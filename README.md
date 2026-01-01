@@ -9,7 +9,9 @@ pinned: false
 
 # Reachy Mini Home Assistant Voice Assistant
 
-A voice assistant for Reachy Mini robot that integrates with Home Assistant via the ESPHome protocol.
+A voice assistant application that runs on **Reachy Mini robot** and integrates with Home Assistant via the ESPHome protocol.
+
+> **Note**: This application runs directly on the Reachy Mini robot (Raspberry Pi 4), not on Hugging Face Spaces. The Hugging Face Space is used for code hosting and documentation only.
 
 ## Features
 
