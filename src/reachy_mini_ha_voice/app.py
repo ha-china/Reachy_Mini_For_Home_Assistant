@@ -55,7 +55,7 @@ def _run(
     robot: ReachyMini,
     app_stop_event: threading.Event,
     settings_app=None,
-    instance_path: Optional[Path] = None,
+    instance_path: Optional[str] = None,
 ) -> None:
     """Run the voice assistant."""
     _LOGGER.info("Starting Reachy Mini Home Assistant Voice Assistant")
