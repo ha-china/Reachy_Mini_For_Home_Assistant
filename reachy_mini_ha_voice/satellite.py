@@ -16,8 +16,6 @@ from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     DeviceInfoResponse,
     ListEntitiesDoneResponse,
     ListEntitiesRequest,
-    ListEntitiesServicesResponse,
-    ListEntitiesServicesArgumentsResponse,
     MediaPlayerCommandRequest,
     SubscribeHomeAssistantStatesRequest,
     VoiceAssistantAnnounceFinished,
