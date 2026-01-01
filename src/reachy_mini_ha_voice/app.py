@@ -4,7 +4,10 @@ Main application for Reachy Mini Home Assistant Voice Assistant
 
 import asyncio
 import logging
+import threading
 from typing import Optional
+
+from reachy_mini import ReachyMini, ReachyMiniApp
 
 from .config.manager import ConfigManager
 from .audio.adapter import MicrophoneArray, Speaker
@@ -103,91 +106,76 @@ class ServerState:
         logger.info("Server state cleaned up")
 
 
-class ReachyMiniVoiceApp:
-    """Main application class"""
+class ReachyMiniVoiceApp(ReachyMiniApp):
+    """Main application class for Reachy Mini Home Assistant Voice Assistant"""
     
-    def __init__(
-        self,
-        name: str,
-        config: ConfigManager,
-        audio_input_device: Optional[str] = None,
-        audio_output_device: Optional[str] = None,
-        wake_model: Optional[str] = None,
-        wake_word_dirs: Optional[list] = None,
-        host: str = "0.0.0.0",
-        port: int = 6053,
-        robot_host: str = "localhost",
-        wireless: bool = False,
-        gradio: bool = False
-    ):
-        self.name = name
-        self.config = config
-        self.audio_input_device = audio_input_device
-        self.audio_output_device = audio_output_device
-        self.wake_model = wake_model
-        self.wake_word_dirs = wake_word_dirs
-        self.host = host
-        self.port = port
-        self.robot_host = robot_host
-        self.wireless = wireless
-        self.gradio = gradio
-        
-        self.state = ServerState(name)
-        self._is_running = False
+    custom_app_url: Optional[str] = None  # Optional custom UI URL
     
-    async def start(self):
-        """Start the application"""
-        if self._is_running:
-            logger.warning("Application already running")
-            return
+    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
+        """
+        Main entry point for the application
         
-        logger.info(f"Starting Reachy Mini Voice Assistant: {self.name}")
+        Args:
+            reachy_mini: Reachy Mini instance (already initialized and connected)
+            stop_event: Threading event to signal graceful shutdown
+        """
+        logger.info("Starting Reachy Mini Home Assistant Voice Assistant")
         
+        # Initialize configuration
+        config = ConfigManager("config.json")
+        
+        # Create event loop for async operations
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Create application instance
+        app = ReachyMiniVoiceApp(
+            name="Reachy Mini",
+            config=config,
+            robot_host="localhost",
+            wireless=False
+        )
+        
+        # Initialize state
         try:
-            # Initialize state
-            await self.state.initialize(self.config)
+            loop.run_until_complete(app.state.initialize(config))
             
             # Setup callbacks
-            self._setup_callbacks()
+            app._setup_callbacks()
             
             # Start audio recording
-            await self.state.microphone.start_recording(
-                self.audio_input_device,
-                self._audio_callback,
-                sample_rate=self.config.get("audio.sample_rate", 16000),
-                channels=self.config.get("audio.channels", 1),
-                block_size=self.config.get("audio.block_size", 1024)
-            )
+            loop.run_until_complete(app.state.microphone.start_recording(
+                None,
+                app._audio_callback,
+                sample_rate=16000,
+                channels=1,
+                block_size=1024
+            ))
             
             # Start ESPHome server
-            await self.state.esphome_server.start()
+            loop.run_until_complete(app.state.esphome_server.start())
             
             # Register mDNS discovery
-            await self._register_mdns()
+            loop.run_until_complete(app._register_mdns())
             
-            self._is_running = True
             logger.info("Application started successfully")
             
-            # Keep running
-            while self._is_running:
-                await asyncio.sleep(1)
-                
+            # Main loop - check stop_event periodically
+            while not stop_event.is_set():
+                try:
+                    loop.run_until_complete(asyncio.sleep(1))
+                except Exception as e:
+                    logger.error(f"Error in main loop: {e}", exc_info=True)
+                    break
+            
         except Exception as e:
             logger.error(f"Error starting application: {e}", exc_info=True)
-            await self.stop()
-            raise
-    
-    async def stop(self):
-        """Stop the application"""
-        if not self._is_running:
-            return
-        
-        logger.info("Stopping application...")
-        self._is_running = False
-        
-        await self.state.cleanup()
-        
-        logger.info("Application stopped")
+        finally:
+            # Cleanup
+            logger.info("Shutting down application...")
+            loop.run_until_complete(app.state.cleanup())
+            loop.close()
+            logger.info("Application stopped")
     
     def _setup_callbacks(self):
         """Setup callbacks for audio processing"""
@@ -233,12 +221,12 @@ class ReachyMiniVoiceApp:
             
             info = ServiceInfo(
                 "_esphomelib._tcp.local.",
-                f"{self.name}._esphomelib._tcp.local.",
+                f"{self.state.name}._esphomelib._tcp.local.",
                 addresses=[],
-                port=self.port,
+                port=6053,
                 properties={
                     "version": "1.0",
-                    "name": self.name,
+                    "name": self.state.name,
                     "platform": "reachy_mini"
                 }
             )
@@ -246,7 +234,7 @@ class ReachyMiniVoiceApp:
             zeroconf = Zeroconf()
             zeroconf.register_service(info)
             
-            logger.info(f"Registered mDNS service: {self.name}")
+            logger.info(f"Registered mDNS service: {self.state.name}")
         except ImportError:
             logger.warning("zeroconf not installed, mDNS discovery not available")
         except Exception as e:
@@ -260,9 +248,9 @@ class ReachyMiniVoiceApp:
         if self.state.speaker:
             await self.state.speaker.play_audio(
                 audio_data,
-                self.audio_output_device,
-                sample_rate=self.config.get("audio.sample_rate", 16000),
-                channels=self.config.get("audio.channels", 1)
+                None,
+                sample_rate=16000,
+                channels=1
             )
     
     async def handle_stt_result(self, text: str):
