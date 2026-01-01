@@ -9,7 +9,6 @@ import traceback
 from pathlib import Path
 from queue import Queue
 from typing import Dict, List, Optional, Set, Union
-from pydantic import BaseModel
 
 import numpy as np
 from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
@@ -27,16 +26,6 @@ from .models import (
 from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
-
-try:
-    from fastapi import FastAPI, Response
-    from fastapi.responses import FileResponse, JSONResponse
-    from starlette.staticfiles import StaticFiles
-except Exception:
-    FastAPI = object
-    FileResponse = object
-    JSONResponse = object
-    StaticFiles = object
 
 # Configure root logger to ensure logs are visible
 logging.basicConfig(
@@ -60,7 +49,7 @@ print("=" * 80)
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
     """Home Assistant Voice Assistant for Reachy Mini."""
 
-    custom_app_url: Optional[str] = "http://0.0.0.0:7860"
+    custom_app_url: Optional[str] = None
 
     def __init__(self):
         """Initialize the app."""
@@ -72,7 +61,6 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         self._discovery: Optional[HomeAssistantZeroconf] = None
         self._robot: Optional[ReachyMini] = None
         self._stop_event: Optional[threading.Event] = None
-        self._settings_initialized = False
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         """Run the voice assistant."""
@@ -85,14 +73,6 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         
         self._robot = reachy_mini
         self._stop_event = stop_event
-
-        # Setup settings API
-        try:
-            self._init_settings_ui_if_needed()
-            _LOGGER.info("Settings UI initialized")
-        except Exception as e:
-            _LOGGER.error(f"Failed to initialize settings UI: {e}")
-            traceback.print_exc()
 
         try:
             # Create event loop
@@ -125,47 +105,6 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         finally:
             _LOGGER.info("Shutting down voice assistant")
             self._cleanup()
-
-    def _init_settings_ui_if_needed(self) -> None:
-        """Attach settings UI to the settings app."""
-        if self._settings_initialized:
-            return
-        if not hasattr(self, 'settings_app') or self.settings_app is None:
-            _LOGGER.warning("settings_app not available, skipping settings UI")
-            return
-
-        static_dir = _MODULE_DIR / "static"
-        index_file = static_dir / "index.html"
-
-        if hasattr(self.settings_app, "mount"):
-            try:
-                self.settings_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-                _LOGGER.info(f"Mounted static files from {static_dir}")
-            except Exception as e:
-                _LOGGER.warning(f"Failed to mount static files: {e}")
-                pass
-
-        class AppStatus(BaseModel):
-            running: bool
-            connected: bool = False
-
-        @self.settings_app.get("/")
-        def _root() -> FileResponse:
-            return FileResponse(str(index_file))
-
-        @self.settings_app.get("/favicon.ico")
-        def _favicon() -> Response:
-            return Response(status_code=204)
-
-        @self.settings_app.get("/status")
-        def _status() -> JSONResponse:
-            return JSONResponse({
-                "running": self._state is not None,
-                "connected": self._state.satellite is not None if self._state else False
-            })
-
-        self._settings_initialized = True
-        _LOGGER.info("Settings UI routes registered")
 
     def _init_state(self, reachy_mini: ReachyMini) -> ServerState:
         """Initialize server state."""
@@ -377,7 +316,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
                                     if state.stop_word.process_streaming(micro_input):
                                         stopped = True
 
-                                if stopped and (self._stop_word.id in state.active_wake_words):
+                                if stopped and (state.stop_word.id in state.active_wake_words):
                                     if state.satellite:
                                         state.satellite.stop()
 
@@ -416,7 +355,6 @@ class ReachyMiniAudioPlayer:
     
     def __init__(self, robot: ReachyMini):
         self._robot = robot
-        self._playing = False
         
     def play(self, audio_source, done_callback=None):
         """Play audio from file or URL."""
@@ -425,8 +363,6 @@ class ReachyMiniAudioPlayer:
                 # Check if it's a URL or file path
                 if audio_source.startswith(('http://', 'https://')):
                     _LOGGER.info(f"Playing audio from URL: {audio_source}")
-                    # For URLs, we would need to download and play
-                    # For now, just log
                 else:
                     # Load audio file
                     import soundfile as sf
