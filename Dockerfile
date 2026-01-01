@@ -4,30 +4,22 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for static file serving
 RUN apt-get update && apt-get install -y \
-    portaudio19-dev \
-    build-essential \
-    libportaudio2 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Install simple HTTP server
+RUN pip install --no-cache-dir fastapi uvicorn
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the application code
+# Copy the application files (for display only)
 COPY . .
 
-# Install the package
-RUN pip install -e .
-
-# Expose the ESPHome API port
-EXPOSE 6053
+# Expose the web port
+EXPOSE 7860
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
-# Default command - can be overridden by Hugging Face Spaces
-CMD ["python", "-m", "reachy_mini_ha_voice", "--name", "ReachyMini"]
+# Run simple web server to display the index.html
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
