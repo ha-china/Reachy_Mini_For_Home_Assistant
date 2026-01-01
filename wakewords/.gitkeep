@@ -1,0 +1,2 @@
+# This file ensures the wakewords directory is tracked by git
+# Actual model files (.tflite, .json) should be added by users
