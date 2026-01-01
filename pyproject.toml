@@ -51,11 +51,15 @@ dev = [
 reachy_mini_ha_voice = "reachy_mini_ha_voice.app:ReachyMiniHAVoiceApp"
 
 [tool.setuptools]
-package-dir = { "" = "." }
+package-dir = { "" = "src" }
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
 [tool.setuptools.package-data]
-reachy_mini_ha_voice = ["**/*"]
+reachy_mini_ha_voice = [
+  "static/*",
+  "wakewords/*",
+  "sounds/*",
+]
