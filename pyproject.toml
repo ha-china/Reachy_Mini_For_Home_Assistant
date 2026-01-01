@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=62.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name        = "reachy-mini-ha-voice"
+version     = "1.0.0"
+license     = {text = "Apache-2.0"}
+description = "Reachy Mini voice assistant for Home Assistant using ESPHome protocol"
+readme      = "README.md"
+authors     = [
+    {name = "Reachy Mini HA Voice Contributors", email = "hello@reachy-mini.org"}
+]
+keywords    = ["home", "assistant", "voice", "esphome", "reachy", "robot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.9.0"
+dependencies = [
+    "aioesphomeapi==42.7.0",
+    "numpy>=2,<3",
+    "pymicro-wakeword>=2,<3",
+    "pyopen-wakeword>=1,<2",
+    "pyaudio>=0.2.11",
+    "zeroconf<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "mypy",
+    "pylint",
+    "pytest",
+]
+
+[project.urls]
+"Source Code" = "https://github.com/your-username/reachy_mini_ha_voice"
+
+[tool.setuptools]
+platforms = ["any"]
+zip-safe  = true
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["reachy_mini_ha_voice"]
+exclude = ["tests", "tests.*"]
