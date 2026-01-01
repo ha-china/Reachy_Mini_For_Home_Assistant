@@ -3,11 +3,12 @@ title: Reachy Mini Home Assistant Voice Assistant
 emoji: 🤖
 colorFrom: blue
 colorTo: indigo
-sdk: docker
-sdk_version: "1.0.0"
-app_file: app.py
+sdk: static
 pinned: false
-license: apache-2.0
+short_description: Home Assistant Voice Assistant for Reachy Mini
+tags:
+ - reachy_mini
+ - reachy_mini_python_app
 ---
 
 # Reachy Mini Home Assistant Voice Assistant
