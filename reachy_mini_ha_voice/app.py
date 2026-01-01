@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
+import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 from queue import Queue
 from typing import Dict, List, Optional, Set, Union
@@ -36,11 +38,23 @@ except Exception:
     JSONResponse = object
     StaticFiles = object
 
+# Configure root logger to ensure logs are visible
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+
 _LOGGER = logging.getLogger(__name__)
 _MODULE_DIR = Path(__file__).parent
 _REPO_DIR = _MODULE_DIR.parent
 _WAKEWORDS_DIR = _REPO_DIR / "wakewords"
 _SOUNDS_DIR = _REPO_DIR / "sounds"
+
+# Log when module is loaded
+print("=" * 80)
+print("Reachy Mini Home Assistant Voice Assistant module loaded")
+print("=" * 80)
 
 
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
@@ -50,6 +64,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
     def __init__(self):
         """Initialize the app."""
+        print("ReachyMiniHAVoiceApp.__init__() called")
         self._state: Optional[ServerState] = None
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self._audio_thread: Optional[threading.Thread] = None
@@ -61,33 +76,51 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         """Run the voice assistant."""
+        print("=" * 80)
+        print("ReachyMiniHAVoiceApp.run() called")
+        print("=" * 80)
+        _LOGGER.info("=" * 80)
         _LOGGER.info("Starting Reachy Mini Home Assistant Voice Assistant")
+        _LOGGER.info("=" * 80)
         
         self._robot = reachy_mini
         self._stop_event = stop_event
 
         # Setup settings API
-        self._init_settings_ui_if_needed()
+        try:
+            self._init_settings_ui_if_needed()
+            _LOGGER.info("Settings UI initialized")
+        except Exception as e:
+            _LOGGER.error(f"Failed to initialize settings UI: {e}")
+            traceback.print_exc()
 
         try:
             # Create event loop
+            _LOGGER.info("Creating event loop...")
             self._event_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._event_loop)
+            _LOGGER.info("Event loop created")
 
             # Initialize server state
+            _LOGGER.info("Initializing server state...")
             self._state = self._init_state(reachy_mini)
+            _LOGGER.info("Server state initialized")
 
             # Start media recording and playing
+            _LOGGER.info("Starting media recording and playing...")
             reachy_mini.media.start_recording()
             reachy_mini.media.start_playing()
             time.sleep(1)  # Give time for pipelines to start
+            _LOGGER.info("Media started")
 
             # Start audio processing loop
+            _LOGGER.info("Starting audio processing loop...")
             self._event_loop.run_until_complete(self._run_audio_loop(self._state, stop_event))
 
         except Exception as e:
-            _LOGGER.error("Error running voice assistant: %s", e)
-            import traceback
+            _LOGGER.error("=" * 80)
+            _LOGGER.error(f"Error running voice assistant: {e}")
+            _LOGGER.error("=" * 80)
             traceback.print_exc()
         finally:
             _LOGGER.info("Shutting down voice assistant")
@@ -98,6 +131,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         if self._settings_initialized:
             return
         if not hasattr(self, 'settings_app') or self.settings_app is None:
+            _LOGGER.warning("settings_app not available, skipping settings UI")
             return
 
         static_dir = _MODULE_DIR / "static"
@@ -106,7 +140,9 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         if hasattr(self.settings_app, "mount"):
             try:
                 self.settings_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-            except Exception:
+                _LOGGER.info(f"Mounted static files from {static_dir}")
+            except Exception as e:
+                _LOGGER.warning(f"Failed to mount static files: {e}")
                 pass
 
         class AppStatus(BaseModel):
@@ -129,11 +165,14 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             })
 
         self._settings_initialized = True
+        _LOGGER.info("Settings UI routes registered")
 
     def _init_state(self, reachy_mini: ReachyMini) -> ServerState:
         """Initialize server state."""
         # Load wake words
+        _LOGGER.info("Loading wake words...")
         available_wake_words = self._load_wake_words()
+        _LOGGER.info(f"Loaded {len(available_wake_words)} wake words")
 
         # Load active wake words
         active_wake_words = set()
@@ -151,7 +190,10 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
                 _LOGGER.error("Failed to load wake word %s: %s", default_wake_word, e)
 
         # Load stop model
+        _LOGGER.info("Loading stop model...")
         stop_model = self._load_stop_model()
+        if stop_model:
+            _LOGGER.info("Stop model loaded")
 
         return ServerState(
             name="ReachyMini",
@@ -180,6 +222,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
         for wake_word_dir in [_WAKEWORDS_DIR]:
             if not wake_word_dir.exists():
+                _LOGGER.warning(f"Wake word directory not found: {wake_word_dir}")
                 continue
 
             for model_config_path in wake_word_dir.glob("*.json"):
@@ -214,6 +257,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         """Load stop word model."""
         stop_config_path = _WAKEWORDS_DIR / "stop.json"
         if not stop_config_path.exists():
+            _LOGGER.warning(f"Stop model config not found: {stop_config_path}")
             return None
 
         try:
@@ -224,20 +268,26 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
     async def _run_audio_loop(self, state: ServerState, stop_event: threading.Event) -> None:
         """Run audio processing loop and ESPHome server."""
+        _LOGGER.info("Starting ESPHome server...")
         # Start ESPHome server
         loop = asyncio.get_running_loop()
         self._server = await loop.create_server(
             lambda: VoiceSatelliteProtocol(state), host="0.0.0.0", port=6053
         )
+        _LOGGER.info("ESPHome server created")
 
         # Auto discovery (zeroconf, mDNS)
+        _LOGGER.info("Registering mDNS service...")
         self._discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
         await self._discovery.register_server()
+        _LOGGER.info("mDNS service registered")
 
         try:
             async with self._server:
+                _LOGGER.info("=" * 80)
                 _LOGGER.info("ESPHome server started on port 6053")
                 _LOGGER.info("mDNS service registered for auto-discovery")
+                _LOGGER.info("=" * 80)
                 
                 # Audio processing loop
                 input_sample_rate = self._robot.media.get_input_audio_samplerate()
@@ -253,7 +303,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
                 last_active: Optional[float] = None
 
-                _LOGGER.info("Audio processing started")
+                _LOGGER.info("Audio processing loop started")
 
                 while not stop_event.is_set():
                     # Get audio sample from Reachy Mini
@@ -327,7 +377,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
                                     if state.stop_word.process_streaming(micro_input):
                                         stopped = True
 
-                                if stopped and (state.stop_word.id in state.active_wake_words):
+                                if stopped and (self._stop_word.id in state.active_wake_words):
                                     if state.satellite:
                                         state.satellite.stop()
 
@@ -337,22 +387,28 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
                 
         finally:
             if self._discovery:
+                _LOGGER.info("Unregistering mDNS service...")
                 await self._discovery.unregister_server()
             _LOGGER.info("ESPHome server stopped")
 
     def _cleanup(self) -> None:
         """Clean up resources."""
+        _LOGGER.info("Cleaning up resources...")
         if self._robot:
             try:
                 self._robot.media.stop_recording()
-            except Exception:
-                pass
+                _LOGGER.info("Recording stopped")
+            except Exception as e:
+                _LOGGER.error(f"Error stopping recording: {e}")
             try:
                 self._robot.media.stop_playing()
-            except Exception:
-                pass
+                _LOGGER.info("Playing stopped")
+            except Exception as e:
+                _LOGGER.error(f"Error stopping playing: {e}")
         if self._event_loop and not self._event_loop.is_closed():
             self._event_loop.close()
+            _LOGGER.info("Event loop closed")
+        _LOGGER.info("Cleanup complete")
 
 
 class ReachyMiniAudioPlayer:
