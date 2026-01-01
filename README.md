@@ -1,3 +1,13 @@
+---
+title: Reachy Mini Home Assistant Voice Assistant
+emoji: 🤖
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+license: apache-2.0
+---
+
 # Reachy Mini Home Assistant Voice Assistant
 
 基于 ESPHome 协议的 Reachy Mini 语音助手，用于连接 Home Assistant。可通过 Hugging Face Spaces 一键安装和部署。
