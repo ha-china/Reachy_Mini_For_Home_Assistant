@@ -24,7 +24,6 @@ from .models import (
 )
 from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
-from .zeroconf import HomeAssistantZeroconf
 
 _LOGGER = logging.getLogger(__name__)
 _MODULE_DIR = Path(__file__).parent
@@ -124,6 +123,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             refractory_seconds=2.0,
             download_dir=_REPO_DIR / "local",
             reachy_integration=None,  # Not using Reachy integration for now
+            media_player_entity=None,
         )
 
     def _load_wake_words(self) -> Dict[str, AvailableWakeWord]:
@@ -186,16 +186,12 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             lambda: VoiceSatelliteProtocol(state), host="0.0.0.0", port=6053
         )
 
-        # Auto discovery (zeroconf, mDNS)
-        discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
-        await discovery.register_server()
-
         try:
             async with server:
                 _LOGGER.info("ESPHome server started on port 6053")
                 await server.serve_forever()
         finally:
-            await discovery.unregister_server()
+            _LOGGER.info("ESPHome server stopped")
 
     def _process_audio(self, state: ServerState) -> None:
         """Process audio from microphone."""

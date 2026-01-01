@@ -73,6 +73,20 @@ class ServerState:
     satellite: Optional["VoiceSatelliteProtocol"] = None
     wake_words_changed: bool = True
     reachy_integration: Optional["ReachyMiniIntegration"] = None
+    media_player_entity: Optional["MediaPlayerEntity"] = None
+
+    def save_preferences(self) -> None:
+        """Save preferences to file."""
+        try:
+            import json
+
+            with open(self.preferences_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {"active_wake_words": self.preferences.active_wake_words},
+                    f,
+                )
+        except Exception as e:
+            _LOGGER.error("Error saving preferences: %s", e)
 
 
 @dataclass
@@ -93,13 +107,32 @@ class AudioPlayer:
         self.device = device
         self._stream = None
         self._pyaudio = None
+        self._ducked = False
 
-    def play(self, audio_data: bytes) -> None:
-        """Play audio data."""
+    def play(self, audio_data: Union[bytes, str], done_callback=None) -> None:
+        """Play audio data or URL."""
         import pyaudio
 
         if self._pyaudio is None:
             self._pyaudio = pyaudio.PyAudio()
+
+        if isinstance(audio_data, str):
+            # It's a URL or file path
+            try:
+                from urllib.request import urlopen
+
+                if audio_data.startswith("http://") or audio_data.startswith("https://"):
+                    with urlopen(audio_data) as response:
+                        audio_data = response.read()
+                else:
+                    # It's a file path
+                    with open(audio_data, "rb") as f:
+                        audio_data = f.read()
+            except Exception as e:
+                _LOGGER.error("Error loading audio: %s", e)
+                if done_callback:
+                    done_callback()
+                return
 
         # Assume 16-bit PCM, 16kHz, mono
         if self._stream is None:
@@ -113,11 +146,31 @@ class AudioPlayer:
 
         self._stream.write(audio_data)
 
-    def close(self) -> None:
-        """Close the audio player."""
+        if done_callback:
+            done_callback()
+
+    def duck(self) -> None:
+        """Duck the volume (reduce by 50%)."""
+        self._ducked = True
+        # For simple implementation, we just note the state
+        # In a full implementation, we would actually reduce the volume
+
+    def unduck(self) -> None:
+        """Unduck the volume (restore to normal)."""
+        self._ducked = False
+        # For simple implementation, we just note the state
+        # In a full implementation, we would actually restore the volume
+
+    def stop(self) -> None:
+        """Stop playing and reset the stream."""
         if self._stream is not None:
+            self._stream.stop_stream()
             self._stream.close()
             self._stream = None
+
+    def close(self) -> None:
+        """Close the audio player."""
+        self.stop()
         if self._pyaudio is not None:
             self._pyaudio.terminate()
             self._pyaudio = None
