@@ -34,7 +34,7 @@ license: apache-2.0
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/reachy_mini_ha_voice.git
+git clone https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice
 cd reachy_mini_ha_voice
 
 # 安装系统依赖（Linux）
@@ -256,3 +256,4 @@ Apache License 2.0
 - [ESPHome](https://esphome.io/)
 - [Reachy Mini](https://github.com/pollen-robotics/reachy)
 - [Hugging Face Spaces](https://huggingface.co/spaces)
+- [Source Code](https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice)
