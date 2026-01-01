@@ -4,6 +4,8 @@ emoji: 🤖
 colorFrom: blue
 colorTo: indigo
 sdk: docker
+sdk_version: "1.0.0"
+app_file: app.py
 pinned: false
 license: apache-2.0
 ---
