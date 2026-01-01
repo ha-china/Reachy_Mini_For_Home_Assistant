@@ -1,14 +1,11 @@
-"""Reachy Mini Home Assistant Voice Assistant App."""
+"""Reachy Mini Home Assistant Voice Assistant."""
 
-import asyncio
-import logging
-import sys
-import threading
 import time
-import traceback
+import threading
 from pathlib import Path
 from queue import Queue
 from typing import Dict, List, Optional, Set, Union
+from pydantic import BaseModel
 
 import numpy as np
 from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
@@ -27,91 +24,51 @@ from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
 
-# Configure root logger to ensure logs are visible
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
-)
-
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = __import__('logging').getLogger(__name__)
 _MODULE_DIR = Path(__file__).parent
 _REPO_DIR = _MODULE_DIR.parent
 _WAKEWORDS_DIR = _REPO_DIR / "wakewords"
 _SOUNDS_DIR = _REPO_DIR / "sounds"
 
-# Log when module is loaded
-print("=" * 80)
-print("Reachy Mini Home Assistant Voice Assistant module loaded")
-print("=" * 80)
-
 
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
     """Home Assistant Voice Assistant for Reachy Mini."""
 
-    custom_app_url: Optional[str] = None
-
-    def __init__(self):
-        """Initialize the app."""
-        print("ReachyMiniHAVoiceApp.__init__() called")
-        self._state: Optional[ServerState] = None
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
-        self._audio_thread: Optional[threading.Thread] = None
-        self._server: Optional[asyncio.Server] = None
-        self._discovery: Optional[HomeAssistantZeroconf] = None
-        self._robot: Optional[ReachyMini] = None
-        self._stop_event: Optional[threading.Event] = None
+    custom_app_url: str = "http://0.0.0.0:8042"
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         """Run the voice assistant."""
-        print("=" * 80)
-        print("ReachyMiniHAVoiceApp.run() called")
-        print("=" * 80)
-        _LOGGER.info("=" * 80)
         _LOGGER.info("Starting Reachy Mini Home Assistant Voice Assistant")
-        _LOGGER.info("=" * 80)
-        
-        self._robot = reachy_mini
-        self._stop_event = stop_event
 
-        try:
-            # Create event loop
-            _LOGGER.info("Creating event loop...")
-            self._event_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._event_loop)
-            _LOGGER.info("Event loop created")
+        # Initialize server state
+        state = self._init_state(reachy_mini)
 
-            # Initialize server state
-            _LOGGER.info("Initializing server state...")
-            self._state = self._init_state(reachy_mini)
-            _LOGGER.info("Server state initialized")
+        # Start audio processing thread
+        audio_thread = threading.Thread(
+            target=self._process_audio,
+            args=(state,),
+            daemon=True,
+        )
+        audio_thread.start()
 
-            # Start media recording and playing
-            _LOGGER.info("Starting media recording and playing...")
-            reachy_mini.media.start_recording()
-            reachy_mini.media.start_playing()
-            time.sleep(1)  # Give time for pipelines to start
-            _LOGGER.info("Media started")
+        # Start ESPHome server in background thread
+        server_thread = threading.Thread(
+            target=self._run_server,
+            args=(state, stop_event),
+            daemon=True,
+        )
+        server_thread.start()
 
-            # Start audio processing loop
-            _LOGGER.info("Starting audio processing loop...")
-            self._event_loop.run_until_complete(self._run_audio_loop(self._state, stop_event))
+        # Main loop - wait for stop event
+        while not stop_event.is_set():
+            time.sleep(0.1)
 
-        except Exception as e:
-            _LOGGER.error("=" * 80)
-            _LOGGER.error(f"Error running voice assistant: {e}")
-            _LOGGER.error("=" * 80)
-            traceback.print_exc()
-        finally:
-            _LOGGER.info("Shutting down voice assistant")
-            self._cleanup()
+        _LOGGER.info("Shutting down voice assistant")
 
     def _init_state(self, reachy_mini: ReachyMini) -> ServerState:
         """Initialize server state."""
         # Load wake words
-        _LOGGER.info("Loading wake words...")
         available_wake_words = self._load_wake_words()
-        _LOGGER.info(f"Loaded {len(available_wake_words)} wake words")
 
         # Load active wake words
         active_wake_words = set()
@@ -129,10 +86,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
                 _LOGGER.error("Failed to load wake word %s: %s", default_wake_word, e)
 
         # Load stop model
-        _LOGGER.info("Loading stop model...")
         stop_model = self._load_stop_model()
-        if stop_model:
-            _LOGGER.info("Stop model loaded")
 
         return ServerState(
             name="ReachyMini",
@@ -161,7 +115,6 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
         for wake_word_dir in [_WAKEWORDS_DIR]:
             if not wake_word_dir.exists():
-                _LOGGER.warning(f"Wake word directory not found: {wake_word_dir}")
                 continue
 
             for model_config_path in wake_word_dir.glob("*.json"):
@@ -196,7 +149,6 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         """Load stop word model."""
         stop_config_path = _WAKEWORDS_DIR / "stop.json"
         if not stop_config_path.exists():
-            _LOGGER.warning(f"Stop model config not found: {stop_config_path}")
             return None
 
         try:
@@ -205,149 +157,131 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             _LOGGER.error("Failed to load stop model: %s", e)
             return None
 
-    async def _run_audio_loop(self, state: ServerState, stop_event: threading.Event) -> None:
-        """Run audio processing loop and ESPHome server."""
-        _LOGGER.info("Starting ESPHome server...")
-        # Start ESPHome server
-        loop = asyncio.get_running_loop()
-        self._server = await loop.create_server(
-            lambda: VoiceSatelliteProtocol(state), host="0.0.0.0", port=6053
-        )
-        _LOGGER.info("ESPHome server created")
+    def _run_server(self, state: ServerState, stop_event: threading.Event):
+        """Run ESPHome server in a separate thread."""
+        import asyncio
 
-        # Auto discovery (zeroconf, mDNS)
-        _LOGGER.info("Registering mDNS service...")
-        self._discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
-        await self._discovery.register_server()
-        _LOGGER.info("mDNS service registered")
+        async def server_loop():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-        try:
-            async with self._server:
-                _LOGGER.info("=" * 80)
-                _LOGGER.info("ESPHome server started on port 6053")
-                _LOGGER.info("mDNS service registered for auto-discovery")
-                _LOGGER.info("=" * 80)
-                
-                # Audio processing loop
-                input_sample_rate = self._robot.media.get_input_audio_samplerate()
-                _LOGGER.info(f"Audio input sample rate: {input_sample_rate} Hz")
-                
-                wake_words: List[Union[MicroWakeWord, OpenWakeWord]] = []
-                micro_features: Optional[MicroWakeWordFeatures] = None
-                micro_inputs: List[np.ndarray] = []
+            server = await loop.create_server(
+                lambda: VoiceSatelliteProtocol(state), host="0.0.0.0", port=6053
+            )
 
-                oww_features: Optional[OpenWakeWordFeatures] = None
-                oww_inputs: List[np.ndarray] = []
-                has_oww = False
+            # Auto discovery (zeroconf, mDNS)
+            discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
+            await discovery.register_server()
 
-                last_active: Optional[float] = None
-
-                _LOGGER.info("Audio processing loop started")
-
-                while not stop_event.is_set():
-                    # Get audio sample from Reachy Mini
-                    audio_frame = self._robot.media.get_audio_sample()
+            try:
+                async with server:
+                    _LOGGER.info("ESPHome server started on port 6053")
+                    _LOGGER.info("mDNS service registered for auto-discovery")
                     
-                    if audio_frame is not None:
-                        # Send to satellite if connected
-                        if state.satellite is not None:
-                            # Convert to bytes for satellite
-                            audio_bytes = (audio_frame * 32767.0).astype(np.int16).tobytes()
-                            state.satellite.handle_audio(audio_bytes)
+                    while not stop_event.is_set():
+                        await asyncio.sleep(0.1)
+            finally:
+                await discovery.unregister_server()
+                _LOGGER.info("ESPHome server stopped")
 
-                        # Update wake word models
-                        if (not wake_words) or (state.wake_words_changed and state.wake_words):
-                            state.wake_words_changed = False
-                            wake_words = [
-                                ww
-                                for ww in state.wake_words.values()
-                                if ww.id in state.active_wake_words
-                            ]
+        asyncio.run(server_loop())
 
-                            has_oww = False
-                            for wake_word in wake_words:
-                                if isinstance(wake_word, OpenWakeWord):
-                                    has_oww = True
+    def _process_audio(self, state: ServerState):
+        """Process audio from microphone."""
+        # Start media
+        state.music_player._robot.media.start_recording()
+        state.music_player._robot.media.start_playing()
+        time.sleep(1)
 
-                            if micro_features is None:
-                                micro_features = MicroWakeWordFeatures()
+        wake_words: List[Union[MicroWakeWord, OpenWakeWord]] = []
+        micro_features: Optional[MicroWakeWordFeatures] = None
+        micro_inputs: List[np.ndarray] = []
 
-                            if has_oww and (oww_features is None):
-                                oww_features = OpenWakeWordFeatures.from_builtin()
+        oww_features: Optional[OpenWakeWordFeatures] = None
+        oww_inputs: List[np.ndarray] = []
+        has_oww = False
 
-                        # Process wake words
-                        if wake_words:
-                            assert micro_features is not None
-                            micro_inputs.clear()
-                            # Convert float32 audio to int16 for microWakeWord
-                            audio_int16 = (audio_frame * 32767.0).astype(np.int16)
-                            micro_inputs.extend(micro_features.process_streaming(audio_int16))
+        last_active: Optional[float] = None
 
-                            if has_oww:
-                                assert oww_features is not None
-                                oww_inputs.clear()
-                                oww_inputs.extend(oww_features.process_streaming(audio_frame))
+        _LOGGER.info("Audio processing started")
 
-                            for wake_word in wake_words:
-                                activated = False
-                                if isinstance(wake_word, MicroWakeWord):
-                                    for micro_input in micro_inputs:
-                                        if wake_word.process_streaming(micro_input):
-                                            activated = True
-                                elif isinstance(wake_word, OpenWakeWord):
-                                    for oww_input in oww_inputs:
-                                        for prob in wake_word.process_streaming(oww_input):
-                                            if prob > 0.5:
-                                                activated = True
+        while True:
+            # Get audio sample from Reachy Mini
+            audio_frame = state.music_player._robot.media.get_audio_sample()
+            
+            if audio_frame is not None:
+                # Send to satellite if connected
+                if state.satellite is not None:
+                    # Convert to bytes for satellite
+                    audio_bytes = (audio_frame * 32767.0).astype(np.int16).tobytes()
+                    state.satellite.handle_audio(audio_bytes)
 
-                                if activated:
-                                    now = time.monotonic()
-                                    if (last_active is None) or (
-                                        (now - last_active) > state.refractory_seconds
-                                    ):
-                                        if state.satellite:
-                                            state.satellite.wakeup(wake_word)
-                                        last_active = now
+                # Update wake word models
+                if (not wake_words) or (state.wake_words_changed and state.wake_words):
+                    state.wake_words_changed = False
+                    wake_words = [
+                        ww
+                        for ww in state.wake_words.values()
+                        if ww.id in state.active_wake_words
+                    ]
 
-                            # Process stop word
-                            if state.stop_word is not None:
-                                stopped = False
-                                for micro_input in micro_inputs:
-                                    if state.stop_word.process_streaming(micro_input):
-                                        stopped = True
+                    has_oww = False
+                    for wake_word in wake_words:
+                        if isinstance(wake_word, OpenWakeWord):
+                            has_oww = True
 
-                                if stopped and (state.stop_word.id in state.active_wake_words):
-                                    if state.satellite:
-                                        state.satellite.stop()
+                    if micro_features is None:
+                        micro_features = MicroWakeWordFeatures()
 
-                    await asyncio.sleep(0.001)  # Small sleep to avoid busy loop
-                
-                _LOGGER.info("Stop event received, shutting down...")
-                
-        finally:
-            if self._discovery:
-                _LOGGER.info("Unregistering mDNS service...")
-                await self._discovery.unregister_server()
-            _LOGGER.info("ESPHome server stopped")
+                    if has_oww and (oww_features is None):
+                        oww_features = OpenWakeWordFeatures.from_builtin()
 
-    def _cleanup(self) -> None:
-        """Clean up resources."""
-        _LOGGER.info("Cleaning up resources...")
-        if self._robot:
-            try:
-                self._robot.media.stop_recording()
-                _LOGGER.info("Recording stopped")
-            except Exception as e:
-                _LOGGER.error(f"Error stopping recording: {e}")
-            try:
-                self._robot.media.stop_playing()
-                _LOGGER.info("Playing stopped")
-            except Exception as e:
-                _LOGGER.error(f"Error stopping playing: {e}")
-        if self._event_loop and not self._event_loop.is_closed():
-            self._event_loop.close()
-            _LOGGER.info("Event loop closed")
-        _LOGGER.info("Cleanup complete")
+                # Process wake words
+                if wake_words:
+                    assert micro_features is not None
+                    micro_inputs.clear()
+                    # Convert float32 audio to int16 for microWakeWord
+                    audio_int16 = (audio_frame * 32767.0).astype(np.int16)
+                    micro_inputs.extend(micro_features.process_streaming(audio_int16))
+
+                    if has_oww:
+                        assert oww_features is not None
+                        oww_inputs.clear()
+                        oww_inputs.extend(oww_features.process_streaming(audio_frame))
+
+                    for wake_word in wake_words:
+                        activated = False
+                        if isinstance(wake_word, MicroWakeWord):
+                            for micro_input in micro_inputs:
+                                if wake_word.process_streaming(micro_input):
+                                    activated = True
+                        elif isinstance(wake_word, OpenWakeWord):
+                            for oww_input in oww_inputs:
+                                for prob in wake_word.process_streaming(oww_input):
+                                    if prob > 0.5:
+                                        activated = True
+
+                        if activated:
+                            now = time.monotonic()
+                            if (last_active is None) or (
+                                (now - last_active) > state.refractory_seconds
+                            ):
+                                if state.satellite:
+                                    state.satellite.wakeup(wake_word)
+                                last_active = now
+
+                    # Process stop word
+                    if state.stop_word is not None:
+                        stopped = False
+                        for micro_input in micro_inputs:
+                            if state.stop_word.process_streaming(micro_input):
+                                stopped = True
+
+                        if stopped and (state.stop_word.id in state.active_wake_words):
+                            if state.satellite:
+                                state.satellite.stop()
+
+            time.sleep(0.001)
 
 
 class ReachyMiniAudioPlayer:
