@@ -36,17 +36,19 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
     """Reachy Mini Apps entry point for the voice assistant app."""
 
     custom_app_url = "http://0.0.0.0:7860/"
+    dont_start_webserver = False
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         """Run the Reachy Mini voice assistant app."""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
+        instance_path = self._get_instance_path().parent
         _run(
             robot=reachy_mini,
             app_stop_event=stop_event,
             settings_app=self.settings_app,
-            instance_path=Path.cwd(),
+            instance_path=instance_path,
         )
 
 
