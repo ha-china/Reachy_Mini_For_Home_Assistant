@@ -44,6 +44,13 @@ source .venv/bin/activate
 # 安装依赖
 pip install -e .
 
+# 下载唤醒词模型和声音效果
+# Linux/Mac:
+./download_models.sh
+
+# Windows:
+powershell -ExecutionPolicy Bypass -File download_models.ps1
+
 # 复制环境变量模板
 cp .env.example .env
 
