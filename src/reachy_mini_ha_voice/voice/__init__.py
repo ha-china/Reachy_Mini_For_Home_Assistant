@@ -1,17 +1,14 @@
 """
 Voice processing module for Reachy Mini Voice Assistant
+
+Note: STT and TTS are handled by Home Assistant via ESPHome protocol.
+This module only contains offline wake word detection.
 """
 
 from .detector import WakeWordDetector, MicroWakeWordDetector, OpenWakeWordDetector
-from .stt import STTEngine, WhisperSTT
-from .tts import TTSEngine, PiperTTS
 
 __all__ = [
     "WakeWordDetector",
     "MicroWakeWordDetector",
     "OpenWakeWordDetector",
-    "STTEngine",
-    "WhisperSTT",
-    "TTSEngine",
-    "PiperTTS",
 ]
