@@ -5,9 +5,9 @@ from typing import Dict, List, Optional
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
-    ListEntitiesMediaPlayersResponse,
+    ListEntitiesDoneResponse,
+    ListEntitiesRequest,
     MediaPlayerCommandRequest,
-    TextSensorStateResponse,
 )
 from aioesphomeapi.model import MediaPlayerState
 
@@ -34,16 +34,16 @@ class MediaPlayerEntity(Entity):
 
     def handle_message(self, msg):
         """Handle a message."""
-        if isinstance(msg, ListEntitiesMediaPlayersResponse):
+        if isinstance(msg, ListEntitiesRequest):
             yield self.get_list_entities_response()
         elif isinstance(msg, MediaPlayerCommandRequest):
             self.handle_command(msg)
 
     def get_list_entities_response(self):
         """Get list entities response."""
-        from aioesphomeapi.api_pb2 import ListEntitiesMediaPlayersResponse
+        from aioesphomeapi.api_pb2 import ListEntitiesMediaPlayerResponse
 
-        return ListEntitiesMediaPlayersResponse(
+        return ListEntitiesMediaPlayerResponse(
             object_id=self.object_id,
             key=self.key,
             name=self.name,
