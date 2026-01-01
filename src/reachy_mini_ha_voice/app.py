@@ -81,7 +81,7 @@ def _run(
         audio_thread = threading.Thread(
             target=_process_audio,
             args=(state,),
-            daemon=True,
+            daemon=False,
             name="AudioProcessor",
         )
         audio_thread.start()
@@ -92,7 +92,7 @@ def _run(
         server_thread = threading.Thread(
             target=_run_server,
             args=(state, app_stop_event),
-            daemon=True,
+            daemon=False,
             name="ESPServer",
         )
         server_thread.start()
