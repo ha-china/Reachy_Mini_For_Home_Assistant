@@ -39,7 +39,31 @@ This project is based on [OHF-Voice/linux-voice-assistant](https://github.com/OH
 - Reachy Mini robot
 - Home Assistant with ESPHome integration
 
-### Setup
+### Quick Installation (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/reachy_mini_ha_voice.git
+cd reachy_mini_ha_voice
+
+# Run the automated installation script
+# For Linux/Mac:
+./install.sh
+
+# For Windows:
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+The automated installation script will:
+- ✓ Check Python version
+- ✓ Create virtual environment
+- ✓ Install all dependencies
+- ✓ Download wake word models and sound effects
+- ✓ Create configuration file
+- ✓ Check Reachy Mini SDK installation
+- ✓ Check audio devices
+
+### Manual Installation
 
 ```bash
 # Clone the repository
