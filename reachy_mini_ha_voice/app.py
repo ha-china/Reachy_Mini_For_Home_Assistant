@@ -320,16 +320,30 @@ class ReachyMiniAudioPlayer:
                 # Check if it's a URL or file path
                 if audio_source.startswith(('http://', 'https://')):
                     _LOGGER.info(f"Playing audio from URL: {audio_source}")
-                    # For URLs, just log it - actual playback would need to be implemented
-                    pass
+                    # For URLs, use Reachy Mini's play_sound method
+                    self._robot.media.play_sound(audio_source)
                 else:
-                    # Load audio file as bytes and push to player
-                    with open(audio_source, 'rb') as f:
-                        audio_bytes = f.read()
-                    # Convert bytes to float32 and push
-                    # Assume 16-bit PCM audio
-                    audio_data = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-                    self._robot.media.push_audio_sample(audio_data)
+                    # Load audio file using soundfile
+                    import soundfile as sf
+                    data, sr = sf.read(audio_source, dtype='float32')
+                    
+                    # Resample if needed
+                    output_sr = self._robot.media.get_output_audio_samplerate()
+                    if sr != output_sr:
+                        from scipy.signal import resample
+                        data = resample(data, int(len(data) * output_sr / sr))
+                    
+                    # Ensure correct shape for output channels
+                    output_channels = self._robot.media.get_output_channels()
+                    if data.ndim == 1 and output_channels > 1:
+                        data = np.tile(data[:, None], (1, output_channels))
+                    elif data.ndim == 2 and data.shape[1] < output_channels:
+                        data = np.tile(data[:, [0]], (1, output_channels))
+                    elif data.ndim == 2 and data.shape[1] > output_channels:
+                        data = data[:, :output_channels]
+                    
+                    # Push to player
+                    self._robot.media.push_audio_sample(data)
                     
             if done_callback:
                 done_callback()
