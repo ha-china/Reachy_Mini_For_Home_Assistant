@@ -1,5 +1,6 @@
 """Reachy Mini Home Assistant Voice Assistant."""
 
+import argparse
 import asyncio
 import logging
 import threading
@@ -31,6 +32,17 @@ _WAKEWORDS_DIR = _MODULE_DIR / "wakewords"
 _SOUNDS_DIR = _MODULE_DIR / "sounds"
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Reachy Mini Home Assistant Voice Assistant")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    return parser.parse_args()
+
+
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
     """Reachy Mini Apps entry point for the voice assistant app."""
 
@@ -39,29 +51,23 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         """Run the Reachy Mini voice assistant app."""
-        _LOGGER.info("Reachy Mini HA Voice App: Starting...")
-        _LOGGER.info(f"Reachy Mini connected: {reachy_mini is not None}")
-        _LOGGER.info(f"Settings app: {self.settings_app is not None}")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        args = parse_args()
         
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            instance_path = self._get_instance_path().parent
-            _LOGGER.info(f"Instance path: {instance_path}")
-            
-            _run(
-                robot=reachy_mini,
-                app_stop_event=stop_event,
-                settings_app=self.settings_app,
-                instance_path=instance_path,
-            )
-        except Exception as e:
-            _LOGGER.error(f"Error in run(): {e}", exc_info=True)
-            raise
+        instance_path = self._get_instance_path().parent
+        _run(
+            args,
+            robot=reachy_mini,
+            app_stop_event=stop_event,
+            settings_app=self.settings_app,
+            instance_path=instance_path,
+        )
 
 
 def _run(
+    args: argparse.Namespace,
     robot: ReachyMini,
     app_stop_event: threading.Event,
     settings_app=None,
