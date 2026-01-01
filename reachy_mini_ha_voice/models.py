@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 class WakeWordType(str, Enum):
     """Type of wake word model."""
 
-    MICRO_WAKE_WORD = "microWakeWord"
+    MICRO_WAKE_WORD = "micro"
     OPEN_WAKE_WORD = "openWakeWord"
 
 
@@ -34,11 +34,14 @@ class AvailableWakeWord:
         if self.type == WakeWordType.MICRO_WAKE_WORD:
             from pymicro_wakeword import MicroWakeWord
 
-            return MicroWakeWord.from_config(self.wake_word_path)
+            return MicroWakeWord.from_config(config_path=self.wake_word_path)
         elif self.type == WakeWordType.OPEN_WAKE_WORD:
             from pyopen_wakeword import OpenWakeWord
 
-            return OpenWakeWord.from_config(self.wake_word_path)
+            oww_model = OpenWakeWord.from_model(model_path=self.wake_word_path)
+            setattr(oww_model, "wake_word", self.wake_word)
+
+            return oww_model
         else:
             raise ValueError(f"Unknown wake word type: {self.type}")
 
@@ -56,7 +59,7 @@ class ServerState:
 
     name: str
     mac_address: str
-    audio_queue: Queue
+    audio_queue: "Queue[Optional[bytes]]"
     entities: List["Entity"]
     available_wake_words: Dict[str, AvailableWakeWord]
     wake_words: Dict[str, Union["MicroWakeWord", "OpenWakeWord"]]
@@ -71,7 +74,7 @@ class ServerState:
     refractory_seconds: float
     download_dir: Path
     satellite: Optional["VoiceSatelliteProtocol"] = None
-    wake_words_changed: bool = True
+    wake_words_changed: bool = False
     reachy_integration: Optional["ReachyMiniIntegration"] = None
     media_player_entity: Optional["MediaPlayerEntity"] = None
 
