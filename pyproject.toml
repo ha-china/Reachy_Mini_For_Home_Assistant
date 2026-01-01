@@ -29,6 +29,7 @@ dependencies = [
     "pyopen-wakeword>=1,<2",
     "pyaudio>=0.2.11",
     "zeroconf<1",
+    "reachy-mini>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -51,3 +52,6 @@ include-package-data = true
 [tool.setuptools.packages.find]
 include = ["reachy_mini_ha_voice"]
 exclude = ["tests", "tests.*"]
+
+[project.entry-points."reachy_mini.apps"]
+reachy_mini_ha_voice = "reachy_mini_ha_voice.app:ReachyMiniHAVoiceApp"
