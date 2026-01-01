@@ -56,11 +56,7 @@ class ConfigManager:
             },
             "voice": {
                 "wake_word": "okay_nabu",
-                "wake_word_dirs": ["wakewords"],
-                "stt_engine": "whisper",
-                "stt_model": "base",
-                "tts_engine": "piper",
-                "tts_model": "en_US-lessac-medium"
+                "wake_word_dirs": ["wakewords"]
             },
             "motion": {
                 "enabled": True,
@@ -75,11 +71,6 @@ class ConfigManager:
             "robot": {
                 "host": "localhost",
                 "wireless": False
-            },
-            "gradio": {
-                "enabled": False,
-                "host": "127.0.0.1",
-                "port": 7860
             },
             "logging": {
                 "level": "INFO",
