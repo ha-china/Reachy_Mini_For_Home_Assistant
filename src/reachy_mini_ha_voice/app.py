@@ -27,9 +27,8 @@ from .zeroconf import HomeAssistantZeroconf
 
 _LOGGER = logging.getLogger(__name__)
 _MODULE_DIR = Path(__file__).parent
-_REPO_DIR = _MODULE_DIR.parent
-_WAKEWORDS_DIR = _REPO_DIR / "wakewords"
-_SOUNDS_DIR = _REPO_DIR / "sounds"
+_WAKEWORDS_DIR = _MODULE_DIR / "wakewords"
+_SOUNDS_DIR = _MODULE_DIR / "sounds"
 
 
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
@@ -124,9 +123,9 @@ def _init_state(robot: ReachyMini) -> ServerState:
         wakeup_sound=str(_SOUNDS_DIR / "wake_word_triggered.flac"),
         timer_finished_sound=str(_SOUNDS_DIR / "timer_finished.flac"),
         preferences=Preferences(),
-        preferences_path=_REPO_DIR / "preferences.json",
+        preferences_path=_MODULE_DIR / "preferences.json",
         refractory_seconds=2.0,
-        download_dir=_REPO_DIR / "local",
+        download_dir=_MODULE_DIR / "local",
         reachy_integration=None,
         media_player_entity=None,
     )
