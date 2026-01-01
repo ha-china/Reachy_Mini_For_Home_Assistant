@@ -1,6 +1,7 @@
 [build-system]
-requires = ["setuptools>=62.3"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
 
 [project]
 name        = "reachy-mini-ha-voice"
@@ -11,7 +12,7 @@ readme      = "README.md"
 authors     = [
     {name = "Reachy Mini HA Voice Contributors", email = "hello@reachy-mini.org"}
 ]
-keywords    = ["home", "assistant", "voice", "esphome", "reachy", "robot"]
+keywords    = ["home", "assistant", "voice", "esphome", "reachy", "robot", "reachy-mini-app"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -21,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
-requires-python = ">=3.9.0"
+requires-python = ">=3.10"
 dependencies = [
     "aioesphomeapi==42.7.0",
     "numpy>=2,<3",
@@ -29,7 +30,7 @@ dependencies = [
     "pyopen-wakeword>=1,<2",
     "pyaudio>=0.2.11",
     "zeroconf<1",
-    "reachy-mini>=1.0.0",
+    "reachy-mini",
 ]
 
 [project.optional-dependencies]
@@ -42,16 +43,17 @@ dev = [
 ]
 
 [project.urls]
-"Source Code" = "https://github.com/your-username/reachy_mini_ha_voice"
+"Source Code" = "https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice"
+
+[project.entry-points."reachy_mini_apps"]
+reachy_mini_ha_voice = "reachy_mini_ha_voice.app:ReachyMiniHAVoiceApp"
 
 [tool.setuptools]
-platforms = ["any"]
-zip-safe  = true
+package-dir = { "" = "." }
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["reachy_mini_ha_voice"]
-exclude = ["tests", "tests.*"]
+where = ["."]
 
-[project.entry-points."reachy_mini.apps"]
-reachy_mini_ha_voice = "reachy_mini_ha_voice.app:ReachyMiniHAVoiceApp"
+[tool.setuptools.package-data]
+reachy_mini_ha_voice = ["**/*"]
