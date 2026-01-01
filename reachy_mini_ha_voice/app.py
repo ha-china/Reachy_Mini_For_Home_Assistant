@@ -24,6 +24,7 @@ from .models import (
 )
 from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
+from .zeroconf import HomeAssistantZeroconf
 
 _LOGGER = logging.getLogger(__name__)
 _MODULE_DIR = Path(__file__).parent
@@ -42,7 +43,8 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
         self._state: Optional[ServerState] = None
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self._audio_thread: Optional[threading.Thread] = None
-        self._server_task: Optional[asyncio.Task] = None
+        self._server: Optional[asyncio.Server] = None
+        self._discovery: Optional[HomeAssistantZeroconf] = None
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         """Run the voice assistant."""
@@ -65,19 +67,15 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             self._audio_thread.start()
 
             # Start ESPHome server
-            self._server_task = self._event_loop.create_task(
-                self._run_server(self._state)
-            )
-            self._event_loop.run_until_complete(self._server_task)
+            self._event_loop.run_until_complete(self._run_server(self._state, stop_event))
 
         except Exception as e:
             _LOGGER.error("Error running voice assistant: %s", e)
+            import traceback
+            traceback.print_exc()
         finally:
             _LOGGER.info("Shutting down voice assistant")
-            if self._audio_thread:
-                self._audio_thread.join(timeout=5)
-            if self._event_loop:
-                self._event_loop.close()
+            self._cleanup()
 
     def _init_state(self, reachy_mini: ReachyMini) -> ServerState:
         """Initialize server state."""
@@ -144,9 +142,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
                     with open(model_config_path, "r", encoding="utf-8") as f:
                         model_config = json.load(f)
-                        model_type = WakeWordType(
-                            model_config.get("type", "microWakeWord")
-                        )
+                        model_type = WakeWordType(model_config.get("type", "microWakeWord"))
                         if model_type == WakeWordType.OPEN_WAKE_WORD:
                             wake_word_path = model_config_path.parent / model_config["model"]
                         else:
@@ -160,9 +156,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
                             wake_word_path=wake_word_path,
                         )
                 except Exception as e:
-                    _LOGGER.error(
-                        "Error loading wake word config %s: %s", model_config_path, e
-                    )
+                    _LOGGER.error("Error loading wake word config %s: %s", model_config_path, e)
 
         return available_wake_words
 
@@ -178,25 +172,32 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             _LOGGER.error("Failed to load stop model: %s", e)
             return None
 
-    async def _run_server(self, state: ServerState) -> None:
+    async def _run_server(self, state: ServerState, stop_event: threading.Event) -> None:
         """Run ESPHome server."""
         # Start ESPHome server
         loop = asyncio.get_running_loop()
-        server = await loop.create_server(
+        self._server = await loop.create_server(
             lambda: VoiceSatelliteProtocol(state), host="0.0.0.0", port=6053
         )
 
         # Auto discovery (zeroconf, mDNS) - required for Home Assistant auto-discovery
-        discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
-        await discovery.register_server()
+        self._discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
+        await self._discovery.register_server()
 
         try:
-            async with server:
+            async with self._server:
                 _LOGGER.info("ESPHome server started on port 6053")
                 _LOGGER.info("mDNS service registered for auto-discovery")
-                await server.serve_forever()
+                
+                # Run until stop_event is set
+                while not stop_event.is_set():
+                    await asyncio.sleep(0.1)
+                    
+                _LOGGER.info("Stop event received, shutting down...")
+                
         finally:
-            await discovery.unregister_server()
+            if self._discovery:
+                await self._discovery.unregister_server()
             _LOGGER.info("ESPHome server stopped")
 
     def _process_audio(self, state: ServerState) -> None:
@@ -246,10 +247,9 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
             while True:
                 try:
+                    # Read audio chunk
                     data = stream.read(CHUNK, exception_on_overflow=False)
-                    audio_array = (
-                        np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
-                    )
+                    audio_array = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
 
                     # Send to satellite if connected
                     if state.satellite is not None:
@@ -329,3 +329,10 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             stream.close()
             p.terminate()
             _LOGGER.info("Audio processing stopped")
+
+    def _cleanup(self) -> None:
+        """Clean up resources."""
+        if self._audio_thread:
+            self._audio_thread.join(timeout=5)
+        if self._event_loop and not self._event_loop.is_closed():
+            self._event_loop.close()
