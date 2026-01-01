@@ -30,8 +30,30 @@
 - Reachy Mini 机器人
 - 配置了 ESPHome 集成的 Home Assistant
 
-### 快速安装（推荐）
+### 一键安装（推荐 - 无需输入命令！）
 
+**选项 1: Web 界面（最简单）**
+```bash
+# 克隆仓库
+git clone https://github.com/yourusername/reachy_mini_ha_voice.git
+cd reachy_mini_ha_voice
+
+# 运行安装界面
+python start.py
+```
+
+然后在浏览器中打开 `http://localhost:7860`，点击 **"🚀 Start Installation"** 按钮即可！
+
+安装将自动完成：
+- ✓ 检查 Python 版本
+- ✓ 创建虚拟环境
+- ✓ 安装所有依赖
+- ✓ 下载唤醒词模型和声音效果
+- ✓ 创建配置文件
+- ✓ 检查 Reachy Mini SDK 安装
+- ✓ 检查音频设备
+
+**选项 2: 命令行**
 ```bash
 # 克隆仓库
 git clone https://github.com/yourusername/reachy_mini_ha_voice.git
@@ -44,15 +66,6 @@ cd reachy_mini_ha_voice
 # Windows:
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
-
-自动安装脚本将自动完成：
-- ✓ 检查 Python 版本
-- ✓ 创建虚拟环境
-- ✓ 安装所有依赖
-- ✓ 下载唤醒词模型和声音效果
-- ✓ 创建配置文件
-- ✓ 检查 Reachy Mini SDK 安装
-- ✓ 检查音频设备
 
 ### 手动安装
 
