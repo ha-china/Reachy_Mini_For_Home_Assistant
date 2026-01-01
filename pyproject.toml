@@ -1,22 +1,122 @@
 [build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
-name = "reachy-mini-hello-world"
+name = "reachy-mini-ha-voice"
 version = "0.1.0"
-description = "Hello World app for Reachy Mini"
+description = "Home Assistant Voice Assistant for Reachy Mini"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "reachy-mini",
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["reachy-mini", "home-assistant", "voice-assistant", "robotics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Hardware",
 ]
 
-[tool.setuptools]
-package-dir = { "" = "src" }
+dependencies = [
+    # Reachy Mini SDK
+    "reachy-mini",
+    
+    # Audio processing
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    
+    # Voice processing
+    "pymicro-wakeword>=2.0.0,<3.0.0",
+    "pyopen-wakeword>=1.0.0,<2.0.0",
+    "openai-whisper>=20231117",
+    "piper-tts>=1.2.0",
+    
+    # ESPHome
+    "aioesphomeapi>=42.0.0",
+    "zeroconf>=0.100.0",
+    
+    # Motion control
+    "scipy>=1.10.0",
+    
+    # Web UI
+    "gradio>=4.0.0",
+    
+    # Computer vision (optional)
+    "opencv-python>=4.8.0",
+    "mediapipe>=0.10.0",
+    
+    # Communication
+    "websockets>=12.0",
+    
+    # Configuration
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.optional-dependencies]
+wireless = [
+    "reachy-mini[wireless]",
+]
 
-[project.entry-points."reachy_mini_apps"]
-hello_world = "hello_world.app:HelloWorldApp"
+vision = [
+    "pollen-vision",
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+]
+
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+all = [
+    "reachy-mini-ha-voice[wireless,vision,dev]",
+]
+
+[project.scripts]
+reachy-mini-ha-voice = "reachy_mini_ha_voice.main:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/reachy_mini_ha_voice"
+Documentation = "https://github.com/yourusername/reachy_mini_ha_voice#readme"
+Repository = "https://github.com/yourusername/reachy_mini_ha_voice"
+Issues = "https://github.com/yourusername/reachy_mini_ha_voice/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reachy_mini_ha_voice"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

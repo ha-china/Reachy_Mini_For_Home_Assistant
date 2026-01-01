@@ -1,0 +1,15 @@
+# Available tools for Reachy Mini Voice Assistant
+
+# Motion tools
+move_head
+play_emotion
+dance
+
+# Camera tools (optional)
+# camera
+# head_tracking
+
+# Audio tools
+# play_sound
+
+# Custom tools can be added here
