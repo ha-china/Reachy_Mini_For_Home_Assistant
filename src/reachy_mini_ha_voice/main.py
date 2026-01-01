@@ -12,8 +12,6 @@ from pathlib import Path
 from .config.manager import ConfigManager
 from .audio.adapter import AudioAdapter
 from .voice.detector import WakeWordDetector
-from .voice.stt import STTEngine
-from .voice.tts import TTSEngine
 from .motion.controller import MotionController
 from .esphome.server import ESPHomeServer
 from .app import ReachyMiniVoiceApp
