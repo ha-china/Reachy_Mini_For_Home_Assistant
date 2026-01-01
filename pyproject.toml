@@ -59,7 +59,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 reachy_mini_ha_voice = [
-  "static/*",
-  "wakewords/*",
-  "sounds/*",
+  "static/**/*",
+  "wakewords/**/*",
+  "sounds/**/*",
 ]
