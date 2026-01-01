@@ -1,46 +1,34 @@
 ---
-title: Reachy Mini Examples and Demos
-emoji: 🤖
-colorFrom: blue
-colorTo: indigo
+title: Reachy Mini Hello World
+emoji: 👋
+colorFrom: green
+colorTo: blue
 sdk: static
 pinned: false
-short_description: Reachy Mini robot examples and demonstration programs
+short_description: Hello World app for Reachy Mini
 tags:
  - reachy_mini
- - robotics
- - examples
+ - reachy_mini_python_app
 ---
 
-# Reachy Mini Examples and Demos
+# Reachy Mini Hello World
 
-This repository contains example programs and demonstrations for the Reachy Mini robot.
+A simple Hello World application for the Reachy Mini robot.
 
-## Examples
+## Installation
 
-- `minimal_demo.py` - Minimal demonstration of Reachy Mini control
-- `reachy_compliant_demo.py` - Compliant control demonstration
-- `recorded_moves_example.py` - Playing back recorded movements
-- `sequence.py` - Sequence control examples
+Install this app on your Reachy Mini robot from the dashboard.
 
-## GUI Demos
+## Usage
 
-- `gui_demos/mini_head_lookat_gui.py` - Head tracking GUI
-- `gui_demos/mini_head_position_gui.py` - Head position control GUI
+Once installed, the app will log "Hello World!" every 5 seconds.
 
-## Debug Tools
+## Features
 
-- `debug/sound_play.py` - Audio playback testing
-- `debug/sound_record.py` - Audio recording testing
-- `debug/take_picture.py` - Camera capture testing
-- `debug/body_yaw_test.py` - Body yaw control testing
+- Simple logging example
+- Demonstrates basic Reachy Mini app structure
+- Clean entry point for learning Reachy Mini app development
 
-## Choreographies
+## Development
 
-- `choreographies/another_one_bites_the_dust.json` - Dance choreography
-
-## Requirements
-
-- Reachy Mini robot
-- Python 3.8+
-- reachy-mini package
+Follow the [official tutorial](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) to learn how to create your own Reachy Mini apps.

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reachy-mini-hello-world"
+version = "0.1.0"
+description = "Hello World app for Reachy Mini"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "reachy-mini",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.entry-points."reachy_mini_apps"]
+hello_world = "hello_world.app:HelloWorldApp"
