@@ -1,24 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-
-# Source code
-*.py text eol=lf
-*.sh text eol=lf
-*.yaml text eol=lf
-*.yml text eol=lf
-*.json text eol=lf
-*.toml text eol=lf
-*.md text eol=lf
-# Binary files
-*.tflite binary
-*.flac binary
-*.wav binary
-*.mp3 binary
-# Windows scripts
-*.ps1 text eol=crlf
-# Git LFS for large files
-*.tflite filter=lfs diff=lfs merge=lfs -text
-*.flac filter=lfs diff=lfs merge=lfs -text
-*.wav filter=lfs diff=lfs merge=lfs -text
 "reachy_mini_ha_voice/wakewords/**/*.tflite filter=lfs diff=lfs merge=lfs -text
 reachy_mini_ha_voice/sounds/**/*.flac" filter=lfs diff=lfs merge=lfs -text
