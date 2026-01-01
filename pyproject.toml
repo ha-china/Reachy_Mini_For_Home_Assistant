@@ -48,7 +48,7 @@ dev = [
 "Source Code" = "https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice"
 
 [project.entry-points."reachy_mini_apps"]
-reachy_mini_ha_voice = "reachy_mini_ha_voice.app:ReachyMiniHAVoiceApp"
+reachy_mini_ha_voice = "reachy_mini_conversation_app.main:ReachyMiniConversationApp"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -58,9 +58,12 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-reachy_mini_ha_voice = [
+reachy_mini_conversation_app = [
+  "images/*",
   "static/*",
-  "wakewords/*",
-  "wakewords/openWakeWord/*",
-  "sounds/*",
+  ".env.example",
+  "demos/**/*.txt",
+  "prompts_library/*.txt",
+  "profiles/**/*.txt",
+  "prompts/**/*.txt",
 ]
