@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from queue import Queue
 from typing import Dict, List, Optional, Set, Union
+from pydantic import BaseModel
 
 import numpy as np
 import pyaudio
@@ -49,6 +50,18 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         """Run the voice assistant."""
         _LOGGER.info("Starting Reachy Mini Home Assistant Voice Assistant")
+
+        # Setup settings API
+        class AppStatus(BaseModel):
+            running: bool
+            connected: bool = False
+
+        @self.settings_app.get("/status")
+        def get_status():
+            return AppStatus(
+                running=self._server is not None,
+                connected=self._state.satellite is not None if self._state else False
+            )
 
         try:
             # Create event loop
