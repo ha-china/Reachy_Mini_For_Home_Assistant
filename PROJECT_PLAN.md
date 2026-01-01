@@ -177,3 +177,5 @@ reachy_mini_ha_voice/
 2. **性能优化**：在 Raspberry Pi 4 上运行需要优化性能
 3. **ESPHome 协议实现**：需要完整实现 ESPHome API
 4. **延迟控制**：语音识别到运动响应的延迟需要最小化
+5. **音频流同步**：确保音频流与 Home Assistant 的 STT/TTS 处理同步
+6. **网络稳定性**：ESPHome 连接需要稳定的网络环境
