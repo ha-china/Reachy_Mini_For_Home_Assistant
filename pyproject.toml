@@ -31,6 +31,8 @@ dependencies = [
     "pyaudio>=0.2.11",
     "zeroconf<1",
     "reachy-mini",
+    "scipy",
+    "soundfile",
 ]
 
 [project.optional-dependencies]
