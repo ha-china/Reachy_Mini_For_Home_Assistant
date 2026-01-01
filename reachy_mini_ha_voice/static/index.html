@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reachy Mini Home Assistant Voice Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Reachy Mini Home Assistant Voice Assistant</h1>
+            <p class="subtitle">基于 ESPHome 协议的语音助手</p>
+        </header>
+
+        <main>
+            <section class="status">
+                <h2>状态</h2>
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span class="status-text" id="statusText">未运行</span>
+                </div>
+            </section>
+
+            <section class="info">
+                <h2>信息</h2>
+                <div class="info-card">
+                    <h3>🎤 唤醒词</h3>
+                    <p>默认唤醒词: "Okay Nabu"</p>
+                    <p>支持多个唤醒词: Alexa, Hey Jarvis, Hey Home Assistant 等</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>🔌 连接</h3>
+                    <p>ESPHome 端口: 6053</p>
+                    <p>自动发现: 已启用 (mDNS/Zeroconf)</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>🏠 Home Assistant</h3>
+                    <p>1. 在 Home Assistant 中添加 ESPHome 集成</p>
+                    <p>2. 输入 Reachy Mini 的 IP 地址</p>
+                    <p>3. 端口: 6053</p>
+                </div>
+            </section>
+
+            <section class="actions">
+                <h2>操作</h2>
+                <button class="btn btn-primary" id="startBtn">启动</button>
+                <button class="btn btn-secondary" id="stopBtn">停止</button>
+            </section>
+        </main>
+
+        <footer>
+            <p>基于 <a href="https://github.com/OHF-Voice/linux-voice-assistant">OHF-Voice/linux-voice-assistant</a> 修改</p>
+        </footer>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

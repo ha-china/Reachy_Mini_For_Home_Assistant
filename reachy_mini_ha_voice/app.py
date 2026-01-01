@@ -35,7 +35,7 @@ _SOUNDS_DIR = _REPO_DIR / "sounds"
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
     """Home Assistant Voice Assistant for Reachy Mini."""
 
-    custom_app_url: Optional[str] = None
+    custom_app_url: Optional[str] = "http://0.0.0.0:8042"
 
     def __init__(self):
         """Initialize the app."""
