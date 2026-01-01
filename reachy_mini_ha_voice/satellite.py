@@ -265,7 +265,10 @@ class VoiceSatelliteProtocol(APIServer):
         )
         self.duck()
         self._is_streaming_audio = True
-        self.state.tts_player.play(self.state.wakeup_sound)
+        try:
+            self.state.tts_player.play(self.state.wakeup_sound)
+        except Exception as e:
+            _LOGGER.warning("Failed to play wakeup sound: %s", e)
 
     def stop(self) -> None:
         self.state.active_wake_words.discard(self.state.stop_word.id)
@@ -314,10 +317,14 @@ class VoiceSatelliteProtocol(APIServer):
             self.unduck()
             return
 
-        self.state.tts_player.play(
-            self.state.timer_finished_sound,
-            done_callback=lambda: time.sleep(1.0) or self._play_timer_finished(),
-        )
+        try:
+            self.state.tts_player.play(
+                self.state.timer_finished_sound,
+                done_callback=lambda: time.sleep(1.0) or self._play_timer_finished(),
+            )
+        except Exception as e:
+            _LOGGER.warning("Failed to play timer finished sound: %s", e)
+            self.unduck()
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
