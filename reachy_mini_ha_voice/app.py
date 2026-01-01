@@ -186,11 +186,17 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             lambda: VoiceSatelliteProtocol(state), host="0.0.0.0", port=6053
         )
 
+        # Auto discovery (zeroconf, mDNS) - required for Home Assistant auto-discovery
+        discovery = HomeAssistantZeroconf(port=6053, name="ReachyMini")
+        await discovery.register_server()
+
         try:
             async with server:
                 _LOGGER.info("ESPHome server started on port 6053")
+                _LOGGER.info("mDNS service registered for auto-discovery")
                 await server.serve_forever()
         finally:
+            await discovery.unregister_server()
             _LOGGER.info("ESPHome server stopped")
 
     def _process_audio(self, state: ServerState) -> None:
