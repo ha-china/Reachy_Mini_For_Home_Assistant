@@ -53,6 +53,13 @@ source .venv/bin/activate
 # Install dependencies
 pip install -e .
 
+# Download wake word models and sound effects
+# For Linux/Mac:
+./download_models.sh
+
+# For Windows:
+powershell -ExecutionPolicy Bypass -File download_models.ps1
+
 # Copy environment template
 cp .env.example .env
 
