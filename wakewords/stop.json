@@ -1,0 +1,5 @@
+{
+  "type": "micro",
+  "wake_word": "Stop",
+  "trained_languages": ["en"]
+}
