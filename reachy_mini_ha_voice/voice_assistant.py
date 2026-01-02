@@ -366,24 +366,21 @@ class VoiceAssistantService:
         Based on official reachy_mini SDK implementation:
         - get_audio_sample() returns np.ndarray[np.float32] with shape (samples, channels)
         - Sample rate is 16000 Hz
-        - Channels is typically 2 (stereo)
+        - Channels is 2-4 depending on backend
         """
         from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
         from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
 
-        target_sample_rate = 16000  # Wake word models expect 16kHz
-
         while self._running:
             try:
                 # Get audio from Reachy Mini
-                # Returns np.ndarray[np.float32] with shape (samples, channels) or None
                 audio_data = self.reachy_mini.media.get_audio_sample()
 
                 if audio_data is None:
                     time.sleep(0.01)
                     continue
 
-                # Validate we got a proper numpy array
+                # Validate we got a proper numpy array with numeric dtype
                 if not isinstance(audio_data, np.ndarray):
                     time.sleep(0.01)
                     continue
@@ -392,17 +389,37 @@ class VoiceAssistantService:
                     time.sleep(0.01)
                     continue
 
-                # Audio should already be float32 from Reachy Mini SDK
-                # Shape is (samples, channels) - typically (N, 2) for stereo
-                
-                # Convert stereo to mono by averaging channels
+                # CRITICAL: Check dtype before any numeric operations
+                # If dtype is not numeric (e.g., 'S1' for bytes), skip this sample
+                if not np.issubdtype(audio_data.dtype, np.number):
+                    _LOGGER.warning("Received non-numeric audio data with dtype: %s, skipping", audio_data.dtype)
+                    time.sleep(0.01)
+                    continue
+
+                # Convert to float32 if not already
+                if audio_data.dtype != np.float32:
+                    if audio_data.dtype == np.int16:
+                        audio_data = audio_data.astype(np.float32) / 32768.0
+                    elif audio_data.dtype == np.float64:
+                        audio_data = audio_data.astype(np.float32)
+                    elif np.issubdtype(audio_data.dtype, np.integer):
+                        info = np.iinfo(audio_data.dtype)
+                        audio_data = audio_data.astype(np.float32) / max(abs(info.min), abs(info.max))
+                    else:
+                        audio_data = audio_data.astype(np.float32)
+
+                # Convert multi-channel to mono
+                # Shape is (samples, channels) - typically (N, 2) or (N, 4)
                 if audio_data.ndim == 2 and audio_data.shape[1] > 1:
-                    # Take mean across channels (axis=1)
-                    audio_chunk_array = audio_data.mean(axis=1).astype(np.float32)
-                elif audio_data.ndim == 2 and audio_data.shape[1] == 1:
+                    # Average all channels to mono
+                    audio_chunk_array = np.mean(audio_data, axis=1, dtype=np.float32)
+                elif audio_data.ndim == 2:
                     audio_chunk_array = audio_data.flatten().astype(np.float32)
                 else:
-                    audio_chunk_array = audio_data.flatten().astype(np.float32)
+                    audio_chunk_array = audio_data.astype(np.float32)
+
+                # Ensure 1D
+                audio_chunk_array = audio_chunk_array.ravel()
 
                 # Convert to 16-bit PCM for streaming to Home Assistant
                 audio_chunk = (
