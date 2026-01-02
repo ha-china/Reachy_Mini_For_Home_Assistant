@@ -176,11 +176,14 @@ class VoiceAssistantService:
         """Download required model and sound files if missing."""
         import urllib.request
 
-        # Wake word models
+        # Wake word models - use OHF-Voice/linux-voice-assistant as source
         wakeword_files = {
-            "okay_nabu.tflite": "https://github.com/esphome/micro-wake-word-models/raw/main/models/v2/okay_nabu.tflite",
-            "hey_jarvis.tflite": "https://github.com/esphome/micro-wake-word-models/raw/main/models/v2/hey_jarvis.tflite",
-            "stop.tflite": "https://github.com/esphome/micro-wake-word-models/raw/main/models/v2/stop.tflite",
+            "okay_nabu.tflite": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/okay_nabu.tflite",
+            "okay_nabu.json": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/okay_nabu.json",
+            "hey_jarvis.tflite": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/hey_jarvis.tflite",
+            "hey_jarvis.json": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/hey_jarvis.json",
+            "stop.tflite": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/stop.tflite",
+            "stop.json": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/stop.json",
         }
 
         # Sound files
