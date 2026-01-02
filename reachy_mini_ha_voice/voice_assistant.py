@@ -387,7 +387,7 @@ class VoiceAssistantService:
                 if isinstance(audio_data, bytes):
                     audio_data = np.frombuffer(audio_data, dtype=np.int16)
                 elif isinstance(audio_data, (list, tuple)):
-                    audio_data = np.array(audio_data)
+                    audio_data = np.array(audio_data, dtype=np.float32)
 
                 # Ensure it's a numpy array
                 if not isinstance(audio_data, np.ndarray):
@@ -397,10 +397,31 @@ class VoiceAssistantService:
                     time.sleep(0.01)
                     continue
 
-                # Handle string dtype (S1) - this is the actual error case
-                if audio_data.dtype.kind in ('S', 'U', 'O'):  # bytes, unicode, object
-                    # Convert bytes array to int16
-                    audio_data = np.frombuffer(audio_data.tobytes(), dtype=np.int16)
+                # Handle string/bytes dtype (S1, U, O) - MUST be done before any numeric operations
+                if audio_data.dtype.kind in ('S', 'U', 'O'):
+                    # Get raw bytes and convert to int16
+                    raw_bytes = audio_data.tobytes()
+                    if len(raw_bytes) >= 2:
+                        audio_data = np.frombuffer(raw_bytes, dtype=np.int16)
+                    else:
+                        time.sleep(0.01)
+                        continue
+
+                # Now convert to numeric type BEFORE any mean/reshape operations
+                if not np.issubdtype(audio_data.dtype, np.number):
+                    time.sleep(0.01)
+                    continue
+
+                # Convert to float32 first to avoid issues with mean on integer types
+                if audio_data.dtype == np.int16:
+                    audio_data = audio_data.astype(np.float32) / 32768.0
+                elif audio_data.dtype != np.float32:
+                    if np.issubdtype(audio_data.dtype, np.integer):
+                        info = np.iinfo(audio_data.dtype)
+                        scale = float(max(-info.min, info.max))
+                        audio_data = audio_data.astype(np.float32) / scale
+                    else:
+                        audio_data = audio_data.astype(np.float32)
 
                 # Handle multi-dimensional arrays (stereo/multi-channel)
                 if audio_data.ndim == 2:
@@ -411,24 +432,8 @@ class VoiceAssistantService:
                 elif audio_data.ndim > 2:
                     audio_data = audio_data.reshape(-1)
 
-                # Convert to float32 normalized to [-1.0, 1.0]
-                if audio_data.dtype == np.int16:
-                    audio_chunk_array = audio_data.astype(np.float32) / 32768.0
-                elif audio_data.dtype == np.float32:
-                    audio_chunk_array = audio_data
-                elif audio_data.dtype == np.float64:
-                    audio_chunk_array = audio_data.astype(np.float32)
-                elif np.issubdtype(audio_data.dtype, np.integer):
-                    # Other integer types
-                    info = np.iinfo(audio_data.dtype)
-                    scale = float(max(-info.min, info.max))
-                    audio_chunk_array = audio_data.astype(np.float32) / scale
-                else:
-                    # Try to convert to float32
-                    audio_chunk_array = audio_data.astype(np.float32)
-
-                # Ensure 1D array
-                audio_chunk_array = audio_chunk_array.reshape(-1)
+                # Ensure 1D float32 array
+                audio_chunk_array = audio_data.reshape(-1).astype(np.float32)
 
                 # Resample if needed
                 if input_sample_rate != target_sample_rate and len(audio_chunk_array) > 0:
