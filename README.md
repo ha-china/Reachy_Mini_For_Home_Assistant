@@ -3,7 +3,9 @@ title: Reachy Mini HA Voice
 emoji: 🤖
 colorFrom: blue
 colorTo: purple
-sdk: static
+sdk: gradio
+sdk_version: "4.44.0"
+app_file: app.py
 pinned: false
 ---
 
