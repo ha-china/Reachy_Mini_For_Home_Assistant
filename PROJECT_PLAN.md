@@ -1,179 +1,144 @@
-# Reachy Mini Home Assistant Voice Assistant 项目计划
+# Reachy Mini Home Assistant Voice Assistant - 项目计划
 
-## 📋 参考资源分析
+## 项目概述
 
-### 1. OHF-Voice/linux-voice-assistant
-- **核心功能**：基于 ESPHome 协议的 Home Assistant 语音助手
-- **关键组件**：
-  - 唤醒词检测（microWakeWord/openWakeWord）
-  - ESPHome 协议通信（端口 6053）
-  - 音频处理（16KHz 单声道麦克风）
-- **技术栈**：Python 3.11/3.13, ESPHome, PulseAudio
+将 Home Assistant 语音助手功能集成到 Reachy Mini 机器人，通过 ESPHome 协议与 Home Assistant 通信。
 
-### 2. Reachy Mini SDK
-- **硬件能力**：4 麦克风、5W 扬声器、广角摄像头、6 自由度头部运动、2 个动画天线
-- **Python API**：简单的运动控制接口
-- **应用架构**：基于 Hugging Face Spaces 的应用系统
+## 核心设计原则
 
-### 3. reachy_mini_conversation_app
-- **架构模式**：层次化架构（用户 → AI 服务 → 机器人硬件）
-- **技术栈**：OpenAI realtime API, Gradio, SmolVLM2（本地视觉）
-- **工具系统**：可扩展的工具系统（move_head, dance, play_emotion 等）
+1. **零配置安装** - 用户只需安装应用，无需手动配置
+2. **使用 Reachy Mini 原生硬件** - 使用机器人自带的麦克风和扬声器
+3. **Home Assistant 集中管理** - 所有配置在 Home Assistant 端完成
+4. **运动反馈** - 语音交互时提供头部运动和天线动画反馈
 
----
+## 技术架构
 
-## 🎯 项目目标
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Reachy Mini                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ Microphone  │→ │ Wake Word   │→ │ ESPHome Protocol    │ │
+│  │ (ReSpeaker) │  │ Detection   │  │ Server (Port 6053)  │ │
+│  └─────────────┘  └─────────────┘  └──────────┬──────────┘ │
+│                                                │            │
+│  ┌─────────────┐  ┌─────────────┐             │            │
+│  │ Speaker     │← │ Audio       │←────────────┘            │
+│  │ (ReSpeaker) │  │ Player      │                          │
+│  └─────────────┘  └─────────────┘                          │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Motion Controller (Head + Antennas)                 │   │
+│  │ - on_wakeup: 点头确认                                │   │
+│  │ - on_listening: 注视用户                             │   │
+│  │ - on_thinking: 抬头思考                              │   │
+│  │ - on_speaking: 说话时微动                            │   │
+│  │ - on_idle: 返回中立位置                              │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ ESPHome Protocol
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Home Assistant                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ STT Engine  │  │ Intent      │  │ TTS Engine          │ │
+│  │ (Whisper)   │  │ Processing  │  │ (Piper/Cloud)       │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 
-将 linux-voice-assistant 移植到 Reachy Mini，创建一个可以通过 Home Assistant 控制的语音助手，同时集成 Reachy Mini 的运动和表情能力。
+## 已完成功能
 
----
+### 核心功能
+- [x] ESPHome 协议服务器实现
+- [x] mDNS 服务发现（自动被 Home Assistant 发现）
+- [x] 本地唤醒词检测（microWakeWord）
+- [x] 音频流传输到 Home Assistant
+- [x] TTS 音频播放
+- [x] 停止词检测
 
-## 📊 项目计划（按优先级）
+### Reachy Mini 集成
+- [x] 使用 Reachy Mini SDK 的麦克风输入
+- [x] 使用 Reachy Mini SDK 的扬声器输出
+- [x] 头部运动控制（点头、摇头、注视）
+- [x] 天线动画控制
+- [x] 语音状态反馈动作
 
-### 阶段一：研究和架构设计（高优先级）
+### 应用架构
+- [x] 符合 Reachy Mini App 架构
+- [x] 自动下载唤醒词模型
+- [x] 自动下载音效文件
+- [x] 无需 .env 配置文件
 
-1. **研究 linux-voice-assistant 的核心架构和代码结构**
-   - 分析代码目录结构
-   - 理解 ESPHome 协议实现
-   - 识别可复用的核心模块
-   - 评估依赖项和兼容性
-
-2. **分析 Reachy Mini SDK 的硬件接口和 API**
-   - 研究音频接口（麦克风/扬声器）
-   - 了解运动控制 API（头部运动、表情）
-   - 测试设备兼容性
-
-3. **设计应用架构和接口层**
-   - 设计模块化架构（音频层、语音层、运动层、通信层）
-   - 定义接口规范
-   - 设计配置系统
-   - 规划错误处理机制
-
----
-
-### 阶段二：核心功能实现（高优先级）
-
-4. **实现音频设备适配层（麦克风/扬声器）**
-   - 适配 Reachy Mini 的 4 麦克风阵列
-   - 实现 16KHz 单声道音频处理
-   - 集成回声消除（使用 PulseAudio 或替代方案）
-   - 音频设备发现和管理
-
-5. **移植唤醒词检测模块**
-   - 集成 microWakeWord 或 openWakeWord
-   - 支持自定义唤醒词
-   - 优化检测性能（低延迟）
-
-6. **实现语音转文字（STT）功能**
-   - 选择 STT 引擎（可考虑 Whisper 或其他开源方案）
-   - 实现实时语音识别
-   - 优化识别准确率
-
----
-
-### 阶段三：功能扩展（中优先级）
-
-7. **实现文字转语音（TTS）功能**
-   - 选择 TTS 引擎（Piper、espeak-ng 等）
-   - 集成到 Reachy Mini 扬声器
-   - 优化语音质量和速度
-
-8. **集成 Reachy Mini 运动控制**
-   - 实现头部运动控制（点头、摇头、转头）
-   - 添加表情系统（基于 reachy_mini_dances_library）
-   - 创建语音反应性动作（说话时的微动）
-
-9. **实现 ESPHome 协议通信层**
-   - 实现 ESPHome 服务器（端口 6053）
-   - 支持 Home Assistant 集成
-   - 实现命令和状态同步
-
----
-
-### 阶段四：用户界面和配置（低优先级）
-
-10. **开发 Web UI（Gradio）**
-    - 创建设置界面
-    - 显示实时状态（唤醒、识别、运动）
-    - 支持配置修改
-    - 日志查看
-
-11. **实现配置管理系统**
-    - 支持自定义唤醒词
-    - 音频设备配置
-    - 运动参数调整
-    - ESPHome 连接设置
-
-12. **编写测试用例和文档**
-    - 单元测试
-    - 集成测试
-    - 用户文档
-    - API 文档
-
-13. **打包并发布到 Hugging Face Spaces**
-    - 创建 pyproject.toml
-    - 配置依赖项
-    - 编写 README
-    - 发布应用
-
----
-
-## 🏗️ 建议的项目结构
+## 文件清单
 
 ```
 reachy_mini_ha_voice/
-├── src/
-│   └── reachy_mini_ha_voice/
-│       ├── __init__.py
-│       ├── main.py              # 应用入口
-│       ├── audio/               # 音频处理模块
-│       │   ├── __init__.py
-│       │   ├── microphone.py
-│       │   ├── speaker.py
-│       │   └── echo_cancel.py
-│       ├── voice/               # 语音处理模块
-│       │   ├── __init__.py
-│       │   ├── wakeword.py
-│       │   ├── stt.py
-│       │   └── tts.py
-│       ├── motion/              # 运动控制模块
-│       │   ├── __init__.py
-│       │   ├── head_control.py
-│       │   └── emotions.py
-│       ├── esphome/             # ESPHome 通信模块
-│       │   ├── __init__.py
-│       │   └── protocol.py
-│       └── config/              # 配置管理
-│           ├── __init__.py
-│           └── settings.py
-├── profiles/                    # 个性化配置
-│   └── default/
-│       ├── instructions.txt
-│       └── tools.txt
-├── wakewords/                   # 唤醒词模型
-├── pyproject.toml
-├── README.md
-├── index.html                   # Hugging Face Space 首页
-└── style.css
+├── reachy_mini_ha_voice/
+│   ├── __init__.py          # 包初始化
+│   ├── __main__.py          # 命令行入口
+│   ├── main.py              # ReachyMiniApp 入口
+│   ├── voice_assistant.py   # 语音助手服务
+│   ├── satellite.py         # ESPHome 协议处理
+│   ├── audio_player.py      # 音频播放器
+│   ├── motion.py            # 运动控制
+│   ├── models.py            # 数据模型
+│   ├── entity.py            # ESPHome 实体
+│   ├── api_server.py        # API 服务器
+│   ├── zeroconf.py          # mDNS 发现
+│   └── util.py              # 工具函数
+├── wakewords/               # 唤醒词模型（自动下载）
+│   ├── okay_nabu.json
+│   ├── okay_nabu.tflite
+│   ├── hey_jarvis.json
+│   ├── hey_jarvis.tflite
+│   ├── stop.json
+│   └── stop.tflite
+├── sounds/                  # 音效文件（自动下载）
+│   ├── wake_word_triggered.flac
+│   └── timer_finished.flac
+├── pyproject.toml           # 项目配置
+├── README.md                # 说明文档
+└── PROJECT_PLAN.md          # 项目计划
 ```
 
----
+## 依赖项
 
-## 🔑 关键技术决策
+```toml
+dependencies = [
+    "reachy-mini",           # Reachy Mini SDK
+    "sounddevice>=0.4.6",    # 音频处理（备用）
+    "soundfile>=0.12.0",     # 音频文件读取
+    "numpy>=1.24.0",         # 数值计算
+    "pymicro-wakeword>=2.0.0,<3.0.0",  # 唤醒词检测
+    "pyopen-wakeword>=1.0.0,<2.0.0",   # 备用唤醒词
+    "aioesphomeapi>=42.0.0", # ESPHome 协议
+    "zeroconf>=0.100.0",     # mDNS 发现
+    "scipy>=1.10.0",         # 运动控制
+    "pydantic>=2.0.0",       # 数据验证
+]
+```
 
-1. **音频处理**：使用 Reachy Mini 的 4 麦克风阵列，可能需要麦克风阵列处理算法
-2. **STT 引擎**：建议使用 Whisper（开源、准确率高）或 Vosk（轻量级）
-3. **TTS 引擎**：建议使用 Piper（高质量、低延迟）
-4. **ESPHome 协议**：需要实现完整的 ESPHome API
-5. **运动控制**：基于 Reachy Mini SDK，添加语音反应性动作
+## 使用流程
 
----
+1. **安装应用**
+   - 从 Reachy Mini App Store 安装
+   - 或 `pip install reachy-mini-ha-voice`
 
-## ⚠️ 潜在挑战
+2. **启动应用**
+   - 应用自动启动 ESPHome 服务器（端口 6053）
+   - 自动下载所需模型和音效
 
-1. **音频设备兼容性**：Reachy Mini 的麦克风阵列可能需要特殊处理
-2. **性能优化**：在 Raspberry Pi 4 上运行需要优化性能
-3. **ESPHome 协议实现**：需要完整实现 ESPHome API
-4. **延迟控制**：语音识别到运动响应的延迟需要最小化
-5. **音频流同步**：确保音频流与 Home Assistant 的 STT/TTS 处理同步
-6. **网络稳定性**：ESPHome 连接需要稳定的网络环境
+3. **连接 Home Assistant**
+   - Home Assistant 自动发现设备（mDNS）
+   - 或手动添加：设置 → 设备与服务 → 添加集成 → ESPHome
+
+4. **使用语音助手**
+   - 说 "Okay Nabu" 唤醒
+   - 说出命令
+   - Reachy Mini 会做出运动反馈
+
+## 参考项目
+
+- [OHF-Voice/linux-voice-assistant](https://github.com/OHF-Voice/linux-voice-assistant)
+- [pollen-robotics/reachy_mini](https://github.com/pollen-robotics/reachy_mini)

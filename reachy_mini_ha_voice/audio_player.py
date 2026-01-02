@@ -1,22 +1,23 @@
-"""Audio player using sounddevice for Reachy Mini."""
+"""Audio player using Reachy Mini's media system."""
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import List, Optional, Union
 
 import numpy as np
-import sounddevice as sd
+import scipy.signal
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class AudioPlayer:
-    """Audio player using sounddevice."""
+    """Audio player using Reachy Mini's media system."""
 
-    def __init__(self, device: Optional[str] = None) -> None:
-        self.device = device
+    def __init__(self, reachy_mini=None) -> None:
+        self.reachy_mini = reachy_mini
         self.is_playing = False
         self._playlist: List[str] = []
         self._done_callback: Optional[Callable[[], None]] = None
@@ -25,6 +26,10 @@ class AudioPlayer:
         self._unduck_volume: float = 1.0
         self._current_volume: float = 1.0
         self._stop_flag = threading.Event()
+
+    def set_reachy_mini(self, reachy_mini) -> None:
+        """Set the Reachy Mini instance."""
+        self.reachy_mini = reachy_mini
 
     def play(
         self,
@@ -60,28 +65,42 @@ class AudioPlayer:
     def _play_file(self, file_path: str) -> None:
         """Play an audio file."""
         try:
-            # Try to load the audio file
+            # Handle URLs - download first
             if file_path.startswith(("http://", "https://")):
-                # For URLs, download first
                 import urllib.request
                 import tempfile
-                import os
 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                     urllib.request.urlretrieve(file_path, tmp.name)
                     file_path = tmp.name
 
-            # Load audio file
-            import soundfile as sf
-            data, samplerate = sf.read(file_path)
+            if self._stop_flag.is_set():
+                return
 
-            # Apply volume
-            data = data * self._current_volume
+            # Use Reachy Mini's media system if available
+            if self.reachy_mini is not None:
+                try:
+                    # Use Reachy Mini's play_sound method
+                    self.reachy_mini.media.play_sound(file_path)
 
-            # Play
-            if not self._stop_flag.is_set():
-                sd.play(data, samplerate, device=self.device)
-                sd.wait()
+                    # Estimate playback duration and wait
+                    import soundfile as sf
+                    data, samplerate = sf.read(file_path)
+                    duration = len(data) / samplerate
+
+                    # Wait for playback to complete (with stop check)
+                    start_time = time.time()
+                    while time.time() - start_time < duration:
+                        if self._stop_flag.is_set():
+                            self.reachy_mini.media.clear_output_buffer()
+                            break
+                        time.sleep(0.1)
+
+                except Exception as e:
+                    _LOGGER.warning("Reachy Mini audio failed, falling back to sounddevice: %s", e)
+                    self._play_file_fallback(file_path)
+            else:
+                self._play_file_fallback(file_path)
 
         except Exception as e:
             _LOGGER.error("Error playing audio: %s", e)
@@ -92,6 +111,20 @@ class AudioPlayer:
                 self._play_next()
             else:
                 self._on_playback_finished()
+
+    def _play_file_fallback(self, file_path: str) -> None:
+        """Fallback to sounddevice for audio playback."""
+        import sounddevice as sd
+        import soundfile as sf
+
+        data, samplerate = sf.read(file_path)
+
+        # Apply volume
+        data = data * self._current_volume
+
+        if not self._stop_flag.is_set():
+            sd.play(data, samplerate)
+            sd.wait()
 
     def _on_playback_finished(self) -> None:
         """Called when playback is finished."""
@@ -110,7 +143,6 @@ class AudioPlayer:
                 _LOGGER.exception("Unexpected error running done callback")
 
     def pause(self) -> None:
-        sd.stop()
         self.is_playing = False
 
     def resume(self) -> None:
@@ -119,7 +151,11 @@ class AudioPlayer:
 
     def stop(self) -> None:
         self._stop_flag.set()
-        sd.stop()
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.clear_output_buffer()
+            except Exception:
+                pass
         self._playlist.clear()
         self.is_playing = False
 

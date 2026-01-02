@@ -26,7 +26,14 @@
       "mcp__open-websearch",
       "mcp__serena",
       "all",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(python -c \"from reachy_mini import ReachyMini; help\\(ReachyMini\\)\")",
+      "Bash(pip show reachy-mini)",
+      "mcp__open-websearch__search",
+      "mcp__open-websearch__fetchGithubReadme",
+      "mcp__web-reader__webReader",
+      "mcp__zread__get_repo_structure",
+      "mcp__zread__read_file"
     ],
     "deny": [],
     "ask": []

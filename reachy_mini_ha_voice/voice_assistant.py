@@ -15,7 +15,6 @@ from queue import Queue
 from typing import Dict, List, Optional, Set, Union
 
 import numpy as np
-import sounddevice as sd
 
 from reachy_mini import ReachyMini
 
@@ -87,6 +86,10 @@ class VoiceAssistantService:
         # Load stop model
         stop_model = self._load_stop_model()
 
+        # Create audio players with Reachy Mini reference
+        music_player = AudioPlayer(self.reachy_mini)
+        tts_player = AudioPlayer(self.reachy_mini)
+
         # Create server state
         self._state = ServerState(
             name=self.name,
@@ -97,8 +100,8 @@ class VoiceAssistantService:
             wake_words=wake_models,
             active_wake_words=active_wake_words,
             stop_word=stop_model,
-            music_player=AudioPlayer(),
-            tts_player=AudioPlayer(),
+            music_player=music_player,
+            tts_player=tts_player,
             wakeup_sound=str(_SOUNDS_DIR / "wake_word_triggered.flac"),
             timer_finished_sound=str(_SOUNDS_DIR / "timer_finished.flac"),
             preferences=preferences,
@@ -111,6 +114,15 @@ class VoiceAssistantService:
 
         # Set motion controller reference in state
         self._state.motion = self._motion
+
+        # Start Reachy Mini media system if available
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.start_recording()
+                self.reachy_mini.media.start_playing()
+                _LOGGER.info("Reachy Mini media system initialized")
+            except Exception as e:
+                _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
         # Start audio processing thread
         self._running = True
@@ -149,6 +161,14 @@ class VoiceAssistantService:
 
         if self._discovery:
             await self._discovery.unregister_server()
+
+        # Stop Reachy Mini media system
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.stop_recording()
+                self.reachy_mini.media.stop_playing()
+            except Exception as e:
+                _LOGGER.warning("Error stopping Reachy Mini media: %s", e)
 
         _LOGGER.info("Voice assistant service stopped.")
 
@@ -299,7 +319,7 @@ class VoiceAssistantService:
         return None
 
     def _process_audio(self) -> None:
-        """Process audio from microphone in a separate thread."""
+        """Process audio from Reachy Mini's microphone."""
         from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
         from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
 
@@ -311,111 +331,202 @@ class VoiceAssistantService:
         has_oww = False
         last_active: Optional[float] = None
 
-        block_size = 1024
-
         try:
             _LOGGER.info("Starting audio processing...")
 
-            with sd.InputStream(
-                samplerate=16000,
-                channels=1,
-                blocksize=block_size,
-                dtype="float32",
-            ) as stream:
-                while self._running:
-                    audio_chunk_array, overflowed = stream.read(block_size)
-                    if overflowed:
-                        _LOGGER.warning("Audio buffer overflow")
+            # Use Reachy Mini's microphone if available
+            use_reachy_audio = self.reachy_mini is not None
 
-                    audio_chunk_array = audio_chunk_array.reshape(-1)
-
-                    # Convert to 16-bit PCM for streaming
-                    audio_chunk = (
-                        (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
-                        .astype("<i2")
-                        .tobytes()
-                    )
-
-                    # Stream audio to Home Assistant
-                    if self._state and self._state.satellite:
-                        self._state.satellite.handle_audio(audio_chunk)
-
-                    # Check if wake words changed
-                    if self._state and self._state.wake_words_changed:
-                        self._state.wake_words_changed = False
-                        wake_words = list(self._state.wake_words.values())
-                        has_oww = any(isinstance(ww, OpenWakeWord) for ww in wake_words)
-
-                        if any(isinstance(ww, MicroWakeWord) for ww in wake_words):
-                            micro_features = MicroWakeWordFeatures()
-                        else:
-                            micro_features = None
-
-                        if has_oww:
-                            oww_features = OpenWakeWordFeatures.from_builtin()
-                        else:
-                            oww_features = None
-
-                    # Initialize features if needed
-                    if not wake_words and self._state:
-                        wake_words = list(self._state.wake_words.values())
-                        has_oww = any(isinstance(ww, OpenWakeWord) for ww in wake_words)
-
-                        if any(isinstance(ww, MicroWakeWord) for ww in wake_words):
-                            micro_features = MicroWakeWordFeatures()
-
-                        if has_oww:
-                            oww_features = OpenWakeWordFeatures.from_builtin()
-
-                    # Extract features
-                    micro_inputs.clear()
-                    oww_inputs.clear()
-
-                    if micro_features:
-                        micro_inputs = micro_features.process_streaming(audio_chunk_array)
-
-                    if oww_features:
-                        oww_inputs = oww_features.process_streaming(audio_chunk_array)
-
-                    # Process wake words
-                    if self._state:
-                        for wake_word in wake_words:
-                            if wake_word.id not in self._state.active_wake_words:
-                                continue
-
-                            activated = False
-
-                            if isinstance(wake_word, MicroWakeWord):
-                                for micro_input in micro_inputs:
-                                    if wake_word.process_streaming(micro_input):
-                                        activated = True
-                            elif isinstance(wake_word, OpenWakeWord):
-                                for oww_input in oww_inputs:
-                                    scores = wake_word.process_streaming(oww_input)
-                                    if any(s > 0.5 for s in scores):
-                                        activated = True
-
-                            if activated:
-                                now = time.monotonic()
-                                if (last_active is None) or (
-                                    (now - last_active) > self._state.refractory_seconds
-                                ):
-                                    if self._state.satellite:
-                                        self._state.satellite.wakeup(wake_word)
-                                        # Trigger motion
-                                        self._motion.on_wakeup()
-                                    last_active = now
-
-                        # Process stop word
-                        if self._state.stop_word:
-                            stopped = False
-                            for micro_input in micro_inputs:
-                                if self._state.stop_word.process_streaming(micro_input):
-                                    stopped = True
-
-                            if stopped and (self._state.stop_word.id in self._state.active_wake_words):
-                                if self._state.satellite:
-                                    self._state.satellite.stop()
+            if use_reachy_audio:
+                _LOGGER.info("Using Reachy Mini's microphone")
+                self._process_audio_reachy(
+                    wake_words, micro_features, micro_inputs,
+                    oww_features, oww_inputs, has_oww, last_active
+                )
+            else:
+                _LOGGER.info("Using system microphone (fallback)")
+                self._process_audio_fallback(
+                    wake_words, micro_features, micro_inputs,
+                    oww_features, oww_inputs, has_oww, last_active
+                )
 
         except Exception:
             _LOGGER.exception("Error processing audio")
+
+    def _process_audio_reachy(
+        self,
+        wake_words, micro_features, micro_inputs,
+        oww_features, oww_inputs, has_oww, last_active
+    ) -> None:
+        """Process audio using Reachy Mini's microphone."""
+        from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
+        from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
+
+        while self._running:
+            try:
+                # Get audio from Reachy Mini
+                audio_data = self.reachy_mini.media.get_audio_sample()
+
+                if audio_data is None or len(audio_data) == 0:
+                    time.sleep(0.01)
+                    continue
+
+                # Convert stereo to mono if needed (take first channel)
+                if audio_data.ndim > 1:
+                    audio_chunk_array = audio_data[:, 0]
+                else:
+                    audio_chunk_array = audio_data
+
+                # Ensure float32
+                audio_chunk_array = audio_chunk_array.astype(np.float32)
+
+                # Convert to 16-bit PCM for streaming to Home Assistant
+                audio_chunk = (
+                    (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
+                    .astype("<i2")
+                    .tobytes()
+                )
+
+                # Stream audio to Home Assistant
+                if self._state and self._state.satellite:
+                    self._state.satellite.handle_audio(audio_chunk)
+
+                # Process wake words
+                self._process_wake_words(
+                    audio_chunk_array, wake_words, micro_features, micro_inputs,
+                    oww_features, oww_inputs, has_oww, last_active
+                )
+
+            except Exception as e:
+                _LOGGER.error("Error in Reachy audio processing: %s", e)
+                time.sleep(0.1)
+
+    def _process_audio_fallback(
+        self,
+        wake_words, micro_features, micro_inputs,
+        oww_features, oww_inputs, has_oww, last_active
+    ) -> None:
+        """Process audio using system microphone (fallback)."""
+        import sounddevice as sd
+        from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
+        from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
+
+        block_size = 1024
+
+        with sd.InputStream(
+            samplerate=16000,
+            channels=1,
+            blocksize=block_size,
+            dtype="float32",
+        ) as stream:
+            while self._running:
+                audio_chunk_array, overflowed = stream.read(block_size)
+                if overflowed:
+                    _LOGGER.warning("Audio buffer overflow")
+
+                audio_chunk_array = audio_chunk_array.reshape(-1)
+
+                # Convert to 16-bit PCM for streaming
+                audio_chunk = (
+                    (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
+                    .astype("<i2")
+                    .tobytes()
+                )
+
+                # Stream audio to Home Assistant
+                if self._state and self._state.satellite:
+                    self._state.satellite.handle_audio(audio_chunk)
+
+                # Process wake words
+                self._process_wake_words(
+                    audio_chunk_array, wake_words, micro_features, micro_inputs,
+                    oww_features, oww_inputs, has_oww, last_active
+                )
+
+    def _process_wake_words(
+        self,
+        audio_chunk_array: np.ndarray,
+        wake_words, micro_features, micro_inputs,
+        oww_features, oww_inputs, has_oww, last_active
+    ) -> None:
+        """Process wake word detection."""
+        from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
+        from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
+
+        # Check if wake words changed
+        if self._state and self._state.wake_words_changed:
+            self._state.wake_words_changed = False
+            wake_words.clear()
+            wake_words.extend(self._state.wake_words.values())
+            has_oww = any(isinstance(ww, OpenWakeWord) for ww in wake_words)
+
+            if any(isinstance(ww, MicroWakeWord) for ww in wake_words):
+                micro_features = MicroWakeWordFeatures()
+            else:
+                micro_features = None
+
+            if has_oww:
+                oww_features = OpenWakeWordFeatures.from_builtin()
+            else:
+                oww_features = None
+
+        # Initialize features if needed
+        if not wake_words and self._state:
+            wake_words.extend(self._state.wake_words.values())
+            has_oww = any(isinstance(ww, OpenWakeWord) for ww in wake_words)
+
+            if any(isinstance(ww, MicroWakeWord) for ww in wake_words):
+                micro_features = MicroWakeWordFeatures()
+
+            if has_oww:
+                oww_features = OpenWakeWordFeatures.from_builtin()
+
+        # Extract features
+        micro_inputs.clear()
+        oww_inputs.clear()
+
+        if micro_features:
+            micro_inputs.extend(micro_features.process_streaming(audio_chunk_array))
+
+        if oww_features:
+            oww_inputs.extend(oww_features.process_streaming(audio_chunk_array))
+
+        # Process wake words
+        if self._state:
+            for wake_word in wake_words:
+                if wake_word.id not in self._state.active_wake_words:
+                    continue
+
+                activated = False
+
+                if isinstance(wake_word, MicroWakeWord):
+                    for micro_input in micro_inputs:
+                        if wake_word.process_streaming(micro_input):
+                            activated = True
+                elif isinstance(wake_word, OpenWakeWord):
+                    for oww_input in oww_inputs:
+                        scores = wake_word.process_streaming(oww_input)
+                        if any(s > 0.5 for s in scores):
+                            activated = True
+
+                if activated:
+                    now = time.monotonic()
+                    if (last_active is None) or (
+                        (now - last_active) > self._state.refractory_seconds
+                    ):
+                        if self._state.satellite:
+                            self._state.satellite.wakeup(wake_word)
+                            # Trigger motion
+                            self._motion.on_wakeup()
+                        last_active = now
+
+            # Process stop word
+            if self._state.stop_word:
+                stopped = False
+                for micro_input in micro_inputs:
+                    if self._state.stop_word.process_streaming(micro_input):
+                        stopped = True
+
+                if stopped and (self._state.stop_word.id in self._state.active_wake_words):
+                    if self._state.satellite:
+                        self._state.satellite.stop()
