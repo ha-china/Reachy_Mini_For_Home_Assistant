@@ -15,11 +15,11 @@ with gr.Blocks(title="Reachy Mini HA Voice") as demo:
 
     ## Installation
 
-    Install this app on your Reachy Mini robot from the App Store, or manually:
+    Install this app directly from your **Reachy Mini Dashboard**:
 
-    ```bash
-    pip install reachy-mini-ha-voice
-    ```
+    1. Open Reachy Mini Dashboard in your browser
+    2. Go to **Apps** section
+    3. Find **Reachy Mini HA Voice** and click **Install**
 
     ## Features
 
