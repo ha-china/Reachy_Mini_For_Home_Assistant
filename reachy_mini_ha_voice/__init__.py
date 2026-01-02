@@ -14,18 +14,9 @@ Key features:
 __version__ = "0.1.0"
 __author__ = "Pollen Robotics"
 
-from .main import ReachyMiniHAVoiceApp
-from .voice_assistant import VoiceAssistantService
-from .models import ServerState, AvailableWakeWord, Preferences, WakeWordType
-from .motion import ReachyMiniMotion
+# Don't import main module here to avoid runpy warning
+# The app is loaded via entry point: reachy_mini_ha_voice.main:ReachyMiniHAVoiceApp
 
 __all__ = [
-    "ReachyMiniHAVoiceApp",
-    "VoiceAssistantService",
-    "ServerState",
-    "AvailableWakeWord",
-    "Preferences",
-    "WakeWordType",
-    "ReachyMiniMotion",
     "__version__",
 ]
