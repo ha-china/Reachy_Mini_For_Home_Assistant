@@ -29,7 +29,20 @@ try:
     REACHY_MINI_AVAILABLE = True
 except ImportError:
     REACHY_MINI_AVAILABLE = False
-    ReachyMiniApp = object  # Dummy base class
+
+    # Create a dummy base class
+    class ReachyMiniApp:
+        custom_app_url = None
+
+        def __init__(self):
+            self.stop_event = threading.Event()
+
+        def wrapped_run(self, *args, **kwargs):
+            pass
+
+        def stop(self):
+            self.stop_event.set()
+
     ReachyMini = None
 
 
@@ -49,30 +62,47 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
     # No custom web UI needed - configuration is automatic via Home Assistant
     custom_app_url: Optional[str] = None
 
+    def __init__(self, *args, **kwargs):
+        """Initialize the app."""
+        super().__init__(*args, **kwargs)
+        if not hasattr(self, 'stop_event'):
+            self.stop_event = threading.Event()
+
     def wrapped_run(self, *args, **kwargs) -> None:
         """
         Override wrapped_run to handle Zenoh connection failures gracefully.
 
         If Zenoh is not available, run in standalone mode without robot control.
         """
+        logger.info("Starting Reachy Mini HA Voice App...")
+
         # Check if Zenoh is available before trying to connect
         if not _check_zenoh_available():
             logger.warning("Zenoh service not available (port 7447)")
             logger.info("Running in standalone mode without robot control")
-            self.run(None, self.stop_event)
+            self._run_standalone()
             return
 
-        # Zenoh is available, try normal startup
-        try:
-            super().wrapped_run(*args, **kwargs)
-        except Exception as e:
-            error_str = str(e)
-            if "Unable to connect" in error_str or "ZError" in error_str:
-                logger.warning(f"Failed to connect to Reachy Mini: {e}")
-                logger.info("Falling back to standalone mode")
-                self.run(None, self.stop_event)
-            else:
-                raise
+        # Zenoh is available, try normal startup with ReachyMini
+        if REACHY_MINI_AVAILABLE:
+            try:
+                logger.info("Attempting to connect to Reachy Mini...")
+                super().wrapped_run(*args, **kwargs)
+            except Exception as e:
+                error_str = str(e)
+                if "Unable to connect" in error_str or "ZError" in error_str:
+                    logger.warning(f"Failed to connect to Reachy Mini: {e}")
+                    logger.info("Falling back to standalone mode")
+                    self._run_standalone()
+                else:
+                    raise
+        else:
+            logger.info("Reachy Mini SDK not available, running standalone")
+            self._run_standalone()
+
+    def _run_standalone(self) -> None:
+        """Run in standalone mode without robot."""
+        self.run(None, self.stop_event)
 
     def run(self, reachy_mini, stop_event: threading.Event) -> None:
         """
@@ -123,20 +153,7 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             logger.info("Voice assistant stopped.")
 
 
-def run_standalone():
-    """Run the voice assistant without Reachy Mini robot."""
-    logger.info("Running in standalone mode (no Reachy Mini robot)")
-
-    stop_event = threading.Event()
-    app = ReachyMiniHAVoiceApp()
-    app.stop_event = stop_event
-
-    try:
-        app.run(None, stop_event)
-    except KeyboardInterrupt:
-        stop_event.set()
-
-
+# This is called when running as: python -m reachy_mini_ha_voice.main
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
