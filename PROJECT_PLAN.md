@@ -75,31 +75,34 @@
 ```
 reachy_mini_ha_voice/
 ├── reachy_mini_ha_voice/
-│   ├── __init__.py          # 包初始化
-│   ├── __main__.py          # 命令行入口
-│   ├── main.py              # ReachyMiniApp 入口
-│   ├── voice_assistant.py   # 语音助手服务
-│   ├── satellite.py         # ESPHome 协议处理
-│   ├── audio_player.py      # 音频播放器
-│   ├── motion.py            # 运动控制
-│   ├── models.py            # 数据模型
-│   ├── entity.py            # ESPHome 实体
-│   ├── api_server.py        # API 服务器
-│   ├── zeroconf.py          # mDNS 发现
-│   └── util.py              # 工具函数
-├── wakewords/               # 唤醒词模型（自动下载）
+│   ├── __init__.py             # 包初始化
+│   ├── __main__.py             # 命令行入口
+│   ├── main.py                 # ReachyMiniApp 入口
+│   ├── voice_assistant.py      # 语音助手服务
+│   ├── satellite.py            # ESPHome 协议处理
+│   ├── audio_player.py         # 音频播放器
+│   ├── motion.py               # 运动控制
+│   ├── models.py               # 数据模型
+│   ├── entity.py               # ESPHome 基础实体
+│   ├── entity_extensions.py    # 扩展实体类型 (NEW)
+│   ├── reachy_controller.py    # Reachy Mini 控制器包装 (NEW)
+│   ├── api_server.py           # API 服务器
+│   ├── zeroconf.py             # mDNS 发现
+│   └── util.py                 # 工具函数
+├── wakewords/                  # 唤醒词模型（自动下载）
 │   ├── okay_nabu.json
 │   ├── okay_nabu.tflite
 │   ├── hey_jarvis.json
 │   ├── hey_jarvis.tflite
 │   ├── stop.json
 │   └── stop.tflite
-├── sounds/                  # 音效文件（自动下载）
+├── sounds/                     # 音效文件（自动下载）
 │   ├── wake_word_triggered.flac
 │   └── timer_finished.flac
-├── pyproject.toml           # 项目配置
-├── README.md                # 说明文档
-└── PROJECT_PLAN.md          # 项目计划
+├── pyproject.toml              # 项目配置
+├── README.md                   # 说明文档
+├── ENTITIES.md                 # 实体使用文档 (NEW)
+└── PROJECT_PLAN.md             # 项目计划
 ```
 
 ## 依赖项
