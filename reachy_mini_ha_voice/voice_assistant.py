@@ -383,37 +383,55 @@ class VoiceAssistantService:
                     time.sleep(0.01)
                     continue
 
-                # Convert to numpy array if needed
-                audio_data = np.asarray(audio_data)
+                # Handle bytes data - convert to numpy array first
+                if isinstance(audio_data, bytes):
+                    audio_data = np.frombuffer(audio_data, dtype=np.int16)
+                elif isinstance(audio_data, (list, tuple)):
+                    audio_data = np.array(audio_data)
+
+                # Ensure it's a numpy array
+                if not isinstance(audio_data, np.ndarray):
+                    audio_data = np.asarray(audio_data)
 
                 if audio_data.size == 0:
                     time.sleep(0.01)
                     continue
 
+                # Handle string dtype (S1) - this is the actual error case
+                if audio_data.dtype.kind in ('S', 'U', 'O'):  # bytes, unicode, object
+                    # Convert bytes array to int16
+                    audio_data = np.frombuffer(audio_data.tobytes(), dtype=np.int16)
+
                 # Handle multi-dimensional arrays (stereo/multi-channel)
                 if audio_data.ndim == 2:
-                    # Prefer small first dim as channels
                     if audio_data.shape[0] <= 8 and audio_data.shape[0] <= audio_data.shape[1]:
-                        audio_data = np.mean(audio_data, axis=0)
+                        audio_data = audio_data.mean(axis=0)
                     else:
-                        audio_data = np.mean(audio_data, axis=1)
+                        audio_data = audio_data.mean(axis=1)
                 elif audio_data.ndim > 2:
-                    audio_data = np.mean(audio_data.reshape(audio_data.shape[0], -1), axis=0)
+                    audio_data = audio_data.reshape(-1)
 
-                # Convert to float32 and normalize to [-1.0, 1.0]
-                if np.issubdtype(audio_data.dtype, np.floating):
+                # Convert to float32 normalized to [-1.0, 1.0]
+                if audio_data.dtype == np.int16:
+                    audio_chunk_array = audio_data.astype(np.float32) / 32768.0
+                elif audio_data.dtype == np.float32:
+                    audio_chunk_array = audio_data
+                elif audio_data.dtype == np.float64:
                     audio_chunk_array = audio_data.astype(np.float32)
                 elif np.issubdtype(audio_data.dtype, np.integer):
+                    # Other integer types
                     info = np.iinfo(audio_data.dtype)
                     scale = float(max(-info.min, info.max))
                     audio_chunk_array = audio_data.astype(np.float32) / scale
                 else:
-                    # Skip invalid data types
-                    time.sleep(0.01)
-                    continue
+                    # Try to convert to float32
+                    audio_chunk_array = audio_data.astype(np.float32)
+
+                # Ensure 1D array
+                audio_chunk_array = audio_chunk_array.reshape(-1)
 
                 # Resample if needed
-                if input_sample_rate != target_sample_rate:
+                if input_sample_rate != target_sample_rate and len(audio_chunk_array) > 0:
                     num_samples = int(len(audio_chunk_array) * target_sample_rate / input_sample_rate)
                     if num_samples > 0:
                         audio_chunk_array = resample(audio_chunk_array, num_samples).astype(np.float32)
