@@ -206,22 +206,22 @@ dependencies = [
 
 ### 实现优先级
 
-1. **Phase 1 - 基础状态与音量** (高优先级)
-   - [ ] `daemon_state` - Daemon 状态传感器
-   - [ ] `backend_ready` - 后端就绪状态
-   - [ ] `error_message` - 错误信息
-   - [ ] `speaker_volume` - 扬声器音量控制
+1. **Phase 1 - 基础状态与音量** (高优先级) ✅ **已完成**
+   - [x] `daemon_state` - Daemon 状态传感器
+   - [x] `backend_ready` - 后端就绪状态
+   - [x] `error_message` - 错误信息
+   - [x] `speaker_volume` - 扬声器音量控制
 
-2. **Phase 2 - 电机控制** (高优先级)
-   - [ ] `motors_enabled` - 电机开关
-   - [ ] `motor_mode` - 电机模式选择 (enabled/disabled/gravity_compensation)
-   - [ ] `wake_up` / `go_to_sleep` - 唤醒/睡眠按钮
+2. **Phase 2 - 电机控制** (高优先级) ✅ **已完成**
+   - [x] `motors_enabled` - 电机开关
+   - [x] `motor_mode` - 电机模式选择 (enabled/disabled/gravity_compensation)
+   - [x] `wake_up` / `go_to_sleep` - 唤醒/睡眠按钮
 
-3. **Phase 3 - 姿态控制** (中优先级)
-   - [ ] `head_x/y/z` - 头部位置控制
-   - [ ] `head_roll/pitch/yaw` - 头部角度控制
-   - [ ] `body_yaw` - 身体偏航角控制
-   - [ ] `antenna_left/right` - 天线角度控制
+3. **Phase 3 - 姿态控制** (中优先级) ✅ **已完成**
+   - [x] `head_x/y/z` - 头部位置控制
+   - [x] `head_roll/pitch/yaw` - 头部角度控制
+   - [x] `body_yaw` - 身体偏航角控制
+   - [x] `antenna_left/right` - 天线角度控制
 
 4. **Phase 4 - 注视控制** (中优先级)
    - [ ] `look_at_x/y/z` - 注视点坐标控制

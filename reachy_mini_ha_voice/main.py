@@ -88,9 +88,13 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             try:
                 logger.info("Attempting to connect to Reachy Mini...")
                 super().wrapped_run(*args, **kwargs)
+            except TimeoutError as e:
+                logger.warning(f"Timeout connecting to Reachy Mini: {e}")
+                logger.info("Falling back to standalone mode")
+                self._run_standalone()
             except Exception as e:
                 error_str = str(e)
-                if "Unable to connect" in error_str or "ZError" in error_str:
+                if "Unable to connect" in error_str or "ZError" in error_str or "Timeout" in error_str:
                     logger.warning(f"Failed to connect to Reachy Mini: {e}")
                     logger.info("Falling back to standalone mode")
                     self._run_standalone()

@@ -34,7 +34,8 @@
       "mcp__web-reader__webReader",
       "mcp__zread__get_repo_structure",
       "mcp__zread__read_file",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(C::*)"
     ],
     "deny": [],
     "ask": []

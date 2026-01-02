@@ -21,6 +21,12 @@ A voice assistant application for **Reachy Mini robot** that integrates with Hom
 - **ESPHome Integration**: Seamlessly connects to Home Assistant
 - **Motion Control**: Head movements and antenna animations during voice interaction
 - **Zero Configuration**: Install and run - all settings are managed in Home Assistant
+- **Full Robot Control**: Expose 17+ entities to Home Assistant for complete robot control
+  - Motor control (enable/disable, mode selection)
+  - Head position and orientation control
+  - Body rotation control
+  - Antenna animation control
+  - System status monitoring
 
 ## Requirements
 
@@ -51,6 +57,30 @@ The app runs automatically when installed on Reachy Mini. After installation:
 Default wake word: **"Okay Nabu"**
 
 Additional wake words can be configured through Home Assistant.
+
+## ESPHome Entities
+
+This application exposes 17+ entities to Home Assistant for complete robot control:
+
+### Status & Control
+- **Daemon State** - Monitor robot daemon status
+- **Backend Ready** - Check if backend is ready
+- **Error Message** - View current error messages
+- **Speaker Volume** - Control audio volume (0-100%)
+
+### Motor Control
+- **Motors Enabled** - Enable/disable motor torque
+- **Motor Mode** - Select motor mode (enabled/disabled/gravity_compensation)
+- **Wake Up** - Execute wake up animation
+- **Go to Sleep** - Execute sleep animation
+
+### Pose Control
+- **Head Position** - Control X/Y/Z position (±50mm)
+- **Head Orientation** - Control roll/pitch/yaw angles
+- **Body Yaw** - Rotate body (±160°)
+- **Antennas** - Control left/right antenna angles (±90°)
+
+📖 **[View Complete Entity Documentation](ENTITIES.md)** - Includes usage examples, automations, and Lovelace dashboard configurations
 
 ## How It Works
 

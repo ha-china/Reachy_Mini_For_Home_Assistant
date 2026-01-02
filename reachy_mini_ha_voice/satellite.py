@@ -40,9 +40,11 @@ from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
 from .api_server import APIServer
-from .entity import MediaPlayerEntity
+from .entity import BinarySensorEntity, MediaPlayerEntity, NumberEntity, TextSensorEntity
+from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
 from .models import AvailableWakeWord, ServerState, WakeWordType
 from .util import call_all
+from .reachy_controller import ReachyController
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +57,9 @@ class VoiceSatelliteProtocol(APIServer):
         self.state = state
         self.state.satellite = self
 
+        # Initialize Reachy controller
+        self.reachy_controller = ReachyController(state.reachy_mini)
+
         if self.state.media_player_entity is None:
             self.state.media_player_entity = MediaPlayerEntity(
                 server=self,
@@ -65,6 +70,11 @@ class VoiceSatelliteProtocol(APIServer):
                 announce_player=state.tts_player,
             )
             self.state.entities.append(self.state.media_player_entity)
+
+        # Setup all entity phases
+        self._setup_phase1_entities()
+        self._setup_phase2_entities()
+        self._setup_phase3_entities()
 
         self._is_streaming_audio = False
         self._tts_url: Optional[str] = None
@@ -474,3 +484,271 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Timer finished animation")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
+
+    # -------------------------------------------------------------------------
+    # Entity Setup Methods
+    # -------------------------------------------------------------------------
+
+    def _setup_phase1_entities(self) -> None:
+        """Setup Phase 1 entities: Basic status and volume control."""
+
+        # Daemon state sensor
+        daemon_state_sensor = TextSensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Daemon State",
+            object_id="daemon_state",
+            icon="mdi:robot",
+            value_getter=self.reachy_controller.get_daemon_state,
+        )
+        self.state.entities.append(daemon_state_sensor)
+
+        # Backend ready sensor
+        backend_ready_sensor = BinarySensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Backend Ready",
+            object_id="backend_ready",
+            icon="mdi:check-circle",
+            device_class="connectivity",
+            value_getter=self.reachy_controller.get_backend_ready,
+        )
+        self.state.entities.append(backend_ready_sensor)
+
+        # Error message sensor
+        error_message_sensor = TextSensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Error Message",
+            object_id="error_message",
+            icon="mdi:alert-circle",
+            value_getter=self.reachy_controller.get_error_message,
+        )
+        self.state.entities.append(error_message_sensor)
+
+        # Speaker volume control
+        speaker_volume = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Speaker Volume",
+            object_id="speaker_volume",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            icon="mdi:volume-high",
+            unit_of_measurement="%",
+            mode=2,  # Slider mode
+            value_getter=self.reachy_controller.get_speaker_volume,
+            value_setter=self.reachy_controller.set_speaker_volume,
+        )
+        self.state.entities.append(speaker_volume)
+
+        _LOGGER.info("Phase 1 entities registered: daemon_state, backend_ready, error_message, speaker_volume")
+
+    def _setup_phase2_entities(self) -> None:
+        """Setup Phase 2 entities: Motor control."""
+
+        # Motors enabled switch
+        motors_enabled = SwitchEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Motors Enabled",
+            object_id="motors_enabled",
+            icon="mdi:engine",
+            device_class="switch",
+            value_getter=self.reachy_controller.get_motors_enabled,
+            value_setter=self.reachy_controller.set_motors_enabled,
+        )
+        self.state.entities.append(motors_enabled)
+
+        # Motor mode select
+        motor_mode = SelectEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Motor Mode",
+            object_id="motor_mode",
+            options=["enabled", "disabled", "gravity_compensation"],
+            icon="mdi:cog",
+            value_getter=self.reachy_controller.get_motor_mode,
+            value_setter=self.reachy_controller.set_motor_mode,
+        )
+        self.state.entities.append(motor_mode)
+
+        # Wake up button
+        wake_up_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Wake Up",
+            object_id="wake_up",
+            icon="mdi:alarm",
+            device_class="restart",
+            on_press=self.reachy_controller.wake_up,
+        )
+        self.state.entities.append(wake_up_button)
+
+        # Go to sleep button
+        sleep_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Go to Sleep",
+            object_id="go_to_sleep",
+            icon="mdi:sleep",
+            device_class="restart",
+            on_press=self.reachy_controller.go_to_sleep,
+        )
+        self.state.entities.append(sleep_button)
+
+        _LOGGER.info("Phase 2 entities registered: motors_enabled, motor_mode, wake_up, go_to_sleep")
+
+    def _setup_phase3_entities(self) -> None:
+        """Setup Phase 3 entities: Pose control."""
+
+        # Head position controls (X, Y, Z in mm)
+        head_x = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Head X Position",
+            object_id="head_x",
+            min_value=-50.0,
+            max_value=50.0,
+            step=1.0,
+            icon="mdi:axis-x-arrow",
+            unit_of_measurement="mm",
+            mode=2,  # Slider
+            value_getter=self.reachy_controller.get_head_x,
+            value_setter=self.reachy_controller.set_head_x,
+        )
+        self.state.entities.append(head_x)
+
+        head_y = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Head Y Position",
+            object_id="head_y",
+            min_value=-50.0,
+            max_value=50.0,
+            step=1.0,
+            icon="mdi:axis-y-arrow",
+            unit_of_measurement="mm",
+            mode=2,
+            value_getter=self.reachy_controller.get_head_y,
+            value_setter=self.reachy_controller.set_head_y,
+        )
+        self.state.entities.append(head_y)
+
+        head_z = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Head Z Position",
+            object_id="head_z",
+            min_value=-50.0,
+            max_value=50.0,
+            step=1.0,
+            icon="mdi:axis-z-arrow",
+            unit_of_measurement="mm",
+            mode=2,
+            value_getter=self.reachy_controller.get_head_z,
+            value_setter=self.reachy_controller.set_head_z,
+        )
+        self.state.entities.append(head_z)
+
+        # Head orientation controls (Roll, Pitch, Yaw in degrees)
+        head_roll = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Head Roll",
+            object_id="head_roll",
+            min_value=-40.0,
+            max_value=40.0,
+            step=1.0,
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="°",
+            mode=2,
+            value_getter=self.reachy_controller.get_head_roll,
+            value_setter=self.reachy_controller.set_head_roll,
+        )
+        self.state.entities.append(head_roll)
+
+        head_pitch = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Head Pitch",
+            object_id="head_pitch",
+            min_value=-40.0,
+            max_value=40.0,
+            step=1.0,
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="°",
+            mode=2,
+            value_getter=self.reachy_controller.get_head_pitch,
+            value_setter=self.reachy_controller.set_head_pitch,
+        )
+        self.state.entities.append(head_pitch)
+
+        head_yaw = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Head Yaw",
+            object_id="head_yaw",
+            min_value=-180.0,
+            max_value=180.0,
+            step=1.0,
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="°",
+            mode=2,
+            value_getter=self.reachy_controller.get_head_yaw,
+            value_setter=self.reachy_controller.set_head_yaw,
+        )
+        self.state.entities.append(head_yaw)
+
+        # Body yaw control
+        body_yaw = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Body Yaw",
+            object_id="body_yaw",
+            min_value=-160.0,
+            max_value=160.0,
+            step=1.0,
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="°",
+            mode=2,
+            value_getter=self.reachy_controller.get_body_yaw,
+            value_setter=self.reachy_controller.set_body_yaw,
+        )
+        self.state.entities.append(body_yaw)
+
+        # Antenna controls
+        antenna_left = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Left Antenna",
+            object_id="antenna_left",
+            min_value=-90.0,
+            max_value=90.0,
+            step=1.0,
+            icon="mdi:antenna",
+            unit_of_measurement="°",
+            mode=2,
+            value_getter=self.reachy_controller.get_antenna_left,
+            value_setter=self.reachy_controller.set_antenna_left,
+        )
+        self.state.entities.append(antenna_left)
+
+        antenna_right = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Right Antenna",
+            object_id="antenna_right",
+            min_value=-90.0,
+            max_value=90.0,
+            step=1.0,
+            icon="mdi:antenna",
+            unit_of_measurement="°",
+            mode=2,
+            value_getter=self.reachy_controller.get_antenna_right,
+            value_setter=self.reachy_controller.set_antenna_right,
+        )
+        self.state.entities.append(antenna_right)
+
+        _LOGGER.info("Phase 3 entities registered: head position/orientation, body_yaw, antennas")

@@ -2,15 +2,34 @@
 
 from abc import abstractmethod
 from collections.abc import Iterable
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Union, TYPE_CHECKING
+import logging
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
+    ListEntitiesBinarySensorResponse,
+    ListEntitiesButtonResponse,
     ListEntitiesMediaPlayerResponse,
+    ListEntitiesNumberResponse,
     ListEntitiesRequest,
+    ListEntitiesSelectResponse,
+    ListEntitiesSensorResponse,
+    ListEntitiesSwitchResponse,
+    ListEntitiesTextSensorResponse,
+    BinarySensorStateResponse,
+    ButtonCommandRequest,
     MediaPlayerCommandRequest,
     MediaPlayerStateResponse,
+    NumberCommandRequest,
+    NumberStateResponse,
+    SelectCommandRequest,
+    SelectStateResponse,
+    SensorStateResponse,
     SubscribeHomeAssistantStatesRequest,
+    SubscribeStatesRequest,
+    SwitchCommandRequest,
+    SwitchStateResponse,
+    TextSensorStateResponse,
 )
 from aioesphomeapi.model import MediaPlayerCommand, MediaPlayerState
 from google.protobuf import message
@@ -18,6 +37,11 @@ from google.protobuf import message
 from .api_server import APIServer
 from .audio_player import AudioPlayer
 from .util import call_all
+
+if TYPE_CHECKING:
+    from reachy_mini import ReachyMini
+
+logger = logging.getLogger(__name__)
 
 
 class ESPHomeEntity:
@@ -133,3 +157,189 @@ class MediaPlayerEntity(ESPHomeEntity):
             volume=self.volume,
             muted=self.muted,
         )
+
+
+class TextSensorEntity(ESPHomeEntity):
+    """Text sensor entity for ESPHome (read-only string values)."""
+
+    def __init__(
+        self,
+        server: APIServer,
+        key: int,
+        name: str,
+        object_id: str,
+        icon: str = "",
+        value_getter: Optional[Callable[[], str]] = None,
+    ) -> None:
+        ESPHomeEntity.__init__(self, server)
+        self.key = key
+        self.name = name
+        self.object_id = object_id
+        self.icon = icon
+        self._value_getter = value_getter
+        self._value = ""
+
+    @property
+    def value(self) -> str:
+        if self._value_getter:
+            return self._value_getter()
+        return self._value
+
+    @value.setter
+    def value(self, new_value: str) -> None:
+        self._value = new_value
+
+    def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
+        if isinstance(msg, ListEntitiesRequest):
+            yield ListEntitiesTextSensorResponse(
+                object_id=self.object_id,
+                key=self.key,
+                name=self.name,
+                icon=self.icon,
+            )
+        elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
+            yield self._get_state_message()
+
+    def _get_state_message(self) -> TextSensorStateResponse:
+        return TextSensorStateResponse(
+            key=self.key,
+            state=self.value,
+            missing_state=False,
+        )
+
+    def update_state(self) -> None:
+        """Send state update to Home Assistant."""
+        self.server.send_messages([self._get_state_message()])
+
+
+class BinarySensorEntity(ESPHomeEntity):
+    """Binary sensor entity for ESPHome (read-only boolean values)."""
+
+    def __init__(
+        self,
+        server: APIServer,
+        key: int,
+        name: str,
+        object_id: str,
+        icon: str = "",
+        device_class: str = "",
+        value_getter: Optional[Callable[[], bool]] = None,
+    ) -> None:
+        ESPHomeEntity.__init__(self, server)
+        self.key = key
+        self.name = name
+        self.object_id = object_id
+        self.icon = icon
+        self.device_class = device_class
+        self._value_getter = value_getter
+        self._value = False
+
+    @property
+    def value(self) -> bool:
+        if self._value_getter:
+            return self._value_getter()
+        return self._value
+
+    @value.setter
+    def value(self, new_value: bool) -> None:
+        self._value = new_value
+
+    def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
+        if isinstance(msg, ListEntitiesRequest):
+            yield ListEntitiesBinarySensorResponse(
+                object_id=self.object_id,
+                key=self.key,
+                name=self.name,
+                icon=self.icon,
+                device_class=self.device_class,
+            )
+        elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
+            yield self._get_state_message()
+
+    def _get_state_message(self) -> BinarySensorStateResponse:
+        return BinarySensorStateResponse(
+            key=self.key,
+            state=self.value,
+            missing_state=False,
+        )
+
+    def update_state(self) -> None:
+        """Send state update to Home Assistant."""
+        self.server.send_messages([self._get_state_message()])
+
+
+class NumberEntity(ESPHomeEntity):
+    """Number entity for ESPHome (read-write numeric values)."""
+
+    def __init__(
+        self,
+        server: APIServer,
+        key: int,
+        name: str,
+        object_id: str,
+        min_value: float = 0.0,
+        max_value: float = 100.0,
+        step: float = 1.0,
+        icon: str = "",
+        unit_of_measurement: str = "",
+        mode: int = 0,  # 0 = auto, 1 = box, 2 = slider
+        value_getter: Optional[Callable[[], float]] = None,
+        value_setter: Optional[Callable[[float], None]] = None,
+    ) -> None:
+        ESPHomeEntity.__init__(self, server)
+        self.key = key
+        self.name = name
+        self.object_id = object_id
+        self.min_value = min_value
+        self.max_value = max_value
+        self.step = step
+        self.icon = icon
+        self.unit_of_measurement = unit_of_measurement
+        self.mode = mode
+        self._value_getter = value_getter
+        self._value_setter = value_setter
+        self._value = min_value
+
+    @property
+    def value(self) -> float:
+        if self._value_getter:
+            return self._value_getter()
+        return self._value
+
+    @value.setter
+    def value(self, new_value: float) -> None:
+        # Clamp value to valid range
+        new_value = max(self.min_value, min(self.max_value, new_value))
+        if self._value_setter:
+            self._value_setter(new_value)
+        self._value = new_value
+
+    def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
+        if isinstance(msg, ListEntitiesRequest):
+            yield ListEntitiesNumberResponse(
+                object_id=self.object_id,
+                key=self.key,
+                name=self.name,
+                icon=self.icon,
+                min_value=self.min_value,
+                max_value=self.max_value,
+                step=self.step,
+                unit_of_measurement=self.unit_of_measurement,
+                mode=self.mode,
+            )
+        elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
+            yield self._get_state_message()
+        elif isinstance(msg, NumberCommandRequest) and msg.key == self.key:
+            self.value = msg.state
+            yield self._get_state_message()
+
+    def _get_state_message(self) -> NumberStateResponse:
+        return NumberStateResponse(
+            key=self.key,
+            state=self.value,
+            missing_state=False,
+        )
+
+    def update_state(self) -> None:
+        """Send state update to Home Assistant."""
+        self.server.send_messages([self._get_state_message()])
