@@ -34,6 +34,10 @@ env/
 .idea/
 *.swp
 *.swo
+.claude/*
+.serena/*
+.spec-workflow/
+.playwright-mcp/
 *~
 
 # Configuration
