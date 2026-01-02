@@ -7,6 +7,7 @@ with Home Assistant via ESPHome protocol for voice control.
 
 import asyncio
 import logging
+import socket
 import threading
 from typing import Optional
 
@@ -15,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 def _check_zenoh_available(timeout: float = 1.0) -> bool:
     """Check if Zenoh service is available."""
-    import socket
     try:
         with socket.create_connection(("127.0.0.1", 7447), timeout=timeout):
             return True
@@ -30,6 +30,7 @@ try:
 except ImportError:
     REACHY_MINI_AVAILABLE = False
     ReachyMiniApp = object  # Dummy base class
+    ReachyMini = None
 
 
 from .voice_assistant import VoiceAssistantService
@@ -47,6 +48,31 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
 
     # No custom web UI needed - configuration is automatic via Home Assistant
     custom_app_url: Optional[str] = None
+
+    def wrapped_run(self, *args, **kwargs) -> None:
+        """
+        Override wrapped_run to handle Zenoh connection failures gracefully.
+
+        If Zenoh is not available, run in standalone mode without robot control.
+        """
+        # Check if Zenoh is available before trying to connect
+        if not _check_zenoh_available():
+            logger.warning("Zenoh service not available (port 7447)")
+            logger.info("Running in standalone mode without robot control")
+            self.run(None, self.stop_event)
+            return
+
+        # Zenoh is available, try normal startup
+        try:
+            super().wrapped_run(*args, **kwargs)
+        except Exception as e:
+            error_str = str(e)
+            if "Unable to connect" in error_str or "ZError" in error_str:
+                logger.warning(f"Failed to connect to Reachy Mini: {e}")
+                logger.info("Falling back to standalone mode")
+                self.run(None, self.stop_event)
+            else:
+                raise
 
     def run(self, reachy_mini, stop_event: threading.Event) -> None:
         """
@@ -103,6 +129,7 @@ def run_standalone():
 
     stop_event = threading.Event()
     app = ReachyMiniHAVoiceApp()
+    app.stop_event = stop_event
 
     try:
         app.run(None, stop_event)
@@ -116,14 +143,8 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Check if Zenoh is available
-    if REACHY_MINI_AVAILABLE and _check_zenoh_available():
-        logger.info("Zenoh service detected, running as Reachy Mini app")
-        app = ReachyMiniHAVoiceApp()
-        try:
-            app.wrapped_run()
-        except KeyboardInterrupt:
-            app.stop()
-    else:
-        logger.info("Zenoh service not available, running in standalone mode")
-        run_standalone()
+    app = ReachyMiniHAVoiceApp()
+    try:
+        app.wrapped_run()
+    except KeyboardInterrupt:
+        app.stop()
