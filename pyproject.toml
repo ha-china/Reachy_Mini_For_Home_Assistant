@@ -78,7 +78,7 @@ all = [
 ]
 
 [project.scripts]
-reachy-mini-ha-voice = "reachy_mini_ha_voice.main:main"
+reachy-mini-ha-voice = "reachy_mini_ha_voice.__main__:run"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/reachy_mini_ha_voice"
