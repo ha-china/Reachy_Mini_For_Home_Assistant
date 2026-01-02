@@ -72,6 +72,7 @@ class ServerState:
     # Reachy Mini specific
     reachy_mini: Optional[object] = None
     motion_enabled: bool = True
+    motion: Optional[object] = None  # ReachyMiniMotion instance
 
     media_player_entity: "Optional[MediaPlayerEntity]" = None
     satellite: "Optional[VoiceSatelliteProtocol]" = None

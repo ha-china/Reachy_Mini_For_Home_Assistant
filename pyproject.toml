@@ -30,34 +30,24 @@ classifiers = [
 dependencies = [
     # Reachy Mini SDK
     "reachy-mini",
-    
+
     # Audio processing
     "sounddevice>=0.4.6",
+    "soundfile>=0.12.0",
     "numpy>=1.24.0",
-    
-    # Voice processing
+
+    # Wake word detection (local)
+    # STT/TTS is handled by Home Assistant, not locally
     "pymicro-wakeword>=2.0.0,<3.0.0",
     "pyopen-wakeword>=1.0.0,<2.0.0",
-    "openai-whisper>=20231117",
-    "piper-tts>=1.2.0",
-    
-    # ESPHome
+
+    # ESPHome protocol (communication with Home Assistant)
     "aioesphomeapi>=42.0.0",
     "zeroconf>=0.100.0",
-    
+
     # Motion control
     "scipy>=1.10.0",
-    
-    # Web UI
-    "gradio>=4.0.0",
-    
-    # Computer vision (optional)
-    "opencv-python>=4.8.0",
-    "mediapipe>=0.10.0",
-    
-    # Communication
-    "websockets>=12.0",
-    
+
     # Configuration
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",

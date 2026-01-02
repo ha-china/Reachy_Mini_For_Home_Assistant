@@ -6,8 +6,6 @@
 - **核心功能**：基于 ESPHome 协议的 Home Assistant 语音助手
 - **关键组件**：
   - 唤醒词检测（microWakeWord/openWakeWord）
-  - 语音转文字（STT）
-  - 文字转语音（TTS）
   - ESPHome 协议通信（端口 6053）
   - 音频处理（16KHz 单声道麦克风）
 - **技术栈**：Python 3.11/3.13, ESPHome, PulseAudio
