@@ -143,7 +143,7 @@ dependencies = [
 
 ## ESPHome 实体规划
 
-基于 Reachy Mini SDK 深入分析，以下实体可以暴露给 Home Assistant：
+基于 Reachy Mini SDK 深入分析，以下实体已暴露给 Home Assistant：
 
 ### 已实现实体
 
@@ -152,9 +152,9 @@ dependencies = [
 | Media Player | `media_player` | 音频播放控制 |
 | Voice Assistant | `voice_assistant` | 语音助手管道 |
 
-### 计划实现的实体
+### 已实现的控制实体 (Controls) - 可读写
 
-#### 可控制实体 (Controls) - 可读写
+#### Phase 1-3: 基础控制与姿态
 
 | ESPHome 实体类型 | 名称 | SDK API | 范围/选项 | 说明 |
 |-----------------|------|---------|----------|------|
@@ -172,11 +172,18 @@ dependencies = [
 | `Number` | `body_yaw` | `goto_target(body_yaw=...)` | -160° ~ +160° | 身体偏航角控制 |
 | `Number` | `antenna_left` | `goto_target(antennas=...)` | -90° ~ +90° | 左天线角度控制 |
 | `Number` | `antenna_right` | `goto_target(antennas=...)` | -90° ~ +90° | 右天线角度控制 |
+
+#### Phase 4: 注视控制
+
+| ESPHome 实体类型 | 名称 | SDK API | 范围/选项 | 说明 |
+|-----------------|------|---------|----------|------|
 | `Number` | `look_at_x` | `look_at_world(x, y, z)` | 世界坐标 | 注视点 X 坐标 |
 | `Number` | `look_at_y` | `look_at_world(x, y, z)` | 世界坐标 | 注视点 Y 坐标 |
 | `Number` | `look_at_z` | `look_at_world(x, y, z)` | 世界坐标 | 注视点 Z 坐标 |
 
-#### 只读传感器 (Sensors) - 仅显示
+### 已实现的传感器实体 (Sensors) - 只读
+
+#### Phase 1 & 5: 基础状态与音频传感器
 
 | ESPHome 实体类型 | 名称 | SDK API | 说明 |
 |-----------------|------|---------|------|
@@ -185,6 +192,11 @@ dependencies = [
 | `Text Sensor` | `error_message` | `DaemonStatus.error` | 当前错误信息 |
 | `Sensor` | `doa_angle` | `DoAInfo.angle` | 声源方向角度 (°) |
 | `Binary Sensor` | `speech_detected` | `DoAInfo.speech_detected` | 是否检测到语音 |
+
+#### Phase 6: 诊断信息
+
+| ESPHome 实体类型 | 名称 | SDK API | 说明 |
+|-----------------|------|---------|------|
 | `Sensor` | `control_loop_frequency` | `control_loop_stats` | 控制循环频率 (Hz) |
 | `Text Sensor` | `sdk_version` | `DaemonStatus.version` | SDK 版本号 |
 | `Text Sensor` | `robot_name` | `DaemonStatus.robot_name` | 机器人名称 |
@@ -192,7 +204,7 @@ dependencies = [
 | `Binary Sensor` | `simulation_mode` | `DaemonStatus.simulation_enabled` | 是否在仿真模式 |
 | `Text Sensor` | `wlan_ip` | `DaemonStatus.wlan_ip` | 无线网络 IP |
 
-#### IMU 传感器 (仅无线版本，只读)
+#### Phase 7: IMU 传感器 (仅无线版本)
 
 | ESPHome 实体类型 | 名称 | SDK API | 说明 |
 |-----------------|------|---------|------|
