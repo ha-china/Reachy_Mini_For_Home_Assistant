@@ -33,7 +33,8 @@
       "mcp__open-websearch__fetchGithubReadme",
       "mcp__web-reader__webReader",
       "mcp__zread__get_repo_structure",
-      "mcp__zread__read_file"
+      "mcp__zread__read_file",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []
@@ -45,5 +46,6 @@
     "type": "command",
     "command": "%USERPROFILE%\\.claude\\ccline\\ccline.exe",
     "padding": 0
-  }
+  },
+  "model": "opus"
 }

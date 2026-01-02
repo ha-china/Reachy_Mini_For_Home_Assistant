@@ -362,11 +362,10 @@ class VoiceAssistantService:
         oww_features, oww_inputs, has_oww, last_active
     ) -> None:
         """Process audio using Reachy Mini's microphone.
-        
-        Based on official reachy_mini SDK implementation:
-        - get_audio_sample() returns np.ndarray[np.float32] with shape (samples, channels)
-        - Sample rate is 16000 Hz
-        - Channels is 2-4 depending on backend
+
+        Based on official SDK examples (sound_record.py):
+        - get_audio_sample() returns np.ndarray with dtype=float32, shape=(samples, 2)
+        - Data is already normalized to [-1.0, 1.0] range
         """
         from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
         from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
@@ -374,54 +373,50 @@ class VoiceAssistantService:
         while self._running:
             try:
                 # Get audio from Reachy Mini
+                # Returns: np.ndarray[float32] with shape (samples, 2) or None
                 audio_data = self.reachy_mini.media.get_audio_sample()
 
+                # Skip if no data
                 if audio_data is None:
                     time.sleep(0.01)
                     continue
 
-                # Validate we got a proper numpy array with numeric dtype
+                # Validate data type - SDK should return numpy array
                 if not isinstance(audio_data, np.ndarray):
+                    _LOGGER.debug("Unexpected audio data type: %s", type(audio_data))
                     time.sleep(0.01)
                     continue
 
+                # Skip empty arrays
                 if audio_data.size == 0:
                     time.sleep(0.01)
                     continue
 
-                # CRITICAL: Check dtype before any numeric operations
-                # If dtype is not numeric (e.g., 'S1' for bytes), skip this sample
-                if not np.issubdtype(audio_data.dtype, np.number):
-                    _LOGGER.warning("Received non-numeric audio data with dtype: %s, skipping", audio_data.dtype)
+                # Validate dtype - SDK returns float32
+                if audio_data.dtype != np.float32:
+                    _LOGGER.debug("Unexpected audio dtype: %s, converting", audio_data.dtype)
+                    try:
+                        audio_data = audio_data.astype(np.float32)
+                    except (TypeError, ValueError) as e:
+                        _LOGGER.debug("Failed to convert audio dtype: %s", e)
+                        time.sleep(0.01)
+                        continue
+
+                # Convert stereo to mono (take mean of channels)
+                # SDK returns shape (samples, 2) for stereo
+                if audio_data.ndim == 2 and audio_data.shape[1] == 2:
+                    audio_chunk_array = np.mean(audio_data, axis=1, dtype=np.float32)
+                elif audio_data.ndim == 2:
+                    audio_chunk_array = audio_data[:, 0].astype(np.float32)
+                elif audio_data.ndim == 1:
+                    audio_chunk_array = audio_data.astype(np.float32)
+                else:
+                    _LOGGER.debug("Unexpected audio shape: %s", audio_data.shape)
                     time.sleep(0.01)
                     continue
 
-                # Convert to float32 if not already
-                if audio_data.dtype != np.float32:
-                    if audio_data.dtype == np.int16:
-                        audio_data = audio_data.astype(np.float32) / 32768.0
-                    elif audio_data.dtype == np.float64:
-                        audio_data = audio_data.astype(np.float32)
-                    elif np.issubdtype(audio_data.dtype, np.integer):
-                        info = np.iinfo(audio_data.dtype)
-                        audio_data = audio_data.astype(np.float32) / max(abs(info.min), abs(info.max))
-                    else:
-                        audio_data = audio_data.astype(np.float32)
-
-                # Convert multi-channel to mono
-                # Shape is (samples, channels) - typically (N, 2) or (N, 4)
-                if audio_data.ndim == 2 and audio_data.shape[1] > 1:
-                    # Average all channels to mono
-                    audio_chunk_array = np.mean(audio_data, axis=1, dtype=np.float32)
-                elif audio_data.ndim == 2:
-                    audio_chunk_array = audio_data.flatten().astype(np.float32)
-                else:
-                    audio_chunk_array = audio_data.astype(np.float32)
-
-                # Ensure 1D
-                audio_chunk_array = audio_chunk_array.ravel()
-
                 # Convert to 16-bit PCM for streaming to Home Assistant
+                # Audio is already in [-1.0, 1.0] range from SDK
                 audio_chunk = (
                     (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
                     .astype("<i2")
@@ -522,21 +517,15 @@ class VoiceAssistantService:
             if has_oww:
                 oww_features = OpenWakeWordFeatures.from_builtin()
 
-        # Extract features - ensure audio is float32
-        audio_chunk_array = audio_chunk_array.astype(np.float32)
-        
+        # Extract features
         micro_inputs.clear()
         oww_inputs.clear()
 
         if micro_features:
-            features = micro_features.process_streaming(audio_chunk_array)
-            if features:
-                micro_inputs.extend(features)
+            micro_inputs.extend(micro_features.process_streaming(audio_chunk_array))
 
         if oww_features:
-            features = oww_features.process_streaming(audio_chunk_array)
-            if features:
-                oww_inputs.extend(features)
+            oww_inputs.extend(oww_features.process_streaming(audio_chunk_array))
 
         # Process wake words
         if self._state:
@@ -564,8 +553,7 @@ class VoiceAssistantService:
                         if self._state.satellite:
                             self._state.satellite.wakeup(wake_word)
                             # Trigger motion
-                            if self._motion:
-                                self._motion.on_wakeup()
+                            self._motion.on_wakeup()
                         last_active = now
 
             # Process stop word

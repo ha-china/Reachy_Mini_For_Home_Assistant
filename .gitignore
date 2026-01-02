@@ -61,3 +61,7 @@ htmlcov/
 models/
 *.tflite
 *.onnx
+
+# SDK Reference (local development only)
+reachy_mini/
+reachy_mini_conversation_app/
