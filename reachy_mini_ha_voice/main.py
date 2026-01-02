@@ -1,24 +1,24 @@
 """
-Reachy Mini Home Assistant Voice Assistant App
+Reachy Mini Home Assistant Voice Assistant Application
 
-This app integrates Reachy Mini with Home Assistant via ESPHome protocol,
-allowing voice control through Home Assistant's voice assistant pipeline.
+This is the main entry point for the Reachy Mini application that integrates
+with Home Assistant via ESPHome protocol for voice control.
 """
 
-import threading
-import logging
 import asyncio
+import logging
+import threading
 from typing import Optional
 
-from reachy_mini import ReachyMini
-from reachy_mini.apps import ReachyMiniApp
+from reachy_mini import ReachyMini, ReachyMiniApp
 
-from reachy_mini_ha_voice.voice_assistant import VoiceAssistantService
+from .voice_assistant import VoiceAssistantService
+from .motion import ReachyMiniMotion
 
 logger = logging.getLogger(__name__)
 
 
-class HomeAssistantVoiceApp(ReachyMiniApp):
+class ReachyMiniHAVoiceApp(ReachyMiniApp):
     """
     Reachy Mini Home Assistant Voice Assistant Application.
 
@@ -27,7 +27,7 @@ class HomeAssistantVoiceApp(ReachyMiniApp):
     wake word detection and robot motion feedback.
     """
 
-    # No custom web UI needed - configuration is automatic
+    # No custom web UI needed - configuration is automatic via Home Assistant
     custom_app_url: Optional[str] = None
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
@@ -75,5 +75,9 @@ class HomeAssistantVoiceApp(ReachyMiniApp):
             logger.info("Voice assistant stopped.")
 
 
-# Entry point for the app
-App = HomeAssistantVoiceApp
+if __name__ == "__main__":
+    app = ReachyMiniHAVoiceApp()
+    try:
+        app.wrapped_run()
+    except KeyboardInterrupt:
+        app.stop()

@@ -27,7 +27,7 @@ from .zeroconf import HomeAssistantZeroconf
 _LOGGER = logging.getLogger(__name__)
 
 _MODULE_DIR = Path(__file__).parent
-_REPO_DIR = _MODULE_DIR.parent.parent
+_REPO_DIR = _MODULE_DIR.parent
 _WAKEWORDS_DIR = _REPO_DIR / "wakewords"
 _SOUNDS_DIR = _REPO_DIR / "sounds"
 
