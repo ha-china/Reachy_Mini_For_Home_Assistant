@@ -10,12 +10,30 @@ import logging
 import threading
 from typing import Optional
 
-from reachy_mini import ReachyMini, ReachyMiniApp
+logger = logging.getLogger(__name__)
+
+
+def _check_zenoh_available(timeout: float = 1.0) -> bool:
+    """Check if Zenoh service is available."""
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", 7447), timeout=timeout):
+            return True
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False
+
+
+# Only import ReachyMiniApp if we're running as an app
+try:
+    from reachy_mini import ReachyMini, ReachyMiniApp
+    REACHY_MINI_AVAILABLE = True
+except ImportError:
+    REACHY_MINI_AVAILABLE = False
+    ReachyMiniApp = object  # Dummy base class
+
 
 from .voice_assistant import VoiceAssistantService
 from .motion import ReachyMiniMotion
-
-logger = logging.getLogger(__name__)
 
 
 class ReachyMiniHAVoiceApp(ReachyMiniApp):
@@ -30,12 +48,12 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
     # No custom web UI needed - configuration is automatic via Home Assistant
     custom_app_url: Optional[str] = None
 
-    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
+    def run(self, reachy_mini, stop_event: threading.Event) -> None:
         """
         Main application entry point.
 
         Args:
-            reachy_mini: The Reachy Mini robot instance
+            reachy_mini: The Reachy Mini robot instance (can be None)
             stop_event: Event to signal graceful shutdown
         """
         logger.info("Starting Home Assistant Voice Assistant...")
@@ -55,6 +73,10 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             logger.info("=" * 50)
             logger.info("ESPHome Server: 0.0.0.0:6053")
             logger.info("Wake word: Okay Nabu")
+            if reachy_mini:
+                logger.info("Motion control: enabled")
+            else:
+                logger.info("Motion control: disabled (no robot)")
             logger.info("=" * 50)
             logger.info("To connect from Home Assistant:")
             logger.info("  Settings -> Devices & Services -> Add Integration")
@@ -75,9 +97,33 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             logger.info("Voice assistant stopped.")
 
 
-if __name__ == "__main__":
+def run_standalone():
+    """Run the voice assistant without Reachy Mini robot."""
+    logger.info("Running in standalone mode (no Reachy Mini robot)")
+
+    stop_event = threading.Event()
     app = ReachyMiniHAVoiceApp()
+
     try:
-        app.wrapped_run()
+        app.run(None, stop_event)
     except KeyboardInterrupt:
-        app.stop()
+        stop_event.set()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    # Check if Zenoh is available
+    if REACHY_MINI_AVAILABLE and _check_zenoh_available():
+        logger.info("Zenoh service detected, running as Reachy Mini app")
+        app = ReachyMiniHAVoiceApp()
+        try:
+            app.wrapped_run()
+        except KeyboardInterrupt:
+            app.stop()
+    else:
+        logger.info("Zenoh service not available, running in standalone mode")
+        run_standalone()
