@@ -1,6 +1,17 @@
+---
+title: Reachy Mini HA Voice
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: static
+pinned: false
+---
+
 # Reachy Mini Home Assistant Voice Assistant
 
 A voice assistant application for **Reachy Mini robot** that integrates with Home Assistant via ESPHome protocol.
+
+> **Note**: This is a Reachy Mini App, not a Hugging Face Space. Install it on your Reachy Mini robot.
 
 ## Features
 
