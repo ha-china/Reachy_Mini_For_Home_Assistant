@@ -381,3 +381,254 @@ class ReachyController:
             self.reachy.goto_target(antennas=(math.radians(angle_deg), left))
         except Exception as e:
             logger.error(f"Error setting right antenna: {e}")
+
+    # ========== Phase 4: Look At Control ==========
+
+    def get_look_at_x(self) -> float:
+        """Get look at target X coordinate in world frame (meters)."""
+        # This is a target position, not a current state
+        # We'll store it internally
+        return getattr(self, '_look_at_x', 0.0)
+
+    def set_look_at_x(self, x: float) -> None:
+        """Set look at target X coordinate."""
+        self._look_at_x = x
+        self._update_look_at()
+
+    def get_look_at_y(self) -> float:
+        """Get look at target Y coordinate in world frame (meters)."""
+        return getattr(self, '_look_at_y', 0.0)
+
+    def set_look_at_y(self, y: float) -> None:
+        """Set look at target Y coordinate."""
+        self._look_at_y = y
+        self._update_look_at()
+
+    def get_look_at_z(self) -> float:
+        """Get look at target Z coordinate in world frame (meters)."""
+        return getattr(self, '_look_at_z', 0.0)
+
+    def set_look_at_z(self, z: float) -> None:
+        """Set look at target Z coordinate."""
+        self._look_at_z = z
+        self._update_look_at()
+
+    def _update_look_at(self) -> None:
+        """Update robot to look at the target coordinates."""
+        if not self.is_available:
+            return
+        try:
+            x = getattr(self, '_look_at_x', 0.0)
+            y = getattr(self, '_look_at_y', 0.0)
+            z = getattr(self, '_look_at_z', 0.0)
+            self.reachy.look_at_world(x, y, z)
+            logger.info(f"Looking at world coordinates: ({x}, {y}, {z})")
+        except Exception as e:
+            logger.error(f"Error updating look at: {e}")
+
+    # ========== Phase 5: Audio Sensors ==========
+
+    def get_doa_angle(self) -> float:
+        """Get direction of arrival angle in degrees."""
+        if not self.is_available:
+            return 0.0
+        try:
+            state = self.reachy.get_full_state()
+            if hasattr(state, 'doa') and hasattr(state.doa, 'angle'):
+                return math.degrees(state.doa.angle)
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting DOA angle: {e}")
+            return 0.0
+
+    def get_speech_detected(self) -> bool:
+        """Check if speech is detected."""
+        if not self.is_available:
+            return False
+        try:
+            state = self.reachy.get_full_state()
+            if hasattr(state, 'doa') and hasattr(state.doa, 'speech_detected'):
+                return state.doa.speech_detected
+            return False
+        except Exception as e:
+            logger.error(f"Error getting speech detection: {e}")
+            return False
+
+    # ========== Phase 6: Diagnostic Information ==========
+
+    def get_control_loop_frequency(self) -> float:
+        """Get control loop frequency in Hz."""
+        if not self.is_available:
+            return 0.0
+        try:
+            # This would require access to control loop stats
+            # Placeholder implementation
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting control loop frequency: {e}")
+            return 0.0
+
+    def get_sdk_version(self) -> str:
+        """Get SDK version."""
+        if not self.is_available:
+            return "N/A"
+        try:
+            status = self.reachy.get_daemon_status()
+            if hasattr(status, 'version'):
+                return status.version
+            return "unknown"
+        except Exception as e:
+            logger.error(f"Error getting SDK version: {e}")
+            return "error"
+
+    def get_robot_name(self) -> str:
+        """Get robot name."""
+        if not self.is_available:
+            return "N/A"
+        try:
+            status = self.reachy.get_daemon_status()
+            if hasattr(status, 'robot_name'):
+                return status.robot_name
+            return "unknown"
+        except Exception as e:
+            logger.error(f"Error getting robot name: {e}")
+            return "error"
+
+    def get_wireless_version(self) -> bool:
+        """Check if this is a wireless version."""
+        if not self.is_available:
+            return False
+        try:
+            status = self.reachy.get_daemon_status()
+            if hasattr(status, 'wireless_version'):
+                return status.wireless_version
+            return False
+        except Exception as e:
+            logger.error(f"Error getting wireless version: {e}")
+            return False
+
+    def get_simulation_mode(self) -> bool:
+        """Check if simulation mode is enabled."""
+        if not self.is_available:
+            return False
+        try:
+            status = self.reachy.get_daemon_status()
+            if hasattr(status, 'simulation_enabled'):
+                return status.simulation_enabled
+            return False
+        except Exception as e:
+            logger.error(f"Error getting simulation mode: {e}")
+            return False
+
+    def get_wlan_ip(self) -> str:
+        """Get WLAN IP address."""
+        if not self.is_available:
+            return "N/A"
+        try:
+            status = self.reachy.get_daemon_status()
+            if hasattr(status, 'wlan_ip'):
+                return status.wlan_ip
+            return "N/A"
+        except Exception as e:
+            logger.error(f"Error getting WLAN IP: {e}")
+            return "error"
+
+    # ========== Phase 7: IMU Sensors (Wireless only) ==========
+
+    def get_imu_accel_x(self) -> float:
+        """Get IMU X-axis acceleration in m/s²."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'accelerometer' in imu_data:
+                    return float(imu_data['accelerometer'][0])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU accel X: {e}")
+            return 0.0
+
+    def get_imu_accel_y(self) -> float:
+        """Get IMU Y-axis acceleration in m/s²."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'accelerometer' in imu_data:
+                    return float(imu_data['accelerometer'][1])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU accel Y: {e}")
+            return 0.0
+
+    def get_imu_accel_z(self) -> float:
+        """Get IMU Z-axis acceleration in m/s²."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'accelerometer' in imu_data:
+                    return float(imu_data['accelerometer'][2])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU accel Z: {e}")
+            return 0.0
+
+    def get_imu_gyro_x(self) -> float:
+        """Get IMU X-axis angular velocity in rad/s."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'gyroscope' in imu_data:
+                    return float(imu_data['gyroscope'][0])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU gyro X: {e}")
+            return 0.0
+
+    def get_imu_gyro_y(self) -> float:
+        """Get IMU Y-axis angular velocity in rad/s."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'gyroscope' in imu_data:
+                    return float(imu_data['gyroscope'][1])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU gyro Y: {e}")
+            return 0.0
+
+    def get_imu_gyro_z(self) -> float:
+        """Get IMU Z-axis angular velocity in rad/s."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'gyroscope' in imu_data:
+                    return float(imu_data['gyroscope'][2])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU gyro Z: {e}")
+            return 0.0
+
+    def get_imu_temperature(self) -> float:
+        """Get IMU temperature in °C."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if hasattr(self.reachy, 'imu'):
+                imu_data = self.reachy.imu
+                if 'temperature' in imu_data:
+                    return float(imu_data['temperature'])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting IMU temperature: {e}")
+            return 0.0

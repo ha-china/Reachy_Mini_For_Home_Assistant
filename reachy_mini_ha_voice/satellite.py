@@ -75,6 +75,10 @@ class VoiceSatelliteProtocol(APIServer):
         self._setup_phase1_entities()
         self._setup_phase2_entities()
         self._setup_phase3_entities()
+        self._setup_phase4_entities()
+        self._setup_phase5_entities()
+        self._setup_phase6_entities()
+        self._setup_phase7_entities()
 
         self._is_streaming_audio = False
         self._tts_url: Optional[str] = None
@@ -752,3 +756,265 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.entities.append(antenna_right)
 
         _LOGGER.info("Phase 3 entities registered: head position/orientation, body_yaw, antennas")
+
+    def _setup_phase4_entities(self) -> None:
+        """Setup Phase 4 entities: Look at control."""
+
+        # Look at X coordinate
+        look_at_x = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Look At X",
+            object_id="look_at_x",
+            min_value=-2.0,
+            max_value=2.0,
+            step=0.1,
+            icon="mdi:crosshairs-gps",
+            unit_of_measurement="m",
+            mode=1,  # Box mode for precise input
+            value_getter=self.reachy_controller.get_look_at_x,
+            value_setter=self.reachy_controller.set_look_at_x,
+        )
+        self.state.entities.append(look_at_x)
+
+        # Look at Y coordinate
+        look_at_y = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Look At Y",
+            object_id="look_at_y",
+            min_value=-2.0,
+            max_value=2.0,
+            step=0.1,
+            icon="mdi:crosshairs-gps",
+            unit_of_measurement="m",
+            mode=1,
+            value_getter=self.reachy_controller.get_look_at_y,
+            value_setter=self.reachy_controller.set_look_at_y,
+        )
+        self.state.entities.append(look_at_y)
+
+        # Look at Z coordinate
+        look_at_z = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Look At Z",
+            object_id="look_at_z",
+            min_value=-2.0,
+            max_value=2.0,
+            step=0.1,
+            icon="mdi:crosshairs-gps",
+            unit_of_measurement="m",
+            mode=1,
+            value_getter=self.reachy_controller.get_look_at_z,
+            value_setter=self.reachy_controller.set_look_at_z,
+        )
+        self.state.entities.append(look_at_z)
+
+        _LOGGER.info("Phase 4 entities registered: look_at_x/y/z")
+
+    def _setup_phase5_entities(self) -> None:
+        """Setup Phase 5 entities: Audio sensors."""
+
+        # DOA angle sensor
+        doa_angle = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="DOA Angle",
+            object_id="doa_angle",
+            icon="mdi:compass",
+            unit_of_measurement="°",
+            accuracy_decimals=1,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_doa_angle,
+        )
+        self.state.entities.append(doa_angle)
+
+        # Speech detected sensor
+        speech_detected = BinarySensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Speech Detected",
+            object_id="speech_detected",
+            icon="mdi:microphone",
+            device_class="sound",
+            value_getter=self.reachy_controller.get_speech_detected,
+        )
+        self.state.entities.append(speech_detected)
+
+        _LOGGER.info("Phase 5 entities registered: doa_angle, speech_detected")
+
+    def _setup_phase6_entities(self) -> None:
+        """Setup Phase 6 entities: Diagnostic information."""
+
+        # Control loop frequency
+        control_loop_freq = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Control Loop Frequency",
+            object_id="control_loop_frequency",
+            icon="mdi:speedometer",
+            unit_of_measurement="Hz",
+            accuracy_decimals=1,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_control_loop_frequency,
+        )
+        self.state.entities.append(control_loop_freq)
+
+        # SDK version
+        sdk_version = TextSensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="SDK Version",
+            object_id="sdk_version",
+            icon="mdi:information",
+            value_getter=self.reachy_controller.get_sdk_version,
+        )
+        self.state.entities.append(sdk_version)
+
+        # Robot name
+        robot_name = TextSensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Robot Name",
+            object_id="robot_name",
+            icon="mdi:robot",
+            value_getter=self.reachy_controller.get_robot_name,
+        )
+        self.state.entities.append(robot_name)
+
+        # Wireless version
+        wireless_version = BinarySensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Wireless Version",
+            object_id="wireless_version",
+            icon="mdi:wifi",
+            device_class="connectivity",
+            value_getter=self.reachy_controller.get_wireless_version,
+        )
+        self.state.entities.append(wireless_version)
+
+        # Simulation mode
+        simulation_mode = BinarySensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Simulation Mode",
+            object_id="simulation_mode",
+            icon="mdi:virtual-reality",
+            value_getter=self.reachy_controller.get_simulation_mode,
+        )
+        self.state.entities.append(simulation_mode)
+
+        # WLAN IP
+        wlan_ip = TextSensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="WLAN IP",
+            object_id="wlan_ip",
+            icon="mdi:ip-network",
+            value_getter=self.reachy_controller.get_wlan_ip,
+        )
+        self.state.entities.append(wlan_ip)
+
+        _LOGGER.info("Phase 6 entities registered: control_loop_frequency, sdk_version, robot_name, wireless_version, simulation_mode, wlan_ip")
+
+    def _setup_phase7_entities(self) -> None:
+        """Setup Phase 7 entities: IMU sensors (wireless only)."""
+
+        # IMU Accelerometer
+        imu_accel_x = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Accel X",
+            object_id="imu_accel_x",
+            icon="mdi:axis-x-arrow",
+            unit_of_measurement="m/s²",
+            accuracy_decimals=3,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_accel_x,
+        )
+        self.state.entities.append(imu_accel_x)
+
+        imu_accel_y = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Accel Y",
+            object_id="imu_accel_y",
+            icon="mdi:axis-y-arrow",
+            unit_of_measurement="m/s²",
+            accuracy_decimals=3,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_accel_y,
+        )
+        self.state.entities.append(imu_accel_y)
+
+        imu_accel_z = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Accel Z",
+            object_id="imu_accel_z",
+            icon="mdi:axis-z-arrow",
+            unit_of_measurement="m/s²",
+            accuracy_decimals=3,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_accel_z,
+        )
+        self.state.entities.append(imu_accel_z)
+
+        # IMU Gyroscope
+        imu_gyro_x = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Gyro X",
+            object_id="imu_gyro_x",
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="rad/s",
+            accuracy_decimals=3,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_gyro_x,
+        )
+        self.state.entities.append(imu_gyro_x)
+
+        imu_gyro_y = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Gyro Y",
+            object_id="imu_gyro_y",
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="rad/s",
+            accuracy_decimals=3,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_gyro_y,
+        )
+        self.state.entities.append(imu_gyro_y)
+
+        imu_gyro_z = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Gyro Z",
+            object_id="imu_gyro_z",
+            icon="mdi:rotate-3d-variant",
+            unit_of_measurement="rad/s",
+            accuracy_decimals=3,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_gyro_z,
+        )
+        self.state.entities.append(imu_gyro_z)
+
+        # IMU Temperature
+        imu_temperature = SensorEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="IMU Temperature",
+            object_id="imu_temperature",
+            icon="mdi:thermometer",
+            unit_of_measurement="°C",
+            accuracy_decimals=1,
+            device_class="temperature",
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_imu_temperature,
+        )
+        self.state.entities.append(imu_temperature)
+
+        _LOGGER.info("Phase 7 entities registered: IMU accelerometer, gyroscope, temperature")
