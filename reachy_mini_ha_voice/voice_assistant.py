@@ -364,24 +364,59 @@ class VoiceAssistantService:
         """Process audio using Reachy Mini's microphone."""
         from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
         from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
+        from scipy.signal import resample
+
+        # Get sample rate from Reachy Mini
+        try:
+            input_sample_rate = self.reachy_mini.media.get_input_audio_samplerate()
+        except Exception:
+            input_sample_rate = 16000  # Default fallback
+
+        target_sample_rate = 16000  # Wake word models expect 16kHz
 
         while self._running:
             try:
-                # Get audio from Reachy Mini
+                # Get audio from Reachy Mini (returns numpy array)
                 audio_data = self.reachy_mini.media.get_audio_sample()
 
-                if audio_data is None or len(audio_data) == 0:
+                if audio_data is None:
                     time.sleep(0.01)
                     continue
 
-                # Convert stereo to mono if needed (take first channel)
-                if audio_data.ndim > 1:
-                    audio_chunk_array = audio_data[:, 0]
-                else:
-                    audio_chunk_array = audio_data
+                # Convert to numpy array if needed
+                audio_data = np.asarray(audio_data)
 
-                # Ensure float32
-                audio_chunk_array = audio_chunk_array.astype(np.float32)
+                if audio_data.size == 0:
+                    time.sleep(0.01)
+                    continue
+
+                # Handle multi-dimensional arrays (stereo/multi-channel)
+                if audio_data.ndim == 2:
+                    # Prefer small first dim as channels
+                    if audio_data.shape[0] <= 8 and audio_data.shape[0] <= audio_data.shape[1]:
+                        audio_data = np.mean(audio_data, axis=0)
+                    else:
+                        audio_data = np.mean(audio_data, axis=1)
+                elif audio_data.ndim > 2:
+                    audio_data = np.mean(audio_data.reshape(audio_data.shape[0], -1), axis=0)
+
+                # Convert to float32 and normalize to [-1.0, 1.0]
+                if np.issubdtype(audio_data.dtype, np.floating):
+                    audio_chunk_array = audio_data.astype(np.float32)
+                elif np.issubdtype(audio_data.dtype, np.integer):
+                    info = np.iinfo(audio_data.dtype)
+                    scale = float(max(-info.min, info.max))
+                    audio_chunk_array = audio_data.astype(np.float32) / scale
+                else:
+                    # Skip invalid data types
+                    time.sleep(0.01)
+                    continue
+
+                # Resample if needed
+                if input_sample_rate != target_sample_rate:
+                    num_samples = int(len(audio_chunk_array) * target_sample_rate / input_sample_rate)
+                    if num_samples > 0:
+                        audio_chunk_array = resample(audio_chunk_array, num_samples).astype(np.float32)
 
                 # Convert to 16-bit PCM for streaming to Home Assistant
                 audio_chunk = (
@@ -484,15 +519,21 @@ class VoiceAssistantService:
             if has_oww:
                 oww_features = OpenWakeWordFeatures.from_builtin()
 
-        # Extract features
+        # Extract features - ensure audio is float32
+        audio_chunk_array = audio_chunk_array.astype(np.float32)
+        
         micro_inputs.clear()
         oww_inputs.clear()
 
         if micro_features:
-            micro_inputs.extend(micro_features.process_streaming(audio_chunk_array))
+            features = micro_features.process_streaming(audio_chunk_array)
+            if features:
+                micro_inputs.extend(features)
 
         if oww_features:
-            oww_inputs.extend(oww_features.process_streaming(audio_chunk_array))
+            features = oww_features.process_streaming(audio_chunk_array)
+            if features:
+                oww_inputs.extend(features)
 
         # Process wake words
         if self._state:
@@ -520,7 +561,8 @@ class VoiceAssistantService:
                         if self._state.satellite:
                             self._state.satellite.wakeup(wake_word)
                             # Trigger motion
-                            self._motion.on_wakeup()
+                            if self._motion:
+                                self._motion.on_wakeup()
                         last_active = now
 
             # Process stop word

@@ -4,6 +4,8 @@ import logging
 import socket
 from typing import Optional
 
+from .util import get_mac
+
 _LOGGER = logging.getLogger(__name__)
 
 try:
@@ -22,7 +24,7 @@ class HomeAssistantZeroconf:
         self, port: int, name: Optional[str] = None, host: Optional[str] = None
     ) -> None:
         self.port = port
-        self.name = name or _get_mac_address()
+        self.name = name or f"reachy-mini-{get_mac()[:6]}"
 
         if not host:
             test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -41,6 +43,7 @@ class HomeAssistantZeroconf:
         self._aiozc = AsyncZeroconf()
 
     async def register_server(self) -> None:
+        mac_address = get_mac()
         service_info = AsyncServiceInfo(
             "_esphomelib._tcp.local.",
             f"{self.name}._esphomelib._tcp.local.",
@@ -48,7 +51,7 @@ class HomeAssistantZeroconf:
             port=self.port,
             properties={
                 "version": "2025.9.0",
-                "mac": _get_mac_address(),
+                "mac": mac_address,
                 "board": "reachy_mini",
                 "platform": "REACHY_MINI",
                 "network": "ethernet",
@@ -61,13 +64,3 @@ class HomeAssistantZeroconf:
 
     async def unregister_server(self) -> None:
         await self._aiozc.async_close()
-
-
-def _get_mac_address() -> str:
-    """Return MAC address formatted as hex with no colons."""
-    import uuid
-    return "".join(
-        ["{:02x}".format((uuid.getnode() >> ele) & 0xFF) for ele in range(0, 8 * 6, 8)][
-            ::-1
-        ]
-    )
