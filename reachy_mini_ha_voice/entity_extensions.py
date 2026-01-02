@@ -27,6 +27,14 @@ from .entity import ESPHomeEntity
 logger = logging.getLogger(__name__)
 
 
+class SensorStateClass:
+    """ESPHome SensorStateClass enum values."""
+    NONE = 0
+    MEASUREMENT = 1
+    TOTAL_INCREASING = 2
+    TOTAL = 3
+
+
 class SensorEntity(ESPHomeEntity):
     """Sensor entity for ESPHome (read-only numeric values)."""
 
@@ -40,7 +48,7 @@ class SensorEntity(ESPHomeEntity):
         unit_of_measurement: str = "",
         accuracy_decimals: int = 2,
         device_class: str = "",
-        state_class: str = "",
+        state_class: int = SensorStateClass.NONE,
         value_getter: Optional[Callable[[], float]] = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
@@ -51,7 +59,17 @@ class SensorEntity(ESPHomeEntity):
         self.unit_of_measurement = unit_of_measurement
         self.accuracy_decimals = accuracy_decimals
         self.device_class = device_class
-        self.state_class = state_class
+        # Convert string state_class to int if needed (for backward compatibility)
+        if isinstance(state_class, str):
+            state_class_map = {
+                "": SensorStateClass.NONE,
+                "measurement": SensorStateClass.MEASUREMENT,
+                "total_increasing": SensorStateClass.TOTAL_INCREASING,
+                "total": SensorStateClass.TOTAL,
+            }
+            self.state_class = state_class_map.get(state_class.lower(), SensorStateClass.NONE)
+        else:
+            self.state_class = state_class
         self._value_getter = value_getter
         self._value = 0.0
 

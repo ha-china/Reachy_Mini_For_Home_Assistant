@@ -393,9 +393,20 @@ class VoiceAssistantService:
                     continue
 
                 # Validate dtype - SDK returns float32
+                # Check for string/bytes dtype which cannot be converted
+                if audio_data.dtype.kind in ('S', 'U', 'O'):  # bytes, unicode, object
+                    _LOGGER.debug("Audio data has non-numeric dtype: %s, skipping", audio_data.dtype)
+                    time.sleep(0.01)
+                    continue
+
                 if audio_data.dtype != np.float32:
                     _LOGGER.debug("Unexpected audio dtype: %s, converting", audio_data.dtype)
                     try:
+                        # Ensure we have numeric data before conversion
+                        if not np.issubdtype(audio_data.dtype, np.number):
+                            _LOGGER.debug("Non-numeric audio dtype: %s, skipping", audio_data.dtype)
+                            time.sleep(0.01)
+                            continue
                         audio_data = audio_data.astype(np.float32)
                     except (TypeError, ValueError) as e:
                         _LOGGER.debug("Failed to convert audio dtype: %s", e)
