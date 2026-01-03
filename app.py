@@ -32,6 +32,11 @@ with gr.Blocks(title="Reachy Mini HA Voice") as demo:
 
     After installation on Reachy Mini:
 
+    **Automatic Discovery (Recommended):**
+    - Home Assistant will automatically discover your Reachy Mini via mDNS
+    - A notification will appear in Home Assistant - just click to add the device
+
+    **Manual Setup (if auto-discovery fails):**
     1. Open Home Assistant
     2. Go to **Settings** → **Devices & Services** → **Add Integration**
     3. Search for **ESPHome**

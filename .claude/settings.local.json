@@ -4,7 +4,8 @@
   "permissions": {
     "allow": [
       "SlashCommand(/zcf:git-commit)",
-      "Edit"
+      "Edit",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []
