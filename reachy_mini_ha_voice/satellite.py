@@ -6,9 +6,12 @@ import posixpath
 import shutil
 import time
 from collections.abc import Iterable
-from typing import Dict, Optional, Set, Union
+from typing import Dict, Optional, Set, Union, TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
+
+if TYPE_CHECKING:
+    from .camera_server import MJPEGCameraServer
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
@@ -57,10 +60,92 @@ _LOGGER = logging.getLogger(__name__)
 class VoiceSatelliteProtocol(APIServer):
     """Voice satellite protocol handler for ESPHome."""
 
-    def __init__(self, state: ServerState) -> None:
+    # Fixed entity key mapping - ensures consistent keys across restarts
+    # Keys are based on object_id hash to ensure uniqueness and consistency
+    ENTITY_KEYS = {
+        # Media player (key 0 reserved)
+        "reachy_mini_media_player": 0,
+        # Phase 1: Basic status and volume
+        "daemon_state": 100,
+        "backend_ready": 101,
+        "error_message": 102,
+        "speaker_volume": 103,
+        # Phase 2: Motor control
+        "motors_enabled": 200,
+        "motor_mode": 201,
+        "wake_up": 202,
+        "go_to_sleep": 203,
+        # Phase 3: Pose control
+        "head_x": 300,
+        "head_y": 301,
+        "head_z": 302,
+        "head_roll": 303,
+        "head_pitch": 304,
+        "head_yaw": 305,
+        "body_yaw": 306,
+        "antenna_left": 307,
+        "antenna_right": 308,
+        # Phase 4: Look at control
+        "look_at_x": 400,
+        "look_at_y": 401,
+        "look_at_z": 402,
+        # Phase 5: Audio sensors
+        "doa_angle": 500,
+        "speech_detected": 501,
+        # Phase 6: Diagnostic information
+        "control_loop_frequency": 600,
+        "sdk_version": 601,
+        "robot_name": 602,
+        "wireless_version": 603,
+        "simulation_mode": 604,
+        "wlan_ip": 605,
+        # Phase 7: IMU sensors
+        "imu_accel_x": 700,
+        "imu_accel_y": 701,
+        "imu_accel_z": 702,
+        "imu_gyro_x": 703,
+        "imu_gyro_y": 704,
+        "imu_gyro_z": 705,
+        "imu_temperature": 706,
+        # Phase 8: Emotions
+        "emotion_happy": 800,
+        "emotion_sad": 801,
+        "emotion_angry": 802,
+        "emotion_fear": 803,
+        "emotion_surprise": 804,
+        "emotion_disgust": 805,
+        # Phase 9: Audio controls
+        "microphone_volume": 900,
+        # Phase 10: Camera status
+        "camera_streaming": 1000,
+        "camera_fps": 1001,
+        "camera_url": 1002,
+        # Phase 11: LED control
+        "led_brightness": 1100,
+        "led_effect": 1101,
+        "led_color_r": 1102,
+        "led_color_g": 1103,
+        "led_color_b": 1104,
+        # Phase 12: Audio processing
+        "agc_enabled": 1200,
+        "agc_max_gain": 1201,
+        "noise_suppression": 1202,
+        "echo_cancellation_converged": 1203,
+    }
+
+    def _get_entity_key(self, object_id: str) -> int:
+        """Get a consistent entity key for the given object_id."""
+        if object_id in self.ENTITY_KEYS:
+            return self.ENTITY_KEYS[object_id]
+        # Fallback: generate key from hash (should not happen if all entities are registered)
+        _LOGGER.warning(f"Entity key not found for {object_id}, generating from hash")
+        return abs(hash(object_id)) % 10000 + 2000
+
+    def __init__(self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None) -> None:
         super().__init__(state.name)
         self.state = state
         self.state.satellite = self
+        self.camera_server = camera_server
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -72,7 +157,7 @@ class VoiceSatelliteProtocol(APIServer):
         if self.state.media_player_entity is None:
             self.state.media_player_entity = MediaPlayerEntity(
                 server=self,
-                key=len(state.entities),
+                key=self._get_entity_key("reachy_mini_media_player"),
                 name="Media Player",
                 object_id="reachy_mini_media_player",
                 music_player=state.music_player,
@@ -90,6 +175,9 @@ class VoiceSatelliteProtocol(APIServer):
         self._setup_phase7_entities()
         self._setup_phase8_entities()
         self._setup_phase9_entities()
+        self._setup_phase10_entities()  # Camera status
+        self._setup_phase11_entities()  # LED control
+        self._setup_phase12_entities()  # Audio processing
 
         self._is_streaming_audio = False
         self._tts_url: Optional[str] = None
@@ -561,7 +649,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Daemon state sensor
         daemon_state_sensor = TextSensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("daemon_state"),
             name="Daemon State",
             object_id="daemon_state",
             icon="mdi:robot",
@@ -572,7 +660,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Backend ready sensor
         backend_ready_sensor = BinarySensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("backend_ready"),
             name="Backend Ready",
             object_id="backend_ready",
             icon="mdi:check-circle",
@@ -584,7 +672,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Error message sensor
         error_message_sensor = TextSensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("error_message"),
             name="Error Message",
             object_id="error_message",
             icon="mdi:alert-circle",
@@ -595,7 +683,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Speaker volume control
         speaker_volume = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("speaker_volume"),
             name="Speaker Volume",
             object_id="speaker_volume",
             min_value=0.0,
@@ -617,7 +705,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Motors enabled switch
         motors_enabled = SwitchEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("motors_enabled"),
             name="Motors Enabled",
             object_id="motors_enabled",
             icon="mdi:engine",
@@ -630,7 +718,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Motor mode select
         motor_mode = SelectEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("motor_mode"),
             name="Motor Mode",
             object_id="motor_mode",
             options=["enabled", "disabled", "gravity_compensation"],
@@ -643,7 +731,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Wake up button
         wake_up_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("wake_up"),
             name="Wake Up",
             object_id="wake_up",
             icon="mdi:alarm",
@@ -655,7 +743,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Go to sleep button
         sleep_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("go_to_sleep"),
             name="Go to Sleep",
             object_id="go_to_sleep",
             icon="mdi:sleep",
@@ -672,7 +760,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Head position controls (X, Y, Z in mm)
         head_x = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("head_x"),
             name="Head X Position",
             object_id="head_x",
             min_value=-50.0,
@@ -688,7 +776,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         head_y = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("head_y"),
             name="Head Y Position",
             object_id="head_y",
             min_value=-50.0,
@@ -704,7 +792,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         head_z = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("head_z"),
             name="Head Z Position",
             object_id="head_z",
             min_value=-50.0,
@@ -721,7 +809,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Head orientation controls (Roll, Pitch, Yaw in degrees)
         head_roll = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("head_roll"),
             name="Head Roll",
             object_id="head_roll",
             min_value=-40.0,
@@ -737,7 +825,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         head_pitch = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("head_pitch"),
             name="Head Pitch",
             object_id="head_pitch",
             min_value=-40.0,
@@ -753,7 +841,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         head_yaw = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("head_yaw"),
             name="Head Yaw",
             object_id="head_yaw",
             min_value=-180.0,
@@ -770,7 +858,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Body yaw control
         body_yaw = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("body_yaw"),
             name="Body Yaw",
             object_id="body_yaw",
             min_value=-160.0,
@@ -787,7 +875,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Antenna controls
         antenna_left = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("antenna_left"),
             name="Left Antenna",
             object_id="antenna_left",
             min_value=-90.0,
@@ -803,7 +891,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         antenna_right = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("antenna_right"),
             name="Right Antenna",
             object_id="antenna_right",
             min_value=-90.0,
@@ -825,7 +913,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Look at X coordinate
         look_at_x = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("look_at_x"),
             name="Look At X",
             object_id="look_at_x",
             min_value=-2.0,
@@ -842,7 +930,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Look at Y coordinate
         look_at_y = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("look_at_y"),
             name="Look At Y",
             object_id="look_at_y",
             min_value=-2.0,
@@ -859,7 +947,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Look at Z coordinate
         look_at_z = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("look_at_z"),
             name="Look At Z",
             object_id="look_at_z",
             min_value=-2.0,
@@ -881,7 +969,7 @@ class VoiceSatelliteProtocol(APIServer):
         # DOA angle sensor
         self._doa_angle_entity = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("doa_angle"),
             name="DOA Angle",
             object_id="doa_angle",
             icon="mdi:compass",
@@ -895,7 +983,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Speech detected sensor
         self._speech_detected_entity = BinarySensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("speech_detected"),
             name="Speech Detected",
             object_id="speech_detected",
             icon="mdi:microphone",
@@ -912,7 +1000,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Control loop frequency
         control_loop_freq = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("control_loop_frequency"),
             name="Control Loop Frequency",
             object_id="control_loop_frequency",
             icon="mdi:speedometer",
@@ -926,7 +1014,7 @@ class VoiceSatelliteProtocol(APIServer):
         # SDK version
         sdk_version = TextSensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("sdk_version"),
             name="SDK Version",
             object_id="sdk_version",
             icon="mdi:information",
@@ -937,7 +1025,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Robot name
         robot_name = TextSensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("robot_name"),
             name="Robot Name",
             object_id="robot_name",
             icon="mdi:robot",
@@ -948,7 +1036,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Wireless version
         wireless_version = BinarySensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("wireless_version"),
             name="Wireless Version",
             object_id="wireless_version",
             icon="mdi:wifi",
@@ -960,7 +1048,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Simulation mode
         simulation_mode = BinarySensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("simulation_mode"),
             name="Simulation Mode",
             object_id="simulation_mode",
             icon="mdi:virtual-reality",
@@ -971,7 +1059,7 @@ class VoiceSatelliteProtocol(APIServer):
         # WLAN IP
         wlan_ip = TextSensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("wlan_ip"),
             name="WLAN IP",
             object_id="wlan_ip",
             icon="mdi:ip-network",
@@ -987,7 +1075,7 @@ class VoiceSatelliteProtocol(APIServer):
         # IMU Accelerometer
         imu_accel_x = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_accel_x"),
             name="IMU Accel X",
             object_id="imu_accel_x",
             icon="mdi:axis-x-arrow",
@@ -1000,7 +1088,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         imu_accel_y = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_accel_y"),
             name="IMU Accel Y",
             object_id="imu_accel_y",
             icon="mdi:axis-y-arrow",
@@ -1013,7 +1101,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         imu_accel_z = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_accel_z"),
             name="IMU Accel Z",
             object_id="imu_accel_z",
             icon="mdi:axis-z-arrow",
@@ -1027,7 +1115,7 @@ class VoiceSatelliteProtocol(APIServer):
         # IMU Gyroscope
         imu_gyro_x = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_gyro_x"),
             name="IMU Gyro X",
             object_id="imu_gyro_x",
             icon="mdi:rotate-3d-variant",
@@ -1040,7 +1128,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         imu_gyro_y = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_gyro_y"),
             name="IMU Gyro Y",
             object_id="imu_gyro_y",
             icon="mdi:rotate-3d-variant",
@@ -1053,7 +1141,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         imu_gyro_z = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_gyro_z"),
             name="IMU Gyro Z",
             object_id="imu_gyro_z",
             icon="mdi:rotate-3d-variant",
@@ -1067,7 +1155,7 @@ class VoiceSatelliteProtocol(APIServer):
         # IMU Temperature
         imu_temperature = SensorEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("imu_temperature"),
             name="IMU Temperature",
             object_id="imu_temperature",
             icon="mdi:thermometer",
@@ -1087,7 +1175,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Happy emotion
         happy_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("emotion_happy"),
             name="Happy",
             object_id="emotion_happy",
             icon="mdi:emoticon-happy",
@@ -1099,7 +1187,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Sad emotion
         sad_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("emotion_sad"),
             name="Sad",
             object_id="emotion_sad",
             icon="mdi:emoticon-sad",
@@ -1111,7 +1199,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Angry emotion
         angry_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("emotion_angry"),
             name="Angry",
             object_id="emotion_angry",
             icon="mdi:emoticon-angry",
@@ -1123,7 +1211,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Fear emotion
         fear_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("emotion_fear"),
             name="Fear",
             object_id="emotion_fear",
             icon="mdi:emoticon-frown",
@@ -1135,7 +1223,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Surprise emotion
         surprise_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("emotion_surprise"),
             name="Surprise",
             object_id="emotion_surprise",
             icon="mdi:emoticon-surprised",
@@ -1147,7 +1235,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Disgust emotion
         disgust_button = ButtonEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("emotion_disgust"),
             name="Disgust",
             object_id="emotion_disgust",
             icon="mdi:emoticon-poop",
@@ -1164,7 +1252,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Microphone volume control
         microphone_volume = NumberEntity(
             server=self,
-            key=len(self.state.entities),
+            key=self._get_entity_key("microphone_volume"),
             name="Microphone Volume",
             object_id="microphone_volume",
             min_value=0.0,
@@ -1179,3 +1267,192 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.entities.append(microphone_volume)
 
         _LOGGER.info("Phase 9 entities registered: microphone_volume")
+
+    def _setup_phase10_entities(self) -> None:
+        """Setup Phase 10 entities: Camera status."""
+
+        # Camera streaming status
+        camera_streaming = BinarySensorEntity(
+            server=self,
+            key=self._get_entity_key("camera_streaming"),
+            name="Camera Streaming",
+            object_id="camera_streaming",
+            icon="mdi:camera",
+            device_class="running",
+            value_getter=self.reachy_controller.get_camera_streaming,
+        )
+        self.state.entities.append(camera_streaming)
+
+        # Camera FPS
+        camera_fps = SensorEntity(
+            server=self,
+            key=self._get_entity_key("camera_fps"),
+            name="Camera FPS",
+            object_id="camera_fps",
+            icon="mdi:camera-timer",
+            unit_of_measurement="fps",
+            accuracy_decimals=0,
+            state_class="measurement",
+            value_getter=self.reachy_controller.get_camera_fps,
+        )
+        self.state.entities.append(camera_fps)
+
+        # Camera URL
+        camera_url = TextSensorEntity(
+            server=self,
+            key=self._get_entity_key("camera_url"),
+            name="Camera URL",
+            object_id="camera_url",
+            icon="mdi:link",
+            value_getter=self.reachy_controller.get_camera_url,
+        )
+        self.state.entities.append(camera_url)
+
+        _LOGGER.info("Phase 10 entities registered: camera_streaming, camera_fps, camera_url")
+
+    def _setup_phase11_entities(self) -> None:
+        """Setup Phase 11 entities: LED control (via local SDK)."""
+
+        # LED Brightness
+        led_brightness = NumberEntity(
+            server=self,
+            key=self._get_entity_key("led_brightness"),
+            name="LED Brightness",
+            object_id="led_brightness",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            icon="mdi:brightness-6",
+            unit_of_measurement="%",
+            mode=2,  # Slider mode
+            value_getter=self.reachy_controller.get_led_brightness,
+            value_setter=self.reachy_controller.set_led_brightness,
+        )
+        self.state.entities.append(led_brightness)
+
+        # LED Effect
+        led_effect = SelectEntity(
+            server=self,
+            key=self._get_entity_key("led_effect"),
+            name="LED Effect",
+            object_id="led_effect",
+            options=["off", "solid", "breathing", "rainbow", "doa"],
+            icon="mdi:led-on",
+            value_getter=self.reachy_controller.get_led_effect,
+            value_setter=self.reachy_controller.set_led_effect,
+        )
+        self.state.entities.append(led_effect)
+
+        # LED Color R
+        led_color_r = NumberEntity(
+            server=self,
+            key=self._get_entity_key("led_color_r"),
+            name="LED Color Red",
+            object_id="led_color_r",
+            min_value=0.0,
+            max_value=255.0,
+            step=1.0,
+            icon="mdi:palette",
+            mode=2,
+            value_getter=self.reachy_controller.get_led_color_r,
+            value_setter=self.reachy_controller.set_led_color_r,
+        )
+        self.state.entities.append(led_color_r)
+
+        # LED Color G
+        led_color_g = NumberEntity(
+            server=self,
+            key=self._get_entity_key("led_color_g"),
+            name="LED Color Green",
+            object_id="led_color_g",
+            min_value=0.0,
+            max_value=255.0,
+            step=1.0,
+            icon="mdi:palette",
+            mode=2,
+            value_getter=self.reachy_controller.get_led_color_g,
+            value_setter=self.reachy_controller.set_led_color_g,
+        )
+        self.state.entities.append(led_color_g)
+
+        # LED Color B
+        led_color_b = NumberEntity(
+            server=self,
+            key=self._get_entity_key("led_color_b"),
+            name="LED Color Blue",
+            object_id="led_color_b",
+            min_value=0.0,
+            max_value=255.0,
+            step=1.0,
+            icon="mdi:palette",
+            mode=2,
+            value_getter=self.reachy_controller.get_led_color_b,
+            value_setter=self.reachy_controller.set_led_color_b,
+        )
+        self.state.entities.append(led_color_b)
+
+        _LOGGER.info("Phase 11 entities registered: led_brightness, led_effect, led_color_r/g/b")
+
+    def _setup_phase12_entities(self) -> None:
+        """Setup Phase 12 entities: Audio processing parameters (via local SDK)."""
+
+        # AGC Enabled
+        agc_enabled = SwitchEntity(
+            server=self,
+            key=self._get_entity_key("agc_enabled"),
+            name="AGC Enabled",
+            object_id="agc_enabled",
+            icon="mdi:tune-vertical",
+            device_class="switch",
+            value_getter=self.reachy_controller.get_agc_enabled,
+            value_setter=self.reachy_controller.set_agc_enabled,
+        )
+        self.state.entities.append(agc_enabled)
+
+        # AGC Max Gain
+        agc_max_gain = NumberEntity(
+            server=self,
+            key=self._get_entity_key("agc_max_gain"),
+            name="AGC Max Gain",
+            object_id="agc_max_gain",
+            min_value=0.0,
+            max_value=30.0,
+            step=1.0,
+            icon="mdi:volume-plus",
+            unit_of_measurement="dB",
+            mode=2,
+            value_getter=self.reachy_controller.get_agc_max_gain,
+            value_setter=self.reachy_controller.set_agc_max_gain,
+        )
+        self.state.entities.append(agc_max_gain)
+
+        # Noise Suppression Level
+        noise_suppression = NumberEntity(
+            server=self,
+            key=self._get_entity_key("noise_suppression"),
+            name="Noise Suppression",
+            object_id="noise_suppression",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            icon="mdi:volume-off",
+            unit_of_measurement="%",
+            mode=2,
+            value_getter=self.reachy_controller.get_noise_suppression,
+            value_setter=self.reachy_controller.set_noise_suppression,
+        )
+        self.state.entities.append(noise_suppression)
+
+        # Echo Cancellation Converged
+        echo_cancellation_converged = BinarySensorEntity(
+            server=self,
+            key=self._get_entity_key("echo_cancellation_converged"),
+            name="Echo Cancellation Converged",
+            object_id="echo_cancellation_converged",
+            icon="mdi:waveform",
+            device_class="running",
+            value_getter=self.reachy_controller.get_echo_cancellation_converged,
+        )
+        self.state.entities.append(echo_cancellation_converged)
+
+        _LOGGER.info("Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged")

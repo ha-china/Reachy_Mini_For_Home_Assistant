@@ -755,3 +755,289 @@ class ReachyController:
         except Exception as e:
             logger.error(f"Error getting IMU temperature: {e}")
             return 0.0
+
+    # ========== Phase 10: Camera Status ==========
+
+    def get_camera_streaming(self) -> bool:
+        """Check if camera is streaming."""
+        if not self.is_available:
+            return False
+        try:
+            # Check if media manager has camera initialized
+            if self.reachy.media and self.reachy.media.camera:
+                return True
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking camera streaming: {e}")
+            return False
+
+    def get_camera_fps(self) -> float:
+        """Get camera FPS."""
+        if not self.is_available:
+            return 0.0
+        try:
+            if self.reachy.media and self.reachy.media.camera:
+                return float(self.reachy.media.camera.framerate)
+            return 0.0
+        except Exception as e:
+            logger.debug(f"Error getting camera FPS: {e}")
+            return 0.0
+
+    def get_camera_url(self) -> str:
+        """Get camera stream URL."""
+        if not self.is_available:
+            return "N/A"
+        try:
+            status = self.reachy.client.get_status(wait=False)
+            wlan_ip = status.get('wlan_ip', 'localhost')
+            return f"http://{wlan_ip}:8081/stream"
+        except Exception as e:
+            logger.debug(f"Error getting camera URL: {e}")
+            return "N/A"
+
+    # ========== Phase 11: LED Control (via local SDK) ==========
+
+    def _get_respeaker(self):
+        """Get ReSpeaker device from media manager."""
+        if not self.is_available:
+            return None
+        try:
+            if self.reachy.media and self.reachy.media.audio:
+                return self.reachy.media.audio._respeaker
+            return None
+        except Exception:
+            return None
+
+    def get_led_brightness(self) -> float:
+        """Get LED brightness (0-100)."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_led_brightness', 50.0)
+        try:
+            result = respeaker.read("LED_BRIGHTNESS")
+            if result is not None:
+                # LED_BRIGHTNESS is 0-255, convert to 0-100
+                self._led_brightness = (result[1] / 255.0) * 100.0
+                return self._led_brightness
+        except Exception as e:
+            logger.debug(f"Error getting LED brightness: {e}")
+        return getattr(self, '_led_brightness', 50.0)
+
+    def set_led_brightness(self, brightness: float) -> None:
+        """Set LED brightness (0-100)."""
+        brightness = max(0.0, min(100.0, brightness))
+        self._led_brightness = brightness
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return
+        try:
+            # Convert 0-100 to 0-255
+            value = int((brightness / 100.0) * 255)
+            respeaker.write("LED_BRIGHTNESS", [value])
+            logger.info(f"LED brightness set to {brightness}%")
+        except Exception as e:
+            logger.error(f"Error setting LED brightness: {e}")
+
+    def get_led_effect(self) -> str:
+        """Get current LED effect."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_led_effect', 'off')
+        try:
+            result = respeaker.read("LED_EFFECT")
+            if result is not None:
+                effect_map = {0: 'off', 1: 'solid', 2: 'breathing', 3: 'rainbow', 4: 'doa'}
+                self._led_effect = effect_map.get(result[1], 'off')
+                return self._led_effect
+        except Exception as e:
+            logger.debug(f"Error getting LED effect: {e}")
+        return getattr(self, '_led_effect', 'off')
+
+    def set_led_effect(self, effect: str) -> None:
+        """Set LED effect."""
+        self._led_effect = effect
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return
+        try:
+            effect_map = {'off': 0, 'solid': 1, 'breathing': 2, 'rainbow': 3, 'doa': 4}
+            value = effect_map.get(effect, 0)
+            respeaker.write("LED_EFFECT", [value])
+            logger.info(f"LED effect set to {effect}")
+        except Exception as e:
+            logger.error(f"Error setting LED effect: {e}")
+
+    def get_led_color_r(self) -> float:
+        """Get LED red color component (0-255)."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_led_color_r', 0.0)
+        try:
+            result = respeaker.read("LED_COLOR")
+            if result is not None:
+                # LED_COLOR is a 32-bit value: 0x00RRGGBB
+                color = result[1] if len(result) > 1 else 0
+                self._led_color_r = float((color >> 16) & 0xFF)
+                return self._led_color_r
+        except Exception as e:
+            logger.debug(f"Error getting LED color R: {e}")
+        return getattr(self, '_led_color_r', 0.0)
+
+    def set_led_color_r(self, value: float) -> None:
+        """Set LED red color component (0-255)."""
+        self._led_color_r = max(0.0, min(255.0, value))
+        self._update_led_color()
+
+    def get_led_color_g(self) -> float:
+        """Get LED green color component (0-255)."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_led_color_g', 0.0)
+        try:
+            result = respeaker.read("LED_COLOR")
+            if result is not None:
+                color = result[1] if len(result) > 1 else 0
+                self._led_color_g = float((color >> 8) & 0xFF)
+                return self._led_color_g
+        except Exception as e:
+            logger.debug(f"Error getting LED color G: {e}")
+        return getattr(self, '_led_color_g', 0.0)
+
+    def set_led_color_g(self, value: float) -> None:
+        """Set LED green color component (0-255)."""
+        self._led_color_g = max(0.0, min(255.0, value))
+        self._update_led_color()
+
+    def get_led_color_b(self) -> float:
+        """Get LED blue color component (0-255)."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_led_color_b', 0.0)
+        try:
+            result = respeaker.read("LED_COLOR")
+            if result is not None:
+                color = result[1] if len(result) > 1 else 0
+                self._led_color_b = float(color & 0xFF)
+                return self._led_color_b
+        except Exception as e:
+            logger.debug(f"Error getting LED color B: {e}")
+        return getattr(self, '_led_color_b', 0.0)
+
+    def set_led_color_b(self, value: float) -> None:
+        """Set LED blue color component (0-255)."""
+        self._led_color_b = max(0.0, min(255.0, value))
+        self._update_led_color()
+
+    def _update_led_color(self) -> None:
+        """Update LED color from R, G, B components."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return
+        try:
+            r = int(getattr(self, '_led_color_r', 0))
+            g = int(getattr(self, '_led_color_g', 0))
+            b = int(getattr(self, '_led_color_b', 0))
+            color = (r << 16) | (g << 8) | b
+            respeaker.write("LED_COLOR", [color])
+            logger.info(f"LED color set to RGB({r}, {g}, {b})")
+        except Exception as e:
+            logger.error(f"Error setting LED color: {e}")
+
+    # ========== Phase 12: Audio Processing (via local SDK) ==========
+
+    def get_agc_enabled(self) -> bool:
+        """Get AGC (Automatic Gain Control) enabled status."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_agc_enabled', False)
+        try:
+            result = respeaker.read("PP_AGCONOFF")
+            if result is not None:
+                self._agc_enabled = bool(result[1])
+                return self._agc_enabled
+        except Exception as e:
+            logger.debug(f"Error getting AGC status: {e}")
+        return getattr(self, '_agc_enabled', False)
+
+    def set_agc_enabled(self, enabled: bool) -> None:
+        """Set AGC (Automatic Gain Control) enabled status."""
+        self._agc_enabled = enabled
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return
+        try:
+            respeaker.write("PP_AGCONOFF", [1 if enabled else 0])
+            logger.info(f"AGC {'enabled' if enabled else 'disabled'}")
+        except Exception as e:
+            logger.error(f"Error setting AGC status: {e}")
+
+    def get_agc_max_gain(self) -> float:
+        """Get AGC maximum gain in dB."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_agc_max_gain', 15.0)
+        try:
+            result = respeaker.read("PP_AGCMAXGAIN")
+            if result is not None:
+                self._agc_max_gain = float(result[0])
+                return self._agc_max_gain
+        except Exception as e:
+            logger.debug(f"Error getting AGC max gain: {e}")
+        return getattr(self, '_agc_max_gain', 15.0)
+
+    def set_agc_max_gain(self, gain: float) -> None:
+        """Set AGC maximum gain in dB."""
+        gain = max(0.0, min(30.0, gain))
+        self._agc_max_gain = gain
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return
+        try:
+            respeaker.write("PP_AGCMAXGAIN", [gain])
+            logger.info(f"AGC max gain set to {gain} dB")
+        except Exception as e:
+            logger.error(f"Error setting AGC max gain: {e}")
+
+    def get_noise_suppression(self) -> float:
+        """Get noise suppression level (0-100%)."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return getattr(self, '_noise_suppression', 50.0)
+        try:
+            result = respeaker.read("PP_MIN_NS")
+            if result is not None:
+                # PP_MIN_NS is typically a float value, convert to percentage
+                # Lower values = more suppression
+                self._noise_suppression = max(0.0, min(100.0, (1.0 - result[0]) * 100.0))
+                return self._noise_suppression
+        except Exception as e:
+            logger.debug(f"Error getting noise suppression: {e}")
+        return getattr(self, '_noise_suppression', 50.0)
+
+    def set_noise_suppression(self, level: float) -> None:
+        """Set noise suppression level (0-100%)."""
+        level = max(0.0, min(100.0, level))
+        self._noise_suppression = level
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return
+        try:
+            # Convert percentage to PP_MIN_NS value (inverted)
+            value = 1.0 - (level / 100.0)
+            respeaker.write("PP_MIN_NS", [value])
+            logger.info(f"Noise suppression set to {level}%")
+        except Exception as e:
+            logger.error(f"Error setting noise suppression: {e}")
+
+    def get_echo_cancellation_converged(self) -> bool:
+        """Check if echo cancellation has converged."""
+        respeaker = self._get_respeaker()
+        if respeaker is None:
+            return False
+        try:
+            result = respeaker.read("AEC_AECCONVERGED")
+            if result is not None:
+                return bool(result[1])
+        except Exception as e:
+            logger.debug(f"Error getting AEC converged status: {e}")
+        return False
