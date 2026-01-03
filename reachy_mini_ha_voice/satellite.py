@@ -149,30 +149,49 @@ class VoiceSatelliteProtocol(APIServer):
         self._doa_angle_entity: Optional[SensorEntity] = None
         self._speech_detected_entity: Optional[BinarySensorEntity] = None
 
-        if self.state.media_player_entity is None:
-            self.state.media_player_entity = MediaPlayerEntity(
-                server=self,
-                key=self._get_entity_key("reachy_mini_media_player"),
-                name="Media Player",
-                object_id="reachy_mini_media_player",
-                music_player=state.music_player,
-                announce_player=state.tts_player,
-            )
-            self.state.entities.append(self.state.media_player_entity)
+        # Only setup entities once (check if already initialized)
+        # This prevents duplicate entity registration on reconnection
+        if not getattr(self.state, '_entities_initialized', False):
+            if self.state.media_player_entity is None:
+                self.state.media_player_entity = MediaPlayerEntity(
+                    server=self,
+                    key=self._get_entity_key("reachy_mini_media_player"),
+                    name="Media Player",
+                    object_id="reachy_mini_media_player",
+                    music_player=state.music_player,
+                    announce_player=state.tts_player,
+                )
+                self.state.entities.append(self.state.media_player_entity)
 
-        # Setup all entity phases
-        self._setup_phase1_entities()
-        self._setup_phase2_entities()
-        self._setup_phase3_entities()
-        self._setup_phase4_entities()
-        self._setup_phase5_entities()
-        self._setup_phase6_entities()
-        self._setup_phase7_entities()
-        self._setup_phase8_entities()
-        self._setup_phase9_entities()
-        self._setup_phase10_entities()  # Camera
-        # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
-        self._setup_phase12_entities()  # Audio processing
+            # Setup all entity phases
+            self._setup_phase1_entities()
+            self._setup_phase2_entities()
+            self._setup_phase3_entities()
+            self._setup_phase4_entities()
+            self._setup_phase5_entities()
+            self._setup_phase6_entities()
+            self._setup_phase7_entities()
+            self._setup_phase8_entities()
+            self._setup_phase9_entities()
+            self._setup_phase10_entities()  # Camera
+            # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
+            self._setup_phase12_entities()  # Audio processing
+
+            # Mark entities as initialized
+            self.state._entities_initialized = True
+            _LOGGER.info("Entities initialized: %d total", len(self.state.entities))
+        else:
+            _LOGGER.debug("Entities already initialized, skipping setup")
+            # Update server reference in existing entities
+            for entity in self.state.entities:
+                entity.server = self
+            # Find and store references to DOA entities
+            for entity in self.state.entities:
+                if hasattr(entity, 'object_id'):
+                    if entity.object_id == 'doa_angle':
+                        self._doa_angle_entity = entity
+                    elif entity.object_id == 'speech_detected':
+                        self._speech_detected_entity = entity
 
         self._is_streaming_audio = False
         self._tts_url: Optional[str] = None
@@ -463,6 +482,11 @@ class VoiceSatelliteProtocol(APIServer):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         _LOGGER.info("Disconnected from Home Assistant")
+        # Clear streaming state on disconnect
+        self._is_streaming_audio = False
+        self._tts_url = None
+        self._tts_played = False
+        self._continue_conversation = False
 
     def _download_external_wake_word(
         self, external_wake_word: VoiceAssistantExternalWakeWord

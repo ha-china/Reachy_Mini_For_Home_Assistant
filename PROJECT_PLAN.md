@@ -48,7 +48,7 @@
 │                    Home Assistant                           │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
 │  │ STT Engine  │  │ Intent      │  │ TTS Engine          │ │
-│  │ (Whisper)   │  │ Processing  │  │ (Piper/Cloud)       │ │
+│  │             │  │ Processing  │  │                     │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -87,11 +87,12 @@ reachy_mini_ha_voice/
 │   ├── voice_assistant.py      # 语音助手服务
 │   ├── satellite.py            # ESPHome 协议处理
 │   ├── audio_player.py         # 音频播放器
+│   ├── camera_server.py        # MJPEG 摄像头流服务器
 │   ├── motion.py               # 运动控制
 │   ├── models.py               # 数据模型
 │   ├── entity.py               # ESPHome 基础实体
-│   ├── entity_extensions.py    # 扩展实体类型 (NEW)
-│   ├── reachy_controller.py    # Reachy Mini 控制器包装 (NEW)
+│   ├── entity_extensions.py    # 扩展实体类型
+│   ├── reachy_controller.py    # Reachy Mini 控制器包装
 │   ├── api_server.py           # API 服务器
 │   ├── zeroconf.py             # mDNS 发现
 │   └── util.py                 # 工具函数
@@ -107,7 +108,6 @@ reachy_mini_ha_voice/
 │   └── timer_finished.flac
 ├── pyproject.toml              # 项目配置
 ├── README.md                   # 说明文档
-├── ENTITIES.md                 # 实体使用文档 (NEW)
 └── PROJECT_PLAN.md             # 项目计划
 ```
 
@@ -222,6 +222,23 @@ dependencies = [
 | `Sensor` | `imu_gyro_z` | `mini.imu["gyroscope"][2]` | Z 轴角速度 (rad/s) |
 | `Sensor` | `imu_temperature` | `mini.imu["temperature"]` | IMU 温度 (°C) |
 
+#### Phase 8-12: 扩展功能
+
+| ESPHome 实体类型 | 名称 | 说明 |
+|-----------------|------|------|
+| `Select` | `emotion` | 表情选择器 (Happy/Sad/Angry/Fear/Surprise/Disgust) |
+| `Number` | `microphone_volume` | 麦克风音量 (0-100%) |
+| `Camera` | `camera` | ESPHome Camera 实体（实时预览） |
+| `Number` | `led_brightness` | LED 亮度 (0-100%) |
+| `Select` | `led_effect` | LED 效果 (off/solid/breathing/rainbow/doa) |
+| `Number` | `led_color_r` | LED 红色分量 (0-255) |
+| `Number` | `led_color_g` | LED 绿色分量 (0-255) |
+| `Number` | `led_color_b` | LED 蓝色分量 (0-255) |
+| `Switch` | `agc_enabled` | 自动增益控制开关 |
+| `Number` | `agc_max_gain` | AGC 最大增益 (0-30 dB) |
+| `Number` | `noise_suppression` | 噪声抑制级别 (0-100%) |
+| `Binary Sensor` | `echo_cancellation_converged` | 回声消除收敛状态 |
+
 > **注意**: 头部位置 (x/y/z) 和角度 (roll/pitch/yaw)、身体偏航角、天线角度都是**可控制**的实体，
 > 使用 `Number` 类型实现双向控制。设置新值时调用 `goto_target()`，读取当前值时调用 `get_current_head_pose()` 等。
 
@@ -264,18 +281,43 @@ dependencies = [
    - [x] `imu_gyro_x/y/z` - 陀螺仪
    - [x] `imu_temperature` - IMU 温度
 
+8. **Phase 8 - 表情控制** ✅ **已完成**
+   - [x] `emotion` - 表情选择器 (Happy/Sad/Angry/Fear/Surprise/Disgust)
+
+9. **Phase 9 - 音频控制** ✅ **已完成**
+   - [x] `microphone_volume` - 麦克风音量控制 (0-100%)
+
+10. **Phase 10 - 摄像头集成** ✅ **已完成**
+    - [x] `camera` - ESPHome Camera 实体（实时预览）
+
+11. **Phase 11 - LED 控制** ✅ **已完成**
+    - [x] `led_brightness` - LED 亮度 (0-100%)
+    - [x] `led_effect` - LED 效果 (off/solid/breathing/rainbow/doa)
+    - [x] `led_color_r/g/b` - LED RGB 颜色 (0-255)
+
+12. **Phase 12 - 音频处理参数** ✅ **已完成**
+    - [x] `agc_enabled` - 自动增益控制开关
+    - [x] `agc_max_gain` - AGC 最大增益 (0-30 dB)
+    - [x] `noise_suppression` - 噪声抑制级别 (0-100%)
+    - [x] `echo_cancellation_converged` - 回声消除收敛状态（只读）
+
 ---
 
 ## 🎉 所有实体已完成！
 
-**总计：30+ 个实体**
-- Phase 1: 4 个实体
-- Phase 2: 4 个实体
-- Phase 3: 9 个实体
-- Phase 4: 3 个实体
-- Phase 5: 2 个实体
-- Phase 6: 6 个实体
-- Phase 7: 7 个实体
+**总计：45+ 个实体**
+- Phase 1: 4 个实体 (基础状态与音量)
+- Phase 2: 4 个实体 (电机控制)
+- Phase 3: 9 个实体 (姿态控制)
+- Phase 4: 3 个实体 (注视控制)
+- Phase 5: 2 个实体 (音频传感器)
+- Phase 6: 6 个实体 (诊断信息)
+- Phase 7: 7 个实体 (IMU 传感器)
+- Phase 8: 1 个实体 (表情控制)
+- Phase 9: 1 个实体 (麦克风音量)
+- Phase 10: 1 个实体 (摄像头)
+- Phase 11: 5 个实体 (LED 控制)
+- Phase 12: 4 个实体 (音频处理参数)
 
 ### SDK 数据结构参考
 

@@ -137,19 +137,7 @@ class VoiceAssistantService:
         )
         self._audio_thread.start()
 
-        # Create ESPHome server
-        loop = asyncio.get_running_loop()
-        self._server = await loop.create_server(
-            lambda: VoiceSatelliteProtocol(self._state),
-            host=self.host,
-            port=self.port,
-        )
-
-        # Start mDNS discovery
-        self._discovery = HomeAssistantZeroconf(port=self.port, name=self.name)
-        await self._discovery.register_server()
-
-        # Start camera server if enabled
+        # Start camera server if enabled (must be before ESPHome server)
         if self.camera_enabled:
             self._camera_server = MJPEGCameraServer(
                 reachy_mini=self.reachy_mini,
@@ -159,6 +147,19 @@ class VoiceAssistantService:
                 quality=80,
             )
             await self._camera_server.start()
+
+        # Create ESPHome server (pass camera_server for camera entity)
+        loop = asyncio.get_running_loop()
+        camera_server = self._camera_server  # Capture for lambda
+        self._server = await loop.create_server(
+            lambda: VoiceSatelliteProtocol(self._state, camera_server=camera_server),
+            host=self.host,
+            port=self.port,
+        )
+
+        # Start mDNS discovery
+        self._discovery = HomeAssistantZeroconf(port=self.port, name=self.name)
+        await self._discovery.register_server()
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 

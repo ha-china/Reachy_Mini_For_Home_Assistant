@@ -78,7 +78,7 @@ Additional wake words can be configured through Home Assistant.
 
 ## ESPHome Entities
 
-This application exposes 30+ entities to Home Assistant for complete robot control:
+This application exposes 45+ entities to Home Assistant for complete robot control:
 
 ### Status & Control (Phase 1)
 - **Daemon State** - Monitor robot daemon status
@@ -118,7 +118,25 @@ This application exposes 30+ entities to Home Assistant for complete robot contr
 - **Gyroscope** - X/Y/Z angular velocity (rad/s)
 - **Temperature** - IMU temperature (°C)
 
-📖 **[View Complete Entity Documentation](ENTITIES.md)** - Includes usage examples, automations, and Lovelace dashboard configurations
+### Emotion Control (Phase 8)
+- **Emotion** - Select emotion (Happy/Sad/Angry/Fear/Surprise/Disgust)
+
+### Audio Control (Phase 9)
+- **Microphone Volume** - Control microphone input level (0-100%)
+
+### Camera (Phase 10)
+- **Camera** - ESPHome Camera entity with live preview in Home Assistant
+
+### LED Control (Phase 11)
+- **LED Brightness** - Control LED brightness (0-100%)
+- **LED Effect** - Select LED effect (off/solid/breathing/rainbow/doa)
+- **LED Color R/G/B** - Control LED color (0-255 per channel)
+
+### Audio Processing (Phase 12)
+- **AGC Enabled** - Toggle automatic gain control
+- **AGC Max Gain** - Set maximum AGC gain (0-30 dB)
+- **Noise Suppression** - Set noise suppression level (0-100%)
+- **Echo Cancellation Converged** - Monitor echo cancellation status
 
 ## How It Works
 
@@ -145,6 +163,7 @@ This application exposes 30+ entities to Home Assistant for complete robot contr
 reachy_mini_ha_voice/
 ├── reachy_mini_ha_voice/
 │   ├── __init__.py
+│   ├── __main__.py          # CLI entry point
 │   ├── main.py              # App entry point
 │   ├── voice_assistant.py   # Voice assistant service
 │   ├── camera_server.py     # MJPEG camera streaming server
@@ -152,7 +171,9 @@ reachy_mini_ha_voice/
 │   ├── audio_player.py      # Audio playback
 │   ├── motion.py            # Motion control
 │   ├── models.py            # Data models
-│   ├── entity.py            # ESPHome entities
+│   ├── entity.py            # ESPHome base entities
+│   ├── entity_extensions.py # Extended entity types
+│   ├── reachy_controller.py # Reachy Mini controller wrapper
 │   ├── api_server.py        # API server
 │   ├── zeroconf.py          # mDNS discovery
 │   └── util.py              # Utilities
