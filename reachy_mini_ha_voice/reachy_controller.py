@@ -81,7 +81,7 @@ class ReachyController:
             # Get volume from daemon API
             status = self.reachy.client.get_status(wait=False)
             wlan_ip = status.get('wlan_ip', 'localhost')
-            response = requests.get(f"http://{wlan_ip}:8000/volume/current", timeout=2)
+            response = requests.get(f"http://{wlan_ip}:8000/api/volume/current", timeout=2)
             if response.status_code == 200:
                 data = response.json()
                 self._speaker_volume = float(data.get('volume', self._speaker_volume))
@@ -108,7 +108,7 @@ class ReachyController:
             status = self.reachy.client.get_status(wait=False)
             wlan_ip = status.get('wlan_ip', 'localhost')
             response = requests.post(
-                f"http://{wlan_ip}:8000/volume/set",
+                f"http://{wlan_ip}:8000/api/volume/set",
                 json={"volume": int(volume)},
                 timeout=5
             )
