@@ -48,7 +48,7 @@ from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
 from .api_server import APIServer
-from .entity import BinarySensorEntity, MediaPlayerEntity, NumberEntity, TextSensorEntity
+from .entity import BinarySensorEntity, CameraEntity, MediaPlayerEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
 from .models import AvailableWakeWord, ServerState, WakeWordType
 from .util import call_all
@@ -116,10 +116,8 @@ class VoiceSatelliteProtocol(APIServer):
         "emotion_disgust": 805,
         # Phase 9: Audio controls
         "microphone_volume": 900,
-        # Phase 10: Camera status
-        "camera_streaming": 1000,
-        "camera_fps": 1001,
-        "camera_url": 1002,
+        # Phase 10: Camera
+        "camera": 1000,
         # Phase 11: LED control
         "led_brightness": 1100,
         "led_effect": 1101,
@@ -1269,46 +1267,28 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Phase 9 entities registered: microphone_volume")
 
     def _setup_phase10_entities(self) -> None:
-        """Setup Phase 10 entities: Camera status."""
+        """Setup Phase 10 entities: Camera."""
 
-        # Camera streaming status
-        camera_streaming = BinarySensorEntity(
+        # Camera entity - provides actual camera image in Home Assistant
+        def get_camera_image() -> bytes:
+            """Get camera snapshot from camera server."""
+            if self.camera_server:
+                image = self.camera_server.get_snapshot()
+                if image:
+                    return image
+            return b""
+
+        camera = CameraEntity(
             server=self,
-            key=self._get_entity_key("camera_streaming"),
-            name="Camera Streaming",
-            object_id="camera_streaming",
+            key=self._get_entity_key("camera"),
+            name="Camera",
+            object_id="camera",
             icon="mdi:camera",
-            device_class="running",
-            value_getter=self.reachy_controller.get_camera_streaming,
+            image_getter=get_camera_image,
         )
-        self.state.entities.append(camera_streaming)
+        self.state.entities.append(camera)
 
-        # Camera FPS
-        camera_fps = SensorEntity(
-            server=self,
-            key=self._get_entity_key("camera_fps"),
-            name="Camera FPS",
-            object_id="camera_fps",
-            icon="mdi:camera-timer",
-            unit_of_measurement="fps",
-            accuracy_decimals=0,
-            state_class="measurement",
-            value_getter=self.reachy_controller.get_camera_fps,
-        )
-        self.state.entities.append(camera_fps)
-
-        # Camera URL
-        camera_url = TextSensorEntity(
-            server=self,
-            key=self._get_entity_key("camera_url"),
-            name="Camera URL",
-            object_id="camera_url",
-            icon="mdi:link",
-            value_getter=self.reachy_controller.get_camera_url,
-        )
-        self.state.entities.append(camera_url)
-
-        _LOGGER.info("Phase 10 entities registered: camera_streaming, camera_fps, camera_url")
+        _LOGGER.info("Phase 10 entities registered: camera")
 
     def _setup_phase11_entities(self) -> None:
         """Setup Phase 11 entities: LED control (via local SDK)."""

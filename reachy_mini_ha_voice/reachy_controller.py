@@ -756,45 +756,6 @@ class ReachyController:
             logger.error(f"Error getting IMU temperature: {e}")
             return 0.0
 
-    # ========== Phase 10: Camera Status ==========
-
-    def get_camera_streaming(self) -> bool:
-        """Check if camera is streaming."""
-        if not self.is_available:
-            return False
-        try:
-            # Check if media manager has camera initialized
-            if self.reachy.media and self.reachy.media.camera:
-                return True
-            return False
-        except Exception as e:
-            logger.debug(f"Error checking camera streaming: {e}")
-            return False
-
-    def get_camera_fps(self) -> float:
-        """Get camera FPS."""
-        if not self.is_available:
-            return 0.0
-        try:
-            if self.reachy.media and self.reachy.media.camera:
-                return float(self.reachy.media.camera.framerate)
-            return 0.0
-        except Exception as e:
-            logger.debug(f"Error getting camera FPS: {e}")
-            return 0.0
-
-    def get_camera_url(self) -> str:
-        """Get camera stream URL."""
-        if not self.is_available:
-            return "N/A"
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            wlan_ip = status.get('wlan_ip', 'localhost')
-            return f"http://{wlan_ip}:8081/stream"
-        except Exception as e:
-            logger.debug(f"Error getting camera URL: {e}")
-            return "N/A"
-
     # ========== Phase 11: LED Control (via local SDK) ==========
 
     def _get_respeaker(self):
