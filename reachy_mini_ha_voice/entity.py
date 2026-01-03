@@ -390,8 +390,9 @@ class CameraEntity(ESPHomeEntity):
                 name=self.name,
                 icon=self.icon,
             )
-        elif isinstance(msg, CameraImageRequest) and msg.key == self.key:
-            # Return camera image
+        elif isinstance(msg, CameraImageRequest):
+            # CameraImageRequest doesn't have a key field - it's a global request
+            # Return camera image for any camera request
             image_data = self.get_image()
             if image_data:
                 yield CameraImageResponse(
