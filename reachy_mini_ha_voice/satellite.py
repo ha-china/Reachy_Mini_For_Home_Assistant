@@ -12,12 +12,17 @@ from urllib.request import urlopen
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
+    ButtonCommandRequest,
     DeviceInfoRequest,
     DeviceInfoResponse,
     ListEntitiesDoneResponse,
     ListEntitiesRequest,
     MediaPlayerCommandRequest,
+    NumberCommandRequest,
+    SelectCommandRequest,
     SubscribeHomeAssistantStatesRequest,
+    SubscribeStatesRequest,
+    SwitchCommandRequest,
     VoiceAssistantAnnounceFinished,
     VoiceAssistantAnnounceRequest,
     VoiceAssistantAudio,
@@ -195,7 +200,12 @@ class VoiceSatelliteProtocol(APIServer):
             (
                 ListEntitiesRequest,
                 SubscribeHomeAssistantStatesRequest,
+                SubscribeStatesRequest,
                 MediaPlayerCommandRequest,
+                NumberCommandRequest,
+                SwitchCommandRequest,
+                SelectCommandRequest,
+                ButtonCommandRequest,
             ),
         ):
             for entity in self.state.entities:

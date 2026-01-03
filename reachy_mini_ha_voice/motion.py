@@ -135,12 +135,12 @@ class ReachyMiniMotion:
                 # Nod down
                 pose_down = np.eye(4)
                 pose_down[:3, :3] = R.from_euler('xyz', [amplitude, 0, 0], degrees=True).as_matrix()
-                self.reachy_mini.head.goto(pose_down, duration=duration / 2)
+                self.reachy_mini.goto_target(head=pose_down, duration=duration / 2)
 
                 # Nod up
                 pose_up = np.eye(4)
                 pose_up[:3, :3] = R.from_euler('xyz', [-amplitude / 2, 0, 0], degrees=True).as_matrix()
-                self.reachy_mini.head.goto(pose_up, duration=duration / 2)
+                self.reachy_mini.goto_target(head=pose_up, duration=duration / 2)
 
             # Return to neutral
             self._return_to_neutral()
@@ -159,12 +159,12 @@ class ReachyMiniMotion:
                 # Shake left
                 pose_left = np.eye(4)
                 pose_left[:3, :3] = R.from_euler('xyz', [0, 0, -amplitude], degrees=True).as_matrix()
-                self.reachy_mini.head.goto(pose_left, duration=duration / 2)
+                self.reachy_mini.goto_target(head=pose_left, duration=duration / 2)
 
                 # Shake right
                 pose_right = np.eye(4)
                 pose_right[:3, :3] = R.from_euler('xyz', [0, 0, amplitude], degrees=True).as_matrix()
-                self.reachy_mini.head.goto(pose_right, duration=duration / 2)
+                self.reachy_mini.goto_target(head=pose_right, duration=duration / 2)
 
             # Return to neutral
             self._return_to_neutral()
@@ -178,7 +178,7 @@ class ReachyMiniMotion:
 
         try:
             pose = np.eye(4)
-            self.reachy_mini.head.goto(pose, duration=0.3)
+            self.reachy_mini.goto_target(head=pose, duration=0.3)
         except Exception as e:
             _LOGGER.error("Look at user error: %s", e)
 
@@ -192,7 +192,7 @@ class ReachyMiniMotion:
 
             pose = np.eye(4)
             pose[:3, :3] = R.from_euler('xyz', [-10, 0, 5], degrees=True).as_matrix()
-            self.reachy_mini.head.goto(pose, duration=0.4)
+            self.reachy_mini.goto_target(head=pose, duration=0.4)
         except Exception as e:
             _LOGGER.error("Think pose error: %s", e)
 
@@ -203,7 +203,7 @@ class ReachyMiniMotion:
 
         try:
             pose = np.eye(4)
-            self.reachy_mini.head.goto(pose, duration=0.5)
+            self.reachy_mini.goto_target(head=pose, duration=0.5)
         except Exception as e:
             _LOGGER.error("Return to neutral error: %s", e)
 
@@ -222,13 +222,12 @@ class ReachyMiniMotion:
             return
 
         try:
+            import math
             if happy:
-                # Happy wiggle - both up
-                self.reachy_mini.head.l_antenna.goto(30, duration=0.2)
-                self.reachy_mini.head.r_antenna.goto(-30, duration=0.2)
+                # Happy wiggle - both up (convert degrees to radians)
+                self.reachy_mini.goto_target(antennas=[math.radians(-30), math.radians(30)], duration=0.2)
             else:
                 # Sad - both down
-                self.reachy_mini.head.l_antenna.goto(-20, duration=0.2)
-                self.reachy_mini.head.r_antenna.goto(20, duration=0.2)
+                self.reachy_mini.goto_target(antennas=[math.radians(20), math.radians(-20)], duration=0.2)
         except Exception as e:
             _LOGGER.error("Antenna wiggle error: %s", e)

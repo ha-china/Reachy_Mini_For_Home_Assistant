@@ -94,9 +94,12 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            # We can't directly query motor state from SDK
-            # Return True if daemon is running (motors are typically enabled)
+            # Get motor control mode from backend status
             status = self.reachy.client.get_status(wait=False)
+            backend_status = status.get('backend_status')
+            if backend_status and isinstance(backend_status, dict):
+                motor_mode = backend_status.get('motor_control_mode', 'disabled')
+                return motor_mode == 'enabled'
             return status.get('state') == 'running'
         except Exception as e:
             logger.error(f"Error getting motor state: {e}")
@@ -128,9 +131,12 @@ class ReachyController:
         if not self.is_available:
             return "disabled"
         try:
-            # SDK doesn't expose motor mode directly
-            # Return "enabled" if daemon is running
+            # Get motor control mode from backend status
             status = self.reachy.client.get_status(wait=False)
+            backend_status = status.get('backend_status')
+            if backend_status and isinstance(backend_status, dict):
+                motor_mode = backend_status.get('motor_control_mode', 'disabled')
+                return motor_mode
             if status.get('state') == 'running':
                 return "enabled"
             return "disabled"
@@ -369,9 +375,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            # SDK doesn't expose body_yaw directly in a simple way
-            # Return 0.0 as placeholder - body yaw is typically controlled, not read
-            return 0.0
+            # Body yaw is the first element of head joint positions
+            head_joints, _ = self.reachy.get_current_joint_positions()
+            return math.degrees(head_joints[0])
         except Exception as e:
             logger.error(f"Error getting body yaw: {e}")
             return 0.0
@@ -482,8 +488,11 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            # DOA info is not directly exposed in SDK
-            # Would need to access audio subsystem
+            # Access DOA through media_manager
+            doa_result = self.reachy.media.get_DoA()
+            if doa_result is not None:
+                # Convert radians to degrees
+                return math.degrees(doa_result[0])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting DOA angle: {e}")
@@ -494,7 +503,10 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            # Speech detection is not directly exposed in SDK
+            # Access speech detection through media_manager
+            doa_result = self.reachy.media.get_DoA()
+            if doa_result is not None:
+                return doa_result[1]
             return False
         except Exception as e:
             logger.error(f"Error getting speech detection: {e}")
@@ -507,8 +519,12 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            # This would require access to control loop stats
-            # Placeholder implementation
+            # Get control loop stats from backend status
+            status = self.reachy.client.get_status(wait=False)
+            backend_status = status.get('backend_status')
+            if backend_status and isinstance(backend_status, dict):
+                control_loop_stats = backend_status.get('control_loop_stats', {})
+                return control_loop_stats.get('mean_control_loop_frequency', 0.0)
             return 0.0
         except Exception as e:
             logger.error(f"Error getting control loop frequency: {e}")
