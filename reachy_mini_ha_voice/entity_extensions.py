@@ -49,6 +49,7 @@ class SensorEntity(ESPHomeEntity):
         accuracy_decimals: int = 2,
         device_class: str = "",
         state_class: int = SensorStateClass.NONE,
+        entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
         value_getter: Optional[Callable[[], float]] = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
@@ -59,6 +60,7 @@ class SensorEntity(ESPHomeEntity):
         self.unit_of_measurement = unit_of_measurement
         self.accuracy_decimals = accuracy_decimals
         self.device_class = device_class
+        self.entity_category = entity_category
         # Convert string state_class to int if needed (for backward compatibility)
         if isinstance(state_class, str):
             state_class_map = {
@@ -94,6 +96,7 @@ class SensorEntity(ESPHomeEntity):
                 accuracy_decimals=self.accuracy_decimals,
                 device_class=self.device_class,
                 state_class=self.state_class,
+                entity_category=self.entity_category,
             )
         elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
             yield self._get_state_message()
@@ -186,6 +189,7 @@ class SelectEntity(ESPHomeEntity):
         object_id: str,
         options: List[str],
         icon: str = "",
+        entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
         value_getter: Optional[Callable[[], str]] = None,
         value_setter: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -195,6 +199,7 @@ class SelectEntity(ESPHomeEntity):
         self.object_id = object_id
         self.options = options
         self.icon = icon
+        self.entity_category = entity_category
         self._value_getter = value_getter
         self._value_setter = value_setter
         self._value = options[0] if options else ""
@@ -222,6 +227,7 @@ class SelectEntity(ESPHomeEntity):
                 name=self.name,
                 icon=self.icon,
                 options=self.options,
+                entity_category=self.entity_category,
             )
         elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
             yield self._get_state_message()
@@ -252,6 +258,7 @@ class ButtonEntity(ESPHomeEntity):
         object_id: str,
         icon: str = "",
         device_class: str = "",
+        entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
         on_press: Optional[Callable[[], None]] = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
@@ -260,6 +267,7 @@ class ButtonEntity(ESPHomeEntity):
         self.object_id = object_id
         self.icon = icon
         self.device_class = device_class
+        self.entity_category = entity_category
         self._on_press = on_press
 
     def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
@@ -270,6 +278,7 @@ class ButtonEntity(ESPHomeEntity):
                 name=self.name,
                 icon=self.icon,
                 device_class=self.device_class,
+                entity_category=self.entity_category,
             )
         elif isinstance(msg, ButtonCommandRequest) and msg.key == self.key:
             if self._on_press:

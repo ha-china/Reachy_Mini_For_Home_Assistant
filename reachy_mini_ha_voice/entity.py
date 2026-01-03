@@ -172,6 +172,7 @@ class TextSensorEntity(ESPHomeEntity):
         name: str,
         object_id: str,
         icon: str = "",
+        entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
         value_getter: Optional[Callable[[], str]] = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
@@ -179,6 +180,7 @@ class TextSensorEntity(ESPHomeEntity):
         self.name = name
         self.object_id = object_id
         self.icon = icon
+        self.entity_category = entity_category
         self._value_getter = value_getter
         self._value = ""
 
@@ -199,6 +201,7 @@ class TextSensorEntity(ESPHomeEntity):
                 key=self.key,
                 name=self.name,
                 icon=self.icon,
+                entity_category=self.entity_category,
             )
         elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
             yield self._get_state_message()

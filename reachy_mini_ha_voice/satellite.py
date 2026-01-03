@@ -111,8 +111,9 @@ class VoiceSatelliteProtocol(APIServer):
         "emotion": 800,
         # Phase 9: Audio controls
         "microphone_volume": 900,
-        # Phase 10: Camera URL
-        "camera_url": 1000,
+        # Phase 10: Camera
+        "camera_url": 1000,  # Keep for backward compatibility
+        "camera": 1001,      # New camera entity
         # Phase 11: LED control (disabled - not visible)
         # "led_brightness": 1100,
         # "led_effect": 1101,
@@ -1227,29 +1228,27 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Phase 9 entities registered: microphone_volume")
 
     def _setup_phase10_entities(self) -> None:
-        """Setup Phase 10 entities: Camera URL for Generic Camera integration."""
+        """Setup Phase 10 entities: Camera for Home Assistant integration."""
 
-        # Camera stream URL - users can use this with Generic Camera in HA
-        def get_camera_url() -> str:
-            """Get camera stream URL."""
+        # Camera image getter - returns JPEG bytes from camera server
+        def get_camera_image() -> Optional[bytes]:
+            """Get camera snapshot as JPEG bytes."""
             if self.camera_server:
-                # Get WLAN IP from reachy controller
-                wlan_ip = self.reachy_controller.get_wlan_ip()
-                if wlan_ip and wlan_ip != "N/A":
-                    return f"http://{wlan_ip}:{self.camera_server.port}/stream"
-            return "N/A"
+                return self.camera_server.get_snapshot()
+            return None
 
-        camera_url = TextSensorEntity(
+        # Real camera entity - shows preview in Home Assistant
+        camera_entity = CameraEntity(
             server=self,
-            key=self._get_entity_key("camera_url"),
-            name="Camera Stream URL",
-            object_id="camera_url",
+            key=self._get_entity_key("camera"),  # Use new camera key
+            name="Camera",
+            object_id="camera",
             icon="mdi:camera",
-            value_getter=get_camera_url,
+            image_getter=get_camera_image,
         )
-        self.state.entities.append(camera_url)
+        self.state.entities.append(camera_entity)
 
-        _LOGGER.info("Phase 10 entities registered: camera_url (use with Generic Camera in HA)")
+        _LOGGER.info("Phase 10 entities registered: camera (ESPHome Camera entity)")
 
     def _setup_phase11_entities(self) -> None:
         """Setup Phase 11 entities: LED control (via local SDK)."""
