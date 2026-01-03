@@ -1006,3 +1006,27 @@ class ReachyController:
         except Exception as e:
             logger.debug(f"Error getting AEC converged status: {e}")
         return False
+
+    # ========== Phase 13: Robot Joints ==========
+
+    def get_head_joints_json(self) -> str:
+        """
+        Get head joints as JSON string.
+
+        Returns:
+            JSON string: "[yaw_body, stewart_1, stewart_2, stewart_3, stewart_4, stewart_5, stewart_6]"
+            Values in radians
+        """
+        if not self.is_available:
+            return "[]"
+        try:
+            import json
+            head_joints, _ = self.reachy.get_current_joint_positions()
+            if head_joints and len(head_joints) >= 7:
+                # Convert radians to list
+                joints_list = [float(j) for j in head_joints[:7]]
+                return json.dumps(joints_list)
+            return "[]"
+        except Exception as e:
+            logger.error(f"Error getting head joints JSON: {e}")
+            return "[]"

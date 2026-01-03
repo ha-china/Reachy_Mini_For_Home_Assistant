@@ -126,6 +126,8 @@ class VoiceSatelliteProtocol(APIServer):
         "agc_max_gain": 1201,
         "noise_suppression": 1202,
         "echo_cancellation_converged": 1203,
+        # Phase 13: Robot joints (single JSON sensor)
+        "head_joints": 1300,
     }
 
     def _get_entity_key(self, object_id: str) -> int:
@@ -176,6 +178,7 @@ class VoiceSatelliteProtocol(APIServer):
             self._setup_phase10_entities()  # Camera
             # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
             self._setup_phase12_entities()  # Audio processing
+            self._setup_phase13_entities()  # Robot joints
 
             # Mark entities as initialized
             self.state._entities_initialized = True
@@ -1413,3 +1416,19 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.entities.append(echo_cancellation_converged)
 
         _LOGGER.info("Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged")
+
+    def _setup_phase13_entities(self) -> None:
+        """Setup Phase 13 entities: Robot joints as JSON sensor."""
+
+        # Head joints sensor - returns JSON array of [yaw_body, stewart_1, ..., stewart_6]
+        head_joints_sensor = TextSensorEntity(
+            server=self,
+            key=self._get_entity_key("head_joints"),
+            name="Head Joints",
+            object_id="head_joints",
+            icon="mdi:robot",
+            value_getter=self.reachy_controller.get_head_joints_json,
+        )
+        self.state.entities.append(head_joints_sensor)
+
+        _LOGGER.info("Phase 13 entities registered: head_joints")
