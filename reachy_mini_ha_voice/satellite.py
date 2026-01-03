@@ -128,6 +128,8 @@ class VoiceSatelliteProtocol(APIServer):
         "echo_cancellation_converged": 1203,
         # Phase 13: Robot joints (single JSON sensor)
         "head_joints": 1300,
+        # Phase 14: Passive joints for 3D visualization
+        "passive_joints": 1400,
     }
 
     def _get_entity_key(self, object_id: str) -> int:
@@ -1432,3 +1434,15 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.entities.append(head_joints_sensor)
 
         _LOGGER.info("Phase 13 entities registered: head_joints")
+
+        # Phase 14: Passive joints for 3D visualization
+        passive_joints_sensor = TextSensorEntity(
+            server=self,
+            key=self._get_entity_key("passive_joints"),
+            name="Passive Joints",
+            object_id="passive_joints",
+            value_getter=self.reachy_controller.get_passive_joints_json,
+        )
+        self.state.entities.append(passive_joints_sensor)
+
+        _LOGGER.info("Phase 14 entities registered: passive_joints")

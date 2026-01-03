@@ -1030,3 +1030,28 @@ class ReachyController:
         except Exception as e:
             logger.error(f"Error getting head joints JSON: {e}")
             return "[]"
+
+    def get_passive_joints_json(self) -> str:
+        """
+        Get passive joints as JSON string.
+
+        Returns:
+            JSON string: "[passive_1_x, passive_1_y, passive_1_z, ..., passive_7_z]"
+            Values in radians (21 values total)
+        """
+        if not self.is_available:
+            return "[]"
+        try:
+            import json
+            # Call the backend API to get passive joints
+            backend_url = f"http://{self.reachy._host}:{self.reachy._port}/api/state/full?with_passive_joints=true"
+            response = requests.get(backend_url, timeout=0.5)
+            if response.status_code == 200:
+                data = response.json()
+                passive_joints = data.get("passive_joints")
+                if passive_joints and len(passive_joints) >= 21:
+                    return json.dumps(passive_joints)
+            return "[]"
+        except Exception as e:
+            logger.error(f"Error getting passive joints JSON: {e}")
+            return "[]"
