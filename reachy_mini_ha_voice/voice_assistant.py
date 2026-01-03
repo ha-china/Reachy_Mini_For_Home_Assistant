@@ -627,9 +627,9 @@ class VoiceAssistantService:
 
             doa_radians, speech_detected = doa_result
 
-            if not speech_detected:
-                _LOGGER.debug("No speech detected for DOA")
-                return None
+            # Note: We don't check speech_detected here because we already know
+            # speech was detected (wake word triggered this call).
+            # The DOA value should still be valid from the recent speech.
 
             # Convert ReSpeaker DOA to head yaw angle
             # ReSpeaker: 0=left, π/2=front, π=right
