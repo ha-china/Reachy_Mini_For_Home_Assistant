@@ -67,8 +67,8 @@ class VoiceAssistantService:
         _SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
         _LOCAL_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Download required files
-        await self._download_required_files()
+        # Verify required files (bundled with package)
+        await self._verify_required_files()
 
         # Load wake words
         available_wake_words = self._load_available_wake_words()
@@ -172,45 +172,52 @@ class VoiceAssistantService:
 
         _LOGGER.info("Voice assistant service stopped.")
 
-    async def _download_required_files(self) -> None:
-        """Download required model and sound files if missing."""
-        import urllib.request
+    async def _verify_required_files(self) -> None:
+        """Verify required model and sound files exist (bundled with package)."""
+        # Required wake word files (bundled in wakewords/ directory)
+        required_wakewords = [
+            "okay_nabu.tflite",
+            "okay_nabu.json",
+            "hey_jarvis.tflite",
+            "hey_jarvis.json",
+            "stop.tflite",
+            "stop.json",
+        ]
 
-        # Wake word models - use OHF-Voice/linux-voice-assistant as source
-        wakeword_files = {
-            "okay_nabu.tflite": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/okay_nabu.tflite",
-            "okay_nabu.json": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/okay_nabu.json",
-            "hey_jarvis.tflite": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/hey_jarvis.tflite",
-            "hey_jarvis.json": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/hey_jarvis.json",
-            "stop.tflite": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/stop.tflite",
-            "stop.json": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/wakewords/stop.json",
-        }
+        # Required sound files (bundled in sounds/ directory)
+        required_sounds = [
+            "wake_word_triggered.flac",
+            "timer_finished.flac",
+        ]
 
-        # Sound files
-        sound_files = {
-            "wake_word_triggered.flac": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/sounds/wake_word_triggered.flac",
-            "timer_finished.flac": "https://github.com/OHF-Voice/linux-voice-assistant/raw/main/sounds/timer_finished.flac",
-        }
+        # Verify wake word files
+        missing_wakewords = []
+        for filename in required_wakewords:
+            filepath = _WAKEWORDS_DIR / filename
+            if not filepath.exists():
+                missing_wakewords.append(filename)
 
-        for filename, url in wakeword_files.items():
-            dest = _WAKEWORDS_DIR / filename
-            if not dest.exists():
-                _LOGGER.info("Downloading %s...", filename)
-                try:
-                    urllib.request.urlretrieve(url, dest)
-                    _LOGGER.info("Downloaded %s", filename)
-                except Exception as e:
-                    _LOGGER.warning("Failed to download %s: %s", filename, e)
+        if missing_wakewords:
+            _LOGGER.warning(
+                "Missing wake word files: %s. These should be bundled with the package.",
+                missing_wakewords
+            )
 
-        for filename, url in sound_files.items():
-            dest = _SOUNDS_DIR / filename
-            if not dest.exists():
-                _LOGGER.info("Downloading %s...", filename)
-                try:
-                    urllib.request.urlretrieve(url, dest)
-                    _LOGGER.info("Downloaded %s", filename)
-                except Exception as e:
-                    _LOGGER.warning("Failed to download %s: %s", filename, e)
+        # Verify sound files
+        missing_sounds = []
+        for filename in required_sounds:
+            filepath = _SOUNDS_DIR / filename
+            if not filepath.exists():
+                missing_sounds.append(filename)
+
+        if missing_sounds:
+            _LOGGER.warning(
+                "Missing sound files: %s. These should be bundled with the package.",
+                missing_sounds
+            )
+
+        if not missing_wakewords and not missing_sounds:
+            _LOGGER.info("All required files verified successfully.")
 
     def _load_available_wake_words(self) -> Dict[str, AvailableWakeWord]:
         """Load available wake word configurations."""
