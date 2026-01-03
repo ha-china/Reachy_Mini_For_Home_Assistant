@@ -1043,8 +1043,11 @@ class ReachyController:
             return "[]"
         try:
             import json
+            # Get WLAN IP from daemon status
+            status = self.reachy.client.get_status(wait=False)
+            wlan_ip = status.get('wlan_ip', 'localhost')
             # Call the backend API to get passive joints
-            backend_url = f"http://{self.reachy._host}:{self.reachy._port}/api/state/full?with_passive_joints=true"
+            backend_url = f"http://{wlan_ip}:8000/api/state/full?with_passive_joints=true"
             response = requests.get(backend_url, timeout=0.5)
             if response.status_code == 200:
                 data = response.json()
