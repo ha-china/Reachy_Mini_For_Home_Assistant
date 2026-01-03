@@ -111,14 +111,14 @@ class VoiceSatelliteProtocol(APIServer):
         "emotion": 800,
         # Phase 9: Audio controls
         "microphone_volume": 900,
-        # Phase 10: Camera
-        "camera": 1000,
-        # Phase 11: LED control
-        "led_brightness": 1100,
-        "led_effect": 1101,
-        "led_color_r": 1102,
-        "led_color_g": 1103,
-        "led_color_b": 1104,
+        # Phase 10: Camera URL
+        "camera_url": 1000,
+        # Phase 11: LED control (disabled - not visible)
+        # "led_brightness": 1100,
+        # "led_effect": 1101,
+        # "led_color_r": 1102,
+        # "led_color_g": 1103,
+        # "led_color_b": 1104,
         # Phase 12: Audio processing
         "agc_enabled": 1200,
         "agc_max_gain": 1201,
@@ -168,8 +168,8 @@ class VoiceSatelliteProtocol(APIServer):
         self._setup_phase7_entities()
         self._setup_phase8_entities()
         self._setup_phase9_entities()
-        self._setup_phase10_entities()  # Camera status
-        self._setup_phase11_entities()  # LED control
+        self._setup_phase10_entities()  # Camera
+        # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
         self._setup_phase12_entities()  # Audio processing
 
         self._is_streaming_audio = False
@@ -1227,28 +1227,27 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Phase 9 entities registered: microphone_volume")
 
     def _setup_phase10_entities(self) -> None:
-        """Setup Phase 10 entities: Camera."""
+        """Setup Phase 10 entities: Camera URL for Generic Camera integration."""
 
-        # Camera entity - provides actual camera image in Home Assistant
-        def get_camera_image() -> bytes:
-            """Get camera snapshot from camera server."""
+        # Camera stream URL - users can use this with Generic Camera in HA
+        def get_camera_url() -> str:
+            """Get camera stream URL."""
             if self.camera_server:
-                image = self.camera_server.get_snapshot()
-                if image:
-                    return image
-            return b""
+                # Return the MJPEG stream URL
+                return f"http://{{host}}:{self.camera_server.port}/stream"
+            return "N/A"
 
-        camera = CameraEntity(
+        camera_url = TextSensorEntity(
             server=self,
-            key=self._get_entity_key("camera"),
-            name="Camera",
-            object_id="camera",
+            key=self._get_entity_key("camera_url"),
+            name="Camera Stream URL",
+            object_id="camera_url",
             icon="mdi:camera",
-            image_getter=get_camera_image,
+            value_getter=get_camera_url,
         )
-        self.state.entities.append(camera)
+        self.state.entities.append(camera_url)
 
-        _LOGGER.info("Phase 10 entities registered: camera")
+        _LOGGER.info("Phase 10 entities registered: camera_url (use with Generic Camera in HA)")
 
     def _setup_phase11_entities(self) -> None:
         """Setup Phase 11 entities: LED control (via local SDK)."""
@@ -1386,7 +1385,7 @@ class VoiceSatelliteProtocol(APIServer):
         )
         self.state.entities.append(noise_suppression)
 
-        # Echo Cancellation Converged
+        # Echo Cancellation Converged (read-only diagnostic status)
         echo_cancellation_converged = BinarySensorEntity(
             server=self,
             key=self._get_entity_key("echo_cancellation_converged"),
@@ -1394,6 +1393,7 @@ class VoiceSatelliteProtocol(APIServer):
             object_id="echo_cancellation_converged",
             icon="mdi:waveform",
             device_class="running",
+            entity_category=2,  # diagnostic
             value_getter=self.reachy_controller.get_echo_cancellation_converged,
         )
         self.state.entities.append(echo_cancellation_converged)

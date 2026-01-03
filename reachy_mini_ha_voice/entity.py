@@ -226,6 +226,7 @@ class BinarySensorEntity(ESPHomeEntity):
         object_id: str,
         icon: str = "",
         device_class: str = "",
+        entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
         value_getter: Optional[Callable[[], bool]] = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
@@ -234,6 +235,7 @@ class BinarySensorEntity(ESPHomeEntity):
         self.object_id = object_id
         self.icon = icon
         self.device_class = device_class
+        self.entity_category = entity_category
         self._value_getter = value_getter
         self._value = False
 
@@ -255,6 +257,7 @@ class BinarySensorEntity(ESPHomeEntity):
                 name=self.name,
                 icon=self.icon,
                 device_class=self.device_class,
+                entity_category=self.entity_category,
             )
         elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
             yield self._get_state_message()
