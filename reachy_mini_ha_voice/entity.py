@@ -286,6 +286,7 @@ class NumberEntity(ESPHomeEntity):
         icon: str = "",
         unit_of_measurement: str = "",
         mode: int = 0,  # 0 = auto, 1 = box, 2 = slider
+        entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
         value_getter: Optional[Callable[[], float]] = None,
         value_setter: Optional[Callable[[float], None]] = None,
     ) -> None:
@@ -299,6 +300,7 @@ class NumberEntity(ESPHomeEntity):
         self.icon = icon
         self.unit_of_measurement = unit_of_measurement
         self.mode = mode
+        self.entity_category = entity_category
         self._value_getter = value_getter
         self._value_setter = value_setter
         self._value = min_value
@@ -329,6 +331,7 @@ class NumberEntity(ESPHomeEntity):
                 step=self.step,
                 unit_of_measurement=self.unit_of_measurement,
                 mode=self.mode,
+                entity_category=self.entity_category,
             )
         elif isinstance(msg, (SubscribeHomeAssistantStatesRequest, SubscribeStatesRequest)):
             yield self._get_state_message()

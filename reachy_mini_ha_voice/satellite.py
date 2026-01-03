@@ -690,6 +690,7 @@ class VoiceSatelliteProtocol(APIServer):
             icon="mdi:volume-high",
             unit_of_measurement="%",
             mode=2,  # Slider mode
+            entity_category=1,  # config
             value_getter=self.reachy_controller.get_speaker_volume,
             value_setter=self.reachy_controller.set_speaker_volume,
         )
@@ -1259,6 +1260,7 @@ class VoiceSatelliteProtocol(APIServer):
             icon="mdi:microphone",
             unit_of_measurement="%",
             mode=2,  # Slider mode
+            entity_category=1,  # config
             value_getter=self.reachy_controller.get_microphone_volume,
             value_setter=self.reachy_controller.set_microphone_volume,
         )
@@ -1384,6 +1386,7 @@ class VoiceSatelliteProtocol(APIServer):
             object_id="agc_enabled",
             icon="mdi:tune-vertical",
             device_class="switch",
+            entity_category=1,  # config
             value_getter=self.reachy_controller.get_agc_enabled,
             value_setter=self.reachy_controller.set_agc_enabled,
         )
@@ -1401,6 +1404,7 @@ class VoiceSatelliteProtocol(APIServer):
             icon="mdi:volume-plus",
             unit_of_measurement="dB",
             mode=2,
+            entity_category=1,  # config
             value_getter=self.reachy_controller.get_agc_max_gain,
             value_setter=self.reachy_controller.set_agc_max_gain,
         )
@@ -1418,6 +1422,7 @@ class VoiceSatelliteProtocol(APIServer):
             icon="mdi:volume-off",
             unit_of_measurement="%",
             mode=2,
+            entity_category=1,  # config
             value_getter=self.reachy_controller.get_noise_suppression,
             value_setter=self.reachy_controller.set_noise_suppression,
         )
