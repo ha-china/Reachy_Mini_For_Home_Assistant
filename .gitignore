@@ -56,14 +56,17 @@ config.json
 htmlcov/
 .tox/
 
-# Audio
+# Audio (exclude package bundled files)
 *.wav
 *.mp3
-*.flac
+# *.flac - bundled in package
+!reachy_mini_ha_voice/sounds/*.flac
 
-# Models
+# Models (exclude package bundled files)
 models/
-*.tflite
+# *.tflite - bundled in package
+!reachy_mini_ha_voice/wakewords/*.tflite
+!reachy_mini_ha_voice/wakewords/**/*.tflite
 *.onnx
 
 # SDK Reference (local development only)
