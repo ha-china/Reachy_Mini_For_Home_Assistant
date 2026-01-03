@@ -8,6 +8,7 @@
 1. [linux-voice-assistant](linux-voice-assistant)
 2. [Reachy Mini SDK](reachy_mini)
 3. [reachy_mini_conversation_app](reachy_mini_conversation_app)
+4. [reachy-mini-desktop-app](reachy-mini-desktop-app)
 
 ## 核心设计原则
 

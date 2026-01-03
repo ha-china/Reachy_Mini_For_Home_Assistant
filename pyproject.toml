@@ -18,6 +18,9 @@ dependencies = [
     "soundfile>=0.12.0",
     "numpy>=1.24.0",
 
+    # Camera streaming
+    "opencv-python>=4.8.0",
+
     # Wake word detection (local)
     # STT/TTS is handled by Home Assistant, not locally
     "pymicro-wakeword>=2.0.0,<3.0.0",

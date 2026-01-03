@@ -24,6 +24,7 @@ from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
 from .motion import ReachyMiniMotion
+from .camera_server import MJPEGCameraServer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,12 +44,16 @@ class VoiceAssistantService:
         host: str = "0.0.0.0",
         port: int = 6053,
         wake_model: str = "okay_nabu",
+        camera_port: int = 8081,
+        camera_enabled: bool = True,
     ):
         self.reachy_mini = reachy_mini
         self.name = name
         self.host = host
         self.port = port
         self.wake_model = wake_model
+        self.camera_port = camera_port
+        self.camera_enabled = camera_enabled
 
         self._server = None
         self._discovery = None
@@ -56,6 +61,7 @@ class VoiceAssistantService:
         self._running = False
         self._state: Optional[ServerState] = None
         self._motion = ReachyMiniMotion(reachy_mini)
+        self._camera_server: Optional[MJPEGCameraServer] = None
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -143,6 +149,17 @@ class VoiceAssistantService:
         self._discovery = HomeAssistantZeroconf(port=self.port, name=self.name)
         await self._discovery.register_server()
 
+        # Start camera server if enabled
+        if self.camera_enabled:
+            self._camera_server = MJPEGCameraServer(
+                reachy_mini=self.reachy_mini,
+                host=self.host,
+                port=self.camera_port,
+                fps=15,
+                quality=80,
+            )
+            await self._camera_server.start()
+
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 
     async def stop(self) -> None:
@@ -160,6 +177,11 @@ class VoiceAssistantService:
 
         if self._discovery:
             await self._discovery.unregister_server()
+
+        # Stop camera server
+        if self._camera_server:
+            await self._camera_server.stop()
+            self._camera_server = None
 
         # Stop Reachy Mini media system
         if self.reachy_mini is not None:

@@ -132,15 +132,19 @@ class ReachyMiniHAVoiceApp(ReachyMiniApp):
             logger.info("Home Assistant Voice Assistant Started!")
             logger.info("=" * 50)
             logger.info("ESPHome Server: 0.0.0.0:6053")
+            logger.info("Camera Server: 0.0.0.0:8081")
             logger.info("Wake word: Okay Nabu")
             if reachy_mini:
                 logger.info("Motion control: enabled")
+                logger.info("Camera: enabled (Reachy Mini)")
             else:
                 logger.info("Motion control: disabled (no robot)")
+                logger.info("Camera: test pattern (no robot)")
             logger.info("=" * 50)
             logger.info("To connect from Home Assistant:")
             logger.info("  Settings -> Devices & Services -> Add Integration")
             logger.info("  -> ESPHome -> Enter this device's IP:6053")
+            logger.info("  -> Generic Camera -> http://<ip>:8081/stream")
             logger.info("=" * 50)
 
             # Wait for stop signal

@@ -19,6 +19,7 @@ A voice assistant application for **Reachy Mini robot** that integrates with Hom
 
 - **Local Wake Word Detection**: Uses microWakeWord for offline wake word detection
 - **ESPHome Integration**: Seamlessly connects to Home Assistant
+- **Camera Streaming**: MJPEG video stream for Home Assistant Generic Camera integration
 - **Motion Control**: Head movements and antenna animations during voice interaction
 - **Zero Configuration**: Install and run - all settings are managed in Home Assistant
 - **Full Robot Control**: Expose 30+ entities to Home Assistant for complete robot control
@@ -54,6 +55,20 @@ The app runs automatically when installed on Reachy Mini. After installation:
 3. Search for **ESPHome**
 4. Enter your Reachy Mini's IP address with port `6053`
 5. The voice assistant will be automatically discovered
+
+### Camera Setup
+
+The camera stream is available at `http://<reachy-mini-ip>:8081/stream`. To add it to Home Assistant:
+
+1. Go to **Settings** -> **Devices & Services** -> **Add Integration**
+2. Search for **Generic Camera**
+3. Enter the stream URL: `http://<reachy-mini-ip>:8081/stream`
+4. Set content type to `image/jpeg`
+
+You can also access:
+- **Live Stream**: `http://<reachy-mini-ip>:8081/stream` - MJPEG video stream
+- **Snapshot**: `http://<reachy-mini-ip>:8081/snapshot` - Single JPEG image
+- **Status Page**: `http://<reachy-mini-ip>:8081/` - Web interface with stream preview
 
 ### Wake Words
 
@@ -115,11 +130,14 @@ This application exposes 30+ entities to Home Assistant for complete robot contr
         |
         v
 [Head Motion & Antenna Animation]
+
+[Reachy Mini Camera] -> [MJPEG Server :8081] -> [Home Assistant Generic Camera]
 ```
 
 - **Wake word detection** runs locally on Reachy Mini
 - **Speech-to-Text (STT)** and **Text-to-Speech (TTS)** are handled by Home Assistant
 - **Motion feedback** provides visual response during voice interaction
+- **Camera streaming** provides real-time video feed to Home Assistant
 
 ## Project Structure
 
@@ -129,6 +147,7 @@ reachy_mini_ha_voice/
 │   ├── __init__.py
 │   ├── main.py              # App entry point
 │   ├── voice_assistant.py   # Voice assistant service
+│   ├── camera_server.py     # MJPEG camera streaming server
 │   ├── satellite.py         # ESPHome protocol handler
 │   ├── audio_player.py      # Audio playback
 │   ├── motion.py            # Motion control
@@ -149,6 +168,7 @@ reachy_mini_ha_voice/
 - `reachy-mini` - Reachy Mini SDK
 - `aioesphomeapi` - ESPHome protocol
 - `pymicro-wakeword` - Wake word detection
+- `opencv-python` - Camera streaming
 - `sounddevice` / `soundfile` - Audio processing
 - `zeroconf` - mDNS discovery
 
