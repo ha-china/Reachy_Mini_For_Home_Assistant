@@ -736,19 +736,6 @@ class VoiceSatelliteProtocol(APIServer):
         )
         self.state.entities.append(motors_enabled)
 
-        # Motor mode select
-        motor_mode = SelectEntity(
-            server=self,
-            key=self._get_entity_key("motor_mode"),
-            name="Motor Mode",
-            object_id="motor_mode",
-            options=["enabled", "disabled", "gravity_compensation"],
-            icon="mdi:cog",
-            value_getter=self.reachy_controller.get_motor_mode,
-            value_setter=self.reachy_controller.set_motor_mode,
-        )
-        self.state.entities.append(motor_mode)
-
         # Wake up button
         wake_up_button = ButtonEntity(
             server=self,
@@ -773,7 +760,7 @@ class VoiceSatelliteProtocol(APIServer):
         )
         self.state.entities.append(sleep_button)
 
-        _LOGGER.info("Phase 2 entities registered: motors_enabled, motor_mode, wake_up, go_to_sleep")
+        _LOGGER.info("Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep")
 
     def _setup_phase3_entities(self) -> None:
         """Setup Phase 3 entities: Pose control."""
@@ -897,7 +884,7 @@ class VoiceSatelliteProtocol(APIServer):
         antenna_left = NumberEntity(
             server=self,
             key=self._get_entity_key("antenna_left"),
-            name="Left Antenna",
+            name="Antenna(L)",
             object_id="antenna_left",
             min_value=-90.0,
             max_value=90.0,
@@ -913,7 +900,7 @@ class VoiceSatelliteProtocol(APIServer):
         antenna_right = NumberEntity(
             server=self,
             key=self._get_entity_key("antenna_right"),
-            name="Right Antenna",
+            name="Antenna(R)",
             object_id="antenna_right",
             min_value=-90.0,
             max_value=90.0,
