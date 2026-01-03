@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     ButtonCommandRequest,
+    CameraImageRequest,
     DeviceInfoRequest,
     DeviceInfoResponse,
     ListEntitiesDoneResponse,
@@ -294,6 +295,7 @@ class VoiceSatelliteProtocol(APIServer):
                 SwitchCommandRequest,
                 SelectCommandRequest,
                 ButtonCommandRequest,
+                CameraImageRequest,
             ),
         ):
             for entity in self.state.entities:
