@@ -88,6 +88,8 @@ class VoiceSatelliteProtocol(APIServer):
         self._setup_phase5_entities()
         self._setup_phase6_entities()
         self._setup_phase7_entities()
+        self._setup_phase8_entities()
+        self._setup_phase9_entities()
 
         self._is_streaming_audio = False
         self._tts_url: Optional[str] = None
@@ -517,6 +519,37 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Timer finished animation")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
+
+    def _play_emotion(self, emotion_name: str) -> None:
+        """Play an emotion/expression from the emotions library.
+
+        Args:
+            emotion_name: Name of the emotion (e.g., "happy1", "sad1", etc.)
+        """
+        try:
+            import requests
+
+            # Get WLAN IP from daemon status
+            wlan_ip = "localhost"
+            if self.state.reachy_mini is not None:
+                try:
+                    status = self.state.reachy_mini.client.get_status(wait=False)
+                    wlan_ip = status.get('wlan_ip', 'localhost')
+                except Exception:
+                    wlan_ip = "localhost"
+
+            # Call the emotion playback API
+            # Dataset: pollen-robotics/reachy-mini-emotions-library
+            url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion_name}"
+
+            response = requests.post(url, timeout=5)
+            if response.status_code == 200:
+                _LOGGER.info(f"Playing emotion: {emotion_name}")
+            else:
+                _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
+
+        except Exception as e:
+            _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
 
     # -------------------------------------------------------------------------
     # Entity Setup Methods
@@ -1047,3 +1080,102 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.entities.append(imu_temperature)
 
         _LOGGER.info("Phase 7 entities registered: IMU accelerometer, gyroscope, temperature")
+
+    def _setup_phase8_entities(self) -> None:
+        """Setup Phase 8 entities: Emotion and expression buttons."""
+
+        # Happy emotion
+        happy_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Happy",
+            object_id="emotion_happy",
+            icon="mdi:emoticon-happy",
+            device_class="restart",
+            on_press=lambda: self._play_emotion("happy1"),
+        )
+        self.state.entities.append(happy_button)
+
+        # Sad emotion
+        sad_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Sad",
+            object_id="emotion_sad",
+            icon="mdi:emoticon-sad",
+            device_class="restart",
+            on_press=lambda: self._play_emotion("sad1"),
+        )
+        self.state.entities.append(sad_button)
+
+        # Angry emotion
+        angry_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Angry",
+            object_id="emotion_angry",
+            icon="mdi:emoticon-angry",
+            device_class="restart",
+            on_press=lambda: self._play_emotion("angry1"),
+        )
+        self.state.entities.append(angry_button)
+
+        # Fear emotion
+        fear_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Fear",
+            object_id="emotion_fear",
+            icon="mdi:emoticon-frown",
+            device_class="restart",
+            on_press=lambda: self._play_emotion("fear1"),
+        )
+        self.state.entities.append(fear_button)
+
+        # Surprise emotion
+        surprise_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Surprise",
+            object_id="emotion_surprise",
+            icon="mdi:emoticon-surprised",
+            device_class="restart",
+            on_press=lambda: self._play_emotion("surprise1"),
+        )
+        self.state.entities.append(surprise_button)
+
+        # Disgust emotion
+        disgust_button = ButtonEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Disgust",
+            object_id="emotion_disgust",
+            icon="mdi:emoticon-poop",
+            device_class="restart",
+            on_press=lambda: self._play_emotion("disgust1"),
+        )
+        self.state.entities.append(disgust_button)
+
+        _LOGGER.info("Phase 8 entities registered: emotions (happy, sad, angry, fear, surprise, disgust)")
+
+    def _setup_phase9_entities(self) -> None:
+        """Setup Phase 9 entities: Audio controls."""
+
+        # Microphone volume control
+        microphone_volume = NumberEntity(
+            server=self,
+            key=len(self.state.entities),
+            name="Microphone Volume",
+            object_id="microphone_volume",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            icon="mdi:microphone",
+            unit_of_measurement="%",
+            mode=2,  # Slider mode
+            value_getter=self.reachy_controller.get_microphone_volume,
+            value_setter=self.reachy_controller.set_microphone_volume,
+        )
+        self.state.entities.append(microphone_volume)
+
+        _LOGGER.info("Phase 9 entities registered: microphone_volume")

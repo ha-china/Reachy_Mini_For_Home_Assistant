@@ -119,6 +119,52 @@ class ReachyController:
         except Exception as e:
             logger.error(f"Error setting speaker volume: {e}")
 
+    def get_microphone_volume(self) -> float:
+        """Get microphone volume (0-100) using local SDK audio interface."""
+        if not self.is_available:
+            return 50.0  # Default if not available
+
+        try:
+            # Use Reachy Mini's local audio interface (like get_DoA)
+            audio = self.reachy.media.audio
+            if audio is not None and audio._respeaker is not None:
+                # AUDIO_MGR_MIC_GAIN returns gain in dB (typically 0-15 dB)
+                gain_db = audio._respeaker.read("AUDIO_MGR_MIC_GAIN")
+                if gain_db is not None:
+                    # Convert dB gain to 0-100 percentage
+                    # Assuming 0 dB = 0%, 15 dB = 100%
+                    volume = min(100.0, max(0.0, (gain_db[0] / 15.0) * 100.0))
+                    logger.debug(f"Microphone gain: {gain_db[0]:.2f} dB -> {volume:.0f}%")
+                    return volume
+        except Exception as e:
+            logger.debug(f"Could not get microphone volume from SDK: {e}")
+
+        return 50.0  # Default fallback
+
+    def set_microphone_volume(self, volume: float) -> None:
+        """
+        Set microphone volume (0-100) using local SDK audio interface.
+
+        Args:
+            volume: Volume level 0-100
+        """
+        volume = max(0.0, min(100.0, volume))
+
+        if self.is_available:
+            try:
+                # Use Reachy Mini's local audio interface (like get_DoA)
+                audio = self.reachy.media.audio
+                if audio is not None and audio._respeaker is not None:
+                    # Convert 0-100% to dB gain (0-15 dB range)
+                    gain_db = (volume / 100.0) * 15.0
+                    audio._respeaker.write("AUDIO_MGR_MIC_GAIN", [gain_db])
+                    logger.info(f"Microphone volume set to {volume}% (gain: {gain_db:.2f} dB)")
+                    return
+            except Exception as e:
+                logger.error(f"Failed to set microphone volume: {e}")
+        else:
+            logger.warning("Cannot set microphone volume: robot not available")
+
     # ========== Phase 2: Motor Control ==========
 
     def get_motors_enabled(self) -> bool:
