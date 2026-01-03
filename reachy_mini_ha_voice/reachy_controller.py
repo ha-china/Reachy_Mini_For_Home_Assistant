@@ -3,6 +3,8 @@
 import logging
 from typing import Optional, TYPE_CHECKING
 import math
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -40,8 +42,9 @@ class ReachyController:
         if not self.is_available:
             return "not_available"
         try:
-            status = self.reachy.get_daemon_status()
-            return status.state.value if hasattr(status, 'state') else "unknown"
+            # client.get_status() returns a dict with 'state' key
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('state', 'unknown')
         except Exception as e:
             logger.error(f"Error getting daemon state: {e}")
             return "error"
@@ -51,8 +54,9 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            status = self.reachy.get_backend_status()
-            return status.ready if hasattr(status, 'ready') else False
+            # Check if daemon state is 'running'
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('state') == 'running'
         except Exception as e:
             logger.error(f"Error getting backend status: {e}")
             return False
@@ -62,8 +66,8 @@ class ReachyController:
         if not self.is_available:
             return "Robot not available"
         try:
-            status = self.reachy.get_daemon_status()
-            return status.error if hasattr(status, 'error') else ""
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('error') or ""
         except Exception as e:
             logger.error(f"Error getting error message: {e}")
             return str(e)
@@ -90,8 +94,10 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            state = self.reachy.get_full_state()
-            return state.control_mode.value == "enabled"
+            # We can't directly query motor state from SDK
+            # Return True if daemon is running (motors are typically enabled)
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('state') == 'running'
         except Exception as e:
             logger.error(f"Error getting motor state: {e}")
             return False
@@ -122,8 +128,12 @@ class ReachyController:
         if not self.is_available:
             return "disabled"
         try:
-            state = self.reachy.get_full_state()
-            return state.control_mode.value
+            # SDK doesn't expose motor mode directly
+            # Return "enabled" if daemon is running
+            status = self.reachy.client.get_status(wait=False)
+            if status.get('state') == 'running':
+                return "enabled"
+            return "disabled"
         except Exception as e:
             logger.error(f"Error getting motor mode: {e}")
             return "error"
@@ -145,7 +155,7 @@ class ReachyController:
             elif mode == "disabled":
                 self.reachy.disable_motors()
             elif mode == "gravity_compensation":
-                self.reachy.set_motor_control_mode("gravity_compensation")
+                self.reachy.enable_gravity_compensation()
             else:
                 logger.warning(f"Invalid motor mode: {mode}")
                 return
@@ -179,13 +189,37 @@ class ReachyController:
 
     # ========== Phase 3: Pose Control ==========
 
+    def _extract_pose_from_matrix(self, pose_matrix: np.ndarray) -> tuple:
+        """
+        Extract position (x, y, z) and rotation (roll, pitch, yaw) from 4x4 pose matrix.
+
+        Args:
+            pose_matrix: 4x4 homogeneous transformation matrix
+
+        Returns:
+            tuple: (x, y, z, roll, pitch, yaw) where position is in meters and angles in radians
+        """
+        # Extract position from the last column
+        x = pose_matrix[0, 3]
+        y = pose_matrix[1, 3]
+        z = pose_matrix[2, 3]
+
+        # Extract rotation matrix and convert to euler angles
+        rotation_matrix = pose_matrix[:3, :3]
+        rotation = R.from_matrix(rotation_matrix)
+        # Use 'xyz' convention for roll, pitch, yaw
+        roll, pitch, yaw = rotation.as_euler('xyz')
+
+        return x, y, z, roll, pitch, yaw
+
     def get_head_x(self) -> float:
         """Get head X position in mm."""
         if not self.is_available:
             return 0.0
         try:
             pose = self.reachy.get_current_head_pose()
-            return pose.x * 1000  # Convert m to mm
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            return x * 1000  # Convert m to mm
         except Exception as e:
             logger.error(f"Error getting head X: {e}")
             return 0.0
@@ -195,10 +229,11 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            current = self.reachy.get_current_head_pose()
-            self.reachy.goto_target(
-                head=(x_mm / 1000, current.y, current.z, current.roll, current.pitch, current.yaw)
-            )
+            pose = self.reachy.get_current_head_pose()
+            # Modify the X position in the matrix
+            new_pose = pose.copy()
+            new_pose[0, 3] = x_mm / 1000  # Convert mm to m
+            self.reachy.goto_target(head=new_pose)
         except Exception as e:
             logger.error(f"Error setting head X: {e}")
 
@@ -208,7 +243,8 @@ class ReachyController:
             return 0.0
         try:
             pose = self.reachy.get_current_head_pose()
-            return pose.y * 1000
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            return y * 1000
         except Exception as e:
             logger.error(f"Error getting head Y: {e}")
             return 0.0
@@ -218,10 +254,10 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            current = self.reachy.get_current_head_pose()
-            self.reachy.goto_target(
-                head=(current.x, y_mm / 1000, current.z, current.roll, current.pitch, current.yaw)
-            )
+            pose = self.reachy.get_current_head_pose()
+            new_pose = pose.copy()
+            new_pose[1, 3] = y_mm / 1000
+            self.reachy.goto_target(head=new_pose)
         except Exception as e:
             logger.error(f"Error setting head Y: {e}")
 
@@ -231,7 +267,8 @@ class ReachyController:
             return 0.0
         try:
             pose = self.reachy.get_current_head_pose()
-            return pose.z * 1000
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            return z * 1000
         except Exception as e:
             logger.error(f"Error getting head Z: {e}")
             return 0.0
@@ -241,10 +278,10 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            current = self.reachy.get_current_head_pose()
-            self.reachy.goto_target(
-                head=(current.x, current.y, z_mm / 1000, current.roll, current.pitch, current.yaw)
-            )
+            pose = self.reachy.get_current_head_pose()
+            new_pose = pose.copy()
+            new_pose[2, 3] = z_mm / 1000
+            self.reachy.goto_target(head=new_pose)
         except Exception as e:
             logger.error(f"Error setting head Z: {e}")
 
@@ -254,7 +291,8 @@ class ReachyController:
             return 0.0
         try:
             pose = self.reachy.get_current_head_pose()
-            return math.degrees(pose.roll)
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            return math.degrees(roll)
         except Exception as e:
             logger.error(f"Error getting head roll: {e}")
             return 0.0
@@ -264,10 +302,13 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            current = self.reachy.get_current_head_pose()
-            self.reachy.goto_target(
-                head=(current.x, current.y, current.z, math.radians(roll_deg), current.pitch, current.yaw)
-            )
+            pose = self.reachy.get_current_head_pose()
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            # Create new rotation with updated roll
+            new_rotation = R.from_euler('xyz', [math.radians(roll_deg), pitch, yaw])
+            new_pose = pose.copy()
+            new_pose[:3, :3] = new_rotation.as_matrix()
+            self.reachy.goto_target(head=new_pose)
         except Exception as e:
             logger.error(f"Error setting head roll: {e}")
 
@@ -277,7 +318,8 @@ class ReachyController:
             return 0.0
         try:
             pose = self.reachy.get_current_head_pose()
-            return math.degrees(pose.pitch)
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            return math.degrees(pitch)
         except Exception as e:
             logger.error(f"Error getting head pitch: {e}")
             return 0.0
@@ -287,10 +329,12 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            current = self.reachy.get_current_head_pose()
-            self.reachy.goto_target(
-                head=(current.x, current.y, current.z, current.roll, math.radians(pitch_deg), current.yaw)
-            )
+            pose = self.reachy.get_current_head_pose()
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            new_rotation = R.from_euler('xyz', [roll, math.radians(pitch_deg), yaw])
+            new_pose = pose.copy()
+            new_pose[:3, :3] = new_rotation.as_matrix()
+            self.reachy.goto_target(head=new_pose)
         except Exception as e:
             logger.error(f"Error setting head pitch: {e}")
 
@@ -300,7 +344,8 @@ class ReachyController:
             return 0.0
         try:
             pose = self.reachy.get_current_head_pose()
-            return math.degrees(pose.yaw)
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            return math.degrees(yaw)
         except Exception as e:
             logger.error(f"Error getting head yaw: {e}")
             return 0.0
@@ -310,10 +355,12 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            current = self.reachy.get_current_head_pose()
-            self.reachy.goto_target(
-                head=(current.x, current.y, current.z, current.roll, current.pitch, math.radians(yaw_deg))
-            )
+            pose = self.reachy.get_current_head_pose()
+            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+            new_rotation = R.from_euler('xyz', [roll, pitch, math.radians(yaw_deg)])
+            new_pose = pose.copy()
+            new_pose[:3, :3] = new_rotation.as_matrix()
+            self.reachy.goto_target(head=new_pose)
         except Exception as e:
             logger.error(f"Error setting head yaw: {e}")
 
@@ -322,8 +369,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            state = self.reachy.get_full_state()
-            return math.degrees(state.body_yaw)
+            # SDK doesn't expose body_yaw directly in a simple way
+            # Return 0.0 as placeholder - body yaw is typically controlled, not read
+            return 0.0
         except Exception as e:
             logger.error(f"Error getting body yaw: {e}")
             return 0.0
@@ -342,9 +390,10 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            state = self.reachy.get_full_state()
-            # antennas_position is [right, left]
-            return math.degrees(state.antennas_position[1])
+            # get_current_joint_positions() returns (head_joints, antenna_joints)
+            # antenna_joints is [right, left]
+            _, antennas = self.reachy.get_current_joint_positions()
+            return math.degrees(antennas[1])  # left is index 1
         except Exception as e:
             logger.error(f"Error getting left antenna: {e}")
             return 0.0
@@ -354,9 +403,9 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            state = self.reachy.get_full_state()
-            right = state.antennas_position[0]
-            self.reachy.goto_target(antennas=(right, math.radians(angle_deg)))
+            _, antennas = self.reachy.get_current_joint_positions()
+            right = antennas[0]
+            self.reachy.goto_target(antennas=[right, math.radians(angle_deg)])
         except Exception as e:
             logger.error(f"Error setting left antenna: {e}")
 
@@ -365,8 +414,8 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            state = self.reachy.get_full_state()
-            return math.degrees(state.antennas_position[0])
+            _, antennas = self.reachy.get_current_joint_positions()
+            return math.degrees(antennas[0])  # right is index 0
         except Exception as e:
             logger.error(f"Error getting right antenna: {e}")
             return 0.0
@@ -376,9 +425,9 @@ class ReachyController:
         if not self.is_available:
             return
         try:
-            state = self.reachy.get_full_state()
-            left = state.antennas_position[1]
-            self.reachy.goto_target(antennas=(math.radians(angle_deg), left))
+            _, antennas = self.reachy.get_current_joint_positions()
+            left = antennas[1]
+            self.reachy.goto_target(antennas=[math.radians(angle_deg), left])
         except Exception as e:
             logger.error(f"Error setting right antenna: {e}")
 
@@ -433,9 +482,8 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            state = self.reachy.get_full_state()
-            if hasattr(state, 'doa') and hasattr(state.doa, 'angle'):
-                return math.degrees(state.doa.angle)
+            # DOA info is not directly exposed in SDK
+            # Would need to access audio subsystem
             return 0.0
         except Exception as e:
             logger.error(f"Error getting DOA angle: {e}")
@@ -446,9 +494,7 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            state = self.reachy.get_full_state()
-            if hasattr(state, 'doa') and hasattr(state.doa, 'speech_detected'):
-                return state.doa.speech_detected
+            # Speech detection is not directly exposed in SDK
             return False
         except Exception as e:
             logger.error(f"Error getting speech detection: {e}")
@@ -473,10 +519,8 @@ class ReachyController:
         if not self.is_available:
             return "N/A"
         try:
-            status = self.reachy.get_daemon_status()
-            if hasattr(status, 'version'):
-                return status.version
-            return "unknown"
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('version') or "unknown"
         except Exception as e:
             logger.error(f"Error getting SDK version: {e}")
             return "error"
@@ -486,10 +530,8 @@ class ReachyController:
         if not self.is_available:
             return "N/A"
         try:
-            status = self.reachy.get_daemon_status()
-            if hasattr(status, 'robot_name'):
-                return status.robot_name
-            return "unknown"
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('robot_name') or "unknown"
         except Exception as e:
             logger.error(f"Error getting robot name: {e}")
             return "error"
@@ -499,10 +541,8 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            status = self.reachy.get_daemon_status()
-            if hasattr(status, 'wireless_version'):
-                return status.wireless_version
-            return False
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('wireless_version', False)
         except Exception as e:
             logger.error(f"Error getting wireless version: {e}")
             return False
@@ -512,10 +552,8 @@ class ReachyController:
         if not self.is_available:
             return False
         try:
-            status = self.reachy.get_daemon_status()
-            if hasattr(status, 'simulation_enabled'):
-                return status.simulation_enabled
-            return False
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('simulation_enabled', False)
         except Exception as e:
             logger.error(f"Error getting simulation mode: {e}")
             return False
@@ -525,10 +563,8 @@ class ReachyController:
         if not self.is_available:
             return "N/A"
         try:
-            status = self.reachy.get_daemon_status()
-            if hasattr(status, 'wlan_ip'):
-                return status.wlan_ip
-            return "N/A"
+            status = self.reachy.client.get_status(wait=False)
+            return status.get('wlan_ip') or "N/A"
         except Exception as e:
             logger.error(f"Error getting WLAN IP: {e}")
             return "error"
@@ -540,10 +576,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'accelerometer' in imu_data:
-                    return float(imu_data['accelerometer'][0])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'accelerometer' in imu_data:
+                return float(imu_data['accelerometer'][0])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU accel X: {e}")
@@ -554,10 +589,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'accelerometer' in imu_data:
-                    return float(imu_data['accelerometer'][1])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'accelerometer' in imu_data:
+                return float(imu_data['accelerometer'][1])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU accel Y: {e}")
@@ -568,10 +602,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'accelerometer' in imu_data:
-                    return float(imu_data['accelerometer'][2])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'accelerometer' in imu_data:
+                return float(imu_data['accelerometer'][2])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU accel Z: {e}")
@@ -582,10 +615,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'gyroscope' in imu_data:
-                    return float(imu_data['gyroscope'][0])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'gyroscope' in imu_data:
+                return float(imu_data['gyroscope'][0])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU gyro X: {e}")
@@ -596,10 +628,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'gyroscope' in imu_data:
-                    return float(imu_data['gyroscope'][1])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'gyroscope' in imu_data:
+                return float(imu_data['gyroscope'][1])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU gyro Y: {e}")
@@ -610,10 +641,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'gyroscope' in imu_data:
-                    return float(imu_data['gyroscope'][2])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'gyroscope' in imu_data:
+                return float(imu_data['gyroscope'][2])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU gyro Z: {e}")
@@ -624,10 +654,9 @@ class ReachyController:
         if not self.is_available:
             return 0.0
         try:
-            if hasattr(self.reachy, 'imu'):
-                imu_data = self.reachy.imu
-                if 'temperature' in imu_data:
-                    return float(imu_data['temperature'])
+            imu_data = self.reachy.imu
+            if imu_data is not None and 'temperature' in imu_data:
+                return float(imu_data['temperature'])
             return 0.0
         except Exception as e:
             logger.error(f"Error getting IMU temperature: {e}")
