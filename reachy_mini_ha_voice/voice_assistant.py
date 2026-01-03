@@ -28,10 +28,9 @@ from .motion import ReachyMiniMotion
 _LOGGER = logging.getLogger(__name__)
 
 _MODULE_DIR = Path(__file__).parent
-_REPO_DIR = _MODULE_DIR.parent
-_WAKEWORDS_DIR = _REPO_DIR / "wakewords"
-_SOUNDS_DIR = _REPO_DIR / "sounds"
-_LOCAL_DIR = _REPO_DIR / "local"
+_WAKEWORDS_DIR = _MODULE_DIR / "wakewords"
+_SOUNDS_DIR = _MODULE_DIR / "sounds"
+_LOCAL_DIR = _MODULE_DIR.parent / "local"
 
 
 class VoiceAssistantService:
