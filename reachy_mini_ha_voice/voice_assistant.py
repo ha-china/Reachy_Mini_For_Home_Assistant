@@ -398,35 +398,31 @@ class VoiceAssistantService:
                     time.sleep(0.01)
                     continue
 
-                # Validate dtype - SDK returns float32
-                # Check for string/bytes dtype which cannot be converted
-                if audio_data.dtype.kind in ('S', 'U', 'O'):  # bytes, unicode, object
-                    _LOGGER.debug("Audio data has non-numeric dtype: %s, skipping", audio_data.dtype)
-                    time.sleep(0.01)
-                    continue
-
+                # Convert to float32 BEFORE any math operations
+                # This prevents "ufunc 'add' did not contain a loop" errors
+                # when SDK returns unexpected types (e.g., dtype='S1')
                 if audio_data.dtype != np.float32:
-                    _LOGGER.debug("Unexpected audio dtype: %s, converting", audio_data.dtype)
+                    # Check for non-numeric types that cannot be converted
+                    if audio_data.dtype.kind in ('S', 'U', 'O', 'V'):  # bytes, unicode, object, void
+                        _LOGGER.debug("Audio data has non-numeric dtype: %s, skipping", audio_data.dtype)
+                        time.sleep(0.01)
+                        continue
                     try:
-                        # Ensure we have numeric data before conversion
-                        if not np.issubdtype(audio_data.dtype, np.number):
-                            _LOGGER.debug("Non-numeric audio dtype: %s, skipping", audio_data.dtype)
-                            time.sleep(0.01)
-                            continue
                         audio_data = audio_data.astype(np.float32)
                     except (TypeError, ValueError) as e:
-                        _LOGGER.debug("Failed to convert audio dtype: %s", e)
+                        _LOGGER.debug("Failed to convert audio to float32: %s (dtype=%s)", e, audio_data.dtype)
                         time.sleep(0.01)
                         continue
 
                 # Convert stereo to mono (take mean of channels)
                 # SDK returns shape (samples, 2) for stereo
+                # audio_data is already float32 at this point
                 if audio_data.ndim == 2 and audio_data.shape[1] == 2:
-                    audio_chunk_array = np.mean(audio_data, axis=1, dtype=np.float32)
+                    audio_chunk_array = np.mean(audio_data, axis=1)
                 elif audio_data.ndim == 2:
-                    audio_chunk_array = audio_data[:, 0].astype(np.float32)
+                    audio_chunk_array = audio_data[:, 0]
                 elif audio_data.ndim == 1:
-                    audio_chunk_array = audio_data.astype(np.float32)
+                    audio_chunk_array = audio_data
                 else:
                     _LOGGER.debug("Unexpected audio shape: %s", audio_data.shape)
                     time.sleep(0.01)
