@@ -107,13 +107,8 @@ class VoiceSatelliteProtocol(APIServer):
         "imu_gyro_y": 704,
         "imu_gyro_z": 705,
         "imu_temperature": 706,
-        # Phase 8: Emotions
-        "emotion_happy": 800,
-        "emotion_sad": 801,
-        "emotion_angry": 802,
-        "emotion_fear": 803,
-        "emotion_surprise": 804,
-        "emotion_disgust": 805,
+        # Phase 8: Emotion selector
+        "emotion": 800,
         # Phase 9: Audio controls
         "microphone_volume": 900,
         # Phase 10: Camera
@@ -1169,81 +1164,44 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Phase 7 entities registered: IMU accelerometer, gyroscope, temperature")
 
     def _setup_phase8_entities(self) -> None:
-        """Setup Phase 8 entities: Emotion and expression buttons."""
+        """Setup Phase 8 entities: Emotion selector."""
 
-        # Happy emotion
-        happy_button = ButtonEntity(
+        # Emotion options mapping
+        self._emotion_map = {
+            "None": None,
+            "Happy": "happy1",
+            "Sad": "sad1",
+            "Angry": "angry1",
+            "Fear": "fear1",
+            "Surprise": "surprise1",
+            "Disgust": "disgust1",
+        }
+
+        def get_emotion() -> str:
+            return getattr(self, '_current_emotion', "None")
+
+        def set_emotion(emotion: str) -> None:
+            self._current_emotion = emotion
+            emotion_name = self._emotion_map.get(emotion)
+            if emotion_name:
+                self._play_emotion(emotion_name)
+                # Reset to None after playing
+                self._current_emotion = "None"
+
+        # Emotion selector
+        emotion_select = SelectEntity(
             server=self,
-            key=self._get_entity_key("emotion_happy"),
-            name="Happy",
-            object_id="emotion_happy",
-            icon="mdi:emoticon-happy",
-            device_class="restart",
-            on_press=lambda: self._play_emotion("happy1"),
+            key=self._get_entity_key("emotion"),
+            name="Emotion",
+            object_id="emotion",
+            options=list(self._emotion_map.keys()),
+            icon="mdi:emoticon",
+            value_getter=get_emotion,
+            value_setter=set_emotion,
         )
-        self.state.entities.append(happy_button)
+        self.state.entities.append(emotion_select)
 
-        # Sad emotion
-        sad_button = ButtonEntity(
-            server=self,
-            key=self._get_entity_key("emotion_sad"),
-            name="Sad",
-            object_id="emotion_sad",
-            icon="mdi:emoticon-sad",
-            device_class="restart",
-            on_press=lambda: self._play_emotion("sad1"),
-        )
-        self.state.entities.append(sad_button)
-
-        # Angry emotion
-        angry_button = ButtonEntity(
-            server=self,
-            key=self._get_entity_key("emotion_angry"),
-            name="Angry",
-            object_id="emotion_angry",
-            icon="mdi:emoticon-angry",
-            device_class="restart",
-            on_press=lambda: self._play_emotion("angry1"),
-        )
-        self.state.entities.append(angry_button)
-
-        # Fear emotion
-        fear_button = ButtonEntity(
-            server=self,
-            key=self._get_entity_key("emotion_fear"),
-            name="Fear",
-            object_id="emotion_fear",
-            icon="mdi:emoticon-frown",
-            device_class="restart",
-            on_press=lambda: self._play_emotion("fear1"),
-        )
-        self.state.entities.append(fear_button)
-
-        # Surprise emotion
-        surprise_button = ButtonEntity(
-            server=self,
-            key=self._get_entity_key("emotion_surprise"),
-            name="Surprise",
-            object_id="emotion_surprise",
-            icon="mdi:emoticon-surprised",
-            device_class="restart",
-            on_press=lambda: self._play_emotion("surprise1"),
-        )
-        self.state.entities.append(surprise_button)
-
-        # Disgust emotion
-        disgust_button = ButtonEntity(
-            server=self,
-            key=self._get_entity_key("emotion_disgust"),
-            name="Disgust",
-            object_id="emotion_disgust",
-            icon="mdi:emoticon-poop",
-            device_class="restart",
-            on_press=lambda: self._play_emotion("disgust1"),
-        )
-        self.state.entities.append(disgust_button)
-
-        _LOGGER.info("Phase 8 entities registered: emotions (happy, sad, angry, fear, surprise, disgust)")
+        _LOGGER.info("Phase 8 entities registered: emotion selector")
 
     def _setup_phase9_entities(self) -> None:
         """Setup Phase 9 entities: Audio controls."""
