@@ -1233,8 +1233,10 @@ class VoiceSatelliteProtocol(APIServer):
         def get_camera_url() -> str:
             """Get camera stream URL."""
             if self.camera_server:
-                # Return the MJPEG stream URL
-                return f"http://{{host}}:{self.camera_server.port}/stream"
+                # Get WLAN IP from reachy controller
+                wlan_ip = self.reachy_controller.get_wlan_ip()
+                if wlan_ip and wlan_ip != "N/A":
+                    return f"http://{wlan_ip}:{self.camera_server.port}/stream"
             return "N/A"
 
         camera_url = TextSensorEntity(
