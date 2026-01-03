@@ -50,7 +50,7 @@ from .voice_assistant import VoiceAssistantService
 from .motion import ReachyMiniMotion
 
 
-class ReachyMiniHAVoiceApp(ReachyMiniApp):
+class ReachyMiniHaVoice(ReachyMiniApp):
     """
     Reachy Mini Home Assistant Voice Assistant Application.
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    app = ReachyMiniHAVoiceApp()
+    app = ReachyMiniHaVoice()
     try:
         app.wrapped_run()
     except KeyboardInterrupt:
