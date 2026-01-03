@@ -756,12 +756,21 @@ class ReachyController:
     def _get_respeaker(self):
         """Get ReSpeaker device from media manager."""
         if not self.is_available:
+            logger.debug("ReSpeaker not available: robot not connected")
             return None
         try:
-            if self.reachy.media and self.reachy.media.audio:
-                return self.reachy.media.audio._respeaker
-            return None
-        except Exception:
+            if not self.reachy.media:
+                logger.debug("ReSpeaker not available: media manager is None")
+                return None
+            if not self.reachy.media.audio:
+                logger.debug("ReSpeaker not available: audio is None")
+                return None
+            respeaker = self.reachy.media.audio._respeaker
+            if respeaker is None:
+                logger.debug("ReSpeaker not available: _respeaker is None (USB device not found)")
+            return respeaker
+        except Exception as e:
+            logger.debug(f"ReSpeaker not available: {e}")
             return None
 
     def get_led_brightness(self) -> float:
