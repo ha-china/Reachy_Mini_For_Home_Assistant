@@ -440,9 +440,9 @@ class VoiceAssistantService:
                 if self._state and self._state.satellite:
                     self._state.satellite.handle_audio(audio_chunk)
 
-                # Process wake words
+                # Process wake words (pass bytes, not numpy array)
                 self._process_wake_words(
-                    audio_chunk_array, wake_words, micro_features, micro_inputs,
+                    audio_chunk, wake_words, micro_features, micro_inputs,
                     oww_features, oww_inputs, has_oww, last_active
                 )
 
@@ -486,19 +486,23 @@ class VoiceAssistantService:
                 if self._state and self._state.satellite:
                     self._state.satellite.handle_audio(audio_chunk)
 
-                # Process wake words
+                # Process wake words (pass bytes, not numpy array)
                 self._process_wake_words(
-                    audio_chunk_array, wake_words, micro_features, micro_inputs,
+                    audio_chunk, wake_words, micro_features, micro_inputs,
                     oww_features, oww_inputs, has_oww, last_active
                 )
 
     def _process_wake_words(
         self,
-        audio_chunk_array: np.ndarray,
+        audio_chunk: bytes,
         wake_words, micro_features, micro_inputs,
         oww_features, oww_inputs, has_oww, last_active
     ) -> None:
-        """Process wake word detection."""
+        """Process wake word detection.
+
+        Args:
+            audio_chunk: 16-bit PCM audio data as bytes (not numpy array)
+        """
         from pymicro_wakeword import MicroWakeWord, MicroWakeWordFeatures
         from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
 
@@ -535,10 +539,10 @@ class VoiceAssistantService:
         oww_inputs.clear()
 
         if micro_features:
-            micro_inputs.extend(micro_features.process_streaming(audio_chunk_array))
+            micro_inputs.extend(micro_features.process_streaming(audio_chunk))
 
         if oww_features:
-            oww_inputs.extend(oww_features.process_streaming(audio_chunk_array))
+            oww_inputs.extend(oww_features.process_streaming(audio_chunk))
 
         # Process wake words
         if self._state:
