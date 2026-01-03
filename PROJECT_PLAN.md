@@ -4,7 +4,7 @@
 
 将 Home Assistant 语音助手功能集成到 Reachy Mini 机器人，通过 ESPHome 协议与 Home Assistant 通信。
 
-## 本地项目目录参考
+## 本地项目目录参考 (禁止修改参考目录内任何文件)
 1. [linux-voice-assistant](linux-voice-assistant)
 2. [Reachy Mini SDK](reachy_mini)
 3. [reachy_mini_conversation_app](reachy_mini_conversation_app)
