@@ -5,6 +5,7 @@ from typing import Optional, TYPE_CHECKING
 import math
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import requests
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -74,6 +75,18 @@ class ReachyController:
 
     def get_speaker_volume(self) -> float:
         """Get speaker volume (0-100)."""
+        if not self.is_available:
+            return self._speaker_volume
+        try:
+            # Get volume from daemon API
+            status = self.reachy.client.get_status(wait=False)
+            wlan_ip = status.get('wlan_ip', 'localhost')
+            response = requests.get(f"http://{wlan_ip}:8000/volume/current", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                self._speaker_volume = float(data.get('volume', self._speaker_volume))
+        except Exception as e:
+            logger.debug(f"Could not get volume from API: {e}")
         return self._speaker_volume
 
     def set_speaker_volume(self, volume: float) -> None:
@@ -83,9 +96,28 @@ class ReachyController:
         Args:
             volume: Volume level 0-100
         """
-        self._speaker_volume = max(0.0, min(100.0, volume))
-        logger.info(f"Speaker volume set to {self._speaker_volume}%")
-        # Note: Actual volume control is handled by AudioPlayer
+        volume = max(0.0, min(100.0, volume))
+        self._speaker_volume = volume
+
+        if not self.is_available:
+            logger.warning("Cannot set volume: robot not available")
+            return
+
+        try:
+            # Set volume via daemon API
+            status = self.reachy.client.get_status(wait=False)
+            wlan_ip = status.get('wlan_ip', 'localhost')
+            response = requests.post(
+                f"http://{wlan_ip}:8000/volume/set",
+                json={"volume": int(volume)},
+                timeout=5
+            )
+            if response.status_code == 200:
+                logger.info(f"Speaker volume set to {volume}%")
+            else:
+                logger.error(f"Failed to set volume: {response.status_code} {response.text}")
+        except Exception as e:
+            logger.error(f"Error setting speaker volume: {e}")
 
     # ========== Phase 2: Motor Control ==========
 
