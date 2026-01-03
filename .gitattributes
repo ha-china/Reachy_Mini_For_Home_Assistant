@@ -1,7 +1,4 @@
-wakewords/openWakeWord/alexa_v0.1.tflite filter=lfs diff=lfs merge=lfs -text
-wakewords/openWakeWord/hey_jarvis_v0.1.tflite filter=lfs diff=lfs merge=lfs -text
-wakewords/openWakeWord/hey_mycroft_v0.1.tflite filter=lfs diff=lfs merge=lfs -text
-wakewords/openWakeWord/hey_rhasspy_v0.1.tflite filter=lfs diff=lfs merge=lfs -text
-wakewords/openWakeWord/ok_nabu_v0.1.tflite filter=lfs diff=lfs merge=lfs -text
+reachy_mini_ha_voice/wakewords/**/*.tflite filter=lfs diff=lfs merge=lfs -text
+reachy_mini_ha_voice/sounds/**/*.flac filter=lfs diff=lfs merge=lfs -text
 "reachy_mini_ha_voice/wakewords/**/*.tflite filter=lfs diff=lfs merge=lfs -text
 reachy_mini_ha_voice/sounds/**/*.flac" filter=lfs diff=lfs merge=lfs -text
