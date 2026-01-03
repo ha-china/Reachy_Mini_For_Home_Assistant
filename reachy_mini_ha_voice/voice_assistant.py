@@ -482,7 +482,9 @@ class VoiceAssistantService:
                         if (last_active is None) or ((now - last_active) > self._state.refractory_seconds):
                             _LOGGER.info("Wake word detected: %s", wake_word.id)
                             self._state.satellite.wakeup(wake_word)
-                            self._motion.on_wakeup()
+                            # Get DOA angle and turn to sound source
+                            doa_angle_deg = self._get_doa_angle_deg()
+                            self._motion.on_wakeup(doa_angle_deg)
                             last_active = now
 
                 # Process stop word
@@ -581,7 +583,9 @@ class VoiceAssistantService:
                         if (last_active is None) or ((now - last_active) > self._state.refractory_seconds):
                             _LOGGER.info("Wake word detected: %s", wake_word.id)
                             self._state.satellite.wakeup(wake_word)
-                            self._motion.on_wakeup()
+                            # Get DOA angle and turn to sound source
+                            doa_angle_deg = self._get_doa_angle_deg()
+                            self._motion.on_wakeup(doa_angle_deg)
                             last_active = now
 
                 # Process stop word
@@ -594,3 +598,51 @@ class VoiceAssistantService:
                     if stopped and (self._state.stop_word.id in self._state.active_wake_words):
                         _LOGGER.info("Stop word detected")
                         self._state.satellite.stop()
+
+    def _get_doa_angle_deg(self) -> Optional[float]:
+        """Get DOA angle in degrees from Reachy Mini's microphone array.
+
+        The ReSpeaker DOA returns angle in radians where:
+        - 0 radians = left
+        - π/2 radians = front/back
+        - π radians = right
+
+        We convert this to head yaw degrees where:
+        - 0 = front
+        - positive = right
+        - negative = left
+
+        Returns:
+            DOA angle in degrees suitable for head yaw, or None if unavailable.
+        """
+        if self.reachy_mini is None:
+            return None
+
+        try:
+            import math
+            doa_result = self.reachy_mini.media.get_DoA()
+            if doa_result is None:
+                _LOGGER.debug("DOA not available")
+                return None
+
+            doa_radians, speech_detected = doa_result
+
+            if not speech_detected:
+                _LOGGER.debug("No speech detected for DOA")
+                return None
+
+            # Convert ReSpeaker DOA to head yaw angle
+            # ReSpeaker: 0=left, π/2=front, π=right
+            # Head yaw: 0=front, positive=right, negative=left
+            # Formula: yaw = (doa - π/2) converted to degrees
+            yaw_radians = doa_radians - (math.pi / 2)
+            yaw_degrees = math.degrees(yaw_radians)
+
+            _LOGGER.info("DOA detected: %.1f rad -> yaw %.1f deg (speech=%s)",
+                        doa_radians, yaw_degrees, speech_detected)
+
+            return yaw_degrees
+
+        except Exception as e:
+            _LOGGER.error("Error getting DOA angle: %s", e)
+            return None

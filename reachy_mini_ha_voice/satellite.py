@@ -65,6 +65,10 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
+        # Initialize entity references (will be set in setup phases)
+        self._doa_angle_entity: Optional[SensorEntity] = None
+        self._speech_detected_entity: Optional[BinarySensorEntity] = None
+
         if self.state.media_player_entity is None:
             self.state.media_player_entity = MediaPlayerEntity(
                 server=self,
@@ -308,6 +312,9 @@ class VoiceSatelliteProtocol(APIServer):
         self._is_streaming_audio = True
         self.state.tts_player.play(self.state.wakeup_sound)
 
+        # Update DOA entity in Home Assistant
+        self._update_doa_entities()
+
         # Reachy Mini: Wake up animation
         self._reachy_on_wakeup()
 
@@ -442,6 +449,18 @@ class VoiceSatelliteProtocol(APIServer):
     # -------------------------------------------------------------------------
     # Reachy Mini Motion Control
     # -------------------------------------------------------------------------
+
+    def _update_doa_entities(self) -> None:
+        """Update DOA and speech detection entities in Home Assistant."""
+        try:
+            if self._doa_angle_entity is not None:
+                self._doa_angle_entity.update_state()
+                _LOGGER.debug("DOA angle entity updated")
+            if self._speech_detected_entity is not None:
+                self._speech_detected_entity.update_state()
+                _LOGGER.debug("Speech detected entity updated")
+        except Exception as e:
+            _LOGGER.error("Error updating DOA entities: %s", e)
 
     def _reachy_on_wakeup(self) -> None:
         """Called when wake word is detected."""
@@ -827,7 +846,7 @@ class VoiceSatelliteProtocol(APIServer):
         """Setup Phase 5 entities: Audio sensors."""
 
         # DOA angle sensor
-        doa_angle = SensorEntity(
+        self._doa_angle_entity = SensorEntity(
             server=self,
             key=len(self.state.entities),
             name="DOA Angle",
@@ -838,10 +857,10 @@ class VoiceSatelliteProtocol(APIServer):
             state_class="measurement",
             value_getter=self.reachy_controller.get_doa_angle,
         )
-        self.state.entities.append(doa_angle)
+        self.state.entities.append(self._doa_angle_entity)
 
         # Speech detected sensor
-        speech_detected = BinarySensorEntity(
+        self._speech_detected_entity = BinarySensorEntity(
             server=self,
             key=len(self.state.entities),
             name="Speech Detected",
@@ -850,7 +869,7 @@ class VoiceSatelliteProtocol(APIServer):
             device_class="sound",
             value_getter=self.reachy_controller.get_speech_detected,
         )
-        self.state.entities.append(speech_detected)
+        self.state.entities.append(self._speech_detected_entity)
 
         _LOGGER.info("Phase 5 entities registered: doa_angle, speech_detected")
 

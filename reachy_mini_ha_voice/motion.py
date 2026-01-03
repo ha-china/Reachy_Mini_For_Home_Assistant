@@ -22,15 +22,23 @@ class ReachyMiniMotion:
         """Set the Reachy Mini instance."""
         self.reachy_mini = reachy_mini
 
-    def on_wakeup(self):
-        """Called when wake word is detected - nod to acknowledge."""
+    def on_wakeup(self, doa_angle_deg: Optional[float] = None):
+        """Called when wake word is detected - turn to sound source and nod.
+
+        Args:
+            doa_angle_deg: Direction of arrival angle in degrees (0=front, positive=right, negative=left)
+        """
         if not self.reachy_mini:
             return
 
         try:
+            # First turn to the sound source if DOA is available
+            if doa_angle_deg is not None:
+                self._turn_to_sound_source(doa_angle_deg)
+
             # Quick nod to acknowledge
             self._nod(count=1, amplitude=10, duration=0.3)
-            _LOGGER.debug("Reachy Mini: Wake up nod")
+            _LOGGER.debug("Reachy Mini: Wake up nod (DOA: %s)", doa_angle_deg)
         except Exception as e:
             _LOGGER.error("Motion error on wakeup: %s", e)
 
@@ -215,6 +223,35 @@ class ReachyMiniMotion:
     def _stop_speech_motion(self):
         """Stop speech-reactive motion."""
         pass
+
+    def _turn_to_sound_source(self, doa_angle_deg: float):
+        """Turn head to face the sound source based on DOA angle.
+
+        Args:
+            doa_angle_deg: Direction of arrival angle in degrees.
+                           The DOA from ReSpeaker is in radians where:
+                           0 = left, π/2 = front/back, π = right
+                           We convert to head yaw where:
+                           0 = front, positive = right, negative = left
+        """
+        if not self.reachy_mini:
+            return
+
+        try:
+            from scipy.spatial.transform import Rotation as R
+
+            # Clamp the angle to reasonable head rotation limits
+            yaw_deg = max(-60, min(60, doa_angle_deg))
+
+            # Create head pose with yaw rotation
+            pose = np.eye(4)
+            pose[:3, :3] = R.from_euler('xyz', [0, 0, yaw_deg], degrees=True).as_matrix()
+
+            # Turn head to face the sound source
+            self.reachy_mini.goto_target(head=pose, duration=0.4)
+            _LOGGER.debug("Reachy Mini: Turned to sound source at %s degrees", yaw_deg)
+        except Exception as e:
+            _LOGGER.error("Turn to sound source error: %s", e)
 
     def wiggle_antennas(self, happy: bool = True):
         """Wiggle antennas to show emotion."""
