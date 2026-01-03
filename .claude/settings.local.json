@@ -3,7 +3,8 @@
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
-      "SlashCommand(/zcf:git-commit)"
+      "SlashCommand(/zcf:git-commit)",
+      "Edit"
     ],
     "deny": [],
     "ask": []

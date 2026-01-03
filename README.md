@@ -1,12 +1,15 @@
 ---
-title: Reachy Mini HA Voice
+title: Reachy Mini Home Assistant Voice Assistant
 emoji: 🤖
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-sdk_version: "5.9.1"
-app_file: app.py
+sdk: docker
+sdk_version: "latest"
+app_file: reachy_mini_ha_voice/main.py
 pinned: false
+tags:
+  - reachy_mini
+  - reachy_mini_python_app
 ---
 
 # Reachy Mini Home Assistant Voice Assistant
@@ -93,10 +96,10 @@ This application exposes 45+ entities to Home Assistant for complete robot contr
 - **Go to Sleep** - Execute sleep animation
 
 ### Pose Control (Phase 3)
-- **Head Position** - Control X/Y/Z position (±50mm)
+- **Head Position** - Control X/Y/Z position (+/-50mm)
 - **Head Orientation** - Control roll/pitch/yaw angles
-- **Body Yaw** - Rotate body (±160°)
-- **Antennas** - Control left/right antenna angles (±90°)
+- **Body Yaw** - Rotate body (+/-160 degrees)
+- **Antennas** - Control left/right antenna angles (+/-90 degrees)
 
 ### Look At Control (Phase 4)
 - **Look At X/Y/Z** - Point head at world coordinates
@@ -114,9 +117,9 @@ This application exposes 45+ entities to Home Assistant for complete robot contr
 - **WLAN IP** - Wireless network IP address
 
 ### IMU Sensors (Phase 7 - Wireless only)
-- **Accelerometer** - X/Y/Z acceleration (m/s²)
+- **Accelerometer** - X/Y/Z acceleration (m/s^2)
 - **Gyroscope** - X/Y/Z angular velocity (rad/s)
-- **Temperature** - IMU temperature (°C)
+- **Temperature** - IMU temperature (degrees Celsius)
 
 ### Emotion Control (Phase 8)
 - **Emotion** - Select emotion (Happy/Sad/Angry/Fear/Surprise/Disgust)
@@ -161,27 +164,27 @@ This application exposes 45+ entities to Home Assistant for complete robot contr
 
 ```
 reachy_mini_ha_voice/
-├── reachy_mini_ha_voice/
-│   ├── __init__.py
-│   ├── __main__.py          # CLI entry point
-│   ├── main.py              # App entry point
-│   ├── voice_assistant.py   # Voice assistant service
-│   ├── camera_server.py     # MJPEG camera streaming server
-│   ├── satellite.py         # ESPHome protocol handler
-│   ├── audio_player.py      # Audio playback
-│   ├── motion.py            # Motion control
-│   ├── models.py            # Data models
-│   ├── entity.py            # ESPHome base entities
-│   ├── entity_extensions.py # Extended entity types
-│   ├── reachy_controller.py # Reachy Mini controller wrapper
-│   ├── api_server.py        # API server
-│   ├── zeroconf.py          # mDNS discovery
-│   └── util.py              # Utilities
-├── wakewords/               # Wake word models (auto-downloaded)
-├── sounds/                  # Sound effects (auto-downloaded)
-├── pyproject.toml
-├── README.md
-└── PROJECT_PLAN.md
+|-- reachy_mini_ha_voice/
+|   |-- __init__.py
+|   |-- __main__.py          # CLI entry point
+|   |-- main.py              # App entry point
+|   |-- voice_assistant.py   # Voice assistant service
+|   |-- camera_server.py     # MJPEG camera streaming server
+|   |-- satellite.py         # ESPHome protocol handler
+|   |-- audio_player.py      # Audio playback
+|   |-- motion.py            # Motion control
+|   |-- models.py            # Data models
+|   |-- entity.py            # ESPHome base entities
+|   |-- entity_extensions.py # Extended entity types
+|   |-- reachy_controller.py # Reachy Mini controller wrapper
+|   |-- api_server.py        # API server
+|   |-- zeroconf.py          # mDNS discovery
+|   |-- util.py              # Utilities
+|   |-- wakewords/           # Wake word models (auto-downloaded)
+|   |-- sounds/              # Sound effects (auto-downloaded)
+|   |-- pyproject.toml
+|   |-- README.md
+|   +-- PROJECT_PLAN.md
 ```
 
 ## Dependencies
