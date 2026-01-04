@@ -12,7 +12,7 @@ Key features:
 """
 
 __version__ = "0.1.0"
-__author__ = "Pollen Robotics"
+__author__ = "Desmond Dong"
 
 # Don't import main module here to avoid runpy warning
 # The app is loaded via entry point: reachy_mini_ha_voice.main:ReachyMiniHAVoiceApp
