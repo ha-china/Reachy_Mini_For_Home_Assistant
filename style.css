@@ -26,26 +26,19 @@ body {
 }
 
 .hero {
-	background: linear-gradient(180deg, var(--ha-primary-dark) 0%, var(--ha-primary) 100%);
+	background: linear-gradient(180deg, var(--ha-primary-dark) 0%, var(--ha-primary) 60%, transparent 100%);
 	color: white;
-	padding: 4rem 2rem 6rem 2rem;
+	padding: 4rem 2rem 2rem 2rem;
 	text-align: center;
 	position: relative;
-}
-
-.hero::after {
-	content: '';
-	position: absolute;
-	bottom: -2px;
-	left: 0;
-	right: 0;
-	height: 4rem;
-	background: linear-gradient(to bottom, transparent, var(--ha-surface));
+	margin-bottom: -4rem;
 }
 
 .hero-content {
 	max-width: 800px;
 	margin: 0 auto;
+	position: relative;
+	z-index: 2;
 }
 
 .app-icon {
@@ -83,7 +76,6 @@ body {
 	background: var(--ha-surface);
 	border-radius: 20px;
 	box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-	margin-top: -2rem;
 	overflow: hidden;
 	margin-bottom: 3rem;
 }
