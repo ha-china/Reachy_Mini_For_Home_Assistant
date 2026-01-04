@@ -8,8 +8,8 @@
       "Bash(cd:*)",
       "SlashCommand(/zcf:git-commit --emoji)",
       "SlashCommand(/zcf:git-commit:*)",
-      "Bash(rm:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

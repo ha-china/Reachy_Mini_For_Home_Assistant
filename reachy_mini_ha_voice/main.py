@@ -121,9 +121,14 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         # Create and run the voice assistant service
         service = VoiceAssistantService(reachy_mini)
 
-        # Run the async service in an event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Try to get existing event loop, create new one if needed
+        try:
+            loop = asyncio.get_running_loop()
+            logger.debug("Using existing event loop")
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            logger.debug("Created new event loop")
 
         try:
             loop.run_until_complete(service.start())

@@ -136,9 +136,14 @@ class VoiceAssistantService:
         # Start Reachy Mini media system if available
         if self.reachy_mini is not None:
             try:
-                self.reachy_mini.media.start_recording()
-                self.reachy_mini.media.start_playing()
-                _LOGGER.info("Reachy Mini media system initialized")
+                # Only start if audio system is initialized but not yet recording
+                # This avoids conflicts if SDK already started the media system
+                if self.reachy_mini.media.audio is not None:
+                    self.reachy_mini.media.start_recording()
+                    self.reachy_mini.media.start_playing()
+                    _LOGGER.info("Reachy Mini media system initialized")
+                else:
+                    _LOGGER.warning("Reachy Mini audio system not available")
             except Exception as e:
                 _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
@@ -180,30 +185,48 @@ class VoiceAssistantService:
         """Stop the voice assistant service."""
         _LOGGER.info("Stopping voice assistant service...")
 
+        # 1. First stop audio recording to prevent new data from coming in
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.stop_recording()
+                _LOGGER.debug("Reachy Mini recording stopped")
+            except Exception as e:
+                _LOGGER.warning("Error stopping Reachy Mini recording: %s", e)
+
+        # 2. Set stop flag
         self._running = False
 
+        # 3. Wait for audio thread to finish
         if self._audio_thread:
-            self._audio_thread.join(timeout=2.0)
+            self._audio_thread.join(timeout=3.0)
+            if self._audio_thread.is_alive():
+                _LOGGER.warning("Audio thread did not stop in time")
 
+        # 4. Stop playback
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.stop_playing()
+                _LOGGER.debug("Reachy Mini playback stopped")
+            except Exception as e:
+                _LOGGER.warning("Error stopping Reachy Mini playback: %s", e)
+
+        # 5. Stop ESPHome server
         if self._server:
             self._server.close()
             await self._server.wait_closed()
 
+        # 6. Unregister mDNS
         if self._discovery:
             await self._discovery.unregister_server()
 
-        # Stop camera server
+        # 7. Stop camera server
         if self._camera_server:
             await self._camera_server.stop()
             self._camera_server = None
 
-        # Stop Reachy Mini media system
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_recording()
-                self.reachy_mini.media.stop_playing()
-            except Exception as e:
-                _LOGGER.warning("Error stopping Reachy Mini media: %s", e)
+        # 8. Shutdown motion executor
+        if self._motion:
+            self._motion.shutdown()
 
         _LOGGER.info("Voice assistant service stopped.")
 

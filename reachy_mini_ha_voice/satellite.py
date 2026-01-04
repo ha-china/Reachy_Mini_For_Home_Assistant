@@ -497,38 +497,46 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _reachy_on_listening(self) -> None:
-        """Called when listening for speech."""
+        """Called when listening for speech (HA state: Listening)."""
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
             _LOGGER.debug("Reachy Mini: Listening animation")
+            if self.state.motion:
+                self.state.motion.on_listening()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _reachy_on_thinking(self) -> None:
-        """Called when processing speech."""
+        """Called when processing speech (HA state: Processing)."""
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
             _LOGGER.debug("Reachy Mini: Thinking animation")
+            if self.state.motion:
+                self.state.motion.on_thinking()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _reachy_on_speaking(self) -> None:
-        """Called when TTS is playing."""
+        """Called when TTS is playing (HA state: Responding)."""
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
             _LOGGER.debug("Reachy Mini: Speaking animation")
+            if self.state.motion:
+                self.state.motion.on_speaking_start()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _reachy_on_idle(self) -> None:
-        """Called when returning to idle state."""
+        """Called when returning to idle state (HA state: Idle)."""
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
             _LOGGER.debug("Reachy Mini: Idle animation")
+            if self.state.motion:
+                self.state.motion.on_idle()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -538,6 +546,8 @@ class VoiceSatelliteProtocol(APIServer):
             return
         try:
             _LOGGER.debug("Reachy Mini: Timer finished animation")
+            if self.state.motion:
+                self.state.motion.on_timer_finished()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
