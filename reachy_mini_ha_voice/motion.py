@@ -45,7 +45,9 @@ class ReachyMiniMotion:
         Args:
             doa_angle_deg: Direction of arrival angle in degrees (0=front, positive=right, negative=left)
         """
+        _LOGGER.debug("on_wakeup called with doa_angle_deg=%s, reachy_mini=%s", doa_angle_deg, self.reachy_mini)
         if not self.reachy_mini:
+            _LOGGER.warning("on_wakeup: reachy_mini is None, skipping motion")
             return
         self._submit_motion(self._do_wakeup, doa_angle_deg)
 
@@ -148,8 +150,12 @@ class ReachyMiniMotion:
         """Actual wakeup motion (blocking, runs in thread pool)."""
         with self._lock:
             try:
+                _LOGGER.info("_do_wakeup: doa_angle_deg=%s", doa_angle_deg)
                 if doa_angle_deg is not None:
+                    _LOGGER.info("Turning to sound source at %s degrees", doa_angle_deg)
                     self._turn_to_sound_source(doa_angle_deg)
+                else:
+                    _LOGGER.warning("DOA angle is None, skipping turn to sound source")
                 self._nod(count=1, amplitude=10, duration=0.3)
                 _LOGGER.debug("Reachy Mini: Wake up nod (DOA: %s)", doa_angle_deg)
             except Exception as e:

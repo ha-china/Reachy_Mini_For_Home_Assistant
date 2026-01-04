@@ -333,9 +333,6 @@ class VoiceSatelliteProtocol(APIServer):
         # Update DOA entity in Home Assistant
         self._update_doa_entities()
 
-        # Reachy Mini: Wake up animation
-        self._reachy_on_wakeup()
-
     def stop(self) -> None:
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.state.tts_player.stop()
@@ -484,17 +481,6 @@ class VoiceSatelliteProtocol(APIServer):
                 _LOGGER.debug("Speech detected entity updated")
         except Exception as e:
             _LOGGER.error("Error updating DOA entities: %s", e)
-
-    def _reachy_on_wakeup(self) -> None:
-        """Called when wake word is detected."""
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            return
-        try:
-            # Nod to acknowledge
-            _LOGGER.debug("Reachy Mini: Wake up animation")
-            # Will be implemented with actual Reachy Mini SDK
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""

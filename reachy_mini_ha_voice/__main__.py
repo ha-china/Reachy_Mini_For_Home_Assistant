@@ -20,6 +20,7 @@ from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
 
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .audio_player import AudioPlayer
+from .motion import ReachyMiniMotion
 from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
@@ -314,10 +315,12 @@ async def main() -> None:
 
     # Initialize Reachy Mini (if available)
     reachy_mini = None
+    motion = None
     if not args.no_motion:
         try:
             from reachy_mini import ReachyMini
             reachy_mini = ReachyMini()
+            motion = ReachyMiniMotion(reachy_mini)
             _LOGGER.info("Reachy Mini connected")
         except ImportError:
             _LOGGER.warning("reachy-mini not installed, motion control disabled")
@@ -343,6 +346,7 @@ async def main() -> None:
         refractory_seconds=args.refractory_seconds,
         download_dir=download_dir,
         reachy_mini=reachy_mini,
+        motion=motion,
         motion_enabled=not args.no_motion and reachy_mini is not None,
     )
 
