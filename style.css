@@ -7,58 +7,53 @@
 :root {
 	/* Home Assistant Color Palette */
 	--ha-primary: #03a9f4;
-	--ha-primary-dark: #0288d1;
+	--ha-primary-variant: #0288d1;
 	--ha-secondary: #4db6ac;
-	--ha-accent: #ff9800;
-	--ha-background: #fafafa;
-	--ha-surface: #ffffff;
+	--ha-background: #f5f5f5;
+	--ha-card-background: #ffffff;
 	--ha-text-primary: #212121;
 	--ha-text-secondary: #757575;
 	--ha-divider: #e0e0e0;
+	--ha-shadow: 0 2px 2px 0 rgba(0,0,0,0.14), 0 3px 1px -2px rgba(0,0,0,0.12), 0 1px 5px 0 rgba(0,0,0,0.2);
+	--ha-shadow-hover: 0 5px 5px -3px rgba(0,0,0,0.2), 0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12);
 }
 
 body {
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
 	line-height: 1.6;
 	color: var(--ha-text-primary);
-	background: linear-gradient(180deg, var(--ha-secondary) 0%, var(--ha-primary-dark) 50%, var(--ha-primary-dark) 100%);
+	background: var(--ha-background);
 	min-height: 100vh;
 }
 
 .hero {
-	background: linear-gradient(180deg, var(--ha-primary-dark) 0%, var(--ha-primary) 60%, transparent 100%);
+	background: var(--ha-primary);
 	color: white;
-	padding: 4rem 2rem 2rem 2rem;
+	padding: 2rem 1rem;
 	text-align: center;
-	position: relative;
-	margin-bottom: -4rem;
+	box-shadow: var(--ha-shadow);
 }
 
 .hero-content {
 	max-width: 800px;
 	margin: 0 auto;
-	position: relative;
-	z-index: 2;
 }
 
 .app-icon {
-	font-size: 4rem;
-	margin-bottom: 1rem;
+	font-size: 3rem;
+	margin-bottom: 0.5rem;
 	display: inline-block;
 }
 
 .hero h1 {
-	font-size: 3rem;
-	font-weight: 700;
-	margin-bottom: 1rem;
-	background: linear-gradient(45deg, #fff, #f0f9ff);
-	background-clip: text;
-	-webkit-background-clip: text;
-	-webkit-text-fill-color: transparent;
+	font-size: 2rem;
+	font-weight: 500;
+	margin-bottom: 0.5rem;
+	color: white;
 }
 
 .tagline {
-	font-size: 1.25rem;
+	font-size: 1rem;
 	opacity: 0.9;
 	max-width: 600px;
 	margin: 0 auto;
@@ -67,65 +62,66 @@ body {
 .container {
 	max-width: 1200px;
 	margin: 0 auto;
-	padding: 0 2rem;
-	position: relative;
-	z-index: 2;
+	padding: 1rem;
 }
 
 .main-card {
-	background: var(--ha-surface);
-	border-radius: 20px;
-	box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-	overflow: hidden;
-	margin-bottom: 3rem;
+	background: transparent;
+	box-shadow: none;
+	overflow: visible;
+	margin-bottom: 2rem;
 }
 
 .app-details {
-	padding: 3rem;
+	padding: 0;
 }
 
 .app-details h2 {
-	font-size: 2rem;
-	color: var(--ha-primary-dark);
-	margin-bottom: 2rem;
-	text-align: center;
+	font-size: 1.5rem;
+	font-weight: 400;
+	color: var(--ha-primary);
+	margin-bottom: 1rem;
+	margin-top: 2rem;
 }
 
 .template-info {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-	gap: 2rem;
-	margin-bottom: 3rem;
+	gap: 1rem;
+	margin-bottom: 1rem;
 }
 
 .info-box {
-	background: var(--ha-background);
-	border: 2px solid var(--ha-divider);
-	border-radius: 12px;
-	padding: 2rem;
-	transition: all 0.3s ease;
+	background: var(--ha-card-background);
+	border-radius: 8px;
+	padding: 1.5rem;
+	box-shadow: var(--ha-shadow);
+	transition: box-shadow 0.3s ease, transform 0.3s ease;
+	border: 1px solid var(--ha-divider);
 }
 
 .info-box:hover {
-	box-shadow: 0 4px 12px rgba(3, 169, 244, 0.15);
+	box-shadow: var(--ha-shadow-hover);
 	transform: translateY(-2px);
 }
 
 .info-box h3 {
-	color: var(--ha-primary-dark);
-	margin-bottom: 1rem;
-	font-size: 1.2rem;
+	color: var(--ha-primary);
+	margin-bottom: 0.75rem;
+	font-size: 1.1rem;
+	font-weight: 500;
 }
 
 .info-box p {
 	color: var(--ha-text-secondary);
-	line-height: 1.6;
+	line-height: 1.5;
+	font-size: 0.95rem;
 }
 
 .info-box a {
 	color: var(--ha-primary);
 	text-decoration: none;
-	font-weight: 600;
+	font-weight: 500;
 }
 
 .info-box a:hover {
@@ -133,24 +129,24 @@ body {
 }
 
 .how-to-use {
-	background: #e3f2fd;
-	border: 2px solid var(--ha-primary);
-	border-radius: 12px;
-	padding: 2rem;
-	margin-top: 3rem;
+	background: #e1f5fe;
+	border-radius: 8px;
+	padding: 1.5rem;
+	margin-top: 1.5rem;
+	border: 1px solid #b3e5fc;
 }
 
 .how-to-use h3 {
-	color: var(--ha-primary-dark);
-	margin-bottom: 1.5rem;
-	font-size: 1.3rem;
-	text-align: center;
+	color: var(--ha-primary-variant);
+	margin-bottom: 1rem;
+	font-size: 1.1rem;
+	font-weight: 500;
 }
 
 .steps {
 	display: flex;
 	flex-direction: column;
-	gap: 1.5rem;
+	gap: 1rem;
 }
 
 .step {
@@ -162,37 +158,43 @@ body {
 .step-number {
 	background: var(--ha-primary);
 	color: white;
-	width: 2rem;
-	height: 2rem;
+	width: 1.75rem;
+	height: 1.75rem;
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-weight: bold;
+	font-weight: 500;
 	flex-shrink: 0;
+	font-size: 0.9rem;
 }
 
 .step h4 {
-	color: var(--ha-primary-dark);
-	margin-bottom: 0.5rem;
-	font-size: 1.1rem;
+	color: var(--ha-text-primary);
+	margin-bottom: 0.25rem;
+	font-size: 1rem;
+	font-weight: 500;
 }
 
 .step p {
 	color: var(--ha-text-secondary);
+	font-size: 0.9rem;
 }
 
 .footer {
 	text-align: center;
-	padding: 2rem;
-	color: white;
-	opacity: 0.8;
+	padding: 2rem 1rem;
+	color: var(--ha-text-secondary);
+	font-size: 0.85rem;
+	border-top: 1px solid var(--ha-divider);
+	margin-top: 2rem;
+	background: var(--ha-card-background);
 }
 
 .footer a {
-	color: white;
+	color: var(--ha-primary);
 	text-decoration: none;
-	font-weight: 600;
+	font-weight: 500;
 }
 
 .footer a:hover {
@@ -200,24 +202,28 @@ body {
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+@media (min-width: 768px) {
 	.hero {
-		padding: 2rem 1rem;
+		padding: 3rem 1rem;
+	}
+
+	.app-icon {
+		font-size: 4rem;
 	}
 
 	.hero h1 {
-		font-size: 2rem;
+		font-size: 2.5rem;
+	}
+
+	.tagline {
+		font-size: 1.1rem;
+	}
+
+	.app-details h2 {
+		font-size: 1.75rem;
 	}
 
 	.container {
-		padding: 0 1rem;
-	}
-
-	.app-details {
-		padding: 2rem;
-	}
-
-	.template-info {
-		grid-template-columns: 1fr;
+		padding: 2rem 1rem;
 	}
 }
