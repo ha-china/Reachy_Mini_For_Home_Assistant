@@ -13,13 +13,20 @@
 		<div class="hero-content">
 			<div class="app-icon">🤖⚡</div>
 			<h1>Reachy Mini Home Assistant Voice Assistant</h1>
-			<p class="tagline">Voice control for your Reachy Mini robot via Home Assistant</p>
+			<p class="tagline">Control your Home Assistant with voice using Reachy Mini robot</p>
 		</div>
 	</div>
 
 	<div class="container">
 		<div class="main-card">
 			<div class="app-details">
+				<h2>What is this?</h2>
+				<p style="text-align: center; color: #475569; line-height: 1.8; margin-bottom: 2rem;">
+					This app transforms your <strong>Reachy Mini robot</strong> into a <strong>voice assistant for Home Assistant</strong>.
+					Speak to Reachy Mini, and it will control your smart home devices through Home Assistant's voice commands.
+					Reachy Mini provides visual feedback with head movements and antenna animations while listening and responding.
+				</p>
+
 				<h2>Installation</h2>
 				<div class="how-to-use">
 					<h3>Install from Reachy Mini Dashboard:</h3>
@@ -48,27 +55,51 @@
 					</div>
 				</div>
 
+				<h2>How It Works</h2>
+				<div class="template-info">
+					<div class="info-box">
+						<h3>🎤 Speak to Reachy Mini</h3>
+						<p>Say the wake word "Okay Nabu" followed by your command. Reachy Mini detects your voice locally and sends it to Home Assistant.</p>
+					</div>
+					<div class="info-box">
+						<h3>🏠 Home Assistant Processes</h3>
+						<p>Home Assistant converts your speech to text, processes the command, and controls your smart home devices.</p>
+					</div>
+					<div class="info-box">
+						<h3>🔊 Reachy Mini Responds</h3>
+						<p>Reachy Mini speaks the response back to you with natural head movements and antenna animations.</p>
+					</div>
+					<div class="info-box">
+						<h3>📹 Camera Feed</h3>
+						<p>Reachy Mini's camera stream is available in Home Assistant as a Generic Camera for video monitoring.</p>
+					</div>
+					<div class="info-box">
+						<h3>🎛️ Full Robot Control</h3>
+						<p>Control 30+ robot entities from Home Assistant: motors, head position, LEDs, emotions, and more.</p>
+					</div>
+				</div>
+
 				<h2>Features</h2>
 				<div class="template-info">
 					<div class="info-box">
 						<h3>🎤 Local Wake Word Detection</h3>
-						<p>Offline wake word detection with microWakeWord. Default wake word: "Okay Nabu"</p>
+						<p>Offline wake word detection with microWakeWord. Say "Okay Nabu" to activate.</p>
 					</div>
 					<div class="info-box">
 						<h3>🏠 ESPHome Integration</h3>
-						<p>Seamless connection to Home Assistant with automatic discovery</p>
+						<p>Seamless connection to Home Assistant with automatic discovery via mDNS.</p>
+					</div>
+					<div class="info-box">
+						<h3>🎭 Motion Feedback</h3>
+						<p>Natural head movements and antenna animations during voice interaction.</p>
 					</div>
 					<div class="info-box">
 						<h3>📹 Camera Streaming</h3>
-						<p>MJPEG video stream for Home Assistant Generic Camera integration</p>
+						<p>MJPEG video stream for Home Assistant Generic Camera integration.</p>
 					</div>
 					<div class="info-box">
-						<h3>🎭 Motion Control</h3>
-						<p>Head movements and antenna animations during voice interaction</p>
-					</div>
-					<div class="info-box">
-						<h3>🎛️ 30+ Entities</h3>
-						<p>Complete robot control via Home Assistant (motors, sensors, LEDs, etc.)</p>
+						<h3>🎛️ 30+ Control Entities</h3>
+						<p>Complete robot control via Home Assistant (motors, sensors, LEDs, emotions, etc.)</p>
 					</div>
 				</div>
 
@@ -88,6 +119,13 @@
 							<div>
 								<h4>Manual Setup (if needed)</h4>
 								<p>Settings → Devices & Services → Add Integration → ESPHome → Enter Reachy Mini IP:6053</p>
+							</div>
+						</div>
+						<div class="step">
+							<div class="step-number">3</div>
+							<div>
+								<h4>Start Using</h4>
+								<p>Say "Okay Nabu" followed by your Home Assistant voice command (e.g., "Okay Nabu, turn on the lights")</p>
 							</div>
 						</div>
 					</div>
