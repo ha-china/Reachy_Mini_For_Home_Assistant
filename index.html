@@ -4,7 +4,7 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width" />
-	<title> Reachy Mini Ha Voice </title>
+	<title>Reachy Mini Home Assistant Voice Assistant</title>
 	<link rel="stylesheet" href="style.css" />
 </head>
 
@@ -12,16 +12,101 @@
 	<div class="hero">
 		<div class="hero-content">
 			<div class="app-icon">🤖⚡</div>
-			<h1> Reachy Mini Ha Voice </h1>
-			<p class="tagline">Enter your tagline here</p>
+			<h1>Reachy Mini Home Assistant Voice Assistant</h1>
+			<p class="tagline">Voice control for your Reachy Mini robot via Home Assistant</p>
 		</div>
 	</div>
 
 	<div class="container">
 		<div class="main-card">
-			<div class="app-preview">
-				<div class="preview-image">
-					<div class="camera-feed">🛠️</div>
+			<div class="app-details">
+				<h2>Installation</h2>
+				<div class="how-to-use">
+					<h3>Install from Reachy Mini Dashboard:</h3>
+					<div class="steps">
+						<div class="step">
+							<div class="step-number">1</div>
+							<div>
+								<h4>Open Reachy Mini Dashboard</h4>
+								<p>Navigate to the Apps section in your browser</p>
+							</div>
+						</div>
+						<div class="step">
+							<div class="step-number">2</div>
+							<div>
+								<h4>Find and Install</h4>
+								<p>Search for "Reachy Mini HA Voice" and click Install</p>
+							</div>
+						</div>
+						<div class="step">
+							<div class="step-number">3</div>
+							<div>
+								<h4>Connect to Home Assistant</h4>
+								<p>The app will be automatically discovered by Home Assistant via mDNS</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<h2>Features</h2>
+				<div class="template-info">
+					<div class="info-box">
+						<h3>🎤 Local Wake Word Detection</h3>
+						<p>Offline wake word detection with microWakeWord. Default wake word: "Okay Nabu"</p>
+					</div>
+					<div class="info-box">
+						<h3>🏠 ESPHome Integration</h3>
+						<p>Seamless connection to Home Assistant with automatic discovery</p>
+					</div>
+					<div class="info-box">
+						<h3>📹 Camera Streaming</h3>
+						<p>MJPEG video stream for Home Assistant Generic Camera integration</p>
+					</div>
+					<div class="info-box">
+						<h3>🎭 Motion Control</h3>
+						<p>Head movements and antenna animations during voice interaction</p>
+					</div>
+					<div class="info-box">
+						<h3>🎛️ 30+ Entities</h3>
+						<p>Complete robot control via Home Assistant (motors, sensors, LEDs, etc.)</p>
+					</div>
+				</div>
+
+				<h2>Usage</h2>
+				<div class="how-to-use">
+					<h3>After Installation:</h3>
+					<div class="steps">
+						<div class="step">
+							<div class="step-number">1</div>
+							<div>
+								<h4>Automatic Discovery (Recommended)</h4>
+								<p>Home Assistant will automatically discover your Reachy Mini via mDNS. A notification will appear - just click to add.</p>
+							</div>
+						</div>
+						<div class="step">
+							<div class="step-number">2</div>
+							<div>
+								<h4>Manual Setup (if needed)</h4>
+								<p>Settings → Devices & Services → Add Integration → ESPHome → Enter Reachy Mini IP:6053</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<h2>Links</h2>
+				<div class="template-info">
+					<div class="info-box">
+						<h3>📦 Source Code</h3>
+						<p><a href="https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice/tree/main" target="_blank">View on HuggingFace</a></p>
+					</div>
+					<div class="info-box">
+						<h3>🔧 Original Project</h3>
+						<p><a href="https://github.com/OHF-Voice/linux-voice-assistant" target="_blank">OHF-Voice/linux-voice-assistant</a></p>
+					</div>
+					<div class="info-box">
+						<h3>🤖 Pollen Robotics</h3>
+						<p><a href="https://www.pollen-robotics.com/" target="_blank">Visit Website</a></p>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -29,10 +114,9 @@
 
 	<div class="footer">
 		<p>
-			🤖 Reachy Mini Ha Voice •
+			🤖 Reachy Mini HA Voice •
 			<a href="https://github.com/pollen-robotics" target="_blank">Pollen Robotics</a> •
-			<a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank">Browse More
-				Apps</a>
+			<a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank">Browse More Apps</a>
 		</p>
 	</div>
 </body>
