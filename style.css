@@ -4,16 +4,29 @@
 	box-sizing: border-box;
 }
 
+:root {
+	/* Home Assistant Color Palette */
+	--ha-primary: #03a9f4;
+	--ha-primary-dark: #0288d1;
+	--ha-secondary: #4db6ac;
+	--ha-accent: #ff9800;
+	--ha-background: #fafafa;
+	--ha-surface: #ffffff;
+	--ha-text-primary: #212121;
+	--ha-text-secondary: #757575;
+	--ha-divider: #e0e0e0;
+}
+
 body {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 	line-height: 1.6;
-	color: #333;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: var(--ha-text-primary);
+	background: linear-gradient(135deg, var(--ha-primary-dark) 0%, var(--ha-secondary) 100%);
 	min-height: 100vh;
 }
 
 .hero {
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background: linear-gradient(135deg, var(--ha-primary-dark) 0%, var(--ha-primary) 100%);
 	color: white;
 	padding: 4rem 2rem;
 	text-align: center;
@@ -56,56 +69,12 @@ body {
 }
 
 .main-card {
-	background: white;
+	background: var(--ha-surface);
 	border-radius: 20px;
 	box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
 	margin-top: -2rem;
 	overflow: hidden;
 	margin-bottom: 3rem;
-}
-
-.app-preview {
-	background: linear-gradient(135deg, #1e3a8a, #3b82f6);
-	padding: 3rem;
-	color: white;
-	text-align: center;
-	position: relative;
-}
-
-.preview-image {
-	background: #000;
-	border-radius: 15px;
-	padding: 2rem;
-	max-width: 500px;
-	margin: 0 auto;
-	position: relative;
-	overflow: hidden;
-}
-
-.camera-feed {
-	font-size: 4rem;
-	margin-bottom: 1rem;
-	opacity: 0.7;
-}
-
-.detection-overlay {
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	width: 100%;
-}
-
-.bbox {
-	background: rgba(34, 197, 94, 0.9);
-	color: white;
-	padding: 0.5rem 1rem;
-	border-radius: 8px;
-	font-size: 0.9rem;
-	font-weight: 600;
-	margin: 0.5rem;
-	display: inline-block;
-	border: 2px solid #22c55e;
 }
 
 .app-details {
@@ -114,7 +83,7 @@ body {
 
 .app-details h2 {
 	font-size: 2rem;
-	color: #1e293b;
+	color: var(--ha-primary-dark);
 	margin-bottom: 2rem;
 	text-align: center;
 }
@@ -127,33 +96,49 @@ body {
 }
 
 .info-box {
-	background: #f0f9ff;
-	border: 2px solid #e0f2fe;
+	background: var(--ha-background);
+	border: 2px solid var(--ha-divider);
 	border-radius: 12px;
 	padding: 2rem;
+	transition: all 0.3s ease;
+}
+
+.info-box:hover {
+	box-shadow: 0 4px 12px rgba(3, 169, 244, 0.15);
+	transform: translateY(-2px);
 }
 
 .info-box h3 {
-	color: #0c4a6e;
+	color: var(--ha-primary-dark);
 	margin-bottom: 1rem;
 	font-size: 1.2rem;
 }
 
 .info-box p {
-	color: #0369a1;
+	color: var(--ha-text-secondary);
 	line-height: 1.6;
 }
 
+.info-box a {
+	color: var(--ha-primary);
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.info-box a:hover {
+	text-decoration: underline;
+}
+
 .how-to-use {
-	background: #fefce8;
-	border: 2px solid #fde047;
+	background: #e3f2fd;
+	border: 2px solid var(--ha-primary);
 	border-radius: 12px;
 	padding: 2rem;
 	margin-top: 3rem;
 }
 
 .how-to-use h3 {
-	color: #a16207;
+	color: var(--ha-primary-dark);
 	margin-bottom: 1.5rem;
 	font-size: 1.3rem;
 	text-align: center;
@@ -172,7 +157,7 @@ body {
 }
 
 .step-number {
-	background: #eab308;
+	background: var(--ha-primary);
 	color: white;
 	width: 2rem;
 	height: 2rem;
@@ -185,184 +170,13 @@ body {
 }
 
 .step h4 {
-	color: #a16207;
+	color: var(--ha-primary-dark);
 	margin-bottom: 0.5rem;
 	font-size: 1.1rem;
 }
 
 .step p {
-	color: #ca8a04;
-}
-
-.download-card {
-	background: white;
-	border-radius: 20px;
-	box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-	padding: 3rem;
-	text-align: center;
-}
-
-.download-card h2 {
-	font-size: 2rem;
-	color: #1e293b;
-	margin-bottom: 1rem;
-}
-
-.download-card>p {
-	color: #64748b;
-	font-size: 1.1rem;
-	margin-bottom: 2rem;
-}
-
-.dashboard-config {
-	margin-bottom: 2rem;
-	text-align: left;
-	max-width: 400px;
-	margin-left: auto;
-	margin-right: auto;
-}
-
-.dashboard-config label {
-	display: block;
-	color: #374151;
-	font-weight: 600;
-	margin-bottom: 0.5rem;
-}
-
-.dashboard-config input {
-	width: 100%;
-	padding: 0.75rem 1rem;
-	border: 2px solid #e5e7eb;
-	border-radius: 8px;
-	font-size: 0.95rem;
-	transition: border-color 0.2s;
-}
-
-.dashboard-config input:focus {
-	outline: none;
-	border-color: #667eea;
-}
-
-.install-btn {
-	background: linear-gradient(135deg, #667eea, #764ba2);
-	color: white;
-	border: none;
-	padding: 1.25rem 3rem;
-	border-radius: 16px;
-	font-size: 1.2rem;
-	font-weight: 700;
-	cursor: pointer;
-	transition: all 0.3s ease;
-	display: inline-flex;
-	align-items: center;
-	gap: 0.75rem;
-	margin-bottom: 2rem;
-	box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-}
-
-.install-btn:hover:not(:disabled) {
-	transform: translateY(-3px);
-	box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
-}
-
-.install-btn:disabled {
-	opacity: 0.7;
-	cursor: not-allowed;
-	transform: none;
-}
-
-.manual-option {
-	background: #f8fafc;
-	border-radius: 12px;
-	padding: 2rem;
-	margin-top: 2rem;
-}
-
-.manual-option h3 {
-	color: #1e293b;
-	margin-bottom: 1rem;
-	font-size: 1.2rem;
-}
-
-.manual-option>p {
-	color: #64748b;
-	margin-bottom: 1rem;
-}
-
-.btn-icon {
-	font-size: 1.1rem;
-}
-
-.install-status {
-	padding: 1rem;
-	border-radius: 8px;
-	font-size: 0.9rem;
-	text-align: center;
-	display: none;
-	margin-top: 1rem;
-}
-
-.install-status.success {
-	background: #dcfce7;
-	color: #166534;
-	border: 1px solid #bbf7d0;
-}
-
-.install-status.error {
-	background: #fef2f2;
-	color: #dc2626;
-	border: 1px solid #fecaca;
-}
-
-.install-status.loading {
-	background: #dbeafe;
-	color: #1d4ed8;
-	border: 1px solid #bfdbfe;
-}
-
-.install-status.info {
-	background: #e0f2fe;
-	color: #0369a1;
-	border: 1px solid #7dd3fc;
-}
-
-.manual-install {
-	background: #1f2937;
-	border-radius: 8px;
-	padding: 1rem;
-	margin-bottom: 1rem;
-	display: flex;
-	align-items: center;
-	gap: 1rem;
-}
-
-.manual-install code {
-	color: #10b981;
-	font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-	font-size: 0.85rem;
-	flex: 1;
-	overflow-x: auto;
-}
-
-.copy-btn {
-	background: #374151;
-	color: white;
-	border: none;
-	padding: 0.5rem 1rem;
-	border-radius: 6px;
-	font-size: 0.8rem;
-	cursor: pointer;
-	transition: background-color 0.2s;
-}
-
-.copy-btn:hover {
-	background: #4b5563;
-}
-
-.manual-steps {
-	color: #6b7280;
-	font-size: 0.9rem;
-	line-height: 1.8;
+	color: var(--ha-text-secondary);
 }
 
 .footer {
@@ -396,16 +210,11 @@ body {
 		padding: 0 1rem;
 	}
 
-	.app-details,
-	.download-card {
+	.app-details {
 		padding: 2rem;
 	}
 
-	.features-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.download-options {
+	.template-info {
 		grid-template-columns: 1fr;
 	}
 }
