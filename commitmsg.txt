@@ -1,0 +1,7 @@
+feat(ha): add Reachy Mini 3D visualization card 
+  
+- Add complete 3D card with urdf-loader integration  
+- Implement visual configuration editor  
+- Add 45 STL mesh files for accurate robot rendering  
+- Configure HACS integration and CI/CD workflow  
+- Fix HACS file paths from /local/ to /hacsfiles/  
