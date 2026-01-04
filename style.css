@@ -21,15 +21,26 @@ body {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 	line-height: 1.6;
 	color: var(--ha-text-primary);
-	background: linear-gradient(135deg, var(--ha-primary-dark) 0%, var(--ha-secondary) 100%);
+	background: linear-gradient(180deg, var(--ha-secondary) 0%, var(--ha-primary-dark) 50%, var(--ha-primary-dark) 100%);
 	min-height: 100vh;
 }
 
 .hero {
-	background: linear-gradient(135deg, var(--ha-primary-dark) 0%, var(--ha-primary) 100%);
+	background: linear-gradient(180deg, var(--ha-primary-dark) 0%, var(--ha-primary) 100%);
 	color: white;
-	padding: 4rem 2rem;
+	padding: 4rem 2rem 6rem 2rem;
 	text-align: center;
+	position: relative;
+}
+
+.hero::after {
+	content: '';
+	position: absolute;
+	bottom: -2px;
+	left: 0;
+	right: 0;
+	height: 4rem;
+	background: linear-gradient(to bottom, transparent, var(--ha-surface));
 }
 
 .hero-content {
