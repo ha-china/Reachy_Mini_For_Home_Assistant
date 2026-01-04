@@ -321,31 +321,40 @@ dependencies = [
 
 ---
 
-## 🚀 语音助手增强功能计划 (基于 SDK 最新分析)
+## 🚀 语音助手增强功能实现状态
 
-以下功能将 Reachy Mini SDK 能力与语音助手体验深度整合，提升交互的自然性和表现力。
+### Phase 13 - 情感动作反馈系统 (部分实现) 🟡
 
-### Phase 13 - 情感动作反馈系统 (高优先级)
+**实现状态**: 基础架构已就绪,但仅支持手动触发,未与语音助手事件自动关联
 
-**目标**: 根据语音助手的响应内容，自动播放匹配的情感动作，让机器人更有"灵魂"。
+**已实现功能**:
+- ✅ Phase 8 Emotion Selector 实体 (`emotion`)
+- ✅ 基础情感动作播放API (`_play_emotion`)
+- ✅ 情感映射: Happy/Sad/Angry/Fear/Surprise/Disgust
+- ✅ 与 HuggingFace 动作库集成 (`pollen-robotics/reachy-mini-emotions-library`)
 
-**SDK 支持**:
-- `RecordedMoves` - 从 HuggingFace 加载预录制情感动作库
-- `pollen-robotics/reachy-mini-emotions-library` - 官方情感动作库
-- `pollen-robotics/reachy-mini-dances-library` - 舞蹈动作库
+**未实现功能**:
+- ❌ 自动根据语音助手响应触发情感动作
+- ❌ 意图识别与情感匹配
+- ❌ 舞蹈动作库集成
+- ❌ 上下文感知(如天气查询-晴天播放 happy,雨天播放 sad)
 
-**实现方案**:
+**代码位置**:
+- `entity_registry.py:633-658` - Emotion Selector 实体
+- `satellite.py:544-574` - `_play_emotion()` 方法
 
-| 语音助手事件 | 触发动作 | SDK API |
-|-------------|---------|---------|
-| 唤醒词检测 | 播放 "greeting" 动作 | `play_move(moves.get("greeting"))` |
-| 收到肯定回复 | 播放 "happy" / "nod" 动作 | `play_move(moves.get("happy"))` |
-| 收到否定回复 | 播放 "sad" / "shake" 动作 | `play_move(moves.get("sad"))` |
-| 播放音乐/娱乐 | 播放 "dance" 动作 | `play_move(moves.get("dance"))` |
-| 定时器完成 | 播放 "alert" 动作 | `play_move(moves.get("surprised"))` |
-| 错误/无法理解 | 播放 "confused" 动作 | `play_move(moves.get("confused"))` |
-| 天气查询-晴天 | 播放 "happy" 动作 | 根据天气类型选择 |
-| 天气查询-雨天 | 播放 "sad" 动作 | 根据天气类型选择 |
+**原始规划** (未完全实现):
+
+| 语音助手事件 | 触发动作 | SDK API | 实现状态 |
+|-------------|---------|---------|---------|
+| 唤醒词检测 | 播放 "greeting" 动作 | `play_move(moves.get("greeting"))` | ❌ 未实现 |
+| 收到肯定回复 | 播放 "happy" / "nod" 动作 | `play_move(moves.get("happy"))` | ❌ 未实现 |
+| 收到否定回复 | 播放 "sad" / "shake" 动作 | `play_move(moves.get("sad"))` | ❌ 未实现 |
+| 播放音乐/娱乐 | 播放 "dance" 动作 | `play_move(moves.get("dance"))` | ❌ 未实现 |
+| 定时器完成 | 播放 "alert" 动作 | `play_move(moves.get("surprised"))` | ❌ 未实现 |
+| 错误/无法理解 | 播放 "confused" 动作 | `play_move(moves.get("confused"))` | ❌ 未实现 |
+| 天气查询-晴天 | 播放 "happy" 动作 | 根据天气类型选择 | ❌ 未实现 |
+| 天气查询-雨天 | 播放 "sad" 动作 | 根据天气类型选择 | ❌ 未实现 |
 
 **代码示例**:
 ```python
@@ -368,40 +377,21 @@ class EmotionMotionController:
             self.reachy.play_move(self.dances.get("dance_1"), sound=True)
 ```
 
-### Phase 14 - 智能声源追踪增强 (高优先级)
+### Phase 14 - 智能声源追踪增强 (未实现) ❌
 
 **目标**: 利用 DOA (Direction of Arrival) 实现更自然的声源追踪和多人对话支持。
 
-**当前实现**: 唤醒时转向声源
-**增强方案**:
+**当前实现**: ✅ 唤醒时转向声源 (`motion.py:on_wakeup()`)
+**未实现增强**:
 
-| 功能 | 说明 | SDK API |
-|------|------|---------|
-| 持续声源追踪 | 对话过程中持续跟踪说话人位置 | `media.get_DoA()` |
-| 多人对话切换 | 检测到新说话人时平滑转向 | `goto_target(head=..., method=MIN_JERK)` |
-| 声源可视化 | LED 指示当前声源方向 | `LED_DOA_COLOR` 参数 |
-| 语音活动检测 | 只在检测到语音时追踪 | `DoAInfo.speech_detected` |
+| 功能 | 说明 | SDK API | 实现状态 |
+|------|------|---------|---------|
+| 持续声源追踪 | 对话过程中持续跟踪说话人位置 | `media.get_DoA()` | ❌ 未实现 |
+| 多人对话切换 | 检测到新说话人时平滑转向 | `goto_target(head=..., method=MIN_JERK)` | ❌ 未实现 |
+| 声源可视化 | LED 指示当前声源方向 | `LED_DOA_COLOR` 参数 | ❌ 未实现 |
+| 语音活动检测 | 只在检测到语音时追踪 | `DoAInfo.speech_detected` | ✅ 已暴露为实体 |
 
-**代码示例**:
-```python
-async def continuous_doa_tracking(self):
-    """持续追踪声源方向"""
-    while self.is_listening:
-        doa_result = self.reachy.media.get_DoA()
-        if doa_result and doa_result[1]:  # speech_detected
-            angle_rad, _ = doa_result
-            # 平滑转向声源
-            yaw_deg = math.degrees(angle_rad - math.pi/2)
-            self.reachy.look_at_world(
-                x=math.cos(angle_rad),
-                y=math.sin(angle_rad),
-                z=0.3,
-                duration=0.3
-            )
-        await asyncio.sleep(0.1)
-```
-
-### Phase 15 - 卡通风格运动模式 (中优先级)
+### Phase 15 - 卡通风格运动模式 (未实现) ❌
 
 **目标**: 使用 SDK 的插值技术让机器人动作更有个性和表现力。
 
@@ -411,175 +401,183 @@ async def continuous_doa_tracking(self):
 - `EASE_IN_OUT` - 缓入缓出，优雅
 - `CARTOON` - 卡通风格，带回弹效果，活泼可爱
 
-**应用场景**:
+**实现状态**: 当前使用默认 `MIN_JERK` 插值,未实现动态插值切换
 
-| 场景 | 推荐插值 | 效果 |
-|------|---------|------|
-| 唤醒点头 | `CARTOON` | 活泼的回弹效果 |
-| 思考抬头 | `EASE_IN_OUT` | 优雅的过渡 |
-| 说话时微动 | `MIN_JERK` | 自然流畅 |
-| 错误摇头 | `CARTOON` | 夸张的否定 |
-| 返回中立 | `MIN_JERK` | 平滑归位 |
+**未实现场景**:
 
-**代码示例**:
-```python
-from reachy_mini.utils.interpolation import InterpolationTechnique
+| 场景 | 推荐插值 | 效果 | 实现状态 |
+|------|---------|------|---------|
+| 唤醒点头 | `CARTOON` | 活泼的回弹效果 | ❌ 未实现 |
+| 思考抬头 | `EASE_IN_OUT` | 优雅的过渡 | ❌ 未实现 |
+| 说话时微动 | `MIN_JERK` | 自然流畅 | ✅ 当前默认 |
+| 错误摇头 | `CARTOON` | 夸张的否定 | ❌ 未实现 |
+| 返回中立 | `MIN_JERK` | 平滑归位 | ✅ 当前默认 |
 
-def on_wakeup_cartoon(self):
-    """卡通风格的唤醒动作"""
-    # 使用卡通插值，带回弹效果
-    self.reachy.goto_target(
-        head=nod_pose,
-        duration=0.4,
-        method=InterpolationTechnique.CARTOON
-    )
-```
-
-### Phase 16 - 说话时天线同步动画 (中优先级)
+### Phase 16 - 说话时天线同步动画 (未实现) ❌
 
 **目标**: TTS 播放时，天线随音频节奏摆动，模拟"说话"效果。
 
-**实现方案**:
-```python
-async def speech_antenna_sync(self, audio_data: np.ndarray):
-    """根据音频能量驱动天线摆动"""
-    # 计算音频能量
-    energy = np.abs(audio_data).mean()
+**实现状态**: ❌ 完全未实现
 
-    # 映射到天线角度 (±30度范围)
-    amplitude = min(energy * 100, 30)
-
-    # 左右天线交替摆动
-    left_angle = math.radians(amplitude)
-    right_angle = math.radians(-amplitude)
-
-    self.reachy.set_target(antennas=[right_angle, left_angle])
-```
-
-### Phase 17 - 视觉注视交互 (中优先级)
+### Phase 17 - 视觉注视交互 (未实现) ❌
 
 **目标**: 利用摄像头检测人脸，实现眼神交流。
 
 **SDK 支持**:
 - `look_at_image(u, v)` - 注视图像中的点
 - `look_at_world(x, y, z)` - 注视世界坐标点
-- `media.get_frame()` - 获取摄像头画面
+- `media.get_frame()` - 获取摄像头画面 (✅ 已在 `camera_server.py:146` 实现)
 
-**实现方案**:
+**未实现功能**:
 
-| 功能 | 说明 |
-|------|------|
-| 人脸检测 | 使用 OpenCV/MediaPipe 检测人脸 |
-| 眼神追踪 | 对话时注视说话人的脸 |
-| 多人切换 | 检测到多人时，注视当前说话人 |
-| 空闲扫视 | 空闲时随机环顾四周 |
+| 功能 | 说明 | 实现状态 |
+|------|------|---------|
+| 人脸检测 | 使用 OpenCV/MediaPipe 检测人脸 | ❌ 未实现 |
+| 眼神追踪 | 对话时注视说话人的脸 | ❌ 未实现 |
+| 多人切换 | 检测到多人时，注视当前说话人 | ❌ 未实现 |
+| 空闲扫视 | 空闲时随机环顾四周 | ❌ 未实现 |
 
-**代码示例**:
-```python
-import cv2
-
-async def face_tracking_loop(self):
-    """人脸追踪循环"""
-    face_cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-    )
-
-    while self.is_active:
-        frame = self.reachy.media.get_frame()
-        if frame is None:
-            continue
-
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-
-        if len(faces) > 0:
-            x, y, w, h = faces[0]
-            # 注视人脸中心
-            self.reachy.look_at_image(x + w//2, y + h//2, duration=0.3)
-
-        await asyncio.sleep(0.1)
-```
-
-### Phase 18 - 重力补偿互动模式 (低优先级)
+### Phase 18 - 重力补偿互动模式 (部分实现) 🟡
 
 **目标**: 允许用户物理触摸和引导机器人头部，实现"教学"式交互。
 
 **SDK 支持**: `enable_gravity_compensation()` - 电机进入重力补偿模式，可手动移动
 
+**已实现功能**:
+- ✅ 重力补偿模式切换 (`motor_mode` Select 实体，选项 "gravity_compensation")
+- ✅ `reachy_controller.py:236-237` - 重力补偿 API 调用
+
+**未实现功能**:
+- ❌ 教学模式 - 录制动作轨迹
+- ❌ 保存/播放自定义动作
+- ❌ 语音命令触发教学流程
+
 **应用场景**:
-- 用户说 "让我教你一个动作" → 进入重力补偿模式
-- 用户手动移动头部 → 录制动作轨迹
-- 用户说 "记住这个" → 保存动作
-- 用户说 "做刚才的动作" → 播放录制的动作
+- ❌ 用户说 "让我教你一个动作" → 进入重力补偿模式
+- ❌ 用户手动移动头部 → 录制动作轨迹
+- ❌ 用户说 "记住这个" → 保存动作
+- ❌ 用户说 "做刚才的动作" → 播放录制的动作
 
-**代码示例**:
-```python
-async def teaching_mode(self):
-    """教学模式 - 用户可手动引导机器人"""
-    self.reachy.enable_gravity_compensation()
-    self.reachy.start_recording()
-
-    # 等待用户完成教学
-    await self.wait_for_command("记住这个")
-
-    recorded_data = self.reachy.stop_recording()
-    self.reachy.enable_motors()
-
-    # 保存为自定义动作
-    self.save_custom_move(recorded_data)
-```
-
-### Phase 19 - 环境感知响应 (低优先级，仅无线版本)
+### Phase 19 - 环境感知响应 (未实现) ❌
 
 **目标**: 利用 IMU 传感器感知环境变化并做出响应。
 
 **SDK 支持**:
-- `mini.imu["accelerometer"]` - 加速度计
-- `mini.imu["gyroscope"]` - 陀螺仪
+- ✅ `mini.imu["accelerometer"]` - 加速度计 (Phase 7 已实现为实体)
+- ✅ `mini.imu["gyroscope"]` - 陀螺仪 (Phase 7 已实现为实体)
 
-**应用场景**:
+**未实现功能**:
 
-| 检测事件 | 响应动作 |
-|---------|---------|
-| 被拍打/敲击 | 播放惊讶动作 + 语音 "哎呀!" |
-| 被摇晃 | 播放晕眩动作 + 语音 "别晃我~" |
-| 倾斜/倒下 | 播放求助动作 + 语音 "我倒了，帮帮我" |
-| 长时间静止 | 进入休眠动画 |
+| 检测事件 | 响应动作 | 实现状态 |
+|---------|---------|---------|
+| 被拍打/敲击 | 播放惊讶动作 + 语音 "哎呀!" | ❌ 未实现 |
+| 被摇晃 | 播放晕眩动作 + 语音 "别晃我~" | ❌ 未实现 |
+| 倾斜/倒下 | 播放求助动作 + 语音 "我倒了，帮帮我" | ❌ 未实现 |
+| 长时间静止 | 进入休眠动画 | ❌ 未实现 |
 
-### Phase 20 - Home Assistant 场景联动 (低优先级)
+### Phase 20 - Home Assistant 场景联动 (未实现) ❌
 
 **目标**: 根据 Home Assistant 的场景/自动化触发机器人动作。
 
 **实现方案**: 通过 ESPHome 服务调用
 
-| HA 场景 | 机器人响应 |
-|--------|-----------|
-| 早安场景 | 播放唤醒动作 + "早上好!" |
-| 晚安场景 | 播放睡眠动作 + "晚安~" |
-| 有人回家 | 转向门口 + 挥手 + "欢迎回家!" |
-| 门铃响起 | 转向门口 + 警觉动作 |
-| 播放音乐 | 随音乐节奏摆动 |
+**未实现场景**:
+
+| HA 场景 | 机器人响应 | 实现状态 |
+|--------|-----------|---------|
+| 早安场景 | 播放唤醒动作 + "早上好!" | ❌ 未实现 |
+| 晚安场景 | 播放睡眠动作 + "晚安~" | ❌ 未实现 |
+| 有人回家 | 转向门口 + 挥手 + "欢迎回家!" | ❌ 未实现 |
+| 门铃响起 | 转向门口 + 警觉动作 | ❌ 未实现 |
+| 播放音乐 | 随音乐节奏摆动 | ❌ 未实现 |
 
 ---
 
-## 功能优先级总结
+## 📊 功能实现总结
 
-### 高优先级 (已完成)
-- ✅ Phase 1-12: 基础 ESPHome 实体 (45+ 个)
+### ✅ 已完成功能
 
-### 高优先级 (近期实现)
-- ⏳ **Phase 13**: 情感动作反馈系统 - 让机器人有"灵魂"
-- ⏳ **Phase 14**: 智能声源追踪增强 - 更自然的对话体验
+#### 核心语音助手 (Phase 1-12)
+- **45+ ESPHome 实体** - 全部实现
+- **基础语音交互** - 唤醒词检测、STT/TTS 集成
+- **运动反馈** - 点头、摇头、注视等基础动作
+- **音频处理** - AGC、噪声抑制、回声消除
+- **摄像头流** - MJPEG 实时预览
 
-### 中优先级 (计划中)
-- ⏳ **Phase 15**: 卡通风格运动模式 - 更有个性的动作
-- ⏳ **Phase 16**: 说话时天线同步 - 模拟说话效果
-- ⏳ **Phase 17**: 视觉注视交互 - 眼神交流
+#### 部分实现功能 (Phase 13-20)
+- **Phase 13** - 情感动作 API 基础设施 (手动触发可用)
+- **Phase 18** - 重力补偿模式切换 (教学流程未实现)
 
-### 低优先级 (未来考虑)
-- ⏳ **Phase 18**: 重力补偿互动模式 - 教学式交互
-- ⏳ **Phase 19**: 环境感知响应 - IMU 触发动作
-- ⏳ **Phase 20**: Home Assistant 场景联动 - 智能家居整合
+### ❌ 未实现功能
+
+#### 高优先级
+- **Phase 13** - 自动情感动作反馈 (需与语音助手事件关联)
+- **Phase 14** - 持续声源追踪 (仅唤醒时转向)
+
+#### 中优先级
+- **Phase 15** - 卡通风格运动模式 (需动态插值切换)
+- **Phase 16** - 天线同步动画
+- **Phase 17** - 人脸追踪与眼神交互
+
+#### 低优先级
+- **Phase 18** - 教学模式录制/播放功能
+- **Phase 19** - IMU 环境感知响应
+- **Phase 20** - Home Assistant 场景联动
+
+---
+
+## 功能优先级总结 (更新版)
+
+### 高优先级 (已完成 ✅)
+- ✅ **Phase 1-12**: 基础 ESPHome 实体 (45+ 个)
+- ✅ 核心语音助手功能
+- ✅ 基础运动反馈 (点头、摇头、注视)
+
+### 高优先级 (部分实现 🟡)
+- 🟡 **Phase 13**: 情感动作反馈系统
+  - ✅ Emotion Selector 实体与 API 基础设施
+  - ❌ 自动根据语音助手响应触发情感动作
+  - ❌ 意图识别与情感匹配
+  - ❌ 舞蹈动作库集成
+
+### 高优先级 (未实现 ❌)
+- ❌ **Phase 14**: 智能声源追踪增强
+  - ✅ 唤醒时转向声源
+  - ❌ 持续声源追踪
+  - ❌ 多人对话切换
+  - ❌ 声源可视化
+
+### 中优先级 (未实现 ❌)
+- ❌ **Phase 15**: 卡通风格运动模式 - 更有个性的动作
+- ❌ **Phase 16**: 说话时天线同步 - 模拟说话效果
+- ❌ **Phase 17**: 视觉注视交互 - 眼神交流
+
+### 低优先级 (部分实现 🟡)
+- 🟡 **Phase 18**: 重力补偿互动模式
+  - ✅ 重力补偿模式切换
+  - ❌ 教学式交互 (录制/播放功能)
+
+### 低优先级 (未实现 ❌)
+- ❌ **Phase 19**: 环境感知响应 - IMU 触发动作
+- ❌ **Phase 20**: Home Assistant 场景联动 - 智能家居整合
+
+---
+
+## 📈 完成度统计
+
+| 阶段 | 状态 | 完成度 | 说明 |
+|------|------|--------|------|
+| Phase 1-12 | ✅ 完成 | 100% | 45+ ESPHome 实体全部实现 |
+| Phase 13 | 🟡 部分完成 | 30% | API 基础设施就绪,缺自动触发 |
+| Phase 14 | ❌ 未完成 | 20% | 仅实现唤醒时转向 |
+| Phase 15 | ❌ 未完成 | 0% | 未实现动态插值切换 |
+| Phase 16 | ❌ 未完成 | 0% | 完全未实现 |
+| Phase 17 | ❌ 未完成 | 10% | 摄像头已实现,缺人脸检测 |
+| Phase 18 | 🟡 部分完成 | 40% | 模式切换已实现,缺教学流程 |
+| Phase 19 | ❌ 未完成 | 10% | IMU 数据已暴露,缺触发逻辑 |
+| Phase 20 | ❌ 未完成 | 0% | 完全未实现 |
+
+**总体完成度**: **Phase 1-12: 100%** | **Phase 13-20: ~15%**
 
 ### SDK 数据结构参考
 
