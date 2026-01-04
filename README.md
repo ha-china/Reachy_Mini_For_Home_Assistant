@@ -3,7 +3,9 @@ title: Reachy Mini Home Assistant Voice Assistant
 emoji: 🤖
 colorFrom: blue
 colorTo: purple
-sdk: docker
+sdk: gradio
+sdk_version: 5.33.0
+app_file: app.py
 pinned: false
 tags:
   - reachy_mini
