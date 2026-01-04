@@ -2,3 +2,5 @@ reachy_mini_ha_voice/wakewords/**/*.tflite filter=lfs diff=lfs merge=lfs -text
 reachy_mini_ha_voice/sounds/**/*.flac filter=lfs diff=lfs merge=lfs -text
 "reachy_mini_ha_voice/wakewords/**/*.tflite filter=lfs diff=lfs merge=lfs -text
 reachy_mini_ha_voice/sounds/**/*.flac" filter=lfs diff=lfs merge=lfs -text
+"ha/assets/meshes/*.stl" filter=lfs diff=lfs merge=lfs -text
+"ha/assets/*.urdf" filter=lfs diff=lfs merge=lfs -text

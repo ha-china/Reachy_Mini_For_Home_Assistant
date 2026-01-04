@@ -5,18 +5,20 @@
     "allow": [
       "SlashCommand(/zcf:git-commit)",
       "Edit",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "SlashCommand(/zcf:git-commit --emoji)",
+      "SlashCommand(/zcf:git-commit:*)"
     ],
     "deny": [],
     "ask": []
   },
+  "model": "opus",
   "hooks": {},
-  "alwaysThinkingEnabled": true,
-  "outputStyle": "default",
   "statusLine": {
     "type": "command",
     "command": "%USERPROFILE%\\.claude\\ccline\\ccline.exe",
     "padding": 0
   },
-  "model": "opus"
+  "outputStyle": "default",
+  "alwaysThinkingEnabled": true
 }

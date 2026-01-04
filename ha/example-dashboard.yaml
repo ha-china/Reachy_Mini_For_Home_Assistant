@@ -1,0 +1,77 @@
+# Example Lovelace Dashboard Configuration
+
+title: Reachy Mini Control
+views:
+  - title: Robot Status
+    path: robot
+    icon: 'mdi:robot'
+    badges: []
+    cards:
+      # Main 3D Visualization
+      - type: vertical-stack
+        cards:
+          - type: custom:reachy-mini-3d-card
+            entity_prefix: reachy_mini
+            height: 500
+            show_controls: true
+            auto_rotate: false
+
+          # Status Summary
+          - type: entities
+            title: Robot Status
+            entities:
+              - entity: sensor.reachy_mini_daemon_state
+                name: Daemon State
+              - entity: binary_sensor.reachy_mini_backend_ready
+                name: Backend Ready
+              - entity: switch.reachy_mini_motors_enabled
+                name: Motors Enabled
+
+      # Control Panel
+      - type: custom:reachy-mini-3d-card
+        entity_prefix: reachy_mini
+        height: 300
+        show_controls: false
+        auto_rotate: true
+
+  - title: Camera & Sensors
+    path: sensors
+    icon: 'mdi:cctv'
+    cards:
+      # Camera Feed
+      - type: picture-glance
+        camera_image: camera.reachy_mini
+        entities: []
+        title: Reachy Mini Camera
+
+      # Joint Sensors
+      - type: glance
+        title: Joint Positions
+        columns: 3
+        entities:
+          - entity: number.reachy_mini_body_yaw
+            name: Body Yaw
+          - entity: number.reachy_mini_head_pitch
+            name: Head Pitch
+          - entity: number.reachy_mini_head_roll
+            name: Head Roll
+          - entity: number.reachy_mini_head_yaw
+            name: Head Yaw
+          - entity: number.reachy_mini_antenna_left
+            name: Left Antenna
+          - entity: number.reachy_mini_antenna_right
+            name: Right Antenna
+
+  - title: Multiple Robots (Example)
+    path: multi
+    icon: 'mdi:robot-multiple'
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: custom:reachy-mini-3d-card
+            entity_prefix: reachy_mini_livingroom
+            height: 300
+
+          - type: custom:reachy-mini-3d-card
+            entity_prefix: reachy_mini_bedroom
+            height: 300

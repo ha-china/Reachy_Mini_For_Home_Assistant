@@ -1,0 +1,38 @@
+{
+  "name": "reachy-mini-3d-card",
+  "version": "1.0.0",
+  "description": "3D visualization card for Reachy Mini robot in Home Assistant",
+  "main": "reachy-mini-3d-card.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/djhui5710/reachy_mini_ha_voice"
+  },
+  "keywords": [
+    "home-assistant",
+    "hacs",
+    "custom-card",
+    "reachy-mini",
+    "3d",
+    "robot",
+    "visualization"
+  ],
+  "author": "djhui5710",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c --watch",
+    "lint": "eslint src/**/*.js"
+  },
+  "dependencies": {
+    "lit": "^3.1.0",
+    "three": "^0.160.0",
+    "urdf-loader": "^0.12.6"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.0",
+    "@rollup/plugin-terser": "^0.4.0",
+    "rollup": "^4.0.0",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "eslint": "^8.55.0"
+  }
+}

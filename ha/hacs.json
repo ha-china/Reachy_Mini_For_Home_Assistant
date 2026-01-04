@@ -1,0 +1,16 @@
+{
+  "name": "Reachy Mini 3D Card",
+  "render_readme": true,
+  "domains": ["lovelace"],
+  "iot_class": "local_polling",
+  "homeassistant": "2023.11.0",
+  "zip_release": true,
+  "filename": "reachy-mini-3d-card.zip",
+  "persistent": false,
+  "version": "1.0.0",
+  "description": "Real-time 3D visualization card for Reachy Mini robot with visual configuration editor",
+  "content_in_root": false,
+  "areas": [
+    "automation"
+  ]
+}

@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reachy Mini 3D Status Card - Home Assistant</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--ha-card-background, #1a1a2e);
+      overflow: hidden;
+    }
+
+    #container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Status Panel */
+    .status-panel {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(26, 26, 46, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      z-index: 10;
+      min-width: 180px;
+    }
+
+    .status-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+
+    .status-dot.animated {
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .status-dot.offline {
+      background: #ef4444;
+    }
+
+    .status-dot.connecting {
+      background: #f59e0b;
+      animation: pulse-dot 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.3); }
+    }
+
+    .status-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+
+    .status-label {
+      color: #888;
+    }
+
+    .status-value {
+      color: #FF9500;
+      font-weight: 600;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    /* Controls */
+    .controls {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .control-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(26, 26, 46, 0.9);
+      color: #888;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-size: 16px;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 149, 0, 0.15);
+      border-color: rgba(255, 149, 0, 0.3);
+      color: #FF9500;
+    }
+
+    .control-btn.active {
+      background: rgba(255, 149, 0, 0.2);
+      border-color: rgba(255, 149, 0, 0.5);
+      color: #FF9500;
+    }
+
+    /* Loading */
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #666;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(255, 149, 0, 0.2);
+      border-top-color: #FF9500;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Connection Config */
+    .config-panel {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(26, 26, 46, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      z-index: 10;
+      min-width: 280px;
+    }
+
+    .config-title {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .config-input {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .config-input:focus {
+      outline: none;
+      border-color: #FF9500;
+    }
+
+    .config-btn {
+      width: 100%;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #FF9500;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .config-btn:hover {
+      background: #e68600;
+    }
+
+    .config-btn:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    /* Info Panel */
+    .info-panel {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(26, 26, 46, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      z-index: 10;
+      font-size: 10px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="canvas-container"></div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+      <div class="loading-spinner"></div>
+      <span>Loading Reachy Mini...</span>
+    </div>
+
+    <!-- Status Panel -->
+    <div class="status-panel" id="status-panel">
+      <div class="status-header">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-title" id="status-title">Reachy Mini</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Body Yaw</span>
+        <span class="status-value" id="val-body-yaw">0.0°</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Head Pitch</span>
+        <span class="status-value" id="val-head-pitch">0.0°</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Head Roll</span>
+        <span class="status-value" id="val-head-roll">0.0°</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Head Yaw</span>
+        <span class="status-value" id="val-head-yaw">0.0°</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Antenna L</span>
+        <span class="status-value" id="val-antenna-left">0.0°</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Antenna R</span>
+        <span class="status-value" id="val-antenna-right">0.0°</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Motors</span>
+        <span class="status-value" id="val-motors">--</span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="control-btn" id="btn-reset" title="Reset View">&#8634;</button>
+      <button class="control-btn" id="btn-auto" title="Auto Rotate">&#10227;</button>
+      <button class="control-btn" id="btn-sync" title="Sync with HA">&#8635;</button>
+    </div>
+
+    <!-- Connection Config -->
+    <div class="config-panel" id="config-panel">
+      <div class="config-title">Home Assistant Connection</div>
+      <input type="text" class="config-input" id="ha-url" placeholder="http://homeassistant.local:8123" value="">
+      <input type="text" class="config-input" id="ha-token" placeholder="Long-Lived Access Token" value="">
+      <input type="text" class="config-input" id="entity-prefix" placeholder="Entity prefix (e.g., reachy_mini)" value="reachy_mini">
+      <button class="config-btn" id="btn-connect">Connect</button>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="info-panel" id="info-panel">
+      <div>Data source: Home Assistant ESPHome</div>
+      <div id="last-update">Last update: --</div>
+    </div>
+  </div>
+
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/STLLoader.js"></script>
+
+  <script>
+    // =========================================================================
+    // Configuration
+    // =========================================================================
+    const ASSETS_PATH = './assets/';
+    const URDF_PATH = ASSETS_PATH + 'reachy-mini.urdf';
+
+    // Home Assistant entity IDs (from satellite.py ENTITY_KEYS)
+    const HA_ENTITIES = {
+      bodyYaw: 'number.{prefix}_body_yaw',
+      headPitch: 'number.{prefix}_head_pitch',
+      headRoll: 'number.{prefix}_head_roll',
+      headYaw: 'number.{prefix}_head_yaw',
+      antennaLeft: 'number.{prefix}_antenna_left',
+      antennaRight: 'number.{prefix}_antenna_right',
+      motorsEnabled: 'switch.{prefix}_motors_enabled',
+      daemonState: 'sensor.{prefix}_daemon_state',
+      backendReady: 'binary_sensor.{prefix}_backend_ready',
+    };
+
+    // =========================================================================
+    // State
+    // =========================================================================
+    let scene, camera, renderer, controls;
+    let robot = null;
+    let autoRotate = false;
+    let haConnection = null;
+    let pollInterval = null;
+
+    // Robot state from Home Assistant
+    let robotState = {
+      bodyYaw: 0,
+      headPitch: 0,
+      headRoll: 0,
+      headYaw: 0,
+      antennaLeft: 0,
+      antennaRight: 0,
+      motorsEnabled: false,
+      daemonState: 'unknown',
+      backendReady: false,
+    };
+
+    // =========================================================================
+    // Three.js Setup
+    // =========================================================================
+    function init() {
+      const container = document.getElementById('canvas-container');
+
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10);
+      camera.position.set(0, 0.25, 0.52);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      container.appendChild(renderer.domElement);
+
+      // Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0.2, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.minDistance = 0.2;
+      controls.maxDistance = 0.8;
+      controls.update();
+
+      // Lights
+      setupLights();
+
+      // Load robot
+      loadRobot();
+
+      // Event listeners
+      setupEventListeners();
+
+      // Load saved config
+      loadConfig();
+
+      // Animation loop
+      animate();
+    }
+
+    function setupLights() {
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambient);
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      keyLight.position.set(5, 5, 5);
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+      fillLight.position.set(-5, 3, -5);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+      rimLight.position.set(0, -3, -5);
+      scene.add(rimLight);
+
+      const gridHelper = new THREE.GridHelper(1, 20, 0x444444, 0x333333);
+      gridHelper.position.y = 0;
+      scene.add(gridHelper);
+    }
+
+    async function loadRobot() {
+      try {
+        const response = await fetch(URDF_PATH);
+        const urdfText = await response.text();
+        const parser = new DOMParser();
+        const urdfDoc = parser.parseFromString(urdfText, 'text/xml');
+
+        robot = new THREE.Group();
+        robot.rotation.set(-Math.PI / 2, 0, 0);
+
+        const links = urdfDoc.querySelectorAll('link');
+        const stlLoader = new THREE.STLLoader();
+        const loadPromises = [];
+
+        links.forEach(link => {
+          const linkName = link.getAttribute('name');
+          const visuals = link.querySelectorAll('visual');
+
+          visuals.forEach(visual => {
+            const meshElement = visual.querySelector('mesh');
+            if (meshElement) {
+              const filename = meshElement.getAttribute('filename');
+              const meshPath = ASSETS_PATH + filename;
+
+              const origin = visual.querySelector('origin');
+              let position = [0, 0, 0];
+              let rotation = [0, 0, 0];
+
+              if (origin) {
+                const xyz = origin.getAttribute('xyz');
+                const rpy = origin.getAttribute('rpy');
+                if (xyz) position = xyz.split(' ').map(Number);
+                if (rpy) rotation = rpy.split(' ').map(Number);
+              }
+
+              const material = visual.querySelector('material');
+              let color = 0xcccccc;
+              if (material) {
+                const colorElement = material.querySelector('color');
+                if (colorElement) {
+                  const rgba = colorElement.getAttribute('rgba').split(' ').map(Number);
+                  color = new THREE.Color(rgba[0], rgba[1], rgba[2]);
+                }
+              }
+
+              const loadPromise = new Promise((resolve) => {
+                stlLoader.load(meshPath, (geometry) => {
+                  const mat = new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.1,
+                    roughness: 0.7,
+                  });
+
+                  const mesh = new THREE.Mesh(geometry, mat);
+                  mesh.position.set(position[0], position[1], position[2]);
+                  mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+                  mesh.name = linkName;
+                  mesh.userData.linkName = linkName;
+
+                  robot.add(mesh);
+                  resolve();
+                }, undefined, () => resolve());
+              });
+
+              loadPromises.push(loadPromise);
+            }
+          });
+        });
+
+        await Promise.all(loadPromises);
+
+        robot.position.set(0, 0, 0);
+        robot.rotation.set(0, -Math.PI / 2, 0);
+        scene.add(robot);
+
+        document.getElementById('loading').style.display = 'none';
+        console.log('Robot loaded successfully!');
+
+      } catch (error) {
+        console.error('Error loading robot:', error);
+        document.getElementById('loading').innerHTML = '<span style="color: #ef4444;">Error loading robot</span>';
+      }
+    }
+
+    function setupEventListeners() {
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        camera.position.set(0, 0.25, 0.52);
+        controls.target.set(0, 0.2, 0);
+        controls.update();
+      });
+
+      document.getElementById('btn-auto').addEventListener('click', () => {
+        autoRotate = !autoRotate;
+        controls.autoRotate = autoRotate;
+        document.getElementById('btn-auto').classList.toggle('active', autoRotate);
+      });
+
+      document.getElementById('btn-sync').addEventListener('click', () => {
+        if (haConnection) {
+          fetchHAStates();
+        }
+      });
+
+      document.getElementById('btn-connect').addEventListener('click', connectToHA);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // =========================================================================
+    // Robot Pose Update
+    // =========================================================================
+    function updateRobotPose() {
+      if (!robot) return;
+
+      // Apply body yaw (rotates entire robot for simplified demo)
+      const bodyYawRad = robotState.bodyYaw * Math.PI / 180;
+      robot.rotation.y = -Math.PI / 2 + bodyYawRad;
+
+      // Update UI values
+      document.getElementById('val-body-yaw').textContent = robotState.bodyYaw.toFixed(1) + '°';
+      document.getElementById('val-head-pitch').textContent = robotState.headPitch.toFixed(1) + '°';
+      document.getElementById('val-head-roll').textContent = robotState.headRoll.toFixed(1) + '°';
+      document.getElementById('val-head-yaw').textContent = robotState.headYaw.toFixed(1) + '°';
+      document.getElementById('val-antenna-left').textContent = robotState.antennaLeft.toFixed(1) + '°';
+      document.getElementById('val-antenna-right').textContent = robotState.antennaRight.toFixed(1) + '°';
+      document.getElementById('val-motors').textContent = robotState.motorsEnabled ? 'ON' : 'OFF';
+
+      // Update status indicator
+      updateStatusIndicator();
+    }
+
+    function updateStatusIndicator() {
+      const dot = document.getElementById('status-dot');
+      const title = document.getElementById('status-title');
+
+      if (!haConnection) {
+        dot.className = 'status-dot offline';
+        title.textContent = 'Disconnected';
+      } else if (robotState.backendReady) {
+        dot.className = 'status-dot animated';
+        title.textContent = 'Reachy Mini - ' + robotState.daemonState;
+      } else {
+        dot.className = 'status-dot connecting';
+        title.textContent = 'Connecting...';
+      }
+    }
+
+    // =========================================================================
+    // Home Assistant Integration
+    // =========================================================================
+    function loadConfig() {
+      const savedUrl = localStorage.getItem('ha_url');
+      const savedToken = localStorage.getItem('ha_token');
+      const savedPrefix = localStorage.getItem('entity_prefix');
+
+      if (savedUrl) document.getElementById('ha-url').value = savedUrl;
+      if (savedToken) document.getElementById('ha-token').value = savedToken;
+      if (savedPrefix) document.getElementById('entity-prefix').value = savedPrefix;
+
+      // Auto-connect if config exists
+      if (savedUrl && savedToken) {
+        setTimeout(connectToHA, 1000);
+      }
+    }
+
+    function saveConfig() {
+      localStorage.setItem('ha_url', document.getElementById('ha-url').value);
+      localStorage.setItem('ha_token', document.getElementById('ha-token').value);
+      localStorage.setItem('entity_prefix', document.getElementById('entity-prefix').value);
+    }
+
+    function getEntityId(key) {
+      const prefix = document.getElementById('entity-prefix').value || 'reachy_mini';
+      return HA_ENTITIES[key].replace('{prefix}', prefix);
+    }
+
+    async function connectToHA() {
+      const url = document.getElementById('ha-url').value.trim();
+      const token = document.getElementById('ha-token').value.trim();
+
+      if (!url || !token) {
+        alert('Please enter Home Assistant URL and Access Token');
+        return;
+      }
+
+      saveConfig();
+
+      const btn = document.getElementById('btn-connect');
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+
+      try {
+        // Test connection
+        const response = await fetch(`${url}/api/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+
+        if (response.ok) {
+          haConnection = { url, token };
+          btn.textContent = 'Connected';
+          document.getElementById('config-panel').style.display = 'none';
+
+          // Start polling
+          fetchHAStates();
+          pollInterval = setInterval(fetchHAStates, 1000); // Poll every second
+
+          console.log('Connected to Home Assistant');
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        console.error('Connection failed:', error);
+        btn.disabled = false;
+        btn.textContent = 'Connect';
+        alert('Connection failed: ' + error.message);
+      }
+    }
+
+    async function fetchHAStates() {
+      if (!haConnection) return;
+
+      try {
+        const entities = [
+          { key: 'bodyYaw', id: getEntityId('bodyYaw') },
+          { key: 'headPitch', id: getEntityId('headPitch') },
+          { key: 'headRoll', id: getEntityId('headRoll') },
+          { key: 'headYaw', id: getEntityId('headYaw') },
+          { key: 'antennaLeft', id: getEntityId('antennaLeft') },
+          { key: 'antennaRight', id: getEntityId('antennaRight') },
+          { key: 'motorsEnabled', id: getEntityId('motorsEnabled') },
+          { key: 'daemonState', id: getEntityId('daemonState') },
+          { key: 'backendReady', id: getEntityId('backendReady') },
+        ];
+
+        // Fetch all states
+        const response = await fetch(`${haConnection.url}/api/states`, {
+          headers: {
+            'Authorization': `Bearer ${haConnection.token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const states = await response.json();
+        const stateMap = {};
+        states.forEach(s => stateMap[s.entity_id] = s);
+
+        // Update robot state
+        entities.forEach(({ key, id }) => {
+          const state = stateMap[id];
+          if (state) {
+            if (key === 'motorsEnabled') {
+              robotState[key] = state.state === 'on';
+            } else if (key === 'backendReady') {
+              robotState[key] = state.state === 'on';
+            } else if (key === 'daemonState') {
+              robotState[key] = state.state;
+            } else {
+              robotState[key] = parseFloat(state.state) || 0;
+            }
+          }
+        });
+
+        // Update 3D model and UI
+        updateRobotPose();
+
+        // Update last update time
+        document.getElementById('last-update').textContent =
+          'Last update: ' + new Date().toLocaleTimeString();
+
+      } catch (error) {
+        console.error('Failed to fetch states:', error);
+        // Don't disconnect on temporary errors
+      }
+    }
+
+    // =========================================================================
+    // WebSocket Mode (Alternative - for real-time updates)
+    // =========================================================================
+    function connectWebSocket() {
+      if (!haConnection) return;
+
+      const wsUrl = haConnection.url.replace('http', 'ws') + '/api/websocket';
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'auth_required') {
+          ws.send(JSON.stringify({
+            type: 'auth',
+            access_token: haConnection.token
+          }));
+        } else if (msg.type === 'auth_ok') {
+          // Subscribe to state changes
+          ws.send(JSON.stringify({
+            id: 1,
+            type: 'subscribe_events',
+            event_type: 'state_changed'
+          }));
+        } else if (msg.type === 'event' && msg.event.event_type === 'state_changed') {
+          handleStateChange(msg.event.data);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed, reconnecting...');
+        setTimeout(connectWebSocket, 5000);
+      };
+    }
+
+    function handleStateChange(data) {
+      const entityId = data.entity_id;
+      const newState = data.new_state;
+
+      if (!newState) return;
+
+      // Map entity_id to robotState key
+      const prefix = document.getElementById('entity-prefix').value || 'reachy_mini';
+
+      const mapping = {
+        [`number.${prefix}_body_yaw`]: 'bodyYaw',
+        [`number.${prefix}_head_pitch`]: 'headPitch',
+        [`number.${prefix}_head_roll`]: 'headRoll',
+        [`number.${prefix}_head_yaw`]: 'headYaw',
+        [`number.${prefix}_antenna_left`]: 'antennaLeft',
+        [`number.${prefix}_antenna_right`]: 'antennaRight',
+        [`switch.${prefix}_motors_enabled`]: 'motorsEnabled',
+        [`sensor.${prefix}_daemon_state`]: 'daemonState',
+        [`binary_sensor.${prefix}_backend_ready`]: 'backendReady',
+      };
+
+      const key = mapping[entityId];
+      if (key) {
+        if (key === 'motorsEnabled' || key === 'backendReady') {
+          robotState[key] = newState.state === 'on';
+        } else if (key === 'daemonState') {
+          robotState[key] = newState.state;
+        } else {
+          robotState[key] = parseFloat(newState.state) || 0;
+        }
+        updateRobotPose();
+      }
+    }
+
+    // =========================================================================
+    // Initialize
+    // =========================================================================
+    init();
+  </script>
+</body>
+</html>

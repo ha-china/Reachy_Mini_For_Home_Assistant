@@ -74,4 +74,5 @@ reachy_mini/
 reachy_mini_conversation_app/
 linux-voice-assistant/
 reachy-mini-desktop-app/
-ha/
+# ha/ - temporarily commented out for path fixes
+# ha/ will be moved to separate repository soon
