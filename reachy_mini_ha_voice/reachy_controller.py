@@ -370,17 +370,22 @@ class ReachyController:
             return 0.0
 
     def set_head_x(self, x_mm: float) -> None:
-        """Set head X position in mm."""
-        if not self.is_available:
-            return
-        try:
-            pose = self.reachy.get_current_head_pose()
-            # Modify the X position in the matrix
-            new_pose = pose.copy()
-            new_pose[0, 3] = x_mm / 1000  # Convert mm to m
-            self.reachy.goto_target(head=new_pose)
-        except Exception as e:
-            logger.error(f"Error setting head X: {e}")
+        """Set head X position in mm.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        The MovementManager handles all head pose control during voice conversations.
+        """
+        logger.warning("set_head_x is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     pose = self.reachy.get_current_head_pose()
+        #     # Modify the X position in the matrix
+        #     new_pose = pose.copy()
+        #     new_pose[0, 3] = x_mm / 1000  # Convert mm to m
+        #     self.reachy.goto_target(head=new_pose)
+        # except Exception as e:
+        #     logger.error(f"Error setting head X: {e}")
 
     def get_head_y(self) -> float:
         """Get head Y position in mm with caching."""
@@ -395,16 +400,20 @@ class ReachyController:
             return 0.0
 
     def set_head_y(self, y_mm: float) -> None:
-        """Set head Y position in mm."""
-        if not self.is_available:
-            return
-        try:
-            pose = self.reachy.get_current_head_pose()
-            new_pose = pose.copy()
-            new_pose[1, 3] = y_mm / 1000
-            self.reachy.goto_target(head=new_pose)
-        except Exception as e:
-            logger.error(f"Error setting head Y: {e}")
+        """Set head Y position in mm.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_head_y is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     pose = self.reachy.get_current_head_pose()
+        #     new_pose = pose.copy()
+        #     new_pose[1, 3] = y_mm / 1000
+        #     self.reachy.goto_target(head=new_pose)
+        # except Exception as e:
+        #     logger.error(f"Error setting head Y: {e}")
 
     def get_head_z(self) -> float:
         """Get head Z position in mm with caching."""
@@ -419,16 +428,20 @@ class ReachyController:
             return 0.0
 
     def set_head_z(self, z_mm: float) -> None:
-        """Set head Z position in mm."""
-        if not self.is_available:
-            return
-        try:
-            pose = self.reachy.get_current_head_pose()
-            new_pose = pose.copy()
-            new_pose[2, 3] = z_mm / 1000
-            self.reachy.goto_target(head=new_pose)
-        except Exception as e:
-            logger.error(f"Error setting head Z: {e}")
+        """Set head Z position in mm.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_head_z is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     pose = self.reachy.get_current_head_pose()
+        #     new_pose = pose.copy()
+        #     new_pose[2, 3] = z_mm / 1000
+        #     self.reachy.goto_target(head=new_pose)
+        # except Exception as e:
+        #     logger.error(f"Error setting head Z: {e}")
 
     def get_head_roll(self) -> float:
         """Get head roll angle in degrees with caching."""
@@ -443,19 +456,23 @@ class ReachyController:
             return 0.0
 
     def set_head_roll(self, roll_deg: float) -> None:
-        """Set head roll angle in degrees."""
-        if not self.is_available:
-            return
-        try:
-            pose = self.reachy.get_current_head_pose()
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            # Create new rotation with updated roll
-            new_rotation = R.from_euler('xyz', [math.radians(roll_deg), pitch, yaw])
-            new_pose = pose.copy()
-            new_pose[:3, :3] = new_rotation.as_matrix()
-            self.reachy.goto_target(head=new_pose)
-        except Exception as e:
-            logger.error(f"Error setting head roll: {e}")
+        """Set head roll angle in degrees.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_head_roll is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     pose = self.reachy.get_current_head_pose()
+        #     x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+        #     # Create new rotation with updated roll
+        #     new_rotation = R.from_euler('xyz', [math.radians(roll_deg), pitch, yaw])
+        #     new_pose = pose.copy()
+        #     new_pose[:3, :3] = new_rotation.as_matrix()
+        #     self.reachy.goto_target(head=new_pose)
+        # except Exception as e:
+        #     logger.error(f"Error setting head roll: {e}")
 
     def get_head_pitch(self) -> float:
         """Get head pitch angle in degrees with caching."""
@@ -470,18 +487,22 @@ class ReachyController:
             return 0.0
 
     def set_head_pitch(self, pitch_deg: float) -> None:
-        """Set head pitch angle in degrees."""
-        if not self.is_available:
-            return
-        try:
-            pose = self.reachy.get_current_head_pose()
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            new_rotation = R.from_euler('xyz', [roll, math.radians(pitch_deg), yaw])
-            new_pose = pose.copy()
-            new_pose[:3, :3] = new_rotation.as_matrix()
-            self.reachy.goto_target(head=new_pose)
-        except Exception as e:
-            logger.error(f"Error setting head pitch: {e}")
+        """Set head pitch angle in degrees.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_head_pitch is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     pose = self.reachy.get_current_head_pose()
+        #     x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+        #     new_rotation = R.from_euler('xyz', [roll, math.radians(pitch_deg), yaw])
+        #     new_pose = pose.copy()
+        #     new_pose[:3, :3] = new_rotation.as_matrix()
+        #     self.reachy.goto_target(head=new_pose)
+        # except Exception as e:
+        #     logger.error(f"Error setting head pitch: {e}")
 
     def get_head_yaw(self) -> float:
         """Get head yaw angle in degrees with caching."""
@@ -496,18 +517,22 @@ class ReachyController:
             return 0.0
 
     def set_head_yaw(self, yaw_deg: float) -> None:
-        """Set head yaw angle in degrees."""
-        if not self.is_available:
-            return
-        try:
-            pose = self.reachy.get_current_head_pose()
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            new_rotation = R.from_euler('xyz', [roll, pitch, math.radians(yaw_deg)])
-            new_pose = pose.copy()
-            new_pose[:3, :3] = new_rotation.as_matrix()
-            self.reachy.goto_target(head=new_pose)
-        except Exception as e:
-            logger.error(f"Error setting head yaw: {e}")
+        """Set head yaw angle in degrees.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_head_yaw is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     pose = self.reachy.get_current_head_pose()
+        #     x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
+        #     new_rotation = R.from_euler('xyz', [roll, pitch, math.radians(yaw_deg)])
+        #     new_pose = pose.copy()
+        #     new_pose[:3, :3] = new_rotation.as_matrix()
+        #     self.reachy.goto_target(head=new_pose)
+        # except Exception as e:
+        #     logger.error(f"Error setting head yaw: {e}")
 
     def get_body_yaw(self) -> float:
         """Get body yaw angle in degrees with caching."""
@@ -522,13 +547,17 @@ class ReachyController:
             return 0.0
 
     def set_body_yaw(self, yaw_deg: float) -> None:
-        """Set body yaw angle in degrees."""
-        if not self.is_available:
-            return
-        try:
-            self.reachy.goto_target(body_yaw=math.radians(yaw_deg))
-        except Exception as e:
-            logger.error(f"Error setting body yaw: {e}")
+        """Set body yaw angle in degrees.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_body_yaw is disabled - MovementManager controls body pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     self.reachy.goto_target(body_yaw=math.radians(yaw_deg))
+        # except Exception as e:
+        #     logger.error(f"Error setting body yaw: {e}")
 
     def get_antenna_left(self) -> float:
         """Get left antenna angle in degrees with caching."""
@@ -543,15 +572,19 @@ class ReachyController:
             return 0.0
 
     def set_antenna_left(self, angle_deg: float) -> None:
-        """Set left antenna angle in degrees."""
-        if not self.is_available:
-            return
-        try:
-            _, antennas = self.reachy.get_current_joint_positions()
-            right = antennas[0]
-            self.reachy.goto_target(antennas=[right, math.radians(angle_deg)])
-        except Exception as e:
-            logger.error(f"Error setting left antenna: {e}")
+        """Set left antenna angle in degrees.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_antenna_left is disabled - MovementManager controls antennas")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     _, antennas = self.reachy.get_current_joint_positions()
+        #     right = antennas[0]
+        #     self.reachy.goto_target(antennas=[right, math.radians(angle_deg)])
+        # except Exception as e:
+        #     logger.error(f"Error setting left antenna: {e}")
 
     def get_antenna_right(self) -> float:
         """Get right antenna angle in degrees with caching."""
@@ -566,15 +599,19 @@ class ReachyController:
             return 0.0
 
     def set_antenna_right(self, angle_deg: float) -> None:
-        """Set right antenna angle in degrees."""
-        if not self.is_available:
-            return
-        try:
-            _, antennas = self.reachy.get_current_joint_positions()
-            left = antennas[1]
-            self.reachy.goto_target(antennas=[math.radians(angle_deg), left])
-        except Exception as e:
-            logger.error(f"Error setting right antenna: {e}")
+        """Set right antenna angle in degrees.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("set_antenna_right is disabled - MovementManager controls antennas")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     _, antennas = self.reachy.get_current_joint_positions()
+        #     left = antennas[1]
+        #     self.reachy.goto_target(antennas=[math.radians(angle_deg), left])
+        # except Exception as e:
+        #     logger.error(f"Error setting right antenna: {e}")
 
     # ========== Phase 4: Look At Control ==========
 
@@ -608,17 +645,21 @@ class ReachyController:
         self._update_look_at()
 
     def _update_look_at(self) -> None:
-        """Update robot to look at the target coordinates."""
-        if not self.is_available:
-            return
-        try:
-            x = getattr(self, '_look_at_x', 0.0)
-            y = getattr(self, '_look_at_y', 0.0)
-            z = getattr(self, '_look_at_z', 0.0)
-            self.reachy.look_at_world(x, y, z)
-            logger.info(f"Looking at world coordinates: ({x}, {y}, {z})")
-        except Exception as e:
-            logger.error(f"Error updating look at: {e}")
+        """Update robot to look at the target coordinates.
+        
+        NOTE: Disabled to prevent conflict with MovementManager's control loop.
+        """
+        logger.warning("_update_look_at is disabled - MovementManager controls head pose")
+        # if not self.is_available:
+        #     return
+        # try:
+        #     x = getattr(self, '_look_at_x', 0.0)
+        #     y = getattr(self, '_look_at_y', 0.0)
+        #     z = getattr(self, '_look_at_z', 0.0)
+        #     self.reachy.look_at_world(x, y, z)
+        #     logger.info(f"Looking at world coordinates: ({x}, {y}, {z})")
+        # except Exception as e:
+        #     logger.error(f"Error updating look at: {e}")
 
     # ========== Phase 5: Audio Sensors ==========
 
