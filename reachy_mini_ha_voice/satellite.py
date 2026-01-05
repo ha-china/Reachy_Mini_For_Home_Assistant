@@ -546,32 +546,39 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _play_emotion(self, emotion_name: str) -> None:
-        """Play an emotion/expression from the emotions library.
+        """Play an emotion/expression from the emotions library (async, non-blocking).
 
         Args:
             emotion_name: Name of the emotion (e.g., "happy1", "sad1", etc.)
         """
-        try:
-            import requests
+        def _play_emotion_async():
+            """Internal async function to play emotion without blocking."""
+            try:
+                import requests
 
-            # Get WLAN IP from daemon status
-            wlan_ip = "localhost"
-            if self.state.reachy_mini is not None:
-                try:
-                    status = self.state.reachy_mini.client.get_status(wait=False)
-                    wlan_ip = status.get('wlan_ip', 'localhost')
-                except Exception:
-                    wlan_ip = "localhost"
+                # Get WLAN IP from daemon status
+                wlan_ip = "localhost"
+                if self.state.reachy_mini is not None:
+                    try:
+                        status = self.state.reachy_mini.client.get_status(wait=False)
+                        wlan_ip = status.get('wlan_ip', 'localhost')
+                    except Exception:
+                        wlan_ip = "localhost"
 
-            # Call the emotion playback API
-            # Dataset: pollen-robotics/reachy-mini-emotions-library
-            url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion_name}"
+                # Call the emotion playback API
+                # Dataset: pollen-robotics/reachy-mini-emotions-library
+                url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion_name}"
 
-            response = requests.post(url, timeout=5)
-            if response.status_code == 200:
-                _LOGGER.info(f"Playing emotion: {emotion_name}")
-            else:
-                _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
+                response = requests.post(url, timeout=5)
+                if response.status_code == 200:
+                    _LOGGER.info(f"Playing emotion: {emotion_name}")
+                else:
+                    _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
 
-        except Exception as e:
-            _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
+            except Exception as e:
+                _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
+
+        # Run in background thread to avoid blocking
+        import threading
+        thread = threading.Thread(target=_play_emotion_async, daemon=True)
+        thread.start()
