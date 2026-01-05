@@ -490,6 +490,8 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Listening animation")
             if self.state.motion:
                 self.state.motion.on_listening()
+            # Play attentive/curious expression
+            self._play_emotion("surprise1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -501,6 +503,8 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Thinking animation")
             if self.state.motion:
                 self.state.motion.on_thinking()
+            # Play thinking expression
+            self._play_emotion("thinking1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -512,6 +516,8 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Speaking animation")
             if self.state.motion:
                 self.state.motion.on_speaking_start()
+            # Play happy/speaking expression
+            self._play_emotion("happy1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -523,6 +529,8 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Idle animation")
             if self.state.motion:
                 self.state.motion.on_idle()
+            # Play neutral/calm expression
+            self._play_emotion("neutral1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
