@@ -325,6 +325,13 @@ class MovementManager:
         self._error_interval = 1.0  # Log at most once per second
         self._suppressed_errors = 0
 
+        # Connection health tracking
+        self._connection_lost = False
+        self._last_successful_command = self._now()
+        self._connection_timeout = 5.0  # 5 seconds without success = connection lost
+        self._reconnect_attempt_interval = 10.0  # Try reconnecting every 10 seconds
+        self._last_reconnect_attempt = 0.0
+
         # Pending action
         self._pending_action: Optional[PendingAction] = None
         self._action_start_time: float = 0.0
@@ -660,9 +667,22 @@ class MovementManager:
     # =========================================================================
 
     def _issue_control_command(self, pose: Dict[str, float]) -> None:
-        """Send control command to robot with error throttling."""
+        """Send control command to robot with error throttling and connection health tracking."""
         if self.robot is None:
             return
+
+        # Check if connection is lost and we should skip sending commands
+        now = self._now()
+        if self._connection_lost:
+            time_since_last_success = now - self._last_successful_command
+
+            # Only attempt reconnection every N seconds
+            if now - self._last_reconnect_attempt >= self._reconnect_attempt_interval:
+                self._last_reconnect_attempt = now
+                logger.info("Attempting to send command after connection loss...")
+            else:
+                # Skip sending commands to reduce error spam
+                return
 
         try:
             # Build head pose matrix
@@ -685,8 +705,40 @@ class MovementManager:
                 body_yaw=pose["body_yaw"],
             )
 
+            # Command succeeded - update connection health
+            self._last_successful_command = now
+            if self._connection_lost:
+                logger.info("✓ Connection to robot restored")
+                self._connection_lost = False
+                self._suppressed_errors = 0  # Reset error counter
+
         except Exception as e:
-            self._log_error_throttled(f"Failed to set robot target: {e}")
+            error_msg = str(e)
+
+            # Check if this is a connection error
+            if "Lost connection" in error_msg or "ZError" in error_msg:
+                time_since_last_success = now - self._last_successful_command
+
+                if not self._connection_lost and time_since_last_success > self._connection_timeout:
+                    # First time detecting connection loss
+                    logger.error(f"✗ Lost connection to robot daemon: {error_msg}")
+                    logger.error("  Troubleshooting steps:")
+                    logger.error("  1. Check if Reachy Mini Daemon is running: sudo systemctl status reachy-mini-daemon")
+                    logger.error("  2. Verify Zenoh service on port 7447: netstat -tlnp | grep 7447")
+                    logger.error("  3. Check robot hardware connections")
+                    logger.error("  4. Review daemon logs: sudo journalctl -u reachy-mini-daemon -n 50")
+                    logger.error(f"  Will retry connection every {self._reconnect_attempt_interval}s...")
+                    self._connection_lost = True
+                    self._last_reconnect_attempt = now
+                elif self._connection_lost:
+                    # Already in lost state, use throttled logging
+                    self._log_error_throttled(f"Connection still lost: {error_msg}")
+                else:
+                    # Transient error, not yet considered lost
+                    self._log_error_throttled(f"Failed to set robot target: {error_msg}")
+            else:
+                # Non-connection error
+                self._log_error_throttled(f"Failed to set robot target: {error_msg}")
 
     def _log_error_throttled(self, message: str) -> None:
         """Log error with throttling to prevent log explosion."""
