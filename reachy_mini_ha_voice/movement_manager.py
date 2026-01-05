@@ -17,6 +17,7 @@ import logging
 import math
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from queue import Queue, Empty
@@ -27,6 +28,7 @@ from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
+    from reachy_mini.motion.move import Move
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +339,11 @@ class MovementManager:
         self._action_start_time: float = 0.0
         self._action_start_pose: Dict[str, float] = {}
 
+        # Move queue (for emotions and other Move objects)
+        self._move_queue: deque = deque()
+        self._current_move: Optional["Move"] = None
+        self._move_start_time: Optional[float] = None
+
         # Audio loudness (updated externally)
         self._audio_loudness_db: float = -100.0
         self._audio_lock = threading.Lock()
@@ -372,6 +379,18 @@ class MovementManager:
     def queue_action(self, action: PendingAction) -> None:
         """Thread-safe: Queue a motion action."""
         self._command_queue.put(("action", action))
+
+    def queue_move(self, move: "Move") -> None:
+        """Thread-safe: Queue a Move object (e.g., emotion).
+
+        Args:
+            move: A Move object (e.g., EmotionQueueMove)
+        """
+        self._command_queue.put(("queue_move", move))
+
+    def clear_move_queue(self) -> None:
+        """Thread-safe: Clear the move queue and stop current move."""
+        self._command_queue.put(("clear_queue", None))
 
     def turn_to_angle(self, yaw_deg: float, duration: float = 0.8) -> None:
         """Thread-safe: Turn head to face a direction."""
@@ -455,6 +474,18 @@ class MovementManager:
         elif cmd == "action":
             self._start_action(payload)
 
+        elif cmd == "queue_move":
+            if payload is not None:
+                self._move_queue.append(payload)
+                self.state.last_activity_time = self._now()
+                logger.debug("Queued move, queue size: %d", len(self._move_queue))
+
+        elif cmd == "clear_queue":
+            self._move_queue.clear()
+            self._current_move = None
+            self._move_start_time = None
+            logger.info("Cleared move queue and stopped current move")
+
         elif cmd == "nod":
             amplitude_deg, duration = payload
             self._do_nod(amplitude_deg, duration)
@@ -507,6 +538,56 @@ class MovementManager:
     # =========================================================================
     # Internal: Motion updates (runs in control loop)
     # =========================================================================
+
+    def _manage_move_queue(self) -> None:
+        """Manage the move queue (emotions, etc.)."""
+        current_time = self._now()
+
+        # Check if current move is finished
+        if self._current_move is None or (
+            self._move_start_time is not None
+            and current_time - self._move_start_time >= self._current_move.duration
+        ):
+            self._current_move = None
+            self._move_start_time = None
+
+            # Start next move in queue
+            if self._move_queue:
+                self._current_move = self._move_queue.popleft()
+                self._move_start_time = current_time
+                logger.debug(f"Starting move, duration: {self._current_move.duration}s")
+
+        # Evaluate current move and update target pose
+        if self._current_move is not None and self._move_start_time is not None:
+            move_time = current_time - self._move_start_time
+            try:
+                head_pose, antennas, body_yaw = self._current_move.evaluate(move_time)
+
+                if head_pose is not None:
+                    # Extract rotation from head pose matrix
+                    from scipy.spatial.transform import Rotation as R
+                    rotation = R.from_matrix(head_pose[:3, :3])
+                    euler = rotation.as_euler('xyz')
+
+                    self.state.target_pitch = float(euler[0])
+                    self.state.target_roll = float(euler[1])
+                    self.state.target_yaw = float(euler[2])
+                    self.state.target_x = float(head_pose[0, 3])
+                    self.state.target_y = float(head_pose[1, 3])
+                    self.state.target_z = float(head_pose[2, 3])
+
+                if antennas is not None:
+                    self.state.target_antenna_right = float(antennas[0])
+                    self.state.target_antenna_left = float(antennas[1])
+
+                if body_yaw is not None:
+                    self.state.target_body_yaw = float(body_yaw)
+
+            except Exception as e:
+                logger.error(f"Error evaluating move: {e}")
+                # Clear the problematic move
+                self._current_move = None
+                self._move_start_time = None
 
     def _update_action(self, dt: float) -> None:
         """Update pending action interpolation."""
@@ -771,22 +852,25 @@ class MovementManager:
                 # 1. Process commands from queue
                 self._poll_commands()
 
-                # 2. Update action interpolation
+                # 2. Manage move queue (emotions, etc.)
+                self._manage_move_queue()
+
+                # 3. Update action interpolation
                 self._update_action(dt)
 
-                # 3. Update speech sway
+                # 4. Update speech sway
                 self._update_speech_sway(dt)
 
-                # 4. Update breathing animation
+                # 5. Update breathing animation
                 self._update_breathing(dt)
 
-                # 5. Update antenna blend (listening mode freeze/unfreeze)
+                # 6. Update antenna blend (listening mode freeze/unfreeze)
                 self._update_antenna_blend(dt)
 
-                # 6. Compose final pose
+                # 7. Compose final pose
                 pose = self._compose_final_pose()
 
-                # 7. Send to robot (single control point!)
+                # 8. Send to robot (single control point!)
                 self._issue_control_command(pose)
 
             except Exception as e:

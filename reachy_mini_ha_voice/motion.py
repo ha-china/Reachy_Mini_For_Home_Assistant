@@ -9,6 +9,7 @@ import math
 from typing import Optional
 
 from .movement_manager import MovementManager, RobotState, PendingAction
+from .emotion_moves import create_emotion_move
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +96,13 @@ class ReachyMiniMotion:
             return
 
         self._movement_manager.set_state(RobotState.LISTENING)
-        _LOGGER.debug("Reachy Mini: Listening pose")
+
+        # Queue emotion move
+        emotion_move = create_emotion_move("surprise1")
+        if emotion_move:
+            self._movement_manager.queue_move(emotion_move)
+
+        _LOGGER.debug("Reachy Mini: Listening pose with emotion")
 
     def on_thinking(self):
         """Called when processing speech - thinking pose.
@@ -107,15 +114,21 @@ class ReachyMiniMotion:
 
         self._movement_manager.set_state(RobotState.THINKING)
 
-        # Look up slightly (thinking gesture)
-        action = PendingAction(
-            name="thinking",
-            target_pitch=math.radians(-10),  # Look up
-            target_yaw=math.radians(5),      # Slight turn
-            duration=0.4,
-        )
-        self._movement_manager.queue_action(action)
-        _LOGGER.debug("Reachy Mini: Thinking pose")
+        # Queue emotion move
+        emotion_move = create_emotion_move("thinking1")
+        if emotion_move:
+            self._movement_manager.queue_move(emotion_move)
+        else:
+            # Fallback to simple head gesture if emotion not available
+            action = PendingAction(
+                name="thinking",
+                target_pitch=math.radians(-10),  # Look up
+                target_yaw=math.radians(5),      # Slight turn
+                duration=0.4,
+            )
+            self._movement_manager.queue_action(action)
+
+        _LOGGER.debug("Reachy Mini: Thinking pose with emotion")
 
     def on_speaking_start(self):
         """Called when TTS starts - start speech-reactive motion.
@@ -128,14 +141,20 @@ class ReachyMiniMotion:
         self._is_speaking = True
         self._movement_manager.set_state(RobotState.SPEAKING)
 
-        # Gentle nod to indicate speaking
-        action = PendingAction(
-            name="speaking_start",
-            target_pitch=math.radians(5),  # Slight nod down
-            duration=0.3,
-        )
-        self._movement_manager.queue_action(action)
-        _LOGGER.debug("Reachy Mini: Speaking started")
+        # Queue emotion move
+        emotion_move = create_emotion_move("happy1")
+        if emotion_move:
+            self._movement_manager.queue_move(emotion_move)
+        else:
+            # Fallback to simple nod if emotion not available
+            action = PendingAction(
+                name="speaking_start",
+                target_pitch=math.radians(5),  # Slight nod down
+                duration=0.3,
+            )
+            self._movement_manager.queue_action(action)
+
+        _LOGGER.debug("Reachy Mini: Speaking started with emotion")
 
     def on_speaking_end(self):
         """Called when TTS ends - stop speech-reactive motion.
@@ -159,8 +178,16 @@ class ReachyMiniMotion:
 
         self._is_speaking = False
         self._movement_manager.set_state(RobotState.IDLE)
-        self._movement_manager.reset_to_neutral(duration=0.5)
-        _LOGGER.debug("Reachy Mini: Idle pose")
+
+        # Queue emotion move
+        emotion_move = create_emotion_move("neutral1")
+        if emotion_move:
+            self._movement_manager.queue_move(emotion_move)
+        else:
+            # Fallback to reset if emotion not available
+            self._movement_manager.reset_to_neutral(duration=0.5)
+
+        _LOGGER.debug("Reachy Mini: Idle pose with emotion")
 
     def on_timer_finished(self):
         """Called when a timer finishes - alert animation.

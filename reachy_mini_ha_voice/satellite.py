@@ -490,8 +490,6 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Listening animation")
             if self.state.motion:
                 self.state.motion.on_listening()
-            # Play attentive/curious expression
-            self._play_emotion("surprise1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -503,8 +501,6 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Thinking animation")
             if self.state.motion:
                 self.state.motion.on_thinking()
-            # Play thinking expression
-            self._play_emotion("thinking1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -516,8 +512,6 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Speaking animation")
             if self.state.motion:
                 self.state.motion.on_speaking_start()
-            # Play happy/speaking expression
-            self._play_emotion("happy1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -529,8 +523,6 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Reachy Mini: Idle animation")
             if self.state.motion:
                 self.state.motion.on_idle()
-            # Play neutral/calm expression
-            self._play_emotion("neutral1")
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
@@ -546,39 +538,26 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _play_emotion(self, emotion_name: str) -> None:
-        """Play an emotion/expression from the emotions library (async, non-blocking).
+        """Play an emotion/expression from the emotions library.
+
+        This method is kept for backward compatibility with entity_registry.
+        It now uses the queue-based system instead of HTTP API.
 
         Args:
             emotion_name: Name of the emotion (e.g., "happy1", "sad1", etc.)
         """
-        def _play_emotion_async():
-            """Internal async function to play emotion without blocking."""
-            try:
-                import requests
+        try:
+            from .emotion_moves import create_emotion_move
 
-                # Get WLAN IP from daemon status
-                wlan_ip = "localhost"
-                if self.state.reachy_mini is not None:
-                    try:
-                        status = self.state.reachy_mini.client.get_status(wait=False)
-                        wlan_ip = status.get('wlan_ip', 'localhost')
-                    except Exception:
-                        wlan_ip = "localhost"
-
-                # Call the emotion playback API
-                # Dataset: pollen-robotics/reachy-mini-emotions-library
-                url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion_name}"
-
-                response = requests.post(url, timeout=5)
-                if response.status_code == 200:
-                    _LOGGER.info(f"Playing emotion: {emotion_name}")
+            if self.state.motion and self.state.motion.movement_manager:
+                emotion_move = create_emotion_move(emotion_name)
+                if emotion_move:
+                    self.state.motion.movement_manager.queue_move(emotion_move)
+                    _LOGGER.info(f"Queued emotion: {emotion_name}")
                 else:
-                    _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
+                    _LOGGER.warning(f"Failed to create emotion move: {emotion_name}")
+            else:
+                _LOGGER.warning("Motion system not available for emotion playback")
 
-            except Exception as e:
-                _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
-
-        # Run in background thread to avoid blocking
-        import threading
-        thread = threading.Thread(target=_play_emotion_async, daemon=True)
-        thread.start()
+        except Exception as e:
+            _LOGGER.error(f"Error queueing emotion {emotion_name}: {e}")
