@@ -88,7 +88,8 @@ reachy_mini_ha_voice/
 │   ├── satellite.py            # ESPHome 协议处理
 │   ├── audio_player.py         # 音频播放器
 │   ├── camera_server.py        # MJPEG 摄像头流服务器
-│   ├── motion.py               # 运动控制
+│   ├── motion.py               # 运动控制 (高层 API)
+│   ├── movement_manager.py     # 统一运动管理器 (100Hz 控制循环)
 │   ├── models.py               # 数据模型
 │   ├── entity.py               # ESPHome 基础实体
 │   ├── entity_extensions.py    # 扩展实体类型
@@ -391,7 +392,7 @@ class EmotionMotionController:
 | 声源可视化 | LED 指示当前声源方向 | `LED_DOA_COLOR` 参数 | ❌ 未实现 |
 | 语音活动检测 | 只在检测到语音时追踪 | `DoAInfo.speech_detected` | ✅ 已暴露为实体 |
 
-### Phase 15 - 卡通风格运动模式 (未实现) ❌
+### Phase 15 - 卡通风格运动模式 (部分实现) 🟡
 
 **目标**: 使用 SDK 的插值技术让机器人动作更有个性和表现力。
 
@@ -401,23 +402,64 @@ class EmotionMotionController:
 - `EASE_IN_OUT` - 缓入缓出，优雅
 - `CARTOON` - 卡通风格，带回弹效果，活泼可爱
 
-**实现状态**: 当前使用默认 `MIN_JERK` 插值,未实现动态插值切换
+**已实现功能**:
+- ✅ 100Hz 统一控制循环 (`movement_manager.py`)
+- ✅ 平滑插值动作 (ease in-out 曲线)
+- ✅ 呼吸动画 - 空闲时 Z 轴微动 + 天线摆动 (`BreathingAnimation`)
+- ✅ 命令队列模式 - 线程安全的外部 API
+- ✅ 错误节流 - 防止日志爆炸
 
-**未实现场景**:
+**未实现功能**:
+- ❌ 动态插值技术切换 (CARTOON/EASE_IN_OUT 等)
+- ❌ 夸张的卡通回弹效果
+
+**代码位置**:
+- `movement_manager.py:192-243` - BreathingAnimation 类
+- `movement_manager.py:246-697` - MovementManager 类
+
+**场景实现状态**:
 
 | 场景 | 推荐插值 | 效果 | 实现状态 |
 |------|---------|------|---------|
 | 唤醒点头 | `CARTOON` | 活泼的回弹效果 | ❌ 未实现 |
-| 思考抬头 | `EASE_IN_OUT` | 优雅的过渡 | ❌ 未实现 |
-| 说话时微动 | `MIN_JERK` | 自然流畅 | ✅ 当前默认 |
+| 思考抬头 | `EASE_IN_OUT` | 优雅的过渡 | ✅ 已实现 (平滑插值) |
+| 说话时微动 | `MIN_JERK` | 自然流畅 | ✅ 已实现 (SpeechSway) |
 | 错误摇头 | `CARTOON` | 夸张的否定 | ❌ 未实现 |
-| 返回中立 | `MIN_JERK` | 平滑归位 | ✅ 当前默认 |
+| 返回中立 | `MIN_JERK` | 平滑归位 | ✅ 已实现 |
+| 空闲呼吸 | - | 微妙的生命感 | ✅ 已实现 (BreathingAnimation) |
 
-### Phase 16 - 说话时天线同步动画 (未实现) ❌
+### Phase 16 - 说话时天线同步动画 (部分实现) 🟡
 
 **目标**: TTS 播放时，天线随音频节奏摆动，模拟"说话"效果。
 
-**实现状态**: ❌ 完全未实现
+**已实现功能**:
+- ✅ 语音驱动头部摆动 (`SpeechSwayGenerator`)
+- ✅ 基于音频响度的 VAD 检测
+- ✅ 多频率正弦波叠加 (Lissajous 运动)
+- ✅ 平滑包络过渡
+
+**代码位置**:
+- `movement_manager.py:124-189` - SpeechSwayGenerator 类
+- `motion.py:212-222` - update_audio_loudness() 方法
+
+**技术细节**:
+```python
+# 语音摆动参数
+SWAY_A_PITCH_DEG = 3.0   # 俯仰幅度 (度)
+SWAY_A_YAW_DEG = 2.0     # 偏航幅度
+SWAY_A_ROLL_DEG = 2.0    # 翻滚幅度
+SWAY_F_PITCH = 0.8       # 俯仰频率 Hz
+SWAY_F_YAW = 0.6         # 偏航频率
+SWAY_F_ROLL = 0.5        # 翻滚频率
+
+# VAD 阈值
+VAD_DB_ON = -35   # 开始检测阈值
+VAD_DB_OFF = -45  # 停止检测阈值
+```
+
+**未实现功能**:
+- ❌ 天线随音频节奏摆动 (当前仅头部摆动)
+- ❌ 音频频谱分析驱动动画
 
 ### Phase 17 - 视觉注视交互 (未实现) ❌
 
@@ -547,9 +589,16 @@ class EmotionMotionController:
   - ❌ 多人对话切换
   - ❌ 声源可视化
 
+### 中优先级 (部分实现 🟡)
+- 🟡 **Phase 15**: 卡通风格运动模式
+  - ✅ 100Hz 统一控制循环架构
+  - ✅ 平滑插值动作 + 呼吸动画
+  - ❌ 动态插值技术切换 (CARTOON 等)
+- 🟡 **Phase 16**: 说话时天线同步
+  - ✅ 语音驱动头部摆动 (SpeechSwayGenerator)
+  - ❌ 天线随音频节奏摆动
+
 ### 中优先级 (未实现 ❌)
-- ❌ **Phase 15**: 卡通风格运动模式 - 更有个性的动作
-- ❌ **Phase 16**: 说话时天线同步 - 模拟说话效果
 - ❌ **Phase 17**: 视觉注视交互 - 眼神交流
 
 ### 低优先级 (部分实现 🟡)
@@ -570,14 +619,14 @@ class EmotionMotionController:
 | Phase 1-12 | ✅ 完成 | 100% | 45+ ESPHome 实体全部实现 |
 | Phase 13 | 🟡 部分完成 | 30% | API 基础设施就绪,缺自动触发 |
 | Phase 14 | ❌ 未完成 | 20% | 仅实现唤醒时转向 |
-| Phase 15 | ❌ 未完成 | 0% | 未实现动态插值切换 |
-| Phase 16 | ❌ 未完成 | 0% | 完全未实现 |
+| Phase 15 | 🟡 部分完成 | 60% | 100Hz控制循环+呼吸动画已实现 |
+| Phase 16 | 🟡 部分完成 | 50% | 语音驱动头部摆动已实现 |
 | Phase 17 | ❌ 未完成 | 10% | 摄像头已实现,缺人脸检测 |
 | Phase 18 | 🟡 部分完成 | 40% | 模式切换已实现,缺教学流程 |
 | Phase 19 | ❌ 未完成 | 10% | IMU 数据已暴露,缺触发逻辑 |
 | Phase 20 | ❌ 未完成 | 0% | 完全未实现 |
 
-**总体完成度**: **Phase 1-12: 100%** | **Phase 13-20: ~15%**
+**总体完成度**: **Phase 1-12: 100%** | **Phase 13-20: ~35%**
 
 ### SDK 数据结构参考
 
