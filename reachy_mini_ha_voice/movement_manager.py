@@ -5,13 +5,14 @@ This module provides a centralized control system for robot movements,
 inspired by the reachy_mini_conversation_app architecture.
 
 Key features:
-- Single 20Hz control loop (reduced from 100Hz to prevent daemon crashes)
+- Single 10Hz control loop (reduced from 100Hz to prevent daemon crashes)
 - Command queue pattern (thread-safe external API)
 - Error throttling (prevents log explosion)
 - Speech-driven head sway
 - Breathing animation during idle
 - Graceful shutdown
 - Pose change detection (skip sending if no significant change)
+- Robust connection recovery (faster reconnection attempts)
 """
 
 import logging
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 # Constants (borrowed from conversation_app)
 # =============================================================================
 
-CONTROL_LOOP_FREQUENCY_HZ = 20  # 20Hz control loop (reduced from 100Hz to prevent daemon crashes)
+CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop (reduced from 20Hz to further reduce daemon load)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -289,12 +290,12 @@ class BreathingAnimation:
 
 class MovementManager:
     """
-    Unified movement manager with 20Hz control loop.
+    Unified movement manager with 10Hz control loop.
 
     All external interactions go through the command queue,
     ensuring thread safety and preventing race conditions.
     
-    Note: Frequency reduced from 100Hz to 20Hz to prevent daemon crashes
+    Note: Frequency reduced from 100Hz to 10Hz to prevent daemon crashes
     caused by excessive Zenoh message traffic.
     """
 
@@ -332,9 +333,11 @@ class MovementManager:
         # Connection health tracking
         self._connection_lost = False
         self._last_successful_command = self._now()
-        self._connection_timeout = 5.0  # 5 seconds without success = connection lost
-        self._reconnect_attempt_interval = 10.0  # Try reconnecting every 10 seconds
+        self._connection_timeout = 3.0  # 3 seconds without success = connection lost
+        self._reconnect_attempt_interval = 2.0  # Try reconnecting every 2 seconds (faster recovery)
         self._last_reconnect_attempt = 0.0
+        self._consecutive_errors = 0
+        self._max_consecutive_errors = 5  # Reset connection state after 5 consecutive errors
 
         # Pending action
         self._pending_action: Optional[PendingAction] = None
@@ -689,18 +692,16 @@ class MovementManager:
                 # No significant change, skip sending command
                 return
 
-        # Check if connection is lost and we should skip sending commands
         now = self._now()
+        
+        # Check if we should skip due to connection loss (but always try periodically)
         if self._connection_lost:
-            time_since_last_success = now - self._last_successful_command
-
-            # Only attempt reconnection every N seconds
-            if now - self._last_reconnect_attempt >= self._reconnect_attempt_interval:
-                self._last_reconnect_attempt = now
-                logger.info("Attempting to send command after connection loss...")
-            else:
+            if now - self._last_reconnect_attempt < self._reconnect_attempt_interval:
                 # Skip sending commands to reduce error spam
                 return
+            # Time to try reconnecting
+            self._last_reconnect_attempt = now
+            logger.debug("Attempting to send command after connection loss...")
 
         try:
             # Build head pose matrix
@@ -726,37 +727,36 @@ class MovementManager:
             # Command succeeded - update connection health and cache
             self._last_successful_command = now
             self._last_sent_pose = pose.copy()  # Cache sent pose
+            self._consecutive_errors = 0  # Reset error counter
+            
             if self._connection_lost:
                 logger.info("✓ Connection to robot restored")
                 self._connection_lost = False
-                self._suppressed_errors = 0  # Reset error counter
+                self._suppressed_errors = 0
 
         except Exception as e:
             error_msg = str(e)
+            self._consecutive_errors += 1
 
             # Check if this is a connection error
-            if "Lost connection" in error_msg or "ZError" in error_msg:
-                time_since_last_success = now - self._last_successful_command
-
-                if not self._connection_lost and time_since_last_success > self._connection_timeout:
+            is_connection_error = "Lost connection" in error_msg or "ZError" in error_msg
+            
+            if is_connection_error:
+                if not self._connection_lost:
                     # First time detecting connection loss
-                    logger.error(f"✗ Lost connection to robot daemon: {error_msg}")
-                    logger.error("  Troubleshooting steps:")
-                    logger.error("  1. Check if Reachy Mini Daemon is running: sudo systemctl status reachy-mini-daemon")
-                    logger.error("  2. Verify Zenoh service on port 7447: netstat -tlnp | grep 7447")
-                    logger.error("  3. Check robot hardware connections")
-                    logger.error("  4. Review daemon logs: sudo journalctl -u reachy-mini-daemon -n 50")
-                    logger.error(f"  Will retry connection every {self._reconnect_attempt_interval}s...")
-                    self._connection_lost = True
-                    self._last_reconnect_attempt = now
-                elif self._connection_lost:
+                    if self._consecutive_errors >= self._max_consecutive_errors:
+                        logger.warning(f"Connection unstable after {self._consecutive_errors} errors: {error_msg}")
+                        logger.warning("  Will retry connection every %.1fs...", self._reconnect_attempt_interval)
+                        self._connection_lost = True
+                        self._last_reconnect_attempt = now
+                    else:
+                        # Transient error, log but don't mark as lost yet
+                        self._log_error_throttled(f"Transient connection error ({self._consecutive_errors}/{self._max_consecutive_errors}): {error_msg}")
+                else:
                     # Already in lost state, use throttled logging
                     self._log_error_throttled(f"Connection still lost: {error_msg}")
-                else:
-                    # Transient error, not yet considered lost
-                    self._log_error_throttled(f"Failed to set robot target: {error_msg}")
             else:
-                # Non-connection error
+                # Non-connection error - log but don't affect connection state
                 self._log_error_throttled(f"Failed to set robot target: {error_msg}")
 
     def _log_error_throttled(self, message: str) -> None:
@@ -776,7 +776,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main 20Hz control loop."""
+        """Main 10Hz control loop."""
         logger.info("Movement manager control loop started (%.0f Hz)", CONTROL_LOOP_FREQUENCY_HZ)
 
         last_time = self._now()

@@ -1,7 +1,7 @@
 """Reachy Mini motion control integration.
 
 This module provides a high-level motion API that delegates to the
-MovementManager for unified 20Hz control.
+MovementManager for unified 10Hz control.
 """
 
 import logging
@@ -17,7 +17,7 @@ class ReachyMiniMotion:
     """Reachy Mini motion controller for voice assistant.
 
     All public motion methods (on_*) are non-blocking. They send commands
-    to the MovementManager which handles them in its 20Hz control loop.
+    to the MovementManager which handles them in its 10Hz control loop.
     """
 
     def __init__(self, reachy_mini=None):
