@@ -136,11 +136,25 @@ class VoiceAssistantService:
         # Start Reachy Mini media system if available
         if self.reachy_mini is not None:
             try:
-                # Only start if audio system is initialized but not yet recording
-                # This avoids conflicts if SDK already started the media system
-                if self.reachy_mini.media.audio is not None:
-                    self.reachy_mini.media.start_recording()
-                    self.reachy_mini.media.start_playing()
+                # Check if media system is already running to avoid conflicts
+                media = self.reachy_mini.media
+                if media.audio is not None:
+                    # Check recording state
+                    is_recording = getattr(media, '_recording', False)
+                    if not is_recording:
+                        media.start_recording()
+                        _LOGGER.info("Started Reachy Mini recording")
+                    else:
+                        _LOGGER.debug("Reachy Mini recording already active")
+
+                    # Check playback state
+                    is_playing = getattr(media, '_playing', False)
+                    if not is_playing:
+                        media.start_playing()
+                        _LOGGER.info("Started Reachy Mini playback")
+                    else:
+                        _LOGGER.debug("Reachy Mini playback already active")
+
                     _LOGGER.info("Reachy Mini media system initialized")
                 else:
                     _LOGGER.warning("Reachy Mini audio system not available")
@@ -151,11 +165,11 @@ class VoiceAssistantService:
         if self._motion is not None:
             self._motion.start()
 
-        # Start audio processing thread
+        # Start audio processing thread (non-daemon for proper cleanup)
         self._running = True
         self._audio_thread = threading.Thread(
             target=self._process_audio,
-            daemon=True,
+            daemon=False,
         )
         self._audio_thread.start()
 

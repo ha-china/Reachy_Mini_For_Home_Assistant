@@ -122,14 +122,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         # Create and run the voice assistant service
         service = VoiceAssistantService(reachy_mini)
 
-        # Try to get existing event loop, create new one if needed
-        try:
-            loop = asyncio.get_running_loop()
-            logger.debug("Using existing event loop")
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            logger.debug("Created new event loop")
+        # Always create a new event loop to avoid conflicts with SDK
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        logger.debug("Created new event loop for voice assistant")
 
         try:
             loop.run_until_complete(service.start())
@@ -169,22 +165,8 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             except Exception as e:
                 logger.error(f"Error stopping service: {e}")
 
-            # Clean up robot connection if available
-            if reachy_mini is not None:
-                try:
-                    # Ensure media is explicitly closed before disconnecting
-                    if hasattr(reachy_mini, 'media'):
-                        reachy_mini.media.close()
-                        logger.debug("Robot media closed")
-                except Exception as e:
-                    logger.debug(f"Error closing media during shutdown: {e}")
-
-                try:
-                    # Prevent connection from keeping threads alive
-                    reachy_mini.client.disconnect()
-                    logger.debug("Robot client disconnected")
-                except Exception as e:
-                    logger.debug(f"Error disconnecting client during shutdown: {e}")
+            # Note: Robot connection cleanup is handled by SDK's context manager
+            # in wrapped_run(). We only need to close our event loop here.
 
             # Close event loop
             try:
