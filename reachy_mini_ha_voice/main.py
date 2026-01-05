@@ -149,9 +149,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             logger.info("  -> Generic Camera -> http://<ip>:8081/stream")
             logger.info("=" * 50)
 
-            # Wait for stop signal - use simple sleep to avoid blocking event loop
+            # Wait for stop signal - keep event loop running
+            # We need to keep the event loop alive to handle ESPHome connections
             while not stop_event.is_set():
-                time.sleep(0.1)
+                loop.run_until_complete(asyncio.sleep(0.1))
 
         except KeyboardInterrupt:
             logger.info("Keyboard interruption in main thread... closing server.")
