@@ -5,10 +5,10 @@
 将 Home Assistant 语音助手功能集成到 Reachy Mini 机器人，通过 ESPHome 协议与 Home Assistant 通信。
 
 ## 本地项目目录参考 (禁止修改参考目录内任何文件)
-1. [linux-voice-assistant](linux-voice-assistant)
-2. [Reachy Mini SDK](reachy_mini)
-3. [reachy_mini_conversation_app](reachy_mini_conversation_app)
-4. [reachy-mini-desktop-app](reachy-mini-desktop-app)
+1. [linux-voice-assistant](linux-voice-assistant)，这是一个基于 Linux 的Home Assistant的语音助手应用，用于参考。
+2. [Reachy Mini SDK](reachy_mini) 这是 Reachy Mini SDK 的本地项目目录，用于参考。
+3. [reachy_mini_conversation_app](reachy_mini_conversation_app) - Reachy Mini 对话应用，用于参考
+4. [reachy-mini-desktop-app](reachy-mini-desktop-app) - Reachy Mini 桌面应用，用于参考
 
 ## 核心设计原则
 
@@ -16,6 +16,7 @@
 2. **使用 Reachy Mini 原生硬件** - 使用机器人自带的麦克风和扬声器
 3. **Home Assistant 集中管理** - 所有配置在 Home Assistant 端完成
 4. **运动反馈** - 语音交互时提供头部运动和天线动画反馈
+5. 整个项目需要遵循 [Reachy Mini SDK](reachy_mini) 的架构设计与约束
 
 ## 技术架构
 
@@ -326,16 +327,22 @@ dependencies = [
 
 ### Phase 13 - 情感动作反馈系统 (部分实现) 🟡
 
-**实现状态**: 基础架构已就绪,但仅支持手动触发,未与语音助手事件自动关联
+**实现状态**: 基础架构已就绪,支持手动触发,对话时使用语音驱动的自然微动
 
 **已实现功能**:
 - ✅ Phase 8 Emotion Selector 实体 (`emotion`)
 - ✅ 基础情感动作播放API (`_play_emotion`)
 - ✅ 情感映射: Happy/Sad/Angry/Fear/Surprise/Disgust
 - ✅ 与 HuggingFace 动作库集成 (`pollen-robotics/reachy-mini-emotions-library`)
+- ✅ 对话时使用 SpeechSway 系统提供自然的头部微动 (不阻塞对话体验)
+
+**设计决策**:
+- 🎯 对话时不自动播放完整情感动作,避免阻塞对话体验
+- 🎯 使用语音驱动的头部摆动 (SpeechSway) 提供自然的动作反馈
+- 🎯 情感动作保留为手动触发功能,可通过 ESPHome 实体控制
 
 **未实现功能**:
-- ❌ 自动根据语音助手响应触发情感动作
+- ❌ 自动根据语音助手响应触发情感动作 (已决定不实现,避免阻塞)
 - ❌ 意图识别与情感匹配
 - ❌ 舞蹈动作库集成
 - ❌ 上下文感知(如天气查询-晴天播放 happy,雨天播放 sad)
@@ -343,39 +350,59 @@ dependencies = [
 **代码位置**:
 - `entity_registry.py:633-658` - Emotion Selector 实体
 - `satellite.py:544-574` - `_play_emotion()` 方法
+- `motion.py:132-156` - 对话开始时的动作控制 (使用 SpeechSway)
+- `movement_manager.py:541-595` - Move 队列管理 (允许 SpeechSway 叠加)
 
-**原始规划** (未完全实现):
+**实际行为**:
 
-| 语音助手事件 | 触发动作 | SDK API | 实现状态 |
-|-------------|---------|---------|---------|
-| 唤醒词检测 | 播放 "greeting" 动作 | `play_move(moves.get("greeting"))` | ❌ 未实现 |
-| 收到肯定回复 | 播放 "happy" / "nod" 动作 | `play_move(moves.get("happy"))` | ❌ 未实现 |
-| 收到否定回复 | 播放 "sad" / "shake" 动作 | `play_move(moves.get("sad"))` | ❌ 未实现 |
-| 播放音乐/娱乐 | 播放 "dance" 动作 | `play_move(moves.get("dance"))` | ❌ 未实现 |
-| 定时器完成 | 播放 "alert" 动作 | `play_move(moves.get("surprised"))` | ❌ 未实现 |
-| 错误/无法理解 | 播放 "confused" 动作 | `play_move(moves.get("confused"))` | ❌ 未实现 |
-| 天气查询-晴天 | 播放 "happy" 动作 | 根据天气类型选择 | ❌ 未实现 |
-| 天气查询-雨天 | 播放 "sad" 动作 | 根据天气类型选择 | ❌ 未实现 |
+| 语音助手事件 | 实际动作 | 实现状态 |
+|-------------|---------|---------|
+| 唤醒词检测 | 转向声源 + 点头确认 | ✅ 已实现 |
+| 对话开始 | 语音驱动的头部微动 (SpeechSway) | ✅ 已实现 |
+| 对话进行中 | 持续的语音驱动微动 + 呼吸动画 | ✅ 已实现 |
+| 对话结束 | 返回中立位置 + 呼吸动画 | ✅ 已实现 |
+| 手动触发情感 | 通过 ESPHome `emotion` 实体播放 | ✅ 已实现 |
 
-**代码示例**:
+**技术说明**:
 ```python
-from reachy_mini.motion.recorded_move import RecordedMoves
+# motion.py - 对话时使用 SpeechSway 而非完整情感动作
+def on_speaking_start(self):
+    self._is_speaking = True
+    self._movement_manager.set_state(RobotState.SPEAKING)
+    # SpeechSway 会自动根据音频响度产生自然的头部微动
+    # 不播放完整情感动作,避免阻塞对话体验
 
-class EmotionMotionController:
-    def __init__(self, reachy_mini):
-        self.reachy = reachy_mini
-        # 预加载情感动作库
-        self.emotions = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
-        self.dances = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+# movement_manager.py - 动作分层系统
+# 1. Move 队列 (情感动作) - 设置基础姿态
+# 2. Action (点头/摇头等) - 叠加在基础姿态上
+# 3. SpeechSway - 语音驱动微动,可与 Move 共存
+# 4. Breathing - 空闲时的呼吸动画
+```
 
-    def on_intent_response(self, intent: str, sentiment: str):
-        """根据意图和情感选择动作"""
-        if sentiment == "positive":
-            self.reachy.play_move(self.emotions.get("happy"), sound=True)
-        elif sentiment == "negative":
-            self.reachy.play_move(self.emotions.get("sad"), sound=True)
-        elif intent == "play_music":
-            self.reachy.play_move(self.dances.get("dance_1"), sound=True)
+**原始规划** (已决定不实现,避免阻塞对话):
+
+| 语音助手事件 | 原计划动作 | 不实现原因 |
+|-------------|---------|---------|
+| 收到肯定回复 | 播放 "happy" 动作 | 完整动作会阻塞对话流畅性 |
+| 收到否定回复 | 播放 "sad" 动作 | 完整动作会阻塞对话流畅性 |
+| 播放音乐/娱乐 | 播放 "dance" 动作 | 完整动作会阻塞对话流畅性 |
+| 定时器完成 | 播放 "alert" 动作 | 完整动作会阻塞对话流畅性 |
+| 错误/无法理解 | 播放 "confused" 动作 | 完整动作会阻塞对话流畅性 |
+
+**手动触发情感动作示例**:
+```yaml
+# Home Assistant 自动化示例 - 手动触发情感
+automation:
+  - alias: "Reachy 早安问候"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: select.select_option
+        target:
+          entity_id: select.reachy_mini_emotion
+        data:
+          option: "Happy"
 ```
 
 ### Phase 14 - 智能声源追踪增强 (未实现) ❌

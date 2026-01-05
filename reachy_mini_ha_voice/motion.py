@@ -141,20 +141,9 @@ class ReachyMiniMotion:
         self._is_speaking = True
         self._movement_manager.set_state(RobotState.SPEAKING)
 
-        # Queue emotion move
-        emotion_move = create_emotion_move("happy1")
-        if emotion_move:
-            self._movement_manager.queue_move(emotion_move)
-        else:
-            # Fallback to simple nod if emotion not available
-            action = PendingAction(
-                name="speaking_start",
-                target_pitch=math.radians(5),  # Slight nod down
-                duration=0.3,
-            )
-            self._movement_manager.queue_action(action)
-
-        _LOGGER.debug("Reachy Mini: Speaking started with emotion")
+        # Don't queue emotion moves during conversation - let SpeechSway handle natural motion
+        # Emotion moves can still be triggered manually via ESPHome entity
+        _LOGGER.debug("Reachy Mini: Speaking started with speech sway")
 
     def on_speaking_end(self):
         """Called when TTS ends - stop speech-reactive motion.

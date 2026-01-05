@@ -558,6 +558,7 @@ class MovementManager:
                 logger.debug(f"Starting move, duration: {self._current_move.duration}s")
 
         # Evaluate current move and update target pose
+        # NOTE: Moves set the base target pose, but SpeechSway can still add on top
         if self._current_move is not None and self._move_start_time is not None:
             move_time = current_time - self._move_start_time
             try:
@@ -583,6 +584,11 @@ class MovementManager:
                 if body_yaw is not None:
                     self.state.target_body_yaw = float(body_yaw)
 
+                # Cancel any pending action since move takes priority
+                if self._pending_action is not None:
+                    self._pending_action = None
+                    logger.debug("Cancelled pending action due to active move")
+
             except Exception as e:
                 logger.error(f"Error evaluating move: {e}")
                 # Clear the problematic move
@@ -591,6 +597,10 @@ class MovementManager:
 
     def _update_action(self, dt: float) -> None:
         """Update pending action interpolation."""
+        # Skip if a move is currently playing (moves take priority)
+        if self._current_move is not None:
+            return
+
         if self._pending_action is None:
             return
 
