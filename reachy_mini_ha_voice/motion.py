@@ -147,17 +147,19 @@ class ReachyMiniMotion:
     # -------------------------------------------------------------------------
 
     def _do_wakeup(self, doa_angle_deg: Optional[float] = None):
-        """Actual wakeup motion (blocking, runs in thread pool)."""
+        """Actual wakeup motion (blocking, runs in thread pool).
+
+        Slowly turn to face the sound source.
+        """
         with self._lock:
             try:
-                _LOGGER.info("_do_wakeup: doa_angle_deg=%s", doa_angle_deg)
                 if doa_angle_deg is not None:
                     _LOGGER.info("Turning to sound source at %s degrees", doa_angle_deg)
-                    self._turn_to_sound_source(doa_angle_deg)
+                    self._turn_to_sound_source(doa_angle_deg, duration=0.8)
                 else:
-                    _LOGGER.warning("DOA angle is None, skipping turn to sound source")
-                self._nod(count=1, amplitude=10, duration=0.3)
-                _LOGGER.debug("Reachy Mini: Wake up nod (DOA: %s)", doa_angle_deg)
+                    _LOGGER.debug("DOA angle is None, looking forward")
+                    self._look_at_user()
+                _LOGGER.debug("Reachy Mini: Wake up (DOA: %s)", doa_angle_deg)
             except Exception as e:
                 _LOGGER.error("Motion error on wakeup: %s", e)
 
@@ -344,7 +346,7 @@ class ReachyMiniMotion:
         """Stop speech-reactive motion - return to neutral."""
         pass  # Will return to neutral in on_idle()
 
-    def _turn_to_sound_source(self, doa_angle_deg: float):
+    def _turn_to_sound_source(self, doa_angle_deg: float, duration: float = 0.8):
         """Turn head to face the sound source based on DOA angle.
 
         Args:
@@ -353,6 +355,7 @@ class ReachyMiniMotion:
                            0 = left, π/2 = front/back, π = right
                            We convert to head yaw where:
                            0 = front, positive = right, negative = left
+            duration: Duration of the turn motion in seconds (default: 0.8 for slow turn)
         """
         if not self.reachy_mini:
             return
@@ -368,7 +371,7 @@ class ReachyMiniMotion:
             pose[:3, :3] = R.from_euler('xyz', [0, 0, yaw_deg], degrees=True).as_matrix()
 
             # Turn head to face the sound source
-            self.reachy_mini.goto_target(head=pose, duration=0.4)
+            self.reachy_mini.goto_target(head=pose, duration=duration)
             _LOGGER.debug("Reachy Mini: Turned to sound source at %s degrees", yaw_deg)
         except Exception as e:
             _LOGGER.error("Turn to sound source error: %s", e)

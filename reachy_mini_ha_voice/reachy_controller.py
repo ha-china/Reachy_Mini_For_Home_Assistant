@@ -125,15 +125,21 @@ class ReachyController:
         if respeaker is None:
             return getattr(self, '_microphone_volume', 50.0)
 
-        try:
-            # Try APMGR_MICGAIN first (0-31 range)
-            result = respeaker.read("APMGR_MICGAIN")
-            if result is not None:
-                # Convert 0-31 to 0-100%
-                self._microphone_volume = (result[0] / 31.0) * 100.0
-                return self._microphone_volume
-        except Exception as e:
-            logger.debug(f"Could not get microphone volume: {e}")
+        # Try different gain parameters (varies by ReSpeaker model)
+        gain_params = [
+            ("AGCGAIN", 31.0),      # AGC target level (0-31)
+            ("MICGAIN", 31.0),      # Microphone gain
+        ]
+
+        for param_name, max_val in gain_params:
+            try:
+                result = respeaker.read(param_name)
+                if result is not None:
+                    self._microphone_volume = (result[0] / max_val) * 100.0
+                    logger.debug(f"Read microphone volume: {self._microphone_volume}% ({param_name}: {result[0]})")
+                    return self._microphone_volume
+            except Exception as e:
+                logger.debug(f"Could not read {param_name}: {e}")
 
         return getattr(self, '_microphone_volume', 50.0)
 
@@ -152,13 +158,22 @@ class ReachyController:
             logger.warning("Cannot set microphone volume: ReSpeaker not available")
             return
 
-        try:
-            # Convert 0-100% to 0-31 range for APMGR_MICGAIN
-            gain = int((volume / 100.0) * 31.0)
-            respeaker.write("APMGR_MICGAIN", [gain])
-            logger.info(f"Microphone volume set to {volume}% (gain: {gain})")
-        except Exception as e:
-            logger.error(f"Failed to set microphone volume: {e}")
+        # Try different gain parameters (varies by ReSpeaker model)
+        gain_params = [
+            ("AGCGAIN", 31.0),      # AGC target level (0-31)
+            ("MICGAIN", 31.0),      # Microphone gain
+        ]
+
+        for param_name, max_val in gain_params:
+            try:
+                gain = int((volume / 100.0) * max_val)
+                respeaker.write(param_name, [gain])
+                logger.info(f"Microphone volume set to {volume}% ({param_name}: {gain})")
+                return  # Success, stop trying other params
+            except Exception as e:
+                logger.debug(f"Could not write {param_name}: {e}")
+
+        logger.error("Failed to set microphone volume: no supported parameter found")
 
     # ========== Phase 2: Motor Control ==========
 
