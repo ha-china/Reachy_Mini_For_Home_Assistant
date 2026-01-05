@@ -9,6 +9,7 @@ import asyncio
 import logging
 import socket
 import threading
+import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -152,17 +153,45 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             logger.info("  -> Generic Camera -> http://<ip>:8081/stream")
             logger.info("=" * 50)
 
-            # Wait for stop signal
+            # Wait for stop signal - use simple sleep to avoid blocking event loop
             while not stop_event.is_set():
-                loop.run_until_complete(asyncio.sleep(0.5))
+                time.sleep(0.1)
 
+        except KeyboardInterrupt:
+            logger.info("Keyboard interruption in main thread... closing server.")
         except Exception as e:
             logger.error(f"Error running voice assistant: {e}")
             raise
         finally:
             logger.info("Shutting down voice assistant...")
-            loop.run_until_complete(service.stop())
-            loop.close()
+            try:
+                loop.run_until_complete(service.stop())
+            except Exception as e:
+                logger.error(f"Error stopping service: {e}")
+
+            # Clean up robot connection if available
+            if reachy_mini is not None:
+                try:
+                    # Ensure media is explicitly closed before disconnecting
+                    if hasattr(reachy_mini, 'media'):
+                        reachy_mini.media.close()
+                        logger.debug("Robot media closed")
+                except Exception as e:
+                    logger.debug(f"Error closing media during shutdown: {e}")
+
+                try:
+                    # Prevent connection from keeping threads alive
+                    reachy_mini.client.disconnect()
+                    logger.debug("Robot client disconnected")
+                except Exception as e:
+                    logger.debug(f"Error disconnecting client during shutdown: {e}")
+
+            # Close event loop
+            try:
+                loop.close()
+            except Exception as e:
+                logger.debug(f"Error closing event loop: {e}")
+
             logger.info("Voice assistant stopped.")
 
 
