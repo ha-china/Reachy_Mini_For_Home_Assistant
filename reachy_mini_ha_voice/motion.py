@@ -60,7 +60,7 @@ class ReachyMiniMotion:
     # -------------------------------------------------------------------------
 
     def on_wakeup(self, doa_angle_deg: Optional[float] = None):
-        """Called when wake word is detected - turn to sound source.
+        """Called when wake word is detected - turn to sound source and nod.
 
         Non-blocking: command sent to MovementManager.
 
@@ -84,8 +84,28 @@ class ReachyMiniMotion:
             self._movement_manager.reset_to_neutral(duration=0.3)
             _LOGGER.debug("DOA angle is None, looking forward")
 
+        # Add nod confirmation gesture after turning
+        # Enhanced: More visible nod with longer duration
+        nod_action = PendingAction(
+            name="wakeup_nod",
+            target_pitch=math.radians(18),  # Nod down 18 degrees (increased from 10)
+            duration=0.5,  # Longer duration for visibility (increased from 0.3)
+        )
+        self._movement_manager.queue_action(nod_action)
+
+        # Return to neutral pitch after nod
+        return_action = PendingAction(
+            name="wakeup_return",
+            target_pitch=math.radians(0),  # Return to neutral
+            duration=0.3,  # Slightly longer return (increased from 0.2)
+        )
+        self._movement_manager.queue_action(return_action)
+
         # Set listening state
         self._movement_manager.set_state(RobotState.LISTENING)
+
+        _LOGGER.info("Reachy Mini: Wake word detected - turning to %.1f° and nodding",
+                     doa_angle_deg if doa_angle_deg is not None else 0.0)
 
     def on_listening(self):
         """Called when listening for speech - attentive pose.
@@ -97,12 +117,17 @@ class ReachyMiniMotion:
 
         self._movement_manager.set_state(RobotState.LISTENING)
 
-        # Queue emotion move
-        emotion_move = create_emotion_move("surprise1")
-        if emotion_move:
-            self._movement_manager.queue_move(emotion_move)
+        # Use a subtle attentive gesture instead of full emotion move
+        # Slight head tilt to show attention
+        attention_action = PendingAction(
+            name="listening_attention",
+            target_pitch=math.radians(-5),  # Slight look up
+            target_roll=math.radians(3),    # Slight tilt
+            duration=0.4,
+        )
+        self._movement_manager.queue_action(attention_action)
 
-        _LOGGER.debug("Reachy Mini: Listening pose with emotion")
+        _LOGGER.debug("Reachy Mini: Listening pose - attentive gesture")
 
     def on_thinking(self):
         """Called when processing speech - thinking pose.
@@ -114,21 +139,17 @@ class ReachyMiniMotion:
 
         self._movement_manager.set_state(RobotState.THINKING)
 
-        # Queue emotion move
-        emotion_move = create_emotion_move("thinking1")
-        if emotion_move:
-            self._movement_manager.queue_move(emotion_move)
-        else:
-            # Fallback to simple head gesture if emotion not available
-            action = PendingAction(
-                name="thinking",
-                target_pitch=math.radians(-10),  # Look up
-                target_yaw=math.radians(5),      # Slight turn
-                duration=0.4,
-            )
-            self._movement_manager.queue_action(action)
+        # Use a subtle thinking gesture instead of full emotion move
+        # Look up slightly as if thinking
+        thinking_action = PendingAction(
+            name="thinking",
+            target_pitch=math.radians(-8),  # Look up
+            target_yaw=math.radians(5),     # Slight turn
+            duration=0.4,
+        )
+        self._movement_manager.queue_action(thinking_action)
 
-        _LOGGER.debug("Reachy Mini: Thinking pose with emotion")
+        _LOGGER.debug("Reachy Mini: Thinking pose - subtle gesture")
 
     def on_speaking_start(self):
         """Called when TTS starts - start speech-reactive motion.
@@ -168,15 +189,11 @@ class ReachyMiniMotion:
         self._is_speaking = False
         self._movement_manager.set_state(RobotState.IDLE)
 
-        # Queue emotion move
-        emotion_move = create_emotion_move("neutral1")
-        if emotion_move:
-            self._movement_manager.queue_move(emotion_move)
-        else:
-            # Fallback to reset if emotion not available
-            self._movement_manager.reset_to_neutral(duration=0.5)
+        # Return to neutral position smoothly
+        # Don't queue emotion moves - let breathing animation take over naturally
+        self._movement_manager.reset_to_neutral(duration=0.8)
 
-        _LOGGER.debug("Reachy Mini: Idle pose with emotion")
+        _LOGGER.debug("Reachy Mini: Returning to idle - neutral pose")
 
     def on_timer_finished(self):
         """Called when a timer finishes - alert animation.

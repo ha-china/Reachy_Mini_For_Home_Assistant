@@ -16,7 +16,10 @@
 2. **使用 Reachy Mini 原生硬件** - 使用机器人自带的麦克风和扬声器
 3. **Home Assistant 集中管理** - 所有配置在 Home Assistant 端完成
 4. **运动反馈** - 语音交互时提供头部运动和天线动画反馈
-5. 整个项目需要遵循 [Reachy Mini SDK](reachy_mini) 的架构设计与约束
+5. 整个项目需要严格遵循 [Reachy Mini SDK](reachy_mini) 的架构设计与约束
+6. 严格遵循Python开发的标准，并做到代码风格一致，代码结构清晰，注释完整，文档完善，测试覆盖率高，代码质量高，代码可读性高，代码可维护性高，代码可扩展性高，代码可复用性高
+7. 与home assistant的语音对话为最高优先级，任何其它的功能都是辅助功能，不能影响语音对知的功能，响应速度
+8. LED都被隐藏在了机器人内部，所有的LED控制全部都忽略，不要使用LED控制
 
 ## 技术架构
 
@@ -292,10 +295,10 @@ dependencies = [
 10. **Phase 10 - 摄像头集成** ✅ **已完成**
     - [x] `camera` - ESPHome Camera 实体（实时预览）
 
-11. **Phase 11 - LED 控制** ✅ **已完成**
-    - [x] `led_brightness` - LED 亮度 (0-100%)
-    - [x] `led_effect` - LED 效果 (off/solid/breathing/rainbow/doa)
-    - [x] `led_color_r/g/b` - LED RGB 颜色 (0-255)
+11. **Phase 11 - LED 控制** ❌ **已禁用（LED 隐藏在机器人内部）**
+    - [ ] `led_brightness` - LED 亮度 (0-100%) - 已注释
+    - [ ] `led_effect` - LED 效果 (off/solid/breathing/rainbow/doa) - 已注释
+    - [ ] `led_color_r/g/b` - LED RGB 颜色 (0-255) - 已注释
 
 12. **Phase 12 - 音频处理参数** ✅ **已完成**
     - [x] `agc_enabled` - 自动增益控制开关
@@ -307,7 +310,7 @@ dependencies = [
 
 ## 🎉 Phase 1-12 实体已完成！
 
-**已完成总计：45+ 个实体**
+**已完成总计：40 个实体**
 - Phase 1: 4 个实体 (基础状态与音量)
 - Phase 2: 4 个实体 (电机控制)
 - Phase 3: 9 个实体 (姿态控制)
@@ -318,7 +321,7 @@ dependencies = [
 - Phase 8: 1 个实体 (表情控制)
 - Phase 9: 1 个实体 (麦克风音量)
 - Phase 10: 1 个实体 (摄像头)
-- Phase 11: 5 个实体 (LED 控制)
+- Phase 11: 0 个实体 (LED 控制 - 已禁用)
 - Phase 12: 4 个实体 (音频处理参数)
 
 ---
@@ -416,7 +419,7 @@ automation:
 |------|------|---------|---------|
 | 持续声源追踪 | 对话过程中持续跟踪说话人位置 | `media.get_DoA()` | ❌ 未实现 |
 | 多人对话切换 | 检测到新说话人时平滑转向 | `goto_target(head=..., method=MIN_JERK)` | ❌ 未实现 |
-| 声源可视化 | LED 指示当前声源方向 | `LED_DOA_COLOR` 参数 | ❌ 未实现 |
+| 声源可视化 | ~~LED 指示当前声源方向~~ | ~~`LED_DOA_COLOR` 参数~~ | ❌ 已取消（LED 不可见） |
 | 语音活动检测 | 只在检测到语音时追踪 | `DoAInfo.speech_detected` | ✅ 已暴露为实体 |
 
 ### Phase 15 - 卡通风格运动模式 (部分实现) 🟡
@@ -643,7 +646,7 @@ VAD_DB_OFF = -45  # 停止检测阈值
 
 | 阶段 | 状态 | 完成度 | 说明 |
 |------|------|--------|------|
-| Phase 1-12 | ✅ 完成 | 100% | 45+ ESPHome 实体全部实现 |
+| Phase 1-12 | ✅ 完成 | 100% | 40 个 ESPHome 实体已实现（Phase 11 LED 已禁用） |
 | Phase 13 | 🟡 部分完成 | 30% | API 基础设施就绪,缺自动触发 |
 | Phase 14 | ❌ 未完成 | 20% | 仅实现唤醒时转向 |
 | Phase 15 | 🟡 部分完成 | 60% | 100Hz控制循环+呼吸动画已实现 |
