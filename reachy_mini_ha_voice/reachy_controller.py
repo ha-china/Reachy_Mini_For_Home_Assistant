@@ -1,7 +1,8 @@
 """Reachy Mini controller wrapper for ESPHome entities."""
 
 import logging
-from typing import Optional, TYPE_CHECKING
+import time
+from typing import Any, Dict, Optional, TYPE_CHECKING
 import math
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -30,6 +31,13 @@ class ReachyController:
         """
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
+        
+        # State caching to reduce daemon load
+        self._state_cache: Dict[str, Any] = {}
+        self._cache_ttl = 0.1  # 100ms cache TTL
+        self._last_status_query = 0.0
+        self._last_pose_query = 0.0
+        self._last_joints_query = 0.0
 
     @property
     def is_available(self) -> bool:
@@ -38,48 +46,54 @@ class ReachyController:
 
     # ========== Phase 1: Basic Status & Volume ==========
 
-    def get_daemon_state(self) -> str:
-        """Get daemon state."""
+    def _get_cached_status(self) -> Optional[Dict]:
+        """Get cached daemon status to reduce query frequency."""
+        now = time.time()
+        if now - self._last_status_query < self._cache_ttl:
+            return self._state_cache.get('status')
+        
         if not self.is_available:
-            return "not_available"
+            return None
+        
         try:
-            # client.get_status() returns a dict with 'state' key
             status = self.reachy.client.get_status(wait=False)
-            return status.get('state', 'unknown')
+            self._state_cache['status'] = status
+            self._last_status_query = now
+            return status
         except Exception as e:
-            logger.error(f"Error getting daemon state: {e}")
-            return "error"
+            logger.error(f"Error getting status: {e}")
+            return None
+
+    def get_daemon_state(self) -> str:
+        """Get daemon state with caching."""
+        status = self._get_cached_status()
+        if status is None:
+            return "not_available"
+        return status.get('state', 'unknown')
 
     def get_backend_ready(self) -> bool:
-        """Check if backend is ready."""
-        if not self.is_available:
+        """Check if backend is ready with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return False
-        try:
-            # Check if daemon state is 'running'
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('state') == 'running'
-        except Exception as e:
-            logger.error(f"Error getting backend status: {e}")
-            return False
+        return status.get('state') == 'running'
 
     def get_error_message(self) -> str:
-        """Get current error message."""
-        if not self.is_available:
+        """Get current error message with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return "Robot not available"
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('error') or ""
-        except Exception as e:
-            logger.error(f"Error getting error message: {e}")
-            return str(e)
+        return status.get('error') or ""
 
     def get_speaker_volume(self) -> float:
-        """Get speaker volume (0-100)."""
+        """Get speaker volume (0-100) with caching."""
         if not self.is_available:
             return self._speaker_volume
         try:
-            # Get volume from daemon API
-            status = self.reachy.client.get_status(wait=False)
+            # Get volume from daemon API (use cached status for IP)
+            status = self._get_cached_status()
+            if status is None:
+                return self._speaker_volume
             wlan_ip = status.get('wlan_ip', 'localhost')
             response = requests.get(f"http://{wlan_ip}:8000/api/volume/current", timeout=2)
             if response.status_code == 200:
@@ -91,7 +105,7 @@ class ReachyController:
 
     def set_speaker_volume(self, volume: float) -> None:
         """
-        Set speaker volume (0-100).
+        Set speaker volume (0-100) with cached status.
 
         Args:
             volume: Volume level 0-100
@@ -104,8 +118,11 @@ class ReachyController:
             return
 
         try:
-            # Set volume via daemon API
-            status = self.reachy.client.get_status(wait=False)
+            # Set volume via daemon API (use cached status for IP)
+            status = self._get_cached_status()
+            if status is None:
+                logger.error("Cannot get daemon status for volume control")
+                return
             wlan_ip = status.get('wlan_ip', 'localhost')
             response = requests.post(
                 f"http://{wlan_ip}:8000/api/volume/set",
@@ -178,12 +195,11 @@ class ReachyController:
     # ========== Phase 2: Motor Control ==========
 
     def get_motors_enabled(self) -> bool:
-        """Check if motors are enabled."""
-        if not self.is_available:
+        """Check if motors are enabled with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return False
         try:
-            # Get motor control mode from backend status
-            status = self.reachy.client.get_status(wait=False)
             backend_status = status.get('backend_status')
             if backend_status and isinstance(backend_status, dict):
                 motor_mode = backend_status.get('motor_control_mode', 'disabled')
@@ -215,12 +231,11 @@ class ReachyController:
             logger.error(f"Error setting motor state: {e}")
 
     def get_motor_mode(self) -> str:
-        """Get current motor control mode."""
-        if not self.is_available:
+        """Get current motor control mode with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return "disabled"
         try:
-            # Get motor control mode from backend status
-            status = self.reachy.client.get_status(wait=False)
             backend_status = status.get('backend_status')
             if backend_status and isinstance(backend_status, dict):
                 motor_mode = backend_status.get('motor_control_mode', 'disabled')
@@ -283,6 +298,42 @@ class ReachyController:
 
     # ========== Phase 3: Pose Control ==========
 
+    def _get_cached_head_pose(self) -> Optional[np.ndarray]:
+        """Get cached head pose to reduce query frequency."""
+        now = time.time()
+        if now - self._last_pose_query < self._cache_ttl:
+            return self._state_cache.get('head_pose')
+        
+        if not self.is_available:
+            return None
+        
+        try:
+            pose = self.reachy.get_current_head_pose()
+            self._state_cache['head_pose'] = pose
+            self._last_pose_query = now
+            return pose
+        except Exception as e:
+            logger.error(f"Error getting head pose: {e}")
+            return None
+
+    def _get_cached_joint_positions(self) -> Optional[tuple]:
+        """Get cached joint positions to reduce query frequency."""
+        now = time.time()
+        if now - self._last_joints_query < self._cache_ttl:
+            return self._state_cache.get('joint_positions')
+        
+        if not self.is_available:
+            return None
+        
+        try:
+            joints = self.reachy.get_current_joint_positions()
+            self._state_cache['joint_positions'] = joints
+            self._last_joints_query = now
+            return joints
+        except Exception as e:
+            logger.error(f"Error getting joint positions: {e}")
+            return None
+
     def _extract_pose_from_matrix(self, pose_matrix: np.ndarray) -> tuple:
         """
         Extract position (x, y, z) and rotation (roll, pitch, yaw) from 4x4 pose matrix.
@@ -307,11 +358,11 @@ class ReachyController:
         return x, y, z, roll, pitch, yaw
 
     def get_head_x(self) -> float:
-        """Get head X position in mm."""
-        if not self.is_available:
+        """Get head X position in mm with caching."""
+        pose = self._get_cached_head_pose()
+        if pose is None:
             return 0.0
         try:
-            pose = self.reachy.get_current_head_pose()
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             return x * 1000  # Convert m to mm
         except Exception as e:
@@ -332,11 +383,11 @@ class ReachyController:
             logger.error(f"Error setting head X: {e}")
 
     def get_head_y(self) -> float:
-        """Get head Y position in mm."""
-        if not self.is_available:
+        """Get head Y position in mm with caching."""
+        pose = self._get_cached_head_pose()
+        if pose is None:
             return 0.0
         try:
-            pose = self.reachy.get_current_head_pose()
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             return y * 1000
         except Exception as e:
@@ -356,11 +407,11 @@ class ReachyController:
             logger.error(f"Error setting head Y: {e}")
 
     def get_head_z(self) -> float:
-        """Get head Z position in mm."""
-        if not self.is_available:
+        """Get head Z position in mm with caching."""
+        pose = self._get_cached_head_pose()
+        if pose is None:
             return 0.0
         try:
-            pose = self.reachy.get_current_head_pose()
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             return z * 1000
         except Exception as e:
@@ -380,11 +431,11 @@ class ReachyController:
             logger.error(f"Error setting head Z: {e}")
 
     def get_head_roll(self) -> float:
-        """Get head roll angle in degrees."""
-        if not self.is_available:
+        """Get head roll angle in degrees with caching."""
+        pose = self._get_cached_head_pose()
+        if pose is None:
             return 0.0
         try:
-            pose = self.reachy.get_current_head_pose()
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             return math.degrees(roll)
         except Exception as e:
@@ -407,11 +458,11 @@ class ReachyController:
             logger.error(f"Error setting head roll: {e}")
 
     def get_head_pitch(self) -> float:
-        """Get head pitch angle in degrees."""
-        if not self.is_available:
+        """Get head pitch angle in degrees with caching."""
+        pose = self._get_cached_head_pose()
+        if pose is None:
             return 0.0
         try:
-            pose = self.reachy.get_current_head_pose()
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             return math.degrees(pitch)
         except Exception as e:
@@ -433,11 +484,11 @@ class ReachyController:
             logger.error(f"Error setting head pitch: {e}")
 
     def get_head_yaw(self) -> float:
-        """Get head yaw angle in degrees."""
-        if not self.is_available:
+        """Get head yaw angle in degrees with caching."""
+        pose = self._get_cached_head_pose()
+        if pose is None:
             return 0.0
         try:
-            pose = self.reachy.get_current_head_pose()
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             return math.degrees(yaw)
         except Exception as e:
@@ -459,12 +510,12 @@ class ReachyController:
             logger.error(f"Error setting head yaw: {e}")
 
     def get_body_yaw(self) -> float:
-        """Get body yaw angle in degrees."""
-        if not self.is_available:
+        """Get body yaw angle in degrees with caching."""
+        joints = self._get_cached_joint_positions()
+        if joints is None:
             return 0.0
         try:
-            # Body yaw is the first element of head joint positions
-            head_joints, _ = self.reachy.get_current_joint_positions()
+            head_joints, _ = joints
             return math.degrees(head_joints[0])
         except Exception as e:
             logger.error(f"Error getting body yaw: {e}")
@@ -480,13 +531,12 @@ class ReachyController:
             logger.error(f"Error setting body yaw: {e}")
 
     def get_antenna_left(self) -> float:
-        """Get left antenna angle in degrees."""
-        if not self.is_available:
+        """Get left antenna angle in degrees with caching."""
+        joints = self._get_cached_joint_positions()
+        if joints is None:
             return 0.0
         try:
-            # get_current_joint_positions() returns (head_joints, antenna_joints)
-            # antenna_joints is [right, left]
-            _, antennas = self.reachy.get_current_joint_positions()
+            _, antennas = joints
             return math.degrees(antennas[1])  # left is index 1
         except Exception as e:
             logger.error(f"Error getting left antenna: {e}")
@@ -504,11 +554,12 @@ class ReachyController:
             logger.error(f"Error setting left antenna: {e}")
 
     def get_antenna_right(self) -> float:
-        """Get right antenna angle in degrees."""
-        if not self.is_available:
+        """Get right antenna angle in degrees with caching."""
+        joints = self._get_cached_joint_positions()
+        if joints is None:
             return 0.0
         try:
-            _, antennas = self.reachy.get_current_joint_positions()
+            _, antennas = joints
             return math.degrees(antennas[0])  # right is index 0
         except Exception as e:
             logger.error(f"Error getting right antenna: {e}")
@@ -603,12 +654,11 @@ class ReachyController:
     # ========== Phase 6: Diagnostic Information ==========
 
     def get_control_loop_frequency(self) -> float:
-        """Get control loop frequency in Hz."""
-        if not self.is_available:
+        """Get control loop frequency in Hz with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return 0.0
         try:
-            # Get control loop stats from backend status
-            status = self.reachy.client.get_status(wait=False)
             backend_status = status.get('backend_status')
             if backend_status and isinstance(backend_status, dict):
                 control_loop_stats = backend_status.get('control_loop_stats', {})
@@ -619,59 +669,39 @@ class ReachyController:
             return 0.0
 
     def get_sdk_version(self) -> str:
-        """Get SDK version."""
-        if not self.is_available:
+        """Get SDK version with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return "N/A"
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('version') or "unknown"
-        except Exception as e:
-            logger.error(f"Error getting SDK version: {e}")
-            return "error"
+        return status.get('version') or "unknown"
 
     def get_robot_name(self) -> str:
-        """Get robot name."""
-        if not self.is_available:
+        """Get robot name with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return "N/A"
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('robot_name') or "unknown"
-        except Exception as e:
-            logger.error(f"Error getting robot name: {e}")
-            return "error"
+        return status.get('robot_name') or "unknown"
 
     def get_wireless_version(self) -> bool:
-        """Check if this is a wireless version."""
-        if not self.is_available:
+        """Check if this is a wireless version with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return False
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('wireless_version', False)
-        except Exception as e:
-            logger.error(f"Error getting wireless version: {e}")
-            return False
+        return status.get('wireless_version', False)
 
     def get_simulation_mode(self) -> bool:
-        """Check if simulation mode is enabled."""
-        if not self.is_available:
+        """Check if simulation mode is enabled with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return False
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('simulation_enabled', False)
-        except Exception as e:
-            logger.error(f"Error getting simulation mode: {e}")
-            return False
+        return status.get('simulation_enabled', False)
 
     def get_wlan_ip(self) -> str:
-        """Get WLAN IP address."""
-        if not self.is_available:
+        """Get WLAN IP address with caching."""
+        status = self._get_cached_status()
+        if status is None:
             return "N/A"
-        try:
-            status = self.reachy.client.get_status(wait=False)
-            return status.get('wlan_ip') or "N/A"
-        except Exception as e:
-            logger.error(f"Error getting WLAN IP: {e}")
-            return "error"
+        return status.get('wlan_ip') or "N/A"
 
     # ========== Phase 7: IMU Sensors (Wireless only) ==========
 
@@ -788,140 +818,142 @@ class ReachyController:
             logger.debug(f"ReSpeaker not available: {e}")
             return None
 
-    def get_led_brightness(self) -> float:
-        """Get LED brightness (0-100)."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_led_brightness', 50.0)
-        try:
-            result = respeaker.read("LED_BRIGHTNESS")
-            if result is not None:
-                # LED_BRIGHTNESS is 0-255, convert to 0-100
-                self._led_brightness = (result[1] / 255.0) * 100.0
-                return self._led_brightness
-        except Exception as e:
-            logger.debug(f"Error getting LED brightness: {e}")
-        return getattr(self, '_led_brightness', 50.0)
+    # ========== Phase 11: LED Control (DISABLED - LEDs are inside the robot and not visible) ==========
+    # According to PROJECT_PLAN.md principle 8: "LED都被隐藏在了机器人内部，所有的LED控制全部都忽略"
+    # The following LED methods are kept but commented out for reference.
+    # They are not registered as entities in entity_registry.py.
 
-    def set_led_brightness(self, brightness: float) -> None:
-        """Set LED brightness (0-100)."""
-        brightness = max(0.0, min(100.0, brightness))
-        self._led_brightness = brightness
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return
-        try:
-            # Convert 0-100 to 0-255
-            value = int((brightness / 100.0) * 255)
-            respeaker.write("LED_BRIGHTNESS", [value])
-            logger.info(f"LED brightness set to {brightness}%")
-        except Exception as e:
-            logger.error(f"Error setting LED brightness: {e}")
+    # def get_led_brightness(self) -> float:
+    #     """Get LED brightness (0-100)."""
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return getattr(self, '_led_brightness', 50.0)
+    #     try:
+    #         result = respeaker.read("LED_BRIGHTNESS")
+    #         if result is not None:
+    #             self._led_brightness = (result[1] / 255.0) * 100.0
+    #             return self._led_brightness
+    #     except Exception as e:
+    #         logger.debug(f"Error getting LED brightness: {e}")
+    #     return getattr(self, '_led_brightness', 50.0)
 
-    def get_led_effect(self) -> str:
-        """Get current LED effect."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_led_effect', 'off')
-        try:
-            result = respeaker.read("LED_EFFECT")
-            if result is not None:
-                effect_map = {0: 'off', 1: 'solid', 2: 'breathing', 3: 'rainbow', 4: 'doa'}
-                self._led_effect = effect_map.get(result[1], 'off')
-                return self._led_effect
-        except Exception as e:
-            logger.debug(f"Error getting LED effect: {e}")
-        return getattr(self, '_led_effect', 'off')
+    # def set_led_brightness(self, brightness: float) -> None:
+    #     """Set LED brightness (0-100)."""
+    #     brightness = max(0.0, min(100.0, brightness))
+    #     self._led_brightness = brightness
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return
+    #     try:
+    #         value = int((brightness / 100.0) * 255)
+    #         respeaker.write("LED_BRIGHTNESS", [value])
+    #         logger.info(f"LED brightness set to {brightness}%")
+    #     except Exception as e:
+    #         logger.error(f"Error setting LED brightness: {e}")
 
-    def set_led_effect(self, effect: str) -> None:
-        """Set LED effect."""
-        self._led_effect = effect
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return
-        try:
-            effect_map = {'off': 0, 'solid': 1, 'breathing': 2, 'rainbow': 3, 'doa': 4}
-            value = effect_map.get(effect, 0)
-            respeaker.write("LED_EFFECT", [value])
-            logger.info(f"LED effect set to {effect}")
-        except Exception as e:
-            logger.error(f"Error setting LED effect: {e}")
+    # def get_led_effect(self) -> str:
+    #     """Get current LED effect."""
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return getattr(self, '_led_effect', 'off')
+    #     try:
+    #         result = respeaker.read("LED_EFFECT")
+    #         if result is not None:
+    #             effect_map = {0: 'off', 1: 'solid', 2: 'breathing', 3: 'rainbow', 4: 'doa'}
+    #             self._led_effect = effect_map.get(result[1], 'off')
+    #             return self._led_effect
+    #     except Exception as e:
+    #         logger.debug(f"Error getting LED effect: {e}")
+    #     return getattr(self, '_led_effect', 'off')
 
-    def get_led_color_r(self) -> float:
-        """Get LED red color component (0-255)."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_led_color_r', 0.0)
-        try:
-            result = respeaker.read("LED_COLOR")
-            if result is not None:
-                # LED_COLOR is a 32-bit value: 0x00RRGGBB
-                color = result[1] if len(result) > 1 else 0
-                self._led_color_r = float((color >> 16) & 0xFF)
-                return self._led_color_r
-        except Exception as e:
-            logger.debug(f"Error getting LED color R: {e}")
-        return getattr(self, '_led_color_r', 0.0)
+    # def set_led_effect(self, effect: str) -> None:
+    #     """Set LED effect."""
+    #     self._led_effect = effect
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return
+    #     try:
+    #         effect_map = {'off': 0, 'solid': 1, 'breathing': 2, 'rainbow': 3, 'doa': 4}
+    #         value = effect_map.get(effect, 0)
+    #         respeaker.write("LED_EFFECT", [value])
+    #         logger.info(f"LED effect set to {effect}")
+    #     except Exception as e:
+    #         logger.error(f"Error setting LED effect: {e}")
 
-    def set_led_color_r(self, value: float) -> None:
-        """Set LED red color component (0-255)."""
-        self._led_color_r = max(0.0, min(255.0, value))
-        self._update_led_color()
+    # def get_led_color_r(self) -> float:
+    #     """Get LED red color component (0-255)."""
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return getattr(self, '_led_color_r', 0.0)
+    #     try:
+    #         result = respeaker.read("LED_COLOR")
+    #         if result is not None:
+    #             color = result[1] if len(result) > 1 else 0
+    #             self._led_color_r = float((color >> 16) & 0xFF)
+    #             return self._led_color_r
+    #     except Exception as e:
+    #         logger.debug(f"Error getting LED color R: {e}")
+    #     return getattr(self, '_led_color_r', 0.0)
 
-    def get_led_color_g(self) -> float:
-        """Get LED green color component (0-255)."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_led_color_g', 0.0)
-        try:
-            result = respeaker.read("LED_COLOR")
-            if result is not None:
-                color = result[1] if len(result) > 1 else 0
-                self._led_color_g = float((color >> 8) & 0xFF)
-                return self._led_color_g
-        except Exception as e:
-            logger.debug(f"Error getting LED color G: {e}")
-        return getattr(self, '_led_color_g', 0.0)
+    # def set_led_color_r(self, value: float) -> None:
+    #     """Set LED red color component (0-255)."""
+    #     self._led_color_r = max(0.0, min(255.0, value))
+    #     self._update_led_color()
 
-    def set_led_color_g(self, value: float) -> None:
-        """Set LED green color component (0-255)."""
-        self._led_color_g = max(0.0, min(255.0, value))
-        self._update_led_color()
+    # def get_led_color_g(self) -> float:
+    #     """Get LED green color component (0-255)."""
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return getattr(self, '_led_color_g', 0.0)
+    #     try:
+    #         result = respeaker.read("LED_COLOR")
+    #         if result is not None:
+    #             color = result[1] if len(result) > 1 else 0
+    #             self._led_color_g = float((color >> 8) & 0xFF)
+    #             return self._led_color_g
+    #     except Exception as e:
+    #         logger.debug(f"Error getting LED color G: {e}")
+    #     return getattr(self, '_led_color_g', 0.0)
 
-    def get_led_color_b(self) -> float:
-        """Get LED blue color component (0-255)."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_led_color_b', 0.0)
-        try:
-            result = respeaker.read("LED_COLOR")
-            if result is not None:
-                color = result[1] if len(result) > 1 else 0
-                self._led_color_b = float(color & 0xFF)
-                return self._led_color_b
-        except Exception as e:
-            logger.debug(f"Error getting LED color B: {e}")
-        return getattr(self, '_led_color_b', 0.0)
+    # def set_led_color_g(self, value: float) -> None:
+    #     """Set LED green color component (0-255)."""
+    #     self._led_color_g = max(0.0, min(255.0, value))
+    #     self._update_led_color()
 
-    def set_led_color_b(self, value: float) -> None:
-        """Set LED blue color component (0-255)."""
-        self._led_color_b = max(0.0, min(255.0, value))
-        self._update_led_color()
+    # def get_led_color_b(self) -> float:
+    #     """Get LED blue color component (0-255)."""
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return getattr(self, '_led_color_b', 0.0)
+    #     try:
+    #         result = respeaker.read("LED_COLOR")
+    #         if result is not None:
+    #             color = result[1] if len(result) > 1 else 0
+    #             self._led_color_b = float(color & 0xFF)
+    #             return self._led_color_b
+    #     except Exception as e:
+    #         logger.debug(f"Error getting LED color B: {e}")
+    #     return getattr(self, '_led_color_b', 0.0)
 
-    def _update_led_color(self) -> None:
-        """Update LED color from R, G, B components."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return
-        try:
-            r = int(getattr(self, '_led_color_r', 0))
-            g = int(getattr(self, '_led_color_g', 0))
-            b = int(getattr(self, '_led_color_b', 0))
-            color = (r << 16) | (g << 8) | b
-            respeaker.write("LED_COLOR", [color])
-            logger.info(f"LED color set to RGB({r}, {g}, {b})")
-        except Exception as e:
-            logger.error(f"Error setting LED color: {e}")
+    # def set_led_color_b(self, value: float) -> None:
+    #     """Set LED blue color component (0-255)."""
+    #     self._led_color_b = max(0.0, min(255.0, value))
+    #     self._update_led_color()
+
+    # def _update_led_color(self) -> None:
+    #     """Update LED color from R, G, B components."""
+    #     respeaker = self._get_respeaker()
+    #     if respeaker is None:
+    #         return
+    #     try:
+    #         r = int(getattr(self, '_led_color_r', 0))
+    #         g = int(getattr(self, '_led_color_g', 0))
+    #         b = int(getattr(self, '_led_color_b', 0))
+    #         color = (r << 16) | (g << 8) | b
+    #         respeaker.write("LED_COLOR", [color])
+    #         logger.info(f"LED color set to RGB({r}, {g}, {b})")
+    #     except Exception as e:
+    #         logger.error(f"Error setting LED color: {e}")
 
     # ========== Phase 12: Audio Processing (via local SDK) ==========
 
@@ -1048,7 +1080,7 @@ class ReachyController:
 
     def get_passive_joints_json(self) -> str:
         """
-        Get passive joints as JSON string.
+        Get passive joints as JSON string with cached status.
 
         Returns:
             JSON string: "[passive_1_x, passive_1_y, passive_1_z, ..., passive_7_z]"
@@ -1058,8 +1090,10 @@ class ReachyController:
             return "[]"
         try:
             import json
-            # Get WLAN IP from daemon status
-            status = self.reachy.client.get_status(wait=False)
+            # Get WLAN IP from cached daemon status
+            status = self._get_cached_status()
+            if status is None:
+                return "[]"
             wlan_ip = status.get('wlan_ip', 'localhost')
             # Call the backend API to get passive joints
             backend_url = f"http://{wlan_ip}:8000/api/state/full?with_passive_joints=true"

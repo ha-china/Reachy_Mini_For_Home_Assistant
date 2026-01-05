@@ -5,12 +5,13 @@ This module provides a centralized control system for robot movements,
 inspired by the reachy_mini_conversation_app architecture.
 
 Key features:
-- Single 100Hz control loop (prevents race conditions)
+- Single 20Hz control loop (reduced from 100Hz to prevent daemon crashes)
 - Command queue pattern (thread-safe external API)
 - Error throttling (prevents log explosion)
 - Speech-driven head sway
 - Breathing animation during idle
 - Graceful shutdown
+- Pose change detection (skip sending if no significant change)
 """
 
 import logging
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 # Constants (borrowed from conversation_app)
 # =============================================================================
 
-CONTROL_LOOP_FREQUENCY_HZ = 100  # 100Hz control loop
+CONTROL_LOOP_FREQUENCY_HZ = 20  # 20Hz control loop (reduced from 100Hz to prevent daemon crashes)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -288,10 +289,13 @@ class BreathingAnimation:
 
 class MovementManager:
     """
-    Unified movement manager with 100Hz control loop.
+    Unified movement manager with 20Hz control loop.
 
     All external interactions go through the command queue,
     ensuring thread safety and preventing race conditions.
+    
+    Note: Frequency reduced from 100Hz to 20Hz to prevent daemon crashes
+    caused by excessive Zenoh message traffic.
     """
 
     def __init__(self, reachy_mini: Optional["ReachyMini"] = None):
@@ -340,6 +344,10 @@ class MovementManager:
         # Audio loudness (updated externally)
         self._audio_loudness_db: float = -100.0
         self._audio_lock = threading.Lock()
+
+        # Pose change detection (prevent unnecessary commands)
+        self._last_sent_pose: Optional[Dict[str, float]] = None
+        self._pose_change_threshold = 0.001  # 0.001 rad or 0.001 m
 
         logger.info("MovementManager initialized")
 
@@ -671,6 +679,16 @@ class MovementManager:
         if self.robot is None:
             return
 
+        # Check if pose changed significantly (prevent unnecessary commands)
+        if self._last_sent_pose is not None:
+            max_diff = max(
+                abs(pose[k] - self._last_sent_pose.get(k, 0.0))
+                for k in pose.keys()
+            )
+            if max_diff < self._pose_change_threshold:
+                # No significant change, skip sending command
+                return
+
         # Check if connection is lost and we should skip sending commands
         now = self._now()
         if self._connection_lost:
@@ -705,8 +723,9 @@ class MovementManager:
                 body_yaw=pose["body_yaw"],
             )
 
-            # Command succeeded - update connection health
+            # Command succeeded - update connection health and cache
             self._last_successful_command = now
+            self._last_sent_pose = pose.copy()  # Cache sent pose
             if self._connection_lost:
                 logger.info("✓ Connection to robot restored")
                 self._connection_lost = False
@@ -757,7 +776,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main 100Hz control loop."""
+        """Main 20Hz control loop."""
         logger.info("Movement manager control loop started (%.0f Hz)", CONTROL_LOOP_FREQUENCY_HZ)
 
         last_time = self._now()

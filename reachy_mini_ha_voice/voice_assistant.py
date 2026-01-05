@@ -161,7 +161,7 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
-        # Start motion controller (100Hz control loop)
+        # Start motion controller (20Hz control loop)
         if self._motion is not None:
             self._motion.start()
 
