@@ -540,24 +540,30 @@ class VoiceSatelliteProtocol(APIServer):
     def _play_emotion(self, emotion_name: str) -> None:
         """Play an emotion/expression from the emotions library.
 
-        This method is kept for backward compatibility with entity_registry.
-        It now uses the queue-based system instead of HTTP API.
-
         Args:
             emotion_name: Name of the emotion (e.g., "happy1", "sad1", etc.)
         """
         try:
-            from .emotion_moves import create_emotion_move
+            import requests
 
-            if self.state.motion and self.state.motion.movement_manager:
-                emotion_move = create_emotion_move(emotion_name)
-                if emotion_move:
-                    self.state.motion.movement_manager.queue_move(emotion_move)
-                    _LOGGER.info(f"Queued emotion: {emotion_name}")
-                else:
-                    _LOGGER.warning(f"Failed to create emotion move: {emotion_name}")
+            # Get WLAN IP from daemon status
+            wlan_ip = "localhost"
+            if self.state.reachy_mini is not None:
+                try:
+                    status = self.state.reachy_mini.client.get_status(wait=False)
+                    wlan_ip = status.get('wlan_ip', 'localhost')
+                except Exception:
+                    wlan_ip = "localhost"
+
+            # Call the emotion playback API
+            # Dataset: pollen-robotics/reachy-mini-emotions-library
+            url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion_name}"
+
+            response = requests.post(url, timeout=5)
+            if response.status_code == 200:
+                _LOGGER.info(f"Playing emotion: {emotion_name}")
             else:
-                _LOGGER.warning("Motion system not available for emotion playback")
+                _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
 
         except Exception as e:
-            _LOGGER.error(f"Error queueing emotion {emotion_name}: {e}")
+            _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
