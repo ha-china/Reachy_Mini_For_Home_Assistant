@@ -137,32 +137,34 @@ class ReachyController:
             logger.error(f"Error setting speaker volume: {e}")
 
     def get_microphone_volume(self) -> float:
-        """Get microphone volume (0-100) using local SDK audio interface."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
+        """Get microphone volume (0-100) using daemon HTTP API."""
+        if not self.is_available:
             return getattr(self, '_microphone_volume', 50.0)
-
-        # Try different gain parameters (varies by ReSpeaker model)
-        gain_params = [
-            ("AGCGAIN", 31.0),      # AGC target level (0-31)
-            ("MICGAIN", 31.0),      # Microphone gain
-        ]
-
-        for param_name, max_val in gain_params:
-            try:
-                result = respeaker.read(param_name)
-                if result is not None:
-                    self._microphone_volume = (result[0] / max_val) * 100.0
-                    logger.debug(f"Read microphone volume: {self._microphone_volume}% ({param_name}: {result[0]})")
-                    return self._microphone_volume
-            except Exception as e:
-                logger.debug(f"Could not read {param_name}: {e}")
-
+        
+        try:
+            # Get WLAN IP from cached daemon status
+            status = self._get_cached_status()
+            if status is None:
+                return getattr(self, '_microphone_volume', 50.0)
+            wlan_ip = status.get('wlan_ip', 'localhost')
+            
+            # Call the daemon API to get microphone volume
+            response = requests.get(
+                f"http://{wlan_ip}:8000/api/volume/microphone/current",
+                timeout=2
+            )
+            if response.status_code == 200:
+                data = response.json()
+                self._microphone_volume = float(data.get('volume', 50))
+                return self._microphone_volume
+        except Exception as e:
+            logger.debug(f"Could not get microphone volume from API: {e}")
+        
         return getattr(self, '_microphone_volume', 50.0)
 
     def set_microphone_volume(self, volume: float) -> None:
         """
-        Set microphone volume (0-100) using local SDK audio interface.
+        Set microphone volume (0-100) using daemon HTTP API.
 
         Args:
             volume: Volume level 0-100
@@ -170,27 +172,30 @@ class ReachyController:
         volume = max(0.0, min(100.0, volume))
         self._microphone_volume = volume
 
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            logger.warning("Cannot set microphone volume: ReSpeaker not available")
+        if not self.is_available:
+            logger.warning("Cannot set microphone volume: robot not available")
             return
 
-        # Try different gain parameters (varies by ReSpeaker model)
-        gain_params = [
-            ("AGCGAIN", 31.0),      # AGC target level (0-31)
-            ("MICGAIN", 31.0),      # Microphone gain
-        ]
-
-        for param_name, max_val in gain_params:
-            try:
-                gain = int((volume / 100.0) * max_val)
-                respeaker.write(param_name, [gain])
-                logger.info(f"Microphone volume set to {volume}% ({param_name}: {gain})")
-                return  # Success, stop trying other params
-            except Exception as e:
-                logger.debug(f"Could not write {param_name}: {e}")
-
-        logger.error("Failed to set microphone volume: no supported parameter found")
+        try:
+            # Get WLAN IP from cached daemon status
+            status = self._get_cached_status()
+            if status is None:
+                logger.error("Cannot get daemon status for microphone volume control")
+                return
+            wlan_ip = status.get('wlan_ip', 'localhost')
+            
+            # Call the daemon API to set microphone volume
+            response = requests.post(
+                f"http://{wlan_ip}:8000/api/volume/microphone/set",
+                json={"volume": int(volume)},
+                timeout=5
+            )
+            if response.status_code == 200:
+                logger.info(f"Microphone volume set to {volume}%")
+            else:
+                logger.error(f"Failed to set microphone volume: {response.status_code} {response.text}")
+        except Exception as e:
+            logger.error(f"Error setting microphone volume: {e}")
 
     # ========== Phase 2: Motor Control ==========
 
