@@ -14,6 +14,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class _ReSpeakerContext:
+    """Context manager for thread-safe ReSpeaker access."""
+    
+    def __init__(self, respeaker, lock):
+        self._respeaker = respeaker
+        self._lock = lock
+    
+    def __enter__(self):
+        self._lock.acquire()
+        return self._respeaker
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._lock.release()
+        return False
+
+
 class ReachyController:
     """
     Wrapper class for Reachy Mini control operations.
@@ -899,22 +915,6 @@ class ReachyController:
         except Exception as e:
             logger.debug(f"ReSpeaker not available: {e}")
             return _ReSpeakerContext(None, self._respeaker_lock)
-
-
-class _ReSpeakerContext:
-    """Context manager for thread-safe ReSpeaker access."""
-    
-    def __init__(self, respeaker, lock):
-        self._respeaker = respeaker
-        self._lock = lock
-    
-    def __enter__(self):
-        self._lock.acquire()
-        return self._respeaker
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._lock.release()
-        return False
 
     # ========== Phase 11: LED Control (DISABLED - LEDs are inside the robot and not visible) ==========
     # According to PROJECT_PLAN.md principle 8: "LED都被隐藏在了机器人内部，所有的LED控制全部都忽略"
