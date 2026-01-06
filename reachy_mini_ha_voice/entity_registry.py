@@ -25,7 +25,6 @@ ENTITY_KEYS: Dict[str, int] = {
     # Phase 1: Basic status and volume
     "daemon_state": 100,
     "backend_ready": 101,
-    "error_message": 102,
     "speaker_volume": 103,
     # Phase 2: Motor control
     "motors_enabled": 200,
@@ -53,6 +52,7 @@ ENTITY_KEYS: Dict[str, int] = {
     "wireless_version": 603,
     "simulation_mode": 604,
     "wlan_ip": 605,
+    "error_message": 606,  # Moved to diagnostic
     # Phase 7: IMU sensors
     "imu_accel_x": 700,
     "imu_accel_y": 701,
@@ -79,10 +79,6 @@ ENTITY_KEYS: Dict[str, int] = {
     "agc_max_gain": 1201,
     "noise_suppression": 1202,
     "echo_cancellation_converged": 1203,
-    # Phase 13: Robot joints (single JSON sensor)
-    "head_joints": 1300,
-    # Phase 14: Passive joints for 3D visualization
-    "passive_joints": 1400,
 }
 
 
@@ -148,7 +144,7 @@ class EntityRegistry:
         self._setup_phase10_entities(entities)
         # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
         self._setup_phase12_entities(entities)
-        self._setup_phase13_entities(entities)
+        # Phase 13-14 (head_joints, passive_joints) removed - not needed
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -175,15 +171,6 @@ class EntityRegistry:
             value_getter=rc.get_backend_ready,
         ))
 
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("error_message"),
-            name="Error Message",
-            object_id="error_message",
-            icon="mdi:alert-circle",
-            value_getter=rc.get_error_message,
-        ))
-
         entities.append(NumberEntity(
             server=self.server,
             key=get_entity_key("speaker_volume"),
@@ -200,7 +187,7 @@ class EntityRegistry:
             value_setter=rc.set_speaker_volume,
         ))
 
-        _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, error_message, speaker_volume")
+        _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, speaker_volume")
 
     def _setup_phase2_entities(self, entities: List) -> None:
         """Setup Phase 2 entities: Motor control."""
@@ -448,6 +435,7 @@ class EntityRegistry:
             unit_of_measurement="Hz",
             accuracy_decimals=1,
             state_class="measurement",
+            entity_category=2,  # diagnostic
             value_getter=rc.get_control_loop_frequency,
         ))
 
@@ -457,6 +445,7 @@ class EntityRegistry:
             name="SDK Version",
             object_id="sdk_version",
             icon="mdi:information",
+            entity_category=2,  # diagnostic
             value_getter=rc.get_sdk_version,
         ))
 
@@ -466,6 +455,7 @@ class EntityRegistry:
             name="Robot Name",
             object_id="robot_name",
             icon="mdi:robot",
+            entity_category=2,  # diagnostic
             value_getter=rc.get_robot_name,
         ))
 
@@ -476,6 +466,7 @@ class EntityRegistry:
             object_id="wireless_version",
             icon="mdi:wifi",
             device_class="connectivity",
+            entity_category=2,  # diagnostic
             value_getter=rc.get_wireless_version,
         ))
 
@@ -485,6 +476,7 @@ class EntityRegistry:
             name="Simulation Mode",
             object_id="simulation_mode",
             icon="mdi:virtual-reality",
+            entity_category=2,  # diagnostic
             value_getter=rc.get_simulation_mode,
         ))
 
@@ -494,10 +486,21 @@ class EntityRegistry:
             name="WLAN IP",
             object_id="wlan_ip",
             icon="mdi:ip-network",
+            entity_category=2,  # diagnostic
             value_getter=rc.get_wlan_ip,
         ))
 
-        _LOGGER.debug("Phase 6 entities registered: control_loop_frequency, sdk_version, robot_name, wireless_version, simulation_mode, wlan_ip")
+        entities.append(TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("error_message"),
+            name="Error Message",
+            object_id="error_message",
+            icon="mdi:alert-circle",
+            entity_category=2,  # diagnostic
+            value_getter=rc.get_error_message,
+        ))
+
+        _LOGGER.debug("Phase 6 entities registered: control_loop_frequency, sdk_version, robot_name, wireless_version, simulation_mode, wlan_ip, error_message")
 
     def _setup_phase7_entities(self, entities: List) -> None:
         """Setup Phase 7 entities: IMU sensors (wireless only)."""
@@ -722,32 +725,6 @@ class EntityRegistry:
         ))
 
         _LOGGER.debug("Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged")
-
-    def _setup_phase13_entities(self, entities: List) -> None:
-        """Setup Phase 13 entities: Robot joints as JSON sensor."""
-        rc = self.reachy_controller
-
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("head_joints"),
-            name="Head Joints",
-            object_id="head_joints",
-            icon="mdi:robot",
-            value_getter=rc.get_head_joints_json,
-        ))
-
-        _LOGGER.debug("Phase 13 entities registered: head_joints")
-
-        # Phase 14: Passive joints for 3D visualization
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("passive_joints"),
-            name="Passive Joints",
-            object_id="passive_joints",
-            value_getter=rc.get_passive_joints_json,
-        ))
-
-        _LOGGER.debug("Phase 14 entities registered: passive_joints")
 
     def find_entity_references(self, entities: List) -> None:
         """Find and store references to special entities from existing list.
