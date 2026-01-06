@@ -1,7 +1,7 @@
 """Reachy Mini motion control integration.
 
 This module provides a high-level motion API that delegates to the
-MovementManager for unified 10Hz control.
+MovementManager for unified 5Hz control with face tracking.
 """
 
 import logging
@@ -17,7 +17,7 @@ class ReachyMiniMotion:
     """Reachy Mini motion controller for voice assistant.
 
     All public motion methods (on_*) are non-blocking. They send commands
-    to the MovementManager which handles them in its 10Hz control loop.
+    to the MovementManager which handles them in its 5Hz control loop.
     """
 
     def __init__(self, reachy_mini=None):
@@ -36,6 +36,16 @@ class ReachyMiniMotion:
             self._movement_manager = MovementManager(reachy_mini)
         elif reachy_mini is not None and self._movement_manager is not None:
             self._movement_manager.robot = reachy_mini
+
+    def set_camera_server(self, camera_server):
+        """Set the camera server for face tracking.
+        
+        Args:
+            camera_server: MJPEGCameraServer instance with face tracking enabled
+        """
+        if self._movement_manager is not None:
+            self._movement_manager.set_camera_server(camera_server)
+            _LOGGER.info("Camera server connected for face tracking")
 
     def start(self):
         """Start the movement manager control loop."""
@@ -58,33 +68,20 @@ class ReachyMiniMotion:
     # Public non-blocking motion methods
     # -------------------------------------------------------------------------
 
-    def on_wakeup(self, doa_angle_deg: Optional[float] = None):
-        """Called when wake word is detected - turn to sound source.
+    def on_wakeup(self):
+        """Called when wake word is detected.
 
         Non-blocking: command sent to MovementManager.
-
-        Args:
-            doa_angle_deg: Direction of arrival angle in degrees
-                          (0=front, positive=right, negative=left)
+        Face tracking will handle looking at the user automatically.
         """
-        _LOGGER.debug("on_wakeup called with doa_angle_deg=%s", doa_angle_deg)
+        _LOGGER.debug("on_wakeup called")
         if self._movement_manager is None:
             _LOGGER.warning("on_wakeup: movement_manager is None, skipping motion")
             return
 
-        # Turn to sound source if DOA available
-        if doa_angle_deg is not None:
-            # Clamp to reasonable head rotation limits
-            yaw_deg = max(-60, min(60, doa_angle_deg))
-            self._movement_manager.turn_to_angle(yaw_deg, duration=0.8)
-            _LOGGER.info("Turning to sound source at %.1f degrees", yaw_deg)
-        else:
-            # Look forward
-            self._movement_manager.reset_to_neutral(duration=0.3)
-            _LOGGER.debug("DOA angle is None, looking forward")
-
-        # Set listening state
+        # Set listening state - face tracking will handle looking at user
         self._movement_manager.set_state(RobotState.LISTENING)
+        _LOGGER.info("Wake word detected, entering listening state")
 
     def on_listening(self):
         """Called when listening for speech - attentive pose.

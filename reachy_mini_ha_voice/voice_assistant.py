@@ -161,7 +161,7 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
-        # Start motion controller (10Hz control loop)
+        # Start motion controller (5Hz control loop)
         if self._motion is not None:
             self._motion.start()
 
@@ -181,8 +181,13 @@ class VoiceAssistantService:
                 port=self.camera_port,
                 fps=15,
                 quality=80,
+                enable_face_tracking=True,
             )
             await self._camera_server.start()
+            
+            # Connect camera server to motion controller for face tracking
+            if self._motion is not None:
+                self._motion.set_camera_server(self._camera_server)
 
         # Create ESPHome server (pass camera_server for camera entity)
         loop = asyncio.get_running_loop()
@@ -597,9 +602,8 @@ class VoiceAssistantService:
                 if (ctx.last_active is None) or ((now - ctx.last_active) > self._state.refractory_seconds):
                     _LOGGER.info("Wake word detected: %s", wake_word.id)
                     self._state.satellite.wakeup(wake_word)
-                    # Get DOA angle and turn to sound source
-                    doa_angle_deg = self._get_doa_angle_deg()
-                    self._motion.on_wakeup(doa_angle_deg)
+                    # Face tracking will handle looking at user automatically
+                    self._motion.on_wakeup()
                     ctx.last_active = now
 
     def _detect_stop_word(self, ctx: AudioProcessingContext) -> None:
@@ -615,51 +619,3 @@ class VoiceAssistantService:
         if stopped and (self._state.stop_word.id in self._state.active_wake_words):
             _LOGGER.info("Stop word detected")
             self._state.satellite.stop()
-
-    def _get_doa_angle_deg(self) -> Optional[float]:
-        """Get DOA angle in degrees from Reachy Mini's microphone array.
-
-        The ReSpeaker DOA returns angle in radians where:
-        - 0 radians = left
-        - π/2 radians = front/back
-        - π radians = right
-
-        We convert this to head yaw degrees where:
-        - 0 = front
-        - positive = right
-        - negative = left
-
-        Returns:
-            DOA angle in degrees suitable for head yaw, or None if unavailable.
-        """
-        if self.reachy_mini is None:
-            return None
-
-        try:
-            import math
-            doa_result = self.reachy_mini.media.get_DoA()
-            if doa_result is None:
-                _LOGGER.debug("DOA not available")
-                return None
-
-            doa_radians, speech_detected = doa_result
-
-            # Note: We don't check speech_detected here because we already know
-            # speech was detected (wake word triggered this call).
-            # The DOA value should still be valid from the recent speech.
-
-            # Convert ReSpeaker DOA to head yaw angle
-            # ReSpeaker: 0=left, π/2=front, π=right
-            # Head yaw: 0=front, positive=right, negative=left
-            # Formula: yaw = (doa - π/2) converted to degrees
-            yaw_radians = doa_radians - (math.pi / 2)
-            yaw_degrees = math.degrees(yaw_radians)
-
-            _LOGGER.info("DOA detected: %.1f rad -> yaw %.1f deg (speech=%s)",
-                        doa_radians, yaw_degrees, speech_detected)
-
-            return yaw_degrees
-
-        except Exception as e:
-            _LOGGER.error("Error getting DOA angle: %s", e)
-            return None

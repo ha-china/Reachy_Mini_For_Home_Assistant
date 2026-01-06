@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # Constants (borrowed from conversation_app)
 # =============================================================================
 
-CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop (reduced from 20Hz to further reduce daemon load)
+CONTROL_LOOP_FREQUENCY_HZ = 5  # 5Hz control loop (reduced from 10Hz to prevent daemon serial port overload)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -351,6 +351,13 @@ class MovementManager:
         # Pose change detection (prevent unnecessary commands)
         self._last_sent_pose: Optional[Dict[str, float]] = None
         self._pose_change_threshold = 0.001  # 0.001 rad or 0.001 m
+        
+        # Face tracking offsets (from camera worker)
+        self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        self._face_tracking_lock = threading.Lock()
+        
+        # Camera server reference for face tracking
+        self._camera_server = None
 
         logger.info("MovementManager initialized")
 
@@ -419,6 +426,24 @@ class MovementManager:
             duration=duration,
         )
         self._command_queue.put(("action", action))
+
+    def set_camera_server(self, camera_server) -> None:
+        """Set the camera server for face tracking offsets.
+        
+        Args:
+            camera_server: MJPEGCameraServer instance with face tracking
+        """
+        self._camera_server = camera_server
+        logger.info("Camera server set for face tracking")
+
+    def set_face_tracking_offsets(self, offsets: Tuple[float, float, float, float, float, float]) -> None:
+        """Thread-safe: Update face tracking offsets manually.
+        
+        Args:
+            offsets: Tuple of (x, y, z, roll, pitch, yaw) in meters/radians
+        """
+        with self._face_tracking_lock:
+            self._face_tracking_offsets = offsets
 
     # =========================================================================
     # Internal: Command processing (runs in control loop)
@@ -624,6 +649,16 @@ class MovementManager:
                 self.state.antenna_frozen = False
                 logger.debug("Antennas unfrozen")
 
+    def _update_face_tracking(self) -> None:
+        """Get face tracking offsets from camera server."""
+        if self._camera_server is not None:
+            try:
+                offsets = self._camera_server.get_face_tracking_offsets()
+                with self._face_tracking_lock:
+                    self._face_tracking_offsets = offsets
+            except Exception as e:
+                logger.debug("Error getting face tracking offsets: %s", e)
+
     def _compose_final_pose(self) -> Dict[str, float]:
         """Compose final pose from all sources."""
         # Primary pose (from actions)
@@ -644,6 +679,17 @@ class MovementManager:
 
         # Add breathing
         z += self.state.breathing_z
+        
+        # Add face tracking offsets (from camera worker)
+        with self._face_tracking_lock:
+            face_offsets = self._face_tracking_offsets
+        
+        x += face_offsets[0]
+        y += face_offsets[1]
+        z += face_offsets[2]
+        roll += face_offsets[3]
+        pitch += face_offsets[4]
+        yaw += face_offsets[5]
 
         # Antenna pose with freeze blending
         target_antenna_left = self.state.target_antenna_left + self.state.breathing_antenna_left
@@ -776,7 +822,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main 10Hz control loop."""
+        """Main 5Hz control loop."""
         logger.info("Movement manager control loop started (%.0f Hz)", CONTROL_LOOP_FREQUENCY_HZ)
 
         last_time = self._now()
@@ -801,11 +847,14 @@ class MovementManager:
 
                 # 5. Update antenna blend (listening mode freeze/unfreeze)
                 self._update_antenna_blend(dt)
+                
+                # 6. Update face tracking offsets from camera server
+                self._update_face_tracking()
 
-                # 6. Compose final pose
+                # 7. Compose final pose
                 pose = self._compose_final_pose()
 
-                # 7. Send to robot (single control point!)
+                # 8. Send to robot (single control point!)
                 self._issue_control_command(pose)
 
             except Exception as e:

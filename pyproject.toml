@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_ha_voice"
-version = "0.2.7"
+version = "0.2.8"
 description = "Home Assistant Voice Assistant for Reachy Mini"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,13 +32,16 @@ dependencies = [
 
     # Motion control (head movements)
     "scipy>=1.10.0",
+    
+    # Face tracking (YOLO-based head detection)
+    "ultralytics>=8.0.0",
+    "supervision>=0.18.0",
+    "huggingface_hub>=0.20.0",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
 [project.entry-points."reachy_mini_apps"]
-reachy_mini_ha_voice = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"
-
-[tool.setuptools]
+reachy_mini_ha_voice = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"[tool.setuptools]
 package-dir = { "" = "." }
 include-package-data = true
 

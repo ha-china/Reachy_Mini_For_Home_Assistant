@@ -1,18 +1,20 @@
 """
-MJPEG Camera Server for Reachy Mini.
+MJPEG Camera Server for Reachy Mini with Face Tracking.
 
 This module provides an HTTP server that streams camera frames from Reachy Mini
 as MJPEG, which can be integrated with Home Assistant via Generic Camera.
+Also provides face tracking for head movement control.
 """
 
 import asyncio
 import logging
 import threading
 import time
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Tuple, List, TYPE_CHECKING
 
 import cv2
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -25,12 +27,14 @@ MJPEG_BOUNDARY = "frame"
 
 class MJPEGCameraServer:
     """
-    MJPEG streaming server for Reachy Mini camera.
+    MJPEG streaming server for Reachy Mini camera with face tracking.
 
     Provides HTTP endpoints:
     - /stream - MJPEG video stream
     - /snapshot - Single JPEG image
     - / - Simple status page
+    
+    Also provides face tracking offsets for head movement control.
     """
 
     def __init__(
@@ -40,6 +44,7 @@ class MJPEGCameraServer:
         port: int = 8081,
         fps: int = 15,
         quality: int = 80,
+        enable_face_tracking: bool = True,
     ):
         """
         Initialize the MJPEG camera server.
@@ -50,12 +55,14 @@ class MJPEGCameraServer:
             port: Port number for the HTTP server
             fps: Target frames per second for the stream
             quality: JPEG quality (1-100)
+            enable_face_tracking: Enable face tracking for head movement
         """
         self.reachy_mini = reachy_mini
         self.host = host
         self.port = port
         self.fps = fps
         self.quality = quality
+        self.enable_face_tracking = enable_face_tracking
 
         self._server: Optional[asyncio.Server] = None
         self._running = False
@@ -66,6 +73,22 @@ class MJPEGCameraServer:
 
         # Frame capture thread
         self._capture_thread: Optional[threading.Thread] = None
+        
+        # Face tracking state
+        self._head_tracker = None
+        self._face_tracking_enabled = True
+        self._face_tracking_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self._face_tracking_lock = threading.Lock()
+        
+        # Face tracking timing (smooth interpolation when face lost)
+        self._last_face_detected_time: Optional[float] = None
+        self._interpolation_start_time: Optional[float] = None
+        self._interpolation_start_pose: Optional[np.ndarray] = None
+        self._face_lost_delay = 2.0  # seconds before interpolating back
+        self._interpolation_duration = 1.0  # seconds to interpolate back
+        
+        # Offset scaling (smaller movements for smoother tracking)
+        self._offset_scale = 0.6
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -74,6 +97,16 @@ class MJPEGCameraServer:
             return
 
         self._running = True
+        
+        # Initialize head tracker if face tracking enabled
+        if self.enable_face_tracking:
+            try:
+                from .head_tracker import HeadTracker
+                self._head_tracker = HeadTracker()
+                _LOGGER.info("Face tracking enabled")
+            except Exception as e:
+                _LOGGER.warning("Failed to initialize head tracker: %s", e)
+                self._head_tracker = None
 
         # Start frame capture thread
         self._capture_thread = threading.Thread(
@@ -110,15 +143,16 @@ class MJPEGCameraServer:
         _LOGGER.info("MJPEG Camera server stopped")
 
     def _capture_frames(self) -> None:
-        """Background thread to capture frames from Reachy Mini."""
+        """Background thread to capture frames from Reachy Mini and do face tracking."""
         _LOGGER.info("Starting camera capture thread")
 
         while self._running:
             try:
+                current_time = time.time()
                 frame = self._get_camera_frame()
 
                 if frame is not None:
-                    # Encode frame as JPEG
+                    # Encode frame as JPEG for streaming
                     encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
                     success, jpeg_data = cv2.imencode('.jpg', frame, encode_params)
 
@@ -126,6 +160,13 @@ class MJPEGCameraServer:
                         with self._frame_lock:
                             self._last_frame = jpeg_data.tobytes()
                             self._last_frame_time = time.time()
+                    
+                    # Do face tracking if enabled
+                    if self._face_tracking_enabled and self._head_tracker is not None:
+                        self._process_face_tracking(frame, current_time)
+                    
+                    # Handle smooth interpolation when face lost
+                    self._process_face_lost_interpolation(current_time)
 
                 # Sleep to maintain target FPS
                 time.sleep(self._frame_interval)
@@ -135,6 +176,163 @@ class MJPEGCameraServer:
                 time.sleep(0.5)
 
         _LOGGER.info("Camera capture thread stopped")
+    
+    def _process_face_tracking(self, frame: np.ndarray, current_time: float) -> None:
+        """Process face tracking on a frame."""
+        if self._head_tracker is None or self.reachy_mini is None:
+            return
+        
+        try:
+            face_center, confidence = self._head_tracker.get_head_position(frame)
+            
+            if face_center is not None:
+                # Face detected - update tracking
+                self._last_face_detected_time = current_time
+                self._interpolation_start_time = None  # Stop any interpolation
+                
+                # Convert normalized coordinates to pixel coordinates
+                h, w = frame.shape[:2]
+                eye_center_norm = (face_center + 1) / 2
+                eye_center_pixels = [
+                    eye_center_norm[0] * w,
+                    eye_center_norm[1] * h,
+                ]
+                
+                # Get the head pose needed to look at the target
+                target_pose = self.reachy_mini.look_at_image(
+                    eye_center_pixels[0],
+                    eye_center_pixels[1],
+                    duration=0.0,
+                    perform_movement=False,
+                )
+                
+                # Extract translation and rotation from target pose
+                translation = target_pose[:3, 3]
+                rotation = R.from_matrix(target_pose[:3, :3]).as_euler("xyz", degrees=False)
+                
+                # Scale down for smoother tracking
+                translation = translation * self._offset_scale
+                rotation = rotation * self._offset_scale
+                
+                # Update face tracking offsets
+                with self._face_tracking_lock:
+                    self._face_tracking_offsets = [
+                        float(translation[0]),
+                        float(translation[1]),
+                        float(translation[2]),
+                        float(rotation[0]),
+                        float(rotation[1]),
+                        float(rotation[2]),
+                    ]
+                
+                _LOGGER.debug("Face tracked: conf=%.2f, offsets=(%.3f, %.3f, %.3f)",
+                             confidence or 0, translation[0], translation[1], translation[2])
+        
+        except Exception as e:
+            _LOGGER.debug("Face tracking error: %s", e)
+    
+    def _process_face_lost_interpolation(self, current_time: float) -> None:
+        """Handle smooth interpolation back to neutral when face is lost."""
+        if self._last_face_detected_time is None:
+            return
+        
+        time_since_face_lost = current_time - self._last_face_detected_time
+        
+        if time_since_face_lost < self._face_lost_delay:
+            return  # Still within delay period, keep current offsets
+        
+        # Start interpolation if not already started
+        if self._interpolation_start_time is None:
+            self._interpolation_start_time = current_time
+            # Capture current pose as start of interpolation
+            with self._face_tracking_lock:
+                current_offsets = self._face_tracking_offsets.copy()
+            
+            # Convert to 4x4 pose matrix
+            pose_matrix = np.eye(4, dtype=np.float32)
+            pose_matrix[:3, 3] = current_offsets[:3]
+            pose_matrix[:3, :3] = R.from_euler("xyz", current_offsets[3:]).as_matrix()
+            self._interpolation_start_pose = pose_matrix
+        
+        # Calculate interpolation progress
+        elapsed = current_time - self._interpolation_start_time
+        t = min(1.0, elapsed / self._interpolation_duration)
+        
+        # Interpolate to neutral (identity matrix)
+        if self._interpolation_start_pose is not None:
+            neutral_pose = np.eye(4, dtype=np.float32)
+            interpolated_pose = self._linear_pose_interpolation(
+                self._interpolation_start_pose, neutral_pose, t
+            )
+            
+            # Extract translation and rotation
+            translation = interpolated_pose[:3, 3]
+            rotation = R.from_matrix(interpolated_pose[:3, :3]).as_euler("xyz", degrees=False)
+            
+            with self._face_tracking_lock:
+                self._face_tracking_offsets = [
+                    float(translation[0]),
+                    float(translation[1]),
+                    float(translation[2]),
+                    float(rotation[0]),
+                    float(rotation[1]),
+                    float(rotation[2]),
+                ]
+        
+        # Reset when interpolation complete
+        if t >= 1.0:
+            self._last_face_detected_time = None
+            self._interpolation_start_time = None
+            self._interpolation_start_pose = None
+    
+    def _linear_pose_interpolation(
+        self, start: np.ndarray, end: np.ndarray, t: float
+    ) -> np.ndarray:
+        """Linear interpolation between two 4x4 pose matrices."""
+        # Interpolate translation
+        start_trans = start[:3, 3]
+        end_trans = end[:3, 3]
+        interp_trans = start_trans * (1 - t) + end_trans * t
+        
+        # Interpolate rotation using SLERP
+        start_rot = R.from_matrix(start[:3, :3])
+        end_rot = R.from_matrix(end[:3, :3])
+        
+        # Use scipy's slerp
+        from scipy.spatial.transform import Slerp
+        key_rots = R.concatenate([start_rot, end_rot])
+        slerp = Slerp([0, 1], key_rots)
+        interp_rot = slerp(t)
+        
+        # Build result matrix
+        result = np.eye(4, dtype=np.float32)
+        result[:3, :3] = interp_rot.as_matrix()
+        result[:3, 3] = interp_trans
+        
+        return result
+    
+    # =========================================================================
+    # Public API for face tracking
+    # =========================================================================
+    
+    def get_face_tracking_offsets(self) -> Tuple[float, float, float, float, float, float]:
+        """Get current face tracking offsets (thread-safe).
+        
+        Returns:
+            Tuple of (x, y, z, roll, pitch, yaw) offsets
+        """
+        with self._face_tracking_lock:
+            offsets = self._face_tracking_offsets
+            return (offsets[0], offsets[1], offsets[2], offsets[3], offsets[4], offsets[5])
+    
+    def set_face_tracking_enabled(self, enabled: bool) -> None:
+        """Enable or disable face tracking."""
+        self._face_tracking_enabled = enabled
+        if not enabled:
+            # Start interpolation back to neutral
+            self._last_face_detected_time = time.time()
+            self._interpolation_start_time = None
+        _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""
