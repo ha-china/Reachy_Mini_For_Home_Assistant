@@ -33,11 +33,21 @@ class ReachyController:
         self._speaker_volume = 100  # Default volume
         
         # State caching to reduce daemon load
+        # Increased TTL to 1 second to prevent overwhelming the daemon
+        # when Home Assistant subscribes to all entities at once
         self._state_cache: Dict[str, Any] = {}
-        self._cache_ttl = 0.1  # 100ms cache TTL
+        self._cache_ttl = 1.0  # 1 second cache TTL (was 100ms)
         self._last_status_query = 0.0
         self._last_pose_query = 0.0
         self._last_joints_query = 0.0
+        
+        # Request throttling to prevent daemon overload
+        self._min_request_interval = 0.1  # Minimum 100ms between SDK requests
+        self._last_sdk_request = 0.0
+        self._request_lock = __import__('threading').Lock()
+        
+        # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
+        self._respeaker_lock = __import__('threading').Lock()
 
     @property
     def is_available(self) -> bool:
@@ -55,6 +65,13 @@ class ReachyController:
         if not self.is_available:
             return None
         
+        # Throttle SDK requests to prevent daemon overload
+        with self._request_lock:
+            if now - self._last_sdk_request < self._min_request_interval:
+                # Return cached value if we're requesting too fast
+                return self._state_cache.get('status')
+            self._last_sdk_request = now
+        
         try:
             status = self.reachy.client.get_status(wait=False)
             self._state_cache['status'] = status
@@ -62,7 +79,7 @@ class ReachyController:
             return status
         except Exception as e:
             logger.error(f"Error getting status: {e}")
-            return None
+            return self._state_cache.get('status')  # Return stale cache on error
 
     def get_daemon_state(self) -> str:
         """Get daemon state with caching."""
@@ -312,6 +329,12 @@ class ReachyController:
         if not self.is_available:
             return None
         
+        # Throttle SDK requests to prevent daemon overload
+        with self._request_lock:
+            if now - self._last_sdk_request < self._min_request_interval:
+                return self._state_cache.get('head_pose')
+            self._last_sdk_request = now
+        
         try:
             pose = self.reachy.get_current_head_pose()
             self._state_cache['head_pose'] = pose
@@ -319,7 +342,7 @@ class ReachyController:
             return pose
         except Exception as e:
             logger.error(f"Error getting head pose: {e}")
-            return None
+            return self._state_cache.get('head_pose')  # Return stale cache on error
 
     def _get_cached_joint_positions(self) -> Optional[tuple]:
         """Get cached joint positions to reduce query frequency."""
@@ -330,6 +353,12 @@ class ReachyController:
         if not self.is_available:
             return None
         
+        # Throttle SDK requests to prevent daemon overload
+        with self._request_lock:
+            if now - self._last_sdk_request < self._min_request_interval:
+                return self._state_cache.get('joint_positions')
+            self._last_sdk_request = now
+        
         try:
             joints = self.reachy.get_current_joint_positions()
             self._state_cache['joint_positions'] = joints
@@ -337,7 +366,7 @@ class ReachyController:
             return joints
         except Exception as e:
             logger.error(f"Error getting joint positions: {e}")
-            return None
+            return self._state_cache.get('joint_positions')  # Return stale cache on error
 
     def _extract_pose_from_matrix(self, pose_matrix: np.ndarray) -> tuple:
         """
@@ -845,24 +874,47 @@ class ReachyController:
     # ========== Phase 11: LED Control (via local SDK) ==========
 
     def _get_respeaker(self):
-        """Get ReSpeaker device from media manager."""
+        """Get ReSpeaker device from media manager with thread-safe access.
+        
+        Returns a context manager that holds the lock during ReSpeaker operations.
+        Usage:
+            with self._get_respeaker() as respeaker:
+                if respeaker:
+                    respeaker.read("...")
+        """
         if not self.is_available:
             logger.debug("ReSpeaker not available: robot not connected")
-            return None
+            return _ReSpeakerContext(None, self._respeaker_lock)
         try:
             if not self.reachy.media:
                 logger.debug("ReSpeaker not available: media manager is None")
-                return None
+                return _ReSpeakerContext(None, self._respeaker_lock)
             if not self.reachy.media.audio:
                 logger.debug("ReSpeaker not available: audio is None")
-                return None
+                return _ReSpeakerContext(None, self._respeaker_lock)
             respeaker = self.reachy.media.audio._respeaker
             if respeaker is None:
                 logger.debug("ReSpeaker not available: _respeaker is None (USB device not found)")
-            return respeaker
+            return _ReSpeakerContext(respeaker, self._respeaker_lock)
         except Exception as e:
             logger.debug(f"ReSpeaker not available: {e}")
-            return None
+            return _ReSpeakerContext(None, self._respeaker_lock)
+
+
+class _ReSpeakerContext:
+    """Context manager for thread-safe ReSpeaker access."""
+    
+    def __init__(self, respeaker, lock):
+        self._respeaker = respeaker
+        self._lock = lock
+    
+    def __enter__(self):
+        self._lock.acquire()
+        return self._respeaker
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._lock.release()
+        return False
 
     # ========== Phase 11: LED Control (DISABLED - LEDs are inside the robot and not visible) ==========
     # According to PROJECT_PLAN.md principle 8: "LED都被隐藏在了机器人内部，所有的LED控制全部都忽略"
@@ -1001,103 +1053,103 @@ class ReachyController:
     #     except Exception as e:
     #         logger.error(f"Error setting LED color: {e}")
 
-    # ========== Phase 12: Audio Processing (via local SDK) ==========
+    # ========== Phase 12: Audio Processing (via local SDK with thread-safe access) ==========
 
     def get_agc_enabled(self) -> bool:
         """Get AGC (Automatic Gain Control) enabled status."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_agc_enabled', False)
-        try:
-            result = respeaker.read("PP_AGCONOFF")
-            if result is not None:
-                self._agc_enabled = bool(result[1])
-                return self._agc_enabled
-        except Exception as e:
-            logger.debug(f"Error getting AGC status: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return getattr(self, '_agc_enabled', False)
+            try:
+                result = respeaker.read("PP_AGCONOFF")
+                if result is not None:
+                    self._agc_enabled = bool(result[1])
+                    return self._agc_enabled
+            except Exception as e:
+                logger.debug(f"Error getting AGC status: {e}")
         return getattr(self, '_agc_enabled', False)
 
     def set_agc_enabled(self, enabled: bool) -> None:
         """Set AGC (Automatic Gain Control) enabled status."""
         self._agc_enabled = enabled
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return
-        try:
-            respeaker.write("PP_AGCONOFF", [1 if enabled else 0])
-            logger.info(f"AGC {'enabled' if enabled else 'disabled'}")
-        except Exception as e:
-            logger.error(f"Error setting AGC status: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return
+            try:
+                respeaker.write("PP_AGCONOFF", [1 if enabled else 0])
+                logger.info(f"AGC {'enabled' if enabled else 'disabled'}")
+            except Exception as e:
+                logger.error(f"Error setting AGC status: {e}")
 
     def get_agc_max_gain(self) -> float:
         """Get AGC maximum gain in dB."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_agc_max_gain', 15.0)
-        try:
-            result = respeaker.read("PP_AGCMAXGAIN")
-            if result is not None:
-                self._agc_max_gain = float(result[0])
-                return self._agc_max_gain
-        except Exception as e:
-            logger.debug(f"Error getting AGC max gain: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return getattr(self, '_agc_max_gain', 15.0)
+            try:
+                result = respeaker.read("PP_AGCMAXGAIN")
+                if result is not None:
+                    self._agc_max_gain = float(result[0])
+                    return self._agc_max_gain
+            except Exception as e:
+                logger.debug(f"Error getting AGC max gain: {e}")
         return getattr(self, '_agc_max_gain', 15.0)
 
     def set_agc_max_gain(self, gain: float) -> None:
         """Set AGC maximum gain in dB."""
         gain = max(0.0, min(30.0, gain))
         self._agc_max_gain = gain
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return
-        try:
-            respeaker.write("PP_AGCMAXGAIN", [gain])
-            logger.info(f"AGC max gain set to {gain} dB")
-        except Exception as e:
-            logger.error(f"Error setting AGC max gain: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return
+            try:
+                respeaker.write("PP_AGCMAXGAIN", [gain])
+                logger.info(f"AGC max gain set to {gain} dB")
+            except Exception as e:
+                logger.error(f"Error setting AGC max gain: {e}")
 
     def get_noise_suppression(self) -> float:
         """Get noise suppression level (0-100%)."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return getattr(self, '_noise_suppression', 50.0)
-        try:
-            result = respeaker.read("PP_MIN_NS")
-            if result is not None:
-                # PP_MIN_NS is typically a float value, convert to percentage
-                # Lower values = more suppression
-                self._noise_suppression = max(0.0, min(100.0, (1.0 - result[0]) * 100.0))
-                return self._noise_suppression
-        except Exception as e:
-            logger.debug(f"Error getting noise suppression: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return getattr(self, '_noise_suppression', 50.0)
+            try:
+                result = respeaker.read("PP_MIN_NS")
+                if result is not None:
+                    # PP_MIN_NS is typically a float value, convert to percentage
+                    # Lower values = more suppression
+                    self._noise_suppression = max(0.0, min(100.0, (1.0 - result[0]) * 100.0))
+                    return self._noise_suppression
+            except Exception as e:
+                logger.debug(f"Error getting noise suppression: {e}")
         return getattr(self, '_noise_suppression', 50.0)
 
     def set_noise_suppression(self, level: float) -> None:
         """Set noise suppression level (0-100%)."""
         level = max(0.0, min(100.0, level))
         self._noise_suppression = level
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return
-        try:
-            # Convert percentage to PP_MIN_NS value (inverted)
-            value = 1.0 - (level / 100.0)
-            respeaker.write("PP_MIN_NS", [value])
-            logger.info(f"Noise suppression set to {level}%")
-        except Exception as e:
-            logger.error(f"Error setting noise suppression: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return
+            try:
+                # Convert percentage to PP_MIN_NS value (inverted)
+                value = 1.0 - (level / 100.0)
+                respeaker.write("PP_MIN_NS", [value])
+                logger.info(f"Noise suppression set to {level}%")
+            except Exception as e:
+                logger.error(f"Error setting noise suppression: {e}")
 
     def get_echo_cancellation_converged(self) -> bool:
         """Check if echo cancellation has converged."""
-        respeaker = self._get_respeaker()
-        if respeaker is None:
-            return False
-        try:
-            result = respeaker.read("AEC_AECCONVERGED")
-            if result is not None:
-                return bool(result[1])
-        except Exception as e:
-            logger.debug(f"Error getting AEC converged status: {e}")
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                return False
+            try:
+                result = respeaker.read("AEC_AECCONVERGED")
+                if result is not None:
+                    return bool(result[1])
+            except Exception as e:
+                logger.debug(f"Error getting AEC converged status: {e}")
         return False
 
     # ========== Phase 13: Robot Joints ==========
