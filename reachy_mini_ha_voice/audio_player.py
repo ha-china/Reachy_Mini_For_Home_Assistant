@@ -104,10 +104,21 @@ class AudioPlayer:
         import sounddevice as sd
         import soundfile as sf
 
-        data, samplerate = sf.read(file_path)
+        data, samplerate = sf.read(file_path, dtype='float32')
+
+        # Convert to mono if stereo
+        if data.ndim == 2:
+            data = data.mean(axis=1)
 
         # Apply volume
         data = data * self._current_volume
+        
+        # Resample to 48000Hz (standard rate supported by most devices)
+        target_samplerate = 48000
+        if samplerate != target_samplerate:
+            num_samples = int(len(data) * target_samplerate / samplerate)
+            data = scipy.signal.resample(data, num_samples)
+            samplerate = target_samplerate
 
         if not self._stop_flag.is_set():
             try:
@@ -123,9 +134,9 @@ class AudioPlayer:
                             break
                 
                 if output_device is not None:
-                    sd.play(data, samplerate, device=output_device)
+                    sd.play(data.astype(np.float32), samplerate, device=output_device)
                 else:
-                    sd.play(data, samplerate)
+                    sd.play(data.astype(np.float32), samplerate)
                 sd.wait()
             except Exception as e:
                 _LOGGER.warning("sounddevice playback failed: %s", e)

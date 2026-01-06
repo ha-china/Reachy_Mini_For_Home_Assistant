@@ -25,12 +25,16 @@ class ReachyMiniMotion:
         self._movement_manager: Optional[MovementManager] = None
         self._is_speaking = False
         
-        _LOGGER.info("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
+        _LOGGER.warning("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
 
         # Initialize movement manager if robot is available
         if reachy_mini is not None:
-            self._movement_manager = MovementManager(reachy_mini)
-            _LOGGER.info("MovementManager created successfully")
+            try:
+                self._movement_manager = MovementManager(reachy_mini)
+                _LOGGER.warning("MovementManager created successfully")
+            except Exception as e:
+                _LOGGER.error("Failed to create MovementManager: %s", e, exc_info=True)
+                self._movement_manager = None
         else:
             _LOGGER.warning("reachy_mini is None, MovementManager not created")
 
@@ -56,7 +60,7 @@ class ReachyMiniMotion:
         """Start the movement manager control loop."""
         if self._movement_manager is not None:
             self._movement_manager.start()
-            _LOGGER.info("Motion control started")
+            _LOGGER.warning("Motion control started (movement_manager=%s)", self._movement_manager)
         else:
             _LOGGER.warning("Motion control not started: movement_manager is None (reachy_mini=%s)", self.reachy_mini)
 

@@ -545,6 +545,8 @@ class VoiceAssistantService:
 
     def _convert_to_pcm(self, audio_chunk_array: np.ndarray) -> bytes:
         """Convert float32 audio array to 16-bit PCM bytes."""
+        # Replace NaN/Inf with 0 to avoid microwakeword cast warnings
+        audio_chunk_array = np.nan_to_num(audio_chunk_array, nan=0.0, posinf=1.0, neginf=-1.0)
         return (
             (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
             .astype("<i2")
