@@ -52,6 +52,8 @@ class ReachyMiniMotion:
         if self._movement_manager is not None:
             self._movement_manager.start()
             _LOGGER.info("Motion control started")
+        else:
+            _LOGGER.warning("Motion control not started: movement_manager is None (reachy_mini=%s)", self.reachy_mini)
 
     def shutdown(self):
         """Shutdown the motion controller."""

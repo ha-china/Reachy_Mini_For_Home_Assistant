@@ -140,9 +140,11 @@ class AudioPlayer:
         
         # Read audio file
         data, input_samplerate = sf.read(file_path, dtype='float32')
+        _LOGGER.debug("Audio file: %s, samplerate=%d, shape=%s", file_path, input_samplerate, data.shape)
         
         # Get output sample rate from Reachy Mini
         output_samplerate = self.reachy_mini.media.get_output_audio_samplerate()
+        _LOGGER.debug("Output samplerate: %d", output_samplerate)
         
         # Convert to mono if stereo
         if data.ndim == 2:
@@ -155,6 +157,7 @@ class AudioPlayer:
         if input_samplerate != output_samplerate:
             num_samples = int(len(data) * output_samplerate / input_samplerate)
             data = scipy.signal.resample(data, num_samples)
+            _LOGGER.debug("Resampled to %d samples", num_samples)
         
         # Push audio in chunks (similar to conversation_app)
         chunk_size = int(output_samplerate * 0.1)  # 100ms chunks
