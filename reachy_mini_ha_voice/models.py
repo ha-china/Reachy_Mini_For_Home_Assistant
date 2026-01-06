@@ -73,6 +73,10 @@ class ServerState:
     reachy_mini: Optional[object] = None
     motion_enabled: bool = True
     motion: Optional[object] = None  # ReachyMiniMotion instance
+    
+    # TTS playback state - when True, audio recording should pause
+    # to avoid GStreamer pipeline conflicts
+    tts_playing: bool = False
 
     media_player_entity: "Optional[MediaPlayerEntity]" = None
     satellite: "Optional[VoiceSatelliteProtocol]" = None
