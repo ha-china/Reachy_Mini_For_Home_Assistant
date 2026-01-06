@@ -155,9 +155,7 @@ class VoiceAssistantService:
                     else:
                         _LOGGER.debug("Reachy Mini playback already active")
 
-                    # Wait for pipelines to start (like conversation_app does)
-                    time.sleep(1.0)
-                    _LOGGER.info("Reachy Mini media system initialized (waited 1s for pipelines)")
+                    _LOGGER.info("Reachy Mini media system initialized")
                 else:
                     _LOGGER.warning("Reachy Mini audio system not available")
             except Exception as e:
