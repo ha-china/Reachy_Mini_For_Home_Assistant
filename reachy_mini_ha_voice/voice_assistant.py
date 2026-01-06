@@ -478,6 +478,10 @@ class VoiceAssistantService:
         if self._state is None or self._state.satellite is None:
             time.sleep(0.1)
             return False
+        # Check if satellite is fully initialized
+        if not hasattr(self._state.satellite, '_is_streaming_audio'):
+            time.sleep(0.1)
+            return False
         return True
 
     def _update_wake_words_list(self, ctx: AudioProcessingContext) -> None:
