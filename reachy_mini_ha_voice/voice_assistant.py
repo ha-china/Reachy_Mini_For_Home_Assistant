@@ -424,11 +424,6 @@ class VoiceAssistantService:
                 if not self._wait_for_satellite():
                     continue
 
-                # Pause audio recording during TTS playback to avoid GStreamer conflicts
-                if self._state is not None and self._state.tts_playing:
-                    time.sleep(0.1)
-                    continue
-
                 self._update_wake_words_list(ctx)
 
                 # Get audio from Reachy Mini
