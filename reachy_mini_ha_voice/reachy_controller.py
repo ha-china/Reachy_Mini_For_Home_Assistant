@@ -64,6 +64,13 @@ class ReachyController:
         
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
         self._respeaker_lock = __import__('threading').Lock()
+        
+        # DOA caching to prevent excessive ReSpeaker queries
+        # DOA is only meaningful during wake word detection, not for continuous polling
+        self._last_doa_query = 0.0
+        self._doa_cache_ttl = 0.5  # 500ms cache TTL for DOA
+        self._cached_doa_angle = 0.0
+        self._cached_speech_detected = False
 
     @property
     def is_available(self) -> bool:
@@ -713,34 +720,37 @@ class ReachyController:
 
     # ========== Phase 5: Audio Sensors ==========
 
-    def get_doa_angle(self) -> float:
-        """Get direction of arrival angle in degrees."""
+    def _get_cached_doa(self) -> None:
+        """Update cached DOA values if cache expired."""
+        now = time.time()
+        if now - self._last_doa_query < self._doa_cache_ttl:
+            return  # Use cached values
+        
         if not self.is_available:
-            return 0.0
+            return
+        
         try:
-            # Access DOA through media_manager
-            doa_result = self.reachy.media.get_DoA()
+            # Access DOA through media_manager with thread safety
+            with self._respeaker_lock:
+                doa_result = self.reachy.media.get_DoA()
+            
             if doa_result is not None:
-                # Convert radians to degrees
-                return math.degrees(doa_result[0])
-            return 0.0
+                self._cached_doa_angle = math.degrees(doa_result[0])
+                self._cached_speech_detected = doa_result[1]
+            self._last_doa_query = now
         except Exception as e:
-            logger.error(f"Error getting DOA angle: {e}")
-            return 0.0
+            logger.debug(f"Error getting DOA: {e}")
+            # Keep using cached values on error
+
+    def get_doa_angle(self) -> float:
+        """Get direction of arrival angle in degrees (cached)."""
+        self._get_cached_doa()
+        return self._cached_doa_angle
 
     def get_speech_detected(self) -> bool:
-        """Check if speech is detected."""
-        if not self.is_available:
-            return False
-        try:
-            # Access speech detection through media_manager
-            doa_result = self.reachy.media.get_DoA()
-            if doa_result is not None:
-                return doa_result[1]
-            return False
-        except Exception as e:
-            logger.error(f"Error getting speech detection: {e}")
-            return False
+        """Check if speech is detected (cached)."""
+        self._get_cached_doa()
+        return self._cached_speech_detected
 
     # ========== Phase 6: Diagnostic Information ==========
 
