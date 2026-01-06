@@ -62,6 +62,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
 
     # No custom web UI needed - configuration is automatic via Home Assistant
     custom_app_url: Optional[str] = None
+    
+    # Use GStreamer backend for wireless version (same as conversation_app)
+    # This is required for proper audio playback via push_audio_sample()
+    request_media_backend: str = "gstreamer"
 
     def __init__(self, *args, **kwargs):
         """Initialize the app."""
@@ -118,6 +122,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             stop_event: Event to signal graceful shutdown
         """
         logger.info("Starting Home Assistant Voice Assistant...")
+        logger.info("reachy_mini instance: %s", reachy_mini)
 
         # Create and run the voice assistant service
         service = VoiceAssistantService(reachy_mini)

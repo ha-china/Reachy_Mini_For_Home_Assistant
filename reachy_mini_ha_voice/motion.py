@@ -24,10 +24,15 @@ class ReachyMiniMotion:
         self.reachy_mini = reachy_mini
         self._movement_manager: Optional[MovementManager] = None
         self._is_speaking = False
+        
+        _LOGGER.info("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
 
         # Initialize movement manager if robot is available
         if reachy_mini is not None:
             self._movement_manager = MovementManager(reachy_mini)
+            _LOGGER.info("MovementManager created successfully")
+        else:
+            _LOGGER.warning("reachy_mini is None, MovementManager not created")
 
     def set_reachy_mini(self, reachy_mini):
         """Set the Reachy Mini instance."""
