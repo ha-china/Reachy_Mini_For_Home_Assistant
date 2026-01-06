@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # Constants (borrowed from conversation_app)
 # =============================================================================
 
-CONTROL_LOOP_FREQUENCY_HZ = 5  # 5Hz control loop (reduced from 10Hz to prevent daemon serial port overload)
+CONTROL_LOOP_FREQUENCY_HZ = 2  # 2Hz control loop (reduced from 5Hz to prevent daemon serial port overload during audio)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -351,8 +351,14 @@ class MovementManager:
         # Pose change detection (prevent unnecessary commands)
         self._last_sent_pose: Optional[Dict[str, float]] = None
         # Increased threshold to reduce command frequency
-        # 0.01 rad ≈ 0.57 degrees, prevents micro-movements from triggering commands
-        self._pose_change_threshold = 0.01
+        # 0.02 rad ≈ 1.15 degrees, prevents micro-movements from triggering commands
+        self._pose_change_threshold = 0.02
+        
+        # Audio activity pause (prevent serial port overload during wake word/TTS)
+        self._audio_active = False
+        self._audio_pause_commands = True  # Skip commands during audio activity
+        self._last_command_time = 0.0
+        self._min_command_interval = 0.5  # Minimum 0.5s between commands (2Hz max)
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -429,6 +435,17 @@ class MovementManager:
         )
         self._command_queue.put(("action", action))
 
+    def set_audio_active(self, active: bool) -> None:
+        """Thread-safe: Set audio activity state to pause/resume commands.
+        
+        When audio is active (wake word detection, TTS playback), movement
+        commands are paused to prevent serial port buffer overflow.
+        
+        Args:
+            active: True when audio is playing/processing, False otherwise
+        """
+        self._command_queue.put(("audio_active", active))
+
     def set_camera_server(self, camera_server) -> None:
         """Set the camera server for face tracking offsets.
         
@@ -500,6 +517,13 @@ class MovementManager:
         elif cmd == "shake":
             amplitude_deg, duration = payload
             self._do_shake(amplitude_deg, duration)
+
+        elif cmd == "audio_active":
+            self._audio_active = payload
+            if payload:
+                logger.debug("Audio active - pausing movement commands")
+            else:
+                logger.debug("Audio inactive - resuming movement commands")
 
     def _start_action(self, action: PendingAction) -> None:
         """Start a new motion action."""
@@ -730,6 +754,16 @@ class MovementManager:
         if self.robot is None:
             return
 
+        now = self._now()
+        
+        # Skip commands during audio activity to prevent serial port overload
+        if self._audio_active and self._audio_pause_commands:
+            return
+        
+        # Enforce minimum command interval (additional throttling)
+        if now - self._last_command_time < self._min_command_interval:
+            return
+
         # Check if pose changed significantly (prevent unnecessary commands)
         if self._last_sent_pose is not None:
             max_diff = max(
@@ -739,8 +773,6 @@ class MovementManager:
             if max_diff < self._pose_change_threshold:
                 # No significant change, skip sending command
                 return
-
-        now = self._now()
         
         # Check if we should skip due to connection loss (but always try periodically)
         if self._connection_lost:
@@ -774,6 +806,7 @@ class MovementManager:
 
             # Command succeeded - update connection health and cache
             self._last_successful_command = now
+            self._last_command_time = now  # Track for throttling
             self._last_sent_pose = pose.copy()  # Cache sent pose
             self._consecutive_errors = 0  # Reset error counter
             

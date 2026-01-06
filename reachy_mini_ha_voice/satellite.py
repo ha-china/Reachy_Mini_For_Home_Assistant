@@ -323,6 +323,10 @@ class VoiceSatelliteProtocol(APIServer):
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
+        # Pause movement commands during audio activity to prevent serial port overload
+        if self.state.motion:
+            self.state.motion.set_audio_active(True)
+
         self.send_messages(
             [VoiceAssistantRequest(start=True, wake_word_phrase=wake_word_phrase)]
         )
@@ -339,6 +343,10 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
         else:
             _LOGGER.debug("TTS response stopped manually")
+
+        # Resume movement commands after audio activity
+        if self.state.motion:
+            self.state.motion.set_audio_active(False)
 
         self._tts_finished()
 
@@ -371,6 +379,9 @@ class VoiceSatelliteProtocol(APIServer):
         else:
             self.unduck()
             _LOGGER.debug("TTS response finished")
+            # Resume movement commands after audio activity
+            if self.state.motion:
+                self.state.motion.set_audio_active(False)
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
 
