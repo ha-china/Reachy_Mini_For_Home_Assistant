@@ -67,6 +67,15 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.satellite = self
         self.camera_server = camera_server
 
+        # Initialize streaming state early (before entity setup)
+        # This is needed because audio processing thread checks this attribute
+        self._is_streaming_audio = False
+        self._tts_url: Optional[str] = None
+        self._tts_played = False
+        self._continue_conversation = False
+        self._timer_finished = False
+        self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
+
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
@@ -105,13 +114,6 @@ class VoiceSatelliteProtocol(APIServer):
                 entity.server = self
             # Find and store references to DOA entities
             self._entity_registry.find_entity_references(self.state.entities)
-
-        self._is_streaming_audio = False
-        self._tts_url: Optional[str] = None
-        self._tts_played = False
-        self._continue_conversation = False
-        self._timer_finished = False
-        self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
 
     def handle_voice_event(
         self, event_type: VoiceAssistantEventType, data: Dict[str, str]
