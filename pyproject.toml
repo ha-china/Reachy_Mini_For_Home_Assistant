@@ -41,7 +41,9 @@ dependencies = [
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
 [project.entry-points."reachy_mini_apps"]
-reachy_mini_ha_voice = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"[tool.setuptools]
+reachy_mini_ha_voice = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"
+
+[tool.setuptools]
 package-dir = { "" = "." }
 include-package-data = true
 
