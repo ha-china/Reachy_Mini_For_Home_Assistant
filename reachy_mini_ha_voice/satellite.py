@@ -75,16 +75,21 @@ class VoiceSatelliteProtocol(APIServer):
         self._continue_conversation = False
         self._timer_finished = False
         self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
+        
+        # Tap-to-talk continuous conversation mode
+        self._tap_conversation_mode = False  # When True, auto-continue after TTS
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
-        # Initialize entity registry
+        # Initialize entity registry (tap_detector from state if available)
+        tap_detector = getattr(state, 'tap_detector', None)
         self._entity_registry = EntityRegistry(
             server=self,
             reachy_controller=self.reachy_controller,
             camera_server=camera_server,
             play_emotion_callback=self._play_emotion,
+            tap_detector=tap_detector,
         )
 
         # Only setup entities once (check if already initialized)
@@ -330,6 +335,44 @@ class VoiceSatelliteProtocol(APIServer):
         self._is_streaming_audio = True
         self.state.tts_player.play(self.state.wakeup_sound)
 
+    def wakeup_from_tap(self) -> None:
+        """Trigger wake-up from tap detection (no wake word).
+        
+        First tap: Enter continuous conversation mode
+        Second tap (while in conversation): Exit continuous conversation mode
+        """
+        # If already in tap conversation mode, exit it
+        if self._tap_conversation_mode:
+            _LOGGER.info("Tap detected - exiting continuous conversation mode")
+            self._tap_conversation_mode = False
+            self._is_streaming_audio = False
+            # Stop any ongoing TTS
+            self.state.tts_player.stop()
+            self.unduck()
+            self._reachy_on_idle()
+            return
+        
+        if self._timer_finished:
+            # Stop timer instead
+            self._timer_finished = False
+            self.state.tts_player.stop()
+            _LOGGER.debug("Stopping timer finished sound")
+            return
+
+        _LOGGER.info("Tap detected - entering continuous conversation mode")
+        self._tap_conversation_mode = True
+
+        self.send_messages(
+            [VoiceAssistantRequest(start=True, wake_word_phrase="tap")]
+        )
+        self.duck()
+        self._is_streaming_audio = True
+        self.state.tts_player.play(self.state.wakeup_sound)
+
+    def is_tap_conversation_active(self) -> bool:
+        """Check if tap-triggered continuous conversation is active."""
+        return self._tap_conversation_mode
+
     def stop(self) -> None:
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.state.tts_player.stop()
@@ -364,10 +407,21 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
-        if self._continue_conversation:
+        # Check if should continue conversation
+        # 1. HA requested continue (intent not matched)
+        # 2. Tap conversation mode is active
+        should_continue = self._continue_conversation or self._tap_conversation_mode
+
+        if should_continue:
             self.send_messages([VoiceAssistantRequest(start=True)])
             self._is_streaming_audio = True
-            _LOGGER.debug("Continuing conversation")
+            
+            if self._tap_conversation_mode:
+                _LOGGER.debug("Continuing tap conversation mode")
+                # Provide feedback for continuous conversation mode
+                self._tap_continue_feedback()
+            else:
+                _LOGGER.debug("Continuing conversation (HA requested)")
         else:
             self.unduck()
             _LOGGER.debug("TTS response finished")
@@ -510,6 +564,23 @@ class VoiceSatelliteProtocol(APIServer):
                 self.state.motion.on_idle()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
+
+    def _tap_continue_feedback(self) -> None:
+        """Provide feedback when continuing conversation in tap mode.
+        
+        Plays a short sound and triggers a nod to indicate ready for next input.
+        """
+        try:
+            # Play the wakeup sound (short beep) to indicate listening
+            self.state.tts_player.play(self.state.wakeup_sound)
+            _LOGGER.debug("Tap continue feedback: sound played")
+            
+            # Trigger a small nod to indicate ready for input
+            if self.state.motion_enabled and self.state.motion:
+                self.state.motion.on_continue_listening()
+                _LOGGER.debug("Tap continue feedback: continue listening pose")
+        except Exception as e:
+            _LOGGER.error("Tap continue feedback error: %s", e)
 
     def _reachy_on_timer_finished(self) -> None:
         """Called when a timer finishes."""

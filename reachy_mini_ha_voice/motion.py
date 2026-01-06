@@ -112,6 +112,26 @@ class ReachyMiniMotion:
         self._movement_manager.set_state(RobotState.LISTENING)
         _LOGGER.debug("Reachy Mini: Listening pose")
 
+    def on_continue_listening(self):
+        """Called when continuing to listen in tap conversation mode.
+        
+        Performs a small nod to indicate ready for next input.
+        Non-blocking: command sent to MovementManager.
+        """
+        if self._movement_manager is None:
+            return
+
+        self._movement_manager.set_state(RobotState.LISTENING)
+        
+        # Small nod to indicate ready
+        action = PendingAction(
+            name="continue_nod",
+            target_pitch=math.radians(8),  # Small nod down
+            duration=0.25,
+        )
+        self._movement_manager.queue_action(action)
+        _LOGGER.debug("Reachy Mini: Continue listening (nod)")
+
     def on_thinking(self):
         """Called when processing speech - thinking pose.
 

@@ -73,6 +73,7 @@ class ServerState:
     reachy_mini: Optional[object] = None
     motion_enabled: bool = True
     motion: Optional[object] = None  # ReachyMiniMotion instance
+    tap_detector: Optional[object] = None  # TapDetector instance (Wireless only)
 
     media_player_entity: "Optional[MediaPlayerEntity]" = None
     satellite: "Optional[VoiceSatelliteProtocol]" = None

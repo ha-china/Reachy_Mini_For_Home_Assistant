@@ -70,6 +70,7 @@
 - [x] ESPHome 协议服务器实现
 - [x] mDNS 服务发现（自动被 Home Assistant 发现）
 - [x] 本地唤醒词检测（microWakeWord）
+- [x] 拍一拍唤醒（IMU 加速度检测，仅无线版本）
 - [x] 音频流传输到 Home Assistant
 - [x] TTS 音频播放
 - [x] 停止词检测
@@ -584,7 +585,7 @@ VAD_DB_OFF = -45  # 停止检测阈值
 - ❌ 用户说 "记住这个" → 保存动作
 - ❌ 用户说 "做刚才的动作" → 播放录制的动作
 
-### Phase 20 - 环境感知响应 (未实现) ❌
+### Phase 20 - 环境感知响应 (部分实现) 🟡
 
 **目标**: 利用 IMU 传感器感知环境变化并做出响应。
 
@@ -592,11 +593,49 @@ VAD_DB_OFF = -45  # 停止检测阈值
 - ✅ `mini.imu["accelerometer"]` - 加速度计 (Phase 7 已实现为实体)
 - ✅ `mini.imu["gyroscope"]` - 陀螺仪 (Phase 7 已实现为实体)
 
+**已实现功能**:
+
+| 检测事件 | 响应动作 | 实现状态 |
+|---------|---------|---------|
+| 拍一拍唤醒 | 进入持续对话模式 | ✅ 已实现 |
+| 再次拍一拍 | 退出持续对话模式 | ✅ 已实现 |
+
+**拍一拍唤醒 vs 语音唤醒**:
+
+| 唤醒方式 | 对话模式 | 说明 |
+|---------|---------|------|
+| 语音唤醒 (Okay Nabu) | 单次对话 | 每次对话需要重新说唤醒词 |
+| 拍一拍唤醒 | 持续对话 | TTS 结束后自动继续监听，再拍一次退出 |
+
+**技术实现**:
+- `tap_detector.py` - IMU 加速度突变检测
+- `satellite.py:_tap_conversation_mode` - 持续对话模式标志
+- 阈值: 2.0g (可配置)
+- 冷却时间: 1.0s (防止重复触发)
+- 仅限无线版本 (Wireless) 可用
+
+```python
+# satellite.py - 持续对话模式
+def wakeup_from_tap(self):
+    if self._tap_conversation_mode:
+        # 第二次拍 - 退出持续对话
+        self._tap_conversation_mode = False
+        self._reachy_on_idle()
+    else:
+        # 第一次拍 - 进入持续对话
+        self._tap_conversation_mode = True
+        self.send_messages([VoiceAssistantRequest(start=True)])
+
+def _tts_finished(self):
+    if self._tap_conversation_mode:
+        # 持续对话模式：自动继续监听
+        self.send_messages([VoiceAssistantRequest(start=True)])
+```
+
 **未实现功能**:
 
 | 检测事件 | 响应动作 | 实现状态 |
 |---------|---------|---------|
-| 被拍打/敲击 | 播放惊讶动作 + 语音 "哎呀!" | ❌ 未实现 |
 | 被摇晃 | 播放晕眩动作 + 语音 "别晃我~" | ❌ 未实现 |
 | 倾斜/倒下 | 播放求助动作 + 语音 "我倒了，帮帮我" | ❌ 未实现 |
 | 长时间静止 | 进入休眠动画 | ❌ 未实现 |

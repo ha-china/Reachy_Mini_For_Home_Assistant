@@ -26,6 +26,7 @@ from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
 from .motion import ReachyMiniMotion
 from .camera_server import MJPEGCameraServer
+from .tap_detector import TapDetector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +76,8 @@ class VoiceAssistantService:
         self._state: Optional[ServerState] = None
         self._motion = ReachyMiniMotion(reachy_mini)
         self._camera_server: Optional[MJPEGCameraServer] = None
+        self._tap_detector: Optional[TapDetector] = None
+        self._last_tap_wakeup: float = 0.0  # For refractory period
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -165,6 +168,18 @@ class VoiceAssistantService:
         if self._motion is not None:
             self._motion.start()
 
+        # Start tap detector for "tap to wake" (Wireless version only)
+        if self.reachy_mini is not None:
+            self._tap_detector = TapDetector(
+                reachy_mini=self.reachy_mini,
+                on_tap_callback=self._on_tap_detected,
+                threshold_g=2.0,
+                cooldown_seconds=1.0,
+            )
+            self._tap_detector.start()
+            # Store tap_detector in state for entity registry access
+            self._state.tap_detector = self._tap_detector
+
         # Start audio processing thread (non-daemon for proper cleanup)
         self._running = True
         self._audio_thread = threading.Thread(
@@ -247,7 +262,12 @@ class VoiceAssistantService:
             await self._camera_server.stop()
             self._camera_server = None
 
-        # 8. Shutdown motion executor
+        # 8. Stop tap detector
+        if self._tap_detector:
+            self._tap_detector.stop()
+            self._tap_detector = None
+
+        # 9. Shutdown motion executor
         if self._motion:
             self._motion.shutdown()
 
@@ -619,3 +639,35 @@ class VoiceAssistantService:
         if stopped and (self._state.stop_word.id in self._state.active_wake_words):
             _LOGGER.info("Stop word detected")
             self._state.satellite.stop()
+
+    def _on_tap_detected(self) -> None:
+        """Callback when tap is detected on the robot.
+        
+        First tap: Enter continuous conversation mode
+        Second tap: Exit continuous conversation mode
+        """
+        if self._state is None or self._state.satellite is None:
+            return
+        
+        # Check refractory period
+        now = time.monotonic()
+        if now - self._last_tap_wakeup < self._state.refractory_seconds:
+            _LOGGER.debug("Tap ignored (refractory period)")
+            return
+        
+        self._last_tap_wakeup = now
+        
+        # Check if we're exiting conversation mode
+        is_exiting = self._state.satellite.is_tap_conversation_active()
+        
+        # Trigger tap handling in satellite (handles mode toggle)
+        self._state.satellite.wakeup_from_tap()
+        
+        # Trigger motion feedback
+        if self._motion is not None:
+            if is_exiting:
+                # Exiting conversation - return to idle
+                self._motion.on_idle()
+            else:
+                # Starting conversation
+                self._motion.on_wakeup()
