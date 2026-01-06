@@ -9,12 +9,17 @@ from typing import List, Optional, Union
 
 import numpy as np
 import soundfile as sf
+import scipy.signal
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class AudioPlayer:
-    """Audio player using Reachy Mini's media system."""
+    """Audio player using Reachy Mini's media system.
+    
+    Uses push_audio_sample() to write audio to the GStreamer pipeline.
+    The caller must pause audio recording during playback to avoid conflicts.
+    """
 
     def __init__(self, reachy_mini=None) -> None:
         self.reachy_mini = reachy_mini
@@ -63,31 +68,30 @@ class AudioPlayer:
         thread.start()
 
     def _play_file(self, file_path: str) -> None:
-        """Play an audio file using play_sound() - independent GStreamer playbin."""
+        """Play an audio file using push_audio_sample()."""
         try:
             # Handle URLs - download first
             if file_path.startswith(("http://", "https://")):
                 import urllib.request
                 import tempfile
 
+                _LOGGER.debug("Downloading TTS audio from %s", file_path)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                     urllib.request.urlretrieve(file_path, tmp.name)
                     file_path = tmp.name
+                _LOGGER.debug("Downloaded to %s", file_path)
 
             if self._stop_flag.is_set():
                 return
 
-            # Use Reachy Mini's play_sound() for TTS playback
-            # This creates an independent GStreamer playbin that doesn't conflict
-            # with the recording pipeline (unlike push_audio_sample which shares appsrc)
+            # Use push_audio_sample for playback
             if self.reachy_mini is not None:
                 try:
-                    self._play_via_play_sound(file_path)
+                    self._play_via_push_audio(file_path)
                 except Exception as e:
-                    _LOGGER.warning("play_sound failed, trying sounddevice: %s", e)
-                    self._play_file_fallback(file_path)
+                    _LOGGER.warning("push_audio_sample failed: %s", e)
             else:
-                self._play_file_fallback(file_path)
+                _LOGGER.warning("No reachy_mini instance, cannot play audio")
 
         except Exception as e:
             _LOGGER.error("Error playing audio: %s", e)
@@ -99,56 +103,48 @@ class AudioPlayer:
             else:
                 self._on_playback_finished()
 
-    def _play_via_play_sound(self, file_path: str) -> None:
-        """Play audio using Reachy Mini's play_sound() method.
+    def _play_via_push_audio(self, file_path: str) -> None:
+        """Play audio by pushing samples to Reachy Mini's GStreamer pipeline.
         
-        This creates an independent GStreamer playbin pipeline that doesn't
-        conflict with the recording pipeline. This is the key difference from
-        push_audio_sample() which writes to the shared appsrc pipeline.
+        This writes audio directly to the existing playback pipeline.
+        The caller should pause audio recording during this operation.
         """
-        # play_sound() is non-blocking, so we need to estimate duration and wait
-        data, samplerate = sf.read(file_path, dtype='float32')
-        duration = len(data) / samplerate
+        # Read audio file
+        data, input_samplerate = sf.read(file_path, dtype='float32')
+        _LOGGER.debug("Audio file: %s, samplerate=%d, shape=%s", file_path, input_samplerate, data.shape)
         
-        _LOGGER.debug("Playing via play_sound: %s (duration=%.2fs)", file_path, duration)
+        # Get output sample rate from Reachy Mini
+        output_samplerate = self.reachy_mini.media.get_output_audio_samplerate()
+        _LOGGER.debug("Output samplerate: %d", output_samplerate)
         
-        # Call play_sound - creates independent playbin
-        self.reachy_mini.media.play_sound(file_path)
-        
-        # Wait for playback to complete (play_sound is non-blocking)
-        # Check stop flag periodically
-        elapsed = 0.0
-        while elapsed < duration and not self._stop_flag.is_set():
-            time.sleep(0.1)
-            elapsed += 0.1
-
-    def _play_file_fallback(self, file_path: str) -> None:
-        """Play audio using sounddevice (fallback when Reachy Mini not available)."""
-        import sounddevice as sd
-        import scipy.signal
-
-        data, samplerate = sf.read(file_path, dtype='float32')
-
         # Convert to mono if stereo
         if data.ndim == 2:
             data = data.mean(axis=1)
-
+        
         # Apply volume
         data = data * self._current_volume
         
-        # Resample to 48000Hz (standard rate supported by most devices)
-        target_samplerate = 48000
-        if samplerate != target_samplerate:
-            num_samples = int(len(data) * target_samplerate / samplerate)
+        # Resample if needed
+        if input_samplerate != output_samplerate:
+            num_samples = int(len(data) * output_samplerate / input_samplerate)
             data = scipy.signal.resample(data, num_samples)
-            samplerate = target_samplerate
-
-        if not self._stop_flag.is_set():
-            try:
-                sd.play(data.astype(np.float32), samplerate)
-                sd.wait()
-            except Exception as e:
-                _LOGGER.warning("sounddevice playback failed: %s", e)
+            _LOGGER.debug("Resampled to %d samples", num_samples)
+        
+        # Push audio in chunks (like conversation_app)
+        # Use smaller chunks for smoother playback
+        chunk_duration = 0.05  # 50ms chunks
+        chunk_size = int(output_samplerate * chunk_duration)
+        
+        for i in range(0, len(data), chunk_size):
+            if self._stop_flag.is_set():
+                _LOGGER.debug("Playback stopped by flag")
+                break
+            chunk = data[i:i + chunk_size].astype(np.float32)
+            self.reachy_mini.media.push_audio_sample(chunk)
+            # Sleep to match chunk duration (prevents buffer overflow)
+            time.sleep(chunk_duration * 0.8)  # Slightly less to keep buffer fed
+        
+        _LOGGER.debug("Audio playback complete")
 
     def _on_playback_finished(self) -> None:
         """Called when playback is finished."""
@@ -175,6 +171,11 @@ class AudioPlayer:
 
     def stop(self) -> None:
         self._stop_flag.set()
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.clear_output_buffer()
+            except Exception:
+                pass
         self._playlist.clear()
         self.is_playing = False
 

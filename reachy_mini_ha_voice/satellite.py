@@ -352,6 +352,10 @@ class VoiceSatelliteProtocol(APIServer):
         self._tts_played = True
         _LOGGER.debug("Playing TTS response: %s", self._tts_url)
 
+        # Set flag to pause audio recording during TTS playback
+        # This prevents GStreamer pipeline conflicts (recording and playback share resources)
+        self.state.tts_playing = True
+        
         self.state.active_wake_words.add(self.state.stop_word.id)
         self.state.tts_player.play(self._tts_url, done_callback=self._tts_finished)
 
@@ -364,6 +368,9 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.music_player.unduck()
 
     def _tts_finished(self) -> None:
+        # Clear TTS playing flag to resume audio recording
+        self.state.tts_playing = False
+        
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
