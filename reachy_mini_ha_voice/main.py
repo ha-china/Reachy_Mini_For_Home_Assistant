@@ -122,10 +122,12 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             stop_event: Event to signal graceful shutdown
         """
         logger.info("Starting Home Assistant Voice Assistant...")
-        logger.info("reachy_mini instance: %s", reachy_mini)
+        logger.warning("run() called with reachy_mini=%s (type=%s)", reachy_mini, type(reachy_mini).__name__)
 
         # Create and run the voice assistant service
         service = VoiceAssistantService(reachy_mini)
+        logger.warning("VoiceAssistantService created, motion._movement_manager=%s", 
+                      service._motion._movement_manager if service._motion else None)
 
         # Always create a new event loop to avoid conflicts with SDK
         loop = asyncio.new_event_loop()
