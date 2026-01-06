@@ -76,7 +76,7 @@ class MJPEGCameraServer:
         
         # Face tracking state
         self._head_tracker = None
-        self._face_tracking_enabled = True
+        self._face_tracking_enabled = False  # Disabled by default, enabled on wake word
         self._face_tracking_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
         

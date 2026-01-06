@@ -34,7 +34,7 @@ from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     SwitchStateResponse,
     TextSensorStateResponse,
 )
-from aioesphomeapi.model import MediaPlayerCommand, MediaPlayerState
+from aioesphomeapi.model import MediaPlayerCommand, MediaPlayerState, MediaPlayerEntityFeature
 from google.protobuf import message
 
 from .api_server import APIServer
@@ -140,11 +140,20 @@ class MediaPlayerEntity(ESPHomeEntity):
                 self.volume = msg.volume
                 yield self._update_state(self.state)
         elif isinstance(msg, ListEntitiesRequest):
+            # Set feature flags for Music Assistant compatibility
+            # PLAY_MEDIA (512) is required for Music Assistant to recognize the player
+            feature_flags = (
+                MediaPlayerEntityFeature.PAUSE
+                | MediaPlayerEntityFeature.PLAY_MEDIA
+                | MediaPlayerEntityFeature.VOLUME_SET
+                | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
+            )
             yield ListEntitiesMediaPlayerResponse(
                 object_id=self.object_id,
                 key=self.key,
                 name=self.name,
                 supports_pause=True,
+                feature_flags=feature_flags,
             )
         elif isinstance(msg, SubscribeHomeAssistantStatesRequest):
             yield self._get_state_message()

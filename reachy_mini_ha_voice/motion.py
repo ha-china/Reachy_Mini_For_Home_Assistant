@@ -23,6 +23,7 @@ class ReachyMiniMotion:
     def __init__(self, reachy_mini=None):
         self.reachy_mini = reachy_mini
         self._movement_manager: Optional[MovementManager] = None
+        self._camera_server = None  # Reference to camera server for face tracking control
         self._is_speaking = False
         
         _LOGGER.warning("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
@@ -52,6 +53,7 @@ class ReachyMiniMotion:
         Args:
             camera_server: MJPEGCameraServer instance with face tracking enabled
         """
+        self._camera_server = camera_server
         if self._movement_manager is not None:
             self._movement_manager.set_camera_server(camera_server)
             _LOGGER.info("Camera server connected for face tracking")
@@ -83,12 +85,17 @@ class ReachyMiniMotion:
         """Called when wake word is detected.
 
         Non-blocking: command sent to MovementManager.
-        Face tracking will handle looking at the user automatically.
+        Enables face tracking to look at the user.
         """
         _LOGGER.debug("on_wakeup called")
         if self._movement_manager is None:
             _LOGGER.warning("on_wakeup: movement_manager is None, skipping motion")
             return
+
+        # Enable face tracking when wake word detected
+        if self._camera_server is not None:
+            self._camera_server.set_face_tracking_enabled(True)
+            _LOGGER.info("Face tracking enabled on wake word")
 
         # Set listening state - face tracking will handle looking at user
         self._movement_manager.set_state(RobotState.LISTENING)
@@ -161,6 +168,7 @@ class ReachyMiniMotion:
         """Called when returning to idle state.
 
         Non-blocking: command sent to MovementManager.
+        Disables face tracking to save resources.
         """
         if self._movement_manager is None:
             return
@@ -168,6 +176,12 @@ class ReachyMiniMotion:
         self._is_speaking = False
         self._movement_manager.set_state(RobotState.IDLE)
         self._movement_manager.reset_to_neutral(duration=0.5)
+
+        # Disable face tracking when returning to idle (save resources)
+        if self._camera_server is not None:
+            self._camera_server.set_face_tracking_enabled(False)
+            _LOGGER.info("Face tracking disabled on idle")
+
         _LOGGER.debug("Reachy Mini: Idle pose")
 
     def on_timer_finished(self):
