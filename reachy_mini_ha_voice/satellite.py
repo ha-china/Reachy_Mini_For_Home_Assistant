@@ -328,7 +328,6 @@ class VoiceSatelliteProtocol(APIServer):
         )
         self.duck()
         self._is_streaming_audio = True
-        # Play wakeup sound (like linux-voice-assistant does)
         self.state.tts_player.play(self.state.wakeup_sound)
 
     def stop(self) -> None:

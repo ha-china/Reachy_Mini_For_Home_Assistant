@@ -62,20 +62,12 @@ class ReachyMiniHaVoice(ReachyMiniApp):
 
     # No custom web UI needed - configuration is automatic via Home Assistant
     custom_app_url: Optional[str] = None
-    
-    # Use GStreamer backend for wireless version (same as conversation_app)
-    # This is required for proper audio playback via push_audio_sample()
-    request_media_backend: str = "gstreamer"
 
     def __init__(self, *args, **kwargs):
         """Initialize the app."""
         super().__init__(*args, **kwargs)
         if not hasattr(self, 'stop_event'):
             self.stop_event = threading.Event()
-        
-        # Force localhost connection mode since this app runs on the robot
-        # This prevents WebRTC connection attempts that can fail
-        self.daemon_on_localhost = True
 
     def wrapped_run(self, *args, **kwargs) -> None:
         """
@@ -126,12 +118,9 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             stop_event: Event to signal graceful shutdown
         """
         logger.info("Starting Home Assistant Voice Assistant...")
-        logger.warning("run() called with reachy_mini=%s (type=%s)", reachy_mini, type(reachy_mini).__name__)
 
         # Create and run the voice assistant service
         service = VoiceAssistantService(reachy_mini)
-        logger.warning("VoiceAssistantService created, motion._movement_manager=%s", 
-                      service._motion._movement_manager if service._motion else None)
 
         # Always create a new event loop to avoid conflicts with SDK
         loop = asyncio.new_event_loop()

@@ -134,19 +134,32 @@ class VoiceAssistantService:
         self._state.motion = self._motion
 
         # Start Reachy Mini media system if available
-        # Reference: conversation_app/console.py launch() method
         if self.reachy_mini is not None:
             try:
+                # Check if media system is already running to avoid conflicts
                 media = self.reachy_mini.media
                 if media.audio is not None:
-                    # Start recording and playback pipelines
-                    media.start_recording()
-                    media.start_playing()
-                    _LOGGER.info("Reachy Mini media system started (recording + playback)")
+                    # Check recording state
+                    is_recording = getattr(media, '_recording', False)
+                    if not is_recording:
+                        media.start_recording()
+                        _LOGGER.info("Started Reachy Mini recording")
+                    else:
+                        _LOGGER.debug("Reachy Mini recording already active")
+
+                    # Check playback state
+                    is_playing = getattr(media, '_playing', False)
+                    if not is_playing:
+                        media.start_playing()
+                        _LOGGER.info("Started Reachy Mini playback")
+                    else:
+                        _LOGGER.debug("Reachy Mini playback already active")
+
+                    _LOGGER.info("Reachy Mini media system initialized")
                 else:
                     _LOGGER.warning("Reachy Mini audio system not available")
             except Exception as e:
-                _LOGGER.warning("Failed to start Reachy Mini media: %s", e)
+                _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
         # Start motion controller (5Hz control loop)
         if self._motion is not None:
@@ -195,14 +208,13 @@ class VoiceAssistantService:
         """Stop the voice assistant service."""
         _LOGGER.info("Stopping voice assistant service...")
 
-        # 1. Stop media recording first to prevent new audio data
-        # Reference: conversation_app/console.py close() method
+        # 1. First stop audio recording to prevent new data from coming in
         if self.reachy_mini is not None:
             try:
                 self.reachy_mini.media.stop_recording()
                 _LOGGER.debug("Reachy Mini recording stopped")
             except Exception as e:
-                _LOGGER.debug("Error stopping recording: %s", e)
+                _LOGGER.warning("Error stopping Reachy Mini recording: %s", e)
 
         # 2. Set stop flag
         self._running = False
@@ -213,13 +225,13 @@ class VoiceAssistantService:
             if self._audio_thread.is_alive():
                 _LOGGER.warning("Audio thread did not stop in time")
 
-        # 4. Stop media playback
+        # 4. Stop playback
         if self.reachy_mini is not None:
             try:
                 self.reachy_mini.media.stop_playing()
                 _LOGGER.debug("Reachy Mini playback stopped")
             except Exception as e:
-                _LOGGER.debug("Error stopping playback: %s", e)
+                _LOGGER.warning("Error stopping Reachy Mini playback: %s", e)
 
         # 5. Stop ESPHome server
         if self._server:
@@ -533,8 +545,6 @@ class VoiceAssistantService:
 
     def _convert_to_pcm(self, audio_chunk_array: np.ndarray) -> bytes:
         """Convert float32 audio array to 16-bit PCM bytes."""
-        # Replace NaN/Inf with 0 to avoid microwakeword cast warnings
-        audio_chunk_array = np.nan_to_num(audio_chunk_array, nan=0.0, posinf=1.0, neginf=-1.0)
         return (
             (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
             .astype("<i2")
