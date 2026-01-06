@@ -328,11 +328,7 @@ class VoiceSatelliteProtocol(APIServer):
         )
         self.duck()
         self._is_streaming_audio = True
-        # NOTE: Wakeup sound disabled to prevent daemon crash
-        # The play_sound/push_audio_sample conflicts with GStreamer audio recording
-        # TODO: Re-enable once audio playback is fixed
-        # self.state.tts_player.play(self.state.wakeup_sound)
-        _LOGGER.debug("Wakeup sound skipped (disabled to prevent daemon crash)")
+        self.state.tts_player.play(self.state.wakeup_sound)
 
     def stop(self) -> None:
         self.state.active_wake_words.discard(self.state.stop_word.id)
