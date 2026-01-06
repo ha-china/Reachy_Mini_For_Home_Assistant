@@ -471,9 +471,7 @@ class MovementManager:
             # State transition logic
             if payload == RobotState.IDLE and old_state != RobotState.IDLE:
                 self.state.idle_start_time = self._now()
-                # NOTE: Breathing animation disabled to prevent serial port overflow
-                # The 5Hz control loop + breathing causes too many commands
-                # self._breathing.set_active(True)
+                self._breathing.set_active(True)
                 self._speech_sway.reset()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()

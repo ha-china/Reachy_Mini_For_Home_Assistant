@@ -133,33 +133,18 @@ class VoiceAssistantService:
         # Set motion controller reference in state
         self._state.motion = self._motion
 
-        # Start Reachy Mini media system if available
+        # Note: Media system (recording/playback) is managed by the SDK/daemon
+        # We don't need to start it manually - the daemon already handles this
+        # Just verify the media system is available
         if self.reachy_mini is not None:
             try:
-                # Check if media system is already running to avoid conflicts
                 media = self.reachy_mini.media
                 if media.audio is not None:
-                    # Check recording state
-                    is_recording = getattr(media, '_recording', False)
-                    if not is_recording:
-                        media.start_recording()
-                        _LOGGER.info("Started Reachy Mini recording")
-                    else:
-                        _LOGGER.debug("Reachy Mini recording already active")
-
-                    # Check playback state
-                    is_playing = getattr(media, '_playing', False)
-                    if not is_playing:
-                        media.start_playing()
-                        _LOGGER.info("Started Reachy Mini playback")
-                    else:
-                        _LOGGER.debug("Reachy Mini playback already active")
-
-                    _LOGGER.info("Reachy Mini media system initialized")
+                    _LOGGER.info("Reachy Mini media system available")
                 else:
                     _LOGGER.warning("Reachy Mini audio system not available")
             except Exception as e:
-                _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
+                _LOGGER.warning("Failed to check Reachy Mini media: %s", e)
 
         # Start motion controller (5Hz control loop)
         if self._motion is not None:
@@ -208,49 +193,34 @@ class VoiceAssistantService:
         """Stop the voice assistant service."""
         _LOGGER.info("Stopping voice assistant service...")
 
-        # 1. First stop audio recording to prevent new data from coming in
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_recording()
-                _LOGGER.debug("Reachy Mini recording stopped")
-            except Exception as e:
-                _LOGGER.warning("Error stopping Reachy Mini recording: %s", e)
-
-        # 2. Set stop flag
+        # 1. Set stop flag first
         self._running = False
 
-        # 3. Wait for audio thread to finish
+        # 2. Wait for audio thread to finish
         if self._audio_thread:
             self._audio_thread.join(timeout=3.0)
             if self._audio_thread.is_alive():
                 _LOGGER.warning("Audio thread did not stop in time")
 
-        # 4. Stop playback
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_playing()
-                _LOGGER.debug("Reachy Mini playback stopped")
-            except Exception as e:
-                _LOGGER.warning("Error stopping Reachy Mini playback: %s", e)
-
-        # 5. Stop ESPHome server
+        # 3. Stop ESPHome server
         if self._server:
             self._server.close()
             await self._server.wait_closed()
 
-        # 6. Unregister mDNS
+        # 4. Unregister mDNS
         if self._discovery:
             await self._discovery.unregister_server()
 
-        # 7. Stop camera server
+        # 5. Stop camera server
         if self._camera_server:
             await self._camera_server.stop()
             self._camera_server = None
 
-        # 8. Shutdown motion executor
+        # 6. Shutdown motion executor
         if self._motion:
             self._motion.shutdown()
 
+        # Note: Don't stop media recording/playback - managed by SDK/daemon
         _LOGGER.info("Voice assistant service stopped.")
 
     async def _verify_required_files(self) -> None:
