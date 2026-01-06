@@ -112,8 +112,6 @@ class VoiceSatelliteProtocol(APIServer):
             # Update server reference in existing entities
             for entity in self.state.entities:
                 entity.server = self
-            # Find and store references to DOA entities
-            self._entity_registry.find_entity_references(self.state.entities)
 
     def handle_voice_event(
         self, event_type: VoiceAssistantEventType, data: Dict[str, str]
@@ -332,9 +330,6 @@ class VoiceSatelliteProtocol(APIServer):
         self._is_streaming_audio = True
         self.state.tts_player.play(self.state.wakeup_sound)
 
-        # Update DOA entity in Home Assistant
-        self._update_doa_entities()
-
     def stop(self) -> None:
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.state.tts_player.stop()
@@ -471,18 +466,6 @@ class VoiceSatelliteProtocol(APIServer):
     # -------------------------------------------------------------------------
     # Reachy Mini Motion Control
     # -------------------------------------------------------------------------
-
-    def _update_doa_entities(self) -> None:
-        """Update DOA and speech detection entities in Home Assistant."""
-        try:
-            if self._entity_registry.doa_angle_entity is not None:
-                self._entity_registry.doa_angle_entity.update_state()
-                _LOGGER.debug("DOA angle entity updated")
-            if self._entity_registry.speech_detected_entity is not None:
-                self._entity_registry.speech_detected_entity.update_state()
-                _LOGGER.debug("Speech detected entity updated")
-        except Exception as e:
-            _LOGGER.error("Error updating DOA entities: %s", e)
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""

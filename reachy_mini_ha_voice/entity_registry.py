@@ -46,9 +46,6 @@ ENTITY_KEYS: Dict[str, int] = {
     "look_at_x": 400,
     "look_at_y": 401,
     "look_at_z": 402,
-    # Phase 5: Audio sensors
-    "doa_angle": 500,
-    "speech_detected": 501,
     # Phase 6: Diagnostic information
     "control_loop_frequency": 600,
     "sdk_version": 601,
@@ -121,10 +118,6 @@ class EntityRegistry:
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
 
-        # Entity references that need to be accessed externally
-        self.doa_angle_entity: Optional[SensorEntity] = None
-        self.speech_detected_entity: Optional[BinarySensorEntity] = None
-
         # Emotion state
         self._current_emotion = "None"
         self._emotion_map = {
@@ -147,7 +140,7 @@ class EntityRegistry:
         self._setup_phase2_entities(entities)
         self._setup_phase3_entities(entities)
         self._setup_phase4_entities(entities)
-        self._setup_phase5_entities(entities)
+        # Phase 5 (DOA/speech detection) removed - replaced by face tracking
         self._setup_phase6_entities(entities)
         self._setup_phase7_entities(entities)
         self._setup_phase8_entities(entities)
@@ -441,36 +434,6 @@ class EntityRegistry:
         ))
 
         _LOGGER.debug("Phase 4 entities registered: look_at_x/y/z")
-
-    def _setup_phase5_entities(self, entities: List) -> None:
-        """Setup Phase 5 entities: Audio sensors."""
-        rc = self.reachy_controller
-
-        self.doa_angle_entity = SensorEntity(
-            server=self.server,
-            key=get_entity_key("doa_angle"),
-            name="DOA Angle",
-            object_id="doa_angle",
-            icon="mdi:compass",
-            unit_of_measurement="°",
-            accuracy_decimals=1,
-            state_class="measurement",
-            value_getter=rc.get_doa_angle,
-        )
-        entities.append(self.doa_angle_entity)
-
-        self.speech_detected_entity = BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("speech_detected"),
-            name="Speech Detected",
-            object_id="speech_detected",
-            icon="mdi:microphone",
-            device_class="sound",
-            value_getter=rc.get_speech_detected,
-        )
-        entities.append(self.speech_detected_entity)
-
-        _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected")
 
     def _setup_phase6_entities(self, entities: List) -> None:
         """Setup Phase 6 entities: Diagnostic information."""
@@ -792,9 +755,5 @@ class EntityRegistry:
         Args:
             entities: The list of existing entities to search
         """
-        for entity in entities:
-            if hasattr(entity, 'object_id'):
-                if entity.object_id == 'doa_angle':
-                    self.doa_angle_entity = entity
-                elif entity.object_id == 'speech_detected':
-                    self.speech_detected_entity = entity
+        # No special entity references needed after DOA removal
+        pass
