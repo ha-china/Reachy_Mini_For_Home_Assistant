@@ -72,6 +72,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         super().__init__(*args, **kwargs)
         if not hasattr(self, 'stop_event'):
             self.stop_event = threading.Event()
+        
+        # Force localhost connection mode since this app runs on the robot
+        # This prevents WebRTC connection attempts that can fail
+        self.daemon_on_localhost = True
 
     def wrapped_run(self, *args, **kwargs) -> None:
         """
