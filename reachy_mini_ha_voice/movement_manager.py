@@ -350,7 +350,9 @@ class MovementManager:
 
         # Pose change detection (prevent unnecessary commands)
         self._last_sent_pose: Optional[Dict[str, float]] = None
-        self._pose_change_threshold = 0.001  # 0.001 rad or 0.001 m
+        # Increased threshold to reduce command frequency
+        # 0.01 rad ≈ 0.57 degrees, prevents micro-movements from triggering commands
+        self._pose_change_threshold = 0.01
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -469,7 +471,9 @@ class MovementManager:
             # State transition logic
             if payload == RobotState.IDLE and old_state != RobotState.IDLE:
                 self.state.idle_start_time = self._now()
-                self._breathing.set_active(True)
+                # NOTE: Breathing animation disabled to prevent serial port overflow
+                # The 5Hz control loop + breathing causes too many commands
+                # self._breathing.set_active(True)
                 self._speech_sway.reset()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
