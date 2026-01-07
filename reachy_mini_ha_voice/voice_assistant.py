@@ -225,8 +225,11 @@ class VoiceAssistantService:
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker microphone settings for voice recognition.
         
-        This configures AGC (Automatic Gain Control) and other audio processing
-        parameters to improve microphone sensitivity for voice commands.
+        The main issue affecting voice recognition is that the default noise suppression
+        level (PP_MIN_NS) is too aggressive, which can filter out quiet speech.
+        This method reduces noise suppression to improve microphone sensitivity.
+        
+        Reference: reachy_mini/src/reachy_mini/media/audio_control_utils.py
         """
         if self.reachy_mini is None:
             return
@@ -243,33 +246,23 @@ class VoiceAssistantService:
                 _LOGGER.debug("ReSpeaker device not found")
                 return
             
-            # Enable AGC for better sensitivity at distance
+            # Reduce noise suppression - this is the main fix for microphone sensitivity
+            # PP_MIN_NS controls minimum noise suppression threshold
+            # Lower values = less aggressive noise suppression = better voice pickup
+            # Default is typically around 0.5-0.7, we reduce it to 0.2 for voice commands
             try:
-                respeaker.write("PP_AGCONOFF", [1])
-                _LOGGER.info("AGC enabled for better microphone sensitivity")
+                respeaker.write("PP_MIN_NS", [0.2])
+                _LOGGER.info("Noise suppression reduced (PP_MIN_NS=0.2) for better voice pickup")
             except Exception as e:
-                _LOGGER.debug("Could not enable AGC: %s", e)
+                _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
             
-            # Set higher AGC max gain for better sensitivity (default is ~15dB)
+            # Also reduce PP_MIN_NN (minimum noise floor estimation)
+            # This helps in quieter environments
             try:
-                respeaker.write("PP_AGCMAXGAIN", [25.0])  # Increase to 25dB
-                _LOGGER.info("AGC max gain set to 25dB")
+                respeaker.write("PP_MIN_NN", [0.2])
+                _LOGGER.info("Noise floor threshold reduced (PP_MIN_NN=0.2)")
             except Exception as e:
-                _LOGGER.debug("Could not set AGC max gain: %s", e)
-            
-            # Set AGC desired level (target output level)
-            try:
-                respeaker.write("PP_AGCDESIREDLEVEL", [-20.0])  # Target -20dBFS
-                _LOGGER.info("AGC desired level set to -20dBFS")
-            except Exception as e:
-                _LOGGER.debug("Could not set AGC desired level: %s", e)
-            
-            # Increase microphone gain
-            try:
-                respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])  # 2x gain
-                _LOGGER.info("Microphone gain set to 2.0")
-            except Exception as e:
-                _LOGGER.debug("Could not set microphone gain: %s", e)
+                _LOGGER.debug("Could not set PP_MIN_NN: %s", e)
             
             _LOGGER.info("Microphone settings optimized for voice recognition")
             
