@@ -743,7 +743,7 @@ class ReachyController:
         """Get noise suppression level (0-100%)."""
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_noise_suppression', 50.0)
+                return getattr(self, '_noise_suppression', 15.0)
             try:
                 result = respeaker.read("PP_MIN_NS")
                 if result is not None:
@@ -753,7 +753,7 @@ class ReachyController:
                     return self._noise_suppression
             except Exception as e:
                 logger.debug(f"Error getting noise suppression: {e}")
-        return getattr(self, '_noise_suppression', 50.0)
+        return getattr(self, '_noise_suppression', 15.0)
 
     def set_noise_suppression(self, level: float) -> None:
         """Set noise suppression level (0-100%)."""
