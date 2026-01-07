@@ -973,14 +973,13 @@ class MovementManager:
         # Signal stop
         self._stop_event.set()
 
-        # Wait for thread
-        self._thread.join(timeout=2.0)
+        # Wait for thread with shorter timeout
+        self._thread.join(timeout=0.5)
         if self._thread.is_alive():
             logger.warning("Movement manager thread did not stop in time")
 
-        # Reset robot to neutral
-        self._reset_to_neutral_blocking()
-
+        # Skip reset to neutral - let the app manager handle it
+        # This speeds up shutdown significantly
         logger.info("Movement manager stopped")
 
     def _reset_to_neutral_blocking(self) -> None:
@@ -994,7 +993,7 @@ class MovementManager:
                 head=neutral_pose,
                 antennas=[0.0, 0.0],
                 body_yaw=0.0,
-                duration=1.0,
+                duration=0.3,  # Faster reset
             )
             logger.info("Robot reset to neutral position")
         except Exception as e:

@@ -146,7 +146,7 @@ class MJPEGCameraServer:
         self._running = False
 
         if self._capture_thread:
-            self._capture_thread.join(timeout=2.0)
+            self._capture_thread.join(timeout=0.5)
             self._capture_thread = None
 
         if self._server:

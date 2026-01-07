@@ -355,7 +355,7 @@ class VoiceAssistantService:
 
         # 3. Wait for audio thread to finish
         if self._audio_thread:
-            self._audio_thread.join(timeout=3.0)
+            self._audio_thread.join(timeout=1.0)
             if self._audio_thread.is_alive():
                 _LOGGER.warning("Audio thread did not stop in time")
 
