@@ -29,29 +29,17 @@ def _ensure_mediapipe_installed() -> bool:
     except ImportError:
         pass
     
-    # Auto-install for ARM64 (Raspberry Pi CM4)
-    logger.info("MediaPipe not found, installing for ARM64...")
+    # Auto-install mediapipe 0.10.18 for ARM64 (deps already in pyproject.toml)
+    logger.info("Installing MediaPipe for ARM64...")
     try:
-        # Install mediapipe 0.10.18 without deps to avoid numpy conflict
         subprocess.check_call([
             sys.executable, '-m', 'pip', 'install', '-q',
             'mediapipe==0.10.18', '--no-deps'
         ], timeout=120)
-        # Install required deps
-        subprocess.check_call([
-            sys.executable, '-m', 'pip', 'install', '-q',
-            'flatbuffers>=2.0', 'absl-py', 'attrs>=19.1.0'
-        ], timeout=60)
-        logger.info("MediaPipe installed successfully")
+        logger.info("MediaPipe installed")
         return True
-    except subprocess.TimeoutExpired:
-        logger.warning("MediaPipe installation timed out")
-        return False
-    except subprocess.CalledProcessError as e:
-        logger.warning("MediaPipe installation failed: %s", e)
-        return False
     except Exception as e:
-        logger.warning("MediaPipe installation error: %s", e)
+        logger.warning("MediaPipe install failed: %s", e)
         return False
 
 

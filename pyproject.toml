@@ -40,7 +40,16 @@ dependencies = [
     
     # Sendspin synchronized audio (optional, for multi-room playback)
     "aiosendspin>=2.0.1",
+    
+    # Gesture detection dependencies (mediapipe installed separately for ARM64)
+    "flatbuffers>=2.0",
+    "absl-py",
+    "attrs>=19.1.0",
 ]
+
+[project.optional-dependencies]
+# For x86_64 systems, install with: pip install reachy_mini_ha_voice[gesture]
+gesture = ["mediapipe>=0.10.31"]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
 [project.entry-points."reachy_mini_apps"]
