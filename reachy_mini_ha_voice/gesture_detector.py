@@ -1,28 +1,16 @@
 """Gesture detection using MediaPipe Hands.
 
 Detects 11 hand gestures for robot interaction:
-- thumbs_up: 👍 Confirmation/like
-- thumbs_down: 👎 Reject/dislike  
-- open_palm: ✋ Stop/halt
-- fist: ✊ Pause/hold
-- peace: ✌️ Victory sign
-- pointing_up: ☝️ Attention/one
-- ok: 👌 OK sign
-- rock: 🤘 Rock on
-- call: 🤙 Call me
-- three: 3️⃣ Three fingers
-- four: 4️⃣ Four fingers
+- thumbs_up, thumbs_down, open_palm, fist, peace, pointing_up
+- ok, rock, call, three, four
 
-Requires mediapipe to be pre-installed. If not available, gesture detection
-is silently disabled (no network installation attempts).
-
-For ARM64 (Raspberry Pi), install manually:
-    pip install mediapipe==0.10.18 --no-deps
-    pip install flatbuffers absl-py
+Auto-installs mediapipe on first run (ARM64: 0.10.18 with --no-deps).
 """
 
 from __future__ import annotations
 import logging
+import subprocess
+import sys
 from enum import Enum
 from typing import Optional, Tuple, Callable
 import time
@@ -33,19 +21,52 @@ from numpy.typing import NDArray
 logger = logging.getLogger(__name__)
 
 
-# Try to import mediapipe (no auto-install to avoid network issues)
+def _ensure_mediapipe_installed() -> bool:
+    """Ensure mediapipe is installed. Auto-install on ARM64 if missing."""
+    try:
+        import mediapipe
+        return True
+    except ImportError:
+        pass
+    
+    # Auto-install for ARM64 (Raspberry Pi CM4)
+    logger.info("MediaPipe not found, installing for ARM64...")
+    try:
+        # Install mediapipe 0.10.18 without deps to avoid numpy conflict
+        subprocess.check_call([
+            sys.executable, '-m', 'pip', 'install', '-q',
+            'mediapipe==0.10.18', '--no-deps'
+        ], timeout=120)
+        # Install required deps
+        subprocess.check_call([
+            sys.executable, '-m', 'pip', 'install', '-q',
+            'flatbuffers>=2.0', 'absl-py', 'attrs>=19.1.0'
+        ], timeout=60)
+        logger.info("MediaPipe installed successfully")
+        return True
+    except subprocess.TimeoutExpired:
+        logger.warning("MediaPipe installation timed out")
+        return False
+    except subprocess.CalledProcessError as e:
+        logger.warning("MediaPipe installation failed: %s", e)
+        return False
+    except Exception as e:
+        logger.warning("MediaPipe installation error: %s", e)
+        return False
+
+
+# Try to load mediapipe
 _mp_hands = None
 _mediapipe_available = False
 
-try:
-    import mediapipe as mp
-    _mp_hands = mp.solutions.hands
-    _mediapipe_available = True
-    logger.info("MediaPipe loaded for gesture detection")
-except ImportError:
-    logger.info("MediaPipe not installed - gesture detection disabled")
-except Exception as e:
-    logger.warning("MediaPipe load error: %s - gesture detection disabled", e)
+if _ensure_mediapipe_installed():
+    try:
+        import mediapipe as mp
+        _mp_hands = mp.solutions.hands
+        _mediapipe_available = True
+        logger.info("MediaPipe Hands loaded")
+    except Exception as e:
+        logger.warning("MediaPipe load failed: %s", e)
 
 
 class Gesture(Enum):
@@ -76,12 +97,10 @@ class GestureDetector:
         self._hands = None
         self._available = False
         
-        # Callbacks
         self._callbacks: dict[Gesture, Optional[Callable[[], None]]] = {
             g: None for g in Gesture if g != Gesture.NONE
         }
         
-        # State
         self._last_gesture = Gesture.NONE
         self._current_gesture = Gesture.NONE
         self._gesture_start_time: Optional[float] = None
@@ -100,9 +119,9 @@ class GestureDetector:
                     min_tracking_confidence=min_tracking_confidence,
                 )
                 self._available = True
-                logger.info("MediaPipe Hands initialized")
+                logger.info("Gesture detection enabled")
             except Exception as e:
-                logger.warning("Failed to initialize MediaPipe Hands: %s", e)
+                logger.warning("Gesture detection init failed: %s", e)
 
     @property
     def is_available(self) -> bool:
@@ -168,47 +187,26 @@ class GestureDetector:
         
         thumb_index_dist = self._dist(thumb_tip, index_tip)
         
-        # Thumbs up
         if thumb_up and thumb_extended and all_curled:
             return Gesture.THUMBS_UP
-        
-        # Thumbs down
         if thumb_down and thumb_extended and all_curled:
             return Gesture.THUMBS_DOWN
-        
-        # Fist
         if all_curled and not thumb_extended:
             return Gesture.FIST
-        
-        # OK sign
         if thumb_index_dist < 0.05 and middle_ext and ring_ext and pinky_ext:
             return Gesture.OK
-        
-        # Rock (index + pinky)
         if index_ext and pinky_ext and not middle_ext and not ring_ext:
             return Gesture.ROCK
-        
-        # Call (thumb + pinky)
         if thumb_extended and pinky_ext and not index_ext and not middle_ext and not ring_ext:
             return Gesture.CALL
-        
-        # Pointing up
         if index_ext and not middle_ext and not ring_ext and not pinky_ext:
             return Gesture.POINTING_UP
-        
-        # Peace
         if index_ext and middle_ext and not ring_ext and not pinky_ext:
             return Gesture.PEACE
-        
-        # Three
         if index_ext and middle_ext and ring_ext and not pinky_ext:
             return Gesture.THREE
-        
-        # Four
         if index_ext and middle_ext and ring_ext and pinky_ext and not thumb_extended:
             return Gesture.FOUR
-        
-        # Open palm
         if ext_count >= 4 and thumb_extended:
             return Gesture.OPEN_PALM
         
@@ -217,15 +215,12 @@ class GestureDetector:
     def detect(self, frame: NDArray[np.uint8]) -> Gesture:
         if not self._available:
             return Gesture.NONE
-        
         try:
             import cv2
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = self._hands.process(rgb)
-            
             if not results.multi_hand_landmarks:
                 return Gesture.NONE
-            
             return self._classify_gesture(results.multi_hand_landmarks[0])
         except Exception as e:
             logger.debug("Gesture detection error: %s", e)
@@ -253,16 +248,14 @@ class GestureDetector:
             if now - self._gesture_start_time >= self._gesture_hold_threshold:
                 self._last_trigger_time = now
                 self._gesture_start_time = None
-                
                 callback = self._callbacks.get(gesture)
                 if callback:
-                    logger.info("Gesture triggered: %s", gesture.value)
+                    logger.info("Gesture: %s", gesture.value)
                     try:
                         callback()
                     except Exception as e:
                         logger.error("Gesture callback error: %s", e)
                     return gesture
-        
         return None
 
     def close(self) -> None:

@@ -757,7 +757,7 @@ camera_server.set_gesture_callbacks(
 - **Phase 13** - Sendspin 多房间音频支持 ✅
 - **Phase 15** - YOLO 人脸追踪 ✅
 - **Phase 20** - 拍一拍唤醒 ✅
-- **Phase 21** - 手势识别 (7 种手势) ✅
+- **Phase 21** - 手势识别 (11 种手势，自动安装mediapipe) ✅
 
 #### 部分实现功能
 - **Phase 14** - 情感动作 API 基础设施 (手动触发可用)
