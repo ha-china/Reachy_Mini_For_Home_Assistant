@@ -23,7 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 # Check if aiosendspin is available
 try:
     from aiosendspin.client import SendspinClient, PCMFormat
-    from aiosendspin.models.types import Roles
+    from aiosendspin.models.types import Roles, AudioCodec, PlayerCommand
+    from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.core import StreamStartMessage
     SENDSPIN_AVAILABLE = True
 except ImportError:
@@ -202,10 +203,34 @@ class AudioPlayer:
 
         try:
             # Use stable client_id so HA recognizes the same device after restart
+            # Configure player support with common audio formats
+            player_support = ClientHelloPlayerSupport(
+                supported_formats=[
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=2, sample_rate=48000, bit_depth=16
+                    ),
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=2, sample_rate=44100, bit_depth=16
+                    ),
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=1, sample_rate=48000, bit_depth=16
+                    ),
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=1, sample_rate=44100, bit_depth=16
+                    ),
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=1, sample_rate=16000, bit_depth=16
+                    ),
+                ],
+                buffer_capacity=32_000_000,
+                supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
+            )
+            
             self._sendspin_client = SendspinClient(
                 client_id=self._sendspin_client_id,
                 client_name="Reachy Mini",
                 roles=[Roles.PLAYER],  # PLAYER role to receive audio
+                player_support=player_support,
             )
             
             await self._sendspin_client.connect(server_url)
