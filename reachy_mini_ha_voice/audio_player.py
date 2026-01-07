@@ -326,11 +326,7 @@ class AudioPlayer:
     def _on_sendspin_stream_start(self, message: "StreamStartMessage") -> None:
         """Handle stream start from Sendspin server."""
         _LOGGER.debug("Sendspin stream started")
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.clear_output_buffer()
-            except Exception:
-                pass
+        # No need to clear buffer - just start fresh
 
     def _on_sendspin_stream_end(self, roles: Optional[List[Roles]]) -> None:
         """Handle stream end from Sendspin server."""
@@ -343,7 +339,8 @@ class AudioPlayer:
             _LOGGER.debug("Sendspin stream cleared")
             if self.reachy_mini is not None:
                 try:
-                    self.reachy_mini.media.clear_output_buffer()
+                    self.reachy_mini.media.stop_playing()
+                    self._sendspin_playback_started = False
                 except Exception:
                     pass
 
@@ -458,7 +455,7 @@ class AudioPlayer:
                     start_time = time.time()
                     while time.time() - start_time < duration:
                         if self._stop_flag.is_set():
-                            self.reachy_mini.media.clear_output_buffer()
+                            self.reachy_mini.media.stop_playing()
                             break
                         time.sleep(0.1)
 
@@ -519,7 +516,7 @@ class AudioPlayer:
         self._stop_flag.set()
         if self.reachy_mini is not None:
             try:
-                self.reachy_mini.media.clear_output_buffer()
+                self.reachy_mini.media.stop_playing()
             except Exception:
                 pass
         self._playlist.clear()
