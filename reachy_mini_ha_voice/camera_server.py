@@ -237,6 +237,10 @@ class MJPEGCameraServer:
                 translation = target_pose[:3, 3]
                 rotation = R.from_matrix(target_pose[:3, :3]).as_euler("xyz", degrees=False)
                 
+                # Apply Y-axis offset compensation (face tends to be tracked too high)
+                # Negative Y offset moves the gaze point down
+                translation[1] -= 0.015  # 15mm downward compensation
+                
                 # Scale down for smoother tracking
                 translation = translation * self._offset_scale
                 rotation = rotation * self._offset_scale

@@ -231,57 +231,6 @@ class AudioPlayer:
         
         _LOGGER.info("Sendspin stopped")
 
-    def _send_audio_to_sendspin(self, audio_data: bytes, sample_rate: int, channels: int) -> bool:
-        """Send audio data to Sendspin server (thread-safe).
-        
-        Args:
-            audio_data: Raw PCM audio bytes (16-bit signed).
-            sample_rate: Audio sample rate in Hz.
-            channels: Number of audio channels.
-            
-        Returns:
-            True if audio was sent successfully.
-        """
-        if not self._sendspin_enabled or self._sendspin_client is None:
-            return False
-        
-        if self._sendspin_loop is None:
-            return False
-
-        try:
-            # Send audio chunk to Sendspin server
-            # The server will distribute to all connected players
-            future = asyncio.run_coroutine_threadsafe(
-                self._sendspin_client.send_audio(
-                    audio_data,
-                    sample_rate=sample_rate,
-                    channels=channels,
-                    bit_depth=16,
-                ),
-                self._sendspin_loop,
-            )
-            future.result(timeout=5.0)
-            return True
-        except Exception as e:
-            _LOGGER.warning("Failed to send audio to Sendspin: %s", e)
-            return False
-
-    def _clear_sendspin_stream(self) -> None:
-        """Clear Sendspin audio stream (thread-safe)."""
-        if not self._sendspin_enabled or self._sendspin_client is None:
-            return
-        
-        if self._sendspin_loop is None:
-            return
-
-        try:
-            asyncio.run_coroutine_threadsafe(
-                self._sendspin_client.clear_stream(),
-                self._sendspin_loop,
-            )
-        except Exception as e:
-            _LOGGER.debug("Error clearing Sendspin stream: %s", e)
-
 
     # ========== Core Playback Methods ==========
 
@@ -339,49 +288,23 @@ class AudioPlayer:
             if self._stop_flag.is_set():
                 return
 
-            # Read audio file for Sendspin (if enabled)
-            audio_data = None
-            sample_rate = None
             duration = None
-            
-            if self._sendspin_enabled:
-                try:
-                    import soundfile as sf
-                    import numpy as np
-                    
-                    data, sample_rate = sf.read(file_path, dtype='int16')
-                    
-                    # Convert to mono if stereo
-                    if len(data.shape) > 1:
-                        data = np.mean(data, axis=1).astype(np.int16)
-                    
-                    # Apply volume
-                    data = (data * self._current_volume).astype(np.int16)
-                    audio_data = data.tobytes()
-                    duration = len(data) / sample_rate
-                    
-                    # Send to Sendspin server
-                    self._send_audio_to_sendspin(audio_data, sample_rate, channels=1)
-                except Exception as e:
-                    _LOGGER.warning("Failed to send audio to Sendspin: %s", e)
 
             # Play locally using Reachy Mini's media system
             if self.reachy_mini is not None:
                 try:
                     self.reachy_mini.media.play_sound(file_path)
 
-                    # Calculate duration if not already done
-                    if duration is None:
-                        import soundfile as sf
-                        data, sample_rate = sf.read(file_path)
-                        duration = len(data) / sample_rate
+                    # Calculate duration
+                    import soundfile as sf
+                    data, sample_rate = sf.read(file_path)
+                    duration = len(data) / sample_rate
 
                     # Wait for playback to complete
                     start_time = time.time()
                     while time.time() - start_time < duration:
                         if self._stop_flag.is_set():
                             self.reachy_mini.media.clear_output_buffer()
-                            self._clear_sendspin_stream()
                             break
                         time.sleep(0.1)
 
@@ -445,7 +368,6 @@ class AudioPlayer:
                 self.reachy_mini.media.clear_output_buffer()
             except Exception:
                 pass
-        self._clear_sendspin_stream()
         self._playlist.clear()
         self.is_playing = False
 
