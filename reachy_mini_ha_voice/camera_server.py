@@ -51,7 +51,7 @@ class MJPEGCameraServer:
         reachy_mini: Optional["ReachyMini"] = None,
         host: str = "0.0.0.0",
         port: int = 8081,
-        fps: int = 10,  # 10fps for daemon stability
+        fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
     ):

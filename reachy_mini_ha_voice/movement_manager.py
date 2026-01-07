@@ -58,12 +58,11 @@ except ImportError:
 
 # Control loop frequency - CRITICAL for daemon stability
 # The daemon's internal control loop runs at 50Hz.
-# We use 10Hz for IDLE state stability - breathing animation doesn't need high frequency.
+# We use 10Hz for control loop - sufficient for smooth motion.
 # Each set_target() call sends 3 Zenoh messages (head, antennas, body_yaw).
-# At 10Hz × 3 = 30 messages/second MAX, but with pose change detection we typically
-# send much fewer messages (only when pose actually changes significantly).
-# With threshold of 0.005 rad, actual message rate is ~5-10 msg/s during idle.
-CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop for daemon stability
+# With pose change detection, actual message rate is much lower in IDLE state
+# because we only send when pose actually changes.
+CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -86,11 +85,13 @@ SWAY_F_Z = 0.25          # Z frequency Hz
 # Master scale
 SWAY_MASTER = 1.5        # Overall sway intensity multiplier
 
-# Breathing parameters - smoother animation with continuous sine wave
-BREATHING_Z_AMPLITUDE = 0.003  # 3mm (reduced for stability)
-BREATHING_FREQUENCY = 0.08    # 0.08Hz (~5 breaths per minute, slower pace)
-ANTENNA_SWAY_AMPLITUDE_DEG = 5.0  # 5 degrees (reduced to prevent excessive messages)
-ANTENNA_FREQUENCY = 0.15      # 0.15Hz (slower, more graceful)
+# Breathing parameters - DISABLED for IDLE state stability
+# IDLE state should be completely still like just powered on
+# Breathing animation was causing continuous pose changes and daemon crashes
+BREATHING_Z_AMPLITUDE = 0.0  # Disabled - no breathing in IDLE
+BREATHING_FREQUENCY = 0.08
+ANTENNA_SWAY_AMPLITUDE_DEG = 0.0  # Disabled - no antenna sway in IDLE
+ANTENNA_FREQUENCY = 0.15
 
 # VAD parameters for speech detection
 VAD_DB_ON = -35   # Start detection threshold
@@ -496,9 +497,10 @@ class MovementManager:
             self.state.last_activity_time = self._now()
 
             # State transition logic
+            # IDLE state: completely still, no animations (like just powered on)
             if payload == RobotState.IDLE and old_state != RobotState.IDLE:
                 self.state.idle_start_time = self._now()
-                self._breathing.set_active(True)
+                self._breathing.set_active(False)  # No breathing in IDLE - stay still
                 self._speech_sway.reset()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
