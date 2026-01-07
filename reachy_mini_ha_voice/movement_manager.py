@@ -5,14 +5,24 @@ This module provides a centralized control system for robot movements,
 inspired by the reachy_mini_conversation_app architecture.
 
 Key features:
-- Single 10Hz control loop (reduced from 100Hz to prevent daemon crashes)
+- Single 20Hz control loop (balanced between responsiveness and stability)
 - Command queue pattern (thread-safe external API)
 - Error throttling (prevents log explosion)
-- Speech-driven head sway
-- Breathing animation during idle
+- Speech-driven head sway (based on conversation_app's SwayRollRT)
+- Breathing animation during idle (based on conversation_app's BreathingMove)
 - Graceful shutdown
 - Pose change detection (skip sending if no significant change)
 - Robust connection recovery (faster reconnection attempts)
+- Proper pose composition using SDK's compose_world_offset (same as conversation_app)
+- Antenna freeze during listening mode with smooth blend back
+
+SDK Analysis Notes:
+- get_current_head_pose() and get_current_joint_positions() are non-blocking
+  (they return cached Zenoh data from subscriptions)
+- set_target() is the only method that sends Zenoh messages
+- get_status() may trigger I/O, so it's cached in reachy_controller.py
+
+Reference: reachy_mini_conversation_app/src/reachy_mini_conversation_app/moves.py
 """
 
 import logging
@@ -29,6 +39,15 @@ from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
+
+# Import SDK utilities for pose composition (same as conversation_app)
+try:
+    from reachy_mini.utils import create_head_pose
+    from reachy_mini.utils.interpolation import compose_world_offset
+    SDK_UTILS_AVAILABLE = True
+except ImportError:
+    SDK_UTILS_AVAILABLE = False
+    logger.warning("SDK utils not available, using fallback pose composition")
 
 logger = logging.getLogger(__name__)
 
@@ -665,36 +684,82 @@ class MovementManager:
                 logger.debug("Error getting face tracking offsets: %s", e)
 
     def _compose_final_pose(self) -> Dict[str, float]:
-        """Compose final pose from all sources."""
-        # Primary pose (from actions)
-        pitch = self.state.target_pitch
-        yaw = self.state.target_yaw
-        roll = self.state.target_roll
-        x = self.state.target_x
-        y = self.state.target_y
-        z = self.state.target_z
-
-        # Add speech sway (secondary) - rotation and translation
-        pitch += self.state.speech_pitch
-        yaw += self.state.speech_yaw
-        roll += self.state.speech_roll
-        x += self.state.speech_x
-        y += self.state.speech_y
-        z += self.state.speech_z
-
-        # Add breathing
-        z += self.state.breathing_z
+        """Compose final pose from all sources.
         
-        # Add face tracking offsets (from camera worker)
+        Uses SDK's compose_world_offset for proper pose composition (same as conversation_app).
+        Primary pose comes from actions, secondary offsets come from speech sway and face tracking.
+        """
+        # Build primary head pose matrix (from actions)
+        if SDK_UTILS_AVAILABLE:
+            primary_head = create_head_pose(
+                x=self.state.target_x,
+                y=self.state.target_y,
+                z=self.state.target_z,
+                roll=self.state.target_roll,
+                pitch=self.state.target_pitch,
+                yaw=self.state.target_yaw,
+                degrees=False,  # Our state is in radians
+                mm=False,       # Our state is in meters
+            )
+        else:
+            # Fallback: build matrix manually
+            rotation = R.from_euler('xyz', [
+                self.state.target_roll,
+                self.state.target_pitch,
+                self.state.target_yaw,
+            ])
+            primary_head = np.eye(4)
+            primary_head[:3, :3] = rotation.as_matrix()
+            primary_head[0, 3] = self.state.target_x
+            primary_head[1, 3] = self.state.target_y
+            primary_head[2, 3] = self.state.target_z
+
+        # Build secondary offset pose (speech sway + face tracking + breathing)
+        # Get face tracking offsets
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
         
-        x += face_offsets[0]
-        y += face_offsets[1]
-        z += face_offsets[2]
-        roll += face_offsets[3]
-        pitch += face_offsets[4]
-        yaw += face_offsets[5]
+        # Combine all secondary offsets
+        secondary_x = self.state.speech_x + face_offsets[0]
+        secondary_y = self.state.speech_y + face_offsets[1]
+        secondary_z = self.state.speech_z + self.state.breathing_z + face_offsets[2]
+        secondary_roll = self.state.speech_roll + face_offsets[3]
+        secondary_pitch = self.state.speech_pitch + face_offsets[4]
+        secondary_yaw = self.state.speech_yaw + face_offsets[5]
+
+        if SDK_UTILS_AVAILABLE:
+            secondary_head = create_head_pose(
+                x=secondary_x,
+                y=secondary_y,
+                z=secondary_z,
+                roll=secondary_roll,
+                pitch=secondary_pitch,
+                yaw=secondary_yaw,
+                degrees=False,
+                mm=False,
+            )
+            # Compose using SDK utility (same as conversation_app)
+            combined_head = compose_world_offset(primary_head, secondary_head, reorthonormalize=True)
+        else:
+            # Fallback: simple addition (less accurate but works)
+            secondary_rotation = R.from_euler('xyz', [secondary_roll, secondary_pitch, secondary_yaw])
+            secondary_head = np.eye(4)
+            secondary_head[:3, :3] = secondary_rotation.as_matrix()
+            secondary_head[0, 3] = secondary_x
+            secondary_head[1, 3] = secondary_y
+            secondary_head[2, 3] = secondary_z
+            
+            # Simple composition: R_final = R_secondary @ R_primary, t_final = t_primary + t_secondary
+            combined_head = np.eye(4)
+            combined_head[:3, :3] = secondary_head[:3, :3] @ primary_head[:3, :3]
+            combined_head[:3, 3] = primary_head[:3, 3] + secondary_head[:3, 3]
+
+        # Extract final pose values from combined matrix
+        final_rotation = R.from_matrix(combined_head[:3, :3])
+        final_roll, final_pitch, final_yaw = final_rotation.as_euler('xyz')
+        final_x = combined_head[0, 3]
+        final_y = combined_head[1, 3]
+        final_z = combined_head[2, 3]
 
         # Antenna pose with freeze blending
         target_antenna_left = self.state.target_antenna_left + self.state.breathing_antenna_left
@@ -713,12 +778,12 @@ class MovementManager:
             antenna_right = target_antenna_right
 
         return {
-            "pitch": pitch,
-            "yaw": yaw,
-            "roll": roll,
-            "x": x,
-            "y": y,
-            "z": z,
+            "pitch": final_pitch,
+            "yaw": final_yaw,
+            "roll": final_roll,
+            "x": final_x,
+            "y": final_y,
+            "z": final_z,
             "antenna_left": antenna_left,
             "antenna_right": antenna_right,
             "body_yaw": self.state.target_body_yaw,
