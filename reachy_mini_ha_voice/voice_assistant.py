@@ -159,6 +159,9 @@ class VoiceAssistantService:
                         _LOGGER.debug("Reachy Mini playback already active")
 
                     _LOGGER.info("Reachy Mini media system initialized")
+                    
+                    # Optimize microphone settings for voice recognition
+                    self._optimize_microphone_settings()
                 else:
                     _LOGGER.warning("Reachy Mini audio system not available")
             except Exception as e:
@@ -218,6 +221,60 @@ class VoiceAssistantService:
         await self._discovery.register_server()
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
+
+    def _optimize_microphone_settings(self) -> None:
+        """Optimize ReSpeaker microphone settings for voice recognition.
+        
+        This configures AGC (Automatic Gain Control) and other audio processing
+        parameters to improve microphone sensitivity for voice commands.
+        """
+        if self.reachy_mini is None:
+            return
+        
+        try:
+            # Access ReSpeaker through the media audio system
+            audio = self.reachy_mini.media.audio
+            if audio is None or not hasattr(audio, '_respeaker'):
+                _LOGGER.debug("ReSpeaker not available for optimization")
+                return
+            
+            respeaker = audio._respeaker
+            if respeaker is None:
+                _LOGGER.debug("ReSpeaker device not found")
+                return
+            
+            # Enable AGC for better sensitivity at distance
+            try:
+                respeaker.write("PP_AGCONOFF", [1])
+                _LOGGER.info("AGC enabled for better microphone sensitivity")
+            except Exception as e:
+                _LOGGER.debug("Could not enable AGC: %s", e)
+            
+            # Set higher AGC max gain for better sensitivity (default is ~15dB)
+            try:
+                respeaker.write("PP_AGCMAXGAIN", [25.0])  # Increase to 25dB
+                _LOGGER.info("AGC max gain set to 25dB")
+            except Exception as e:
+                _LOGGER.debug("Could not set AGC max gain: %s", e)
+            
+            # Set AGC desired level (target output level)
+            try:
+                respeaker.write("PP_AGCDESIREDLEVEL", [-20.0])  # Target -20dBFS
+                _LOGGER.info("AGC desired level set to -20dBFS")
+            except Exception as e:
+                _LOGGER.debug("Could not set AGC desired level: %s", e)
+            
+            # Increase microphone gain
+            try:
+                respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])  # 2x gain
+                _LOGGER.info("Microphone gain set to 2.0")
+            except Exception as e:
+                _LOGGER.debug("Could not set microphone gain: %s", e)
+            
+            _LOGGER.info("Microphone settings optimized for voice recognition")
+            
+        except Exception as e:
+            _LOGGER.warning("Failed to optimize microphone settings: %s", e)
 
     async def stop(self) -> None:
         """Stop the voice assistant service."""
@@ -645,6 +702,9 @@ class VoiceAssistantService:
         
         First tap: Enter continuous conversation mode
         Second tap: Exit continuous conversation mode
+        
+        NOTE: This is called from the tap_detector background thread.
+        We need to be careful about thread safety.
         """
         if self._state is None or self._state.satellite is None:
             return
@@ -660,14 +720,18 @@ class VoiceAssistantService:
         # Check if we're exiting conversation mode
         is_exiting = self._state.satellite.is_tap_conversation_active()
         
-        # Trigger tap handling in satellite (handles mode toggle)
-        self._state.satellite.wakeup_from_tap()
-        
-        # Trigger motion feedback
-        if self._motion is not None:
-            if is_exiting:
-                # Exiting conversation - return to idle
-                self._motion.on_idle()
-            else:
-                # Starting conversation
-                self._motion.on_wakeup()
+        try:
+            # Trigger tap handling in satellite (handles mode toggle)
+            # This sends messages to Home Assistant
+            self._state.satellite.wakeup_from_tap()
+            
+            # Trigger motion feedback (non-blocking)
+            if self._motion is not None:
+                if is_exiting:
+                    # Exiting conversation - return to idle
+                    self._motion.on_idle()
+                else:
+                    # Starting conversation
+                    self._motion.on_wakeup()
+        except Exception as e:
+            _LOGGER.error("Error in tap detection callback: %s", e)

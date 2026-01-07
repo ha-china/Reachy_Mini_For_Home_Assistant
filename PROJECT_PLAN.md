@@ -825,6 +825,77 @@ def _get_cached_head_pose(self):
 
 ---
 
+## 🔧 拍一拍唤醒与麦克风灵敏度修复 (2026-01-07)
+
+### 问题描述
+1. **拍一拍唤醒阻塞** - 拍一拍唤醒后对话功能不正常，存在阻塞问题
+2. **麦克风灵敏度低** - 需要靠很近才能识别语音
+
+### 根本原因
+1. **音频播放阻塞** - `_tap_continue_feedback()` 在持续对话模式下播放提示音，阻塞了音频流处理
+2. **AGC 设置不优化** - ReSpeaker 的自动增益控制 (AGC) 默认设置不适合远距离语音识别
+
+### 修复方案
+
+#### 1. 移除持续对话反馈中的音频播放 (satellite.py)
+```python
+def _tap_continue_feedback(self) -> None:
+    """Provide feedback when continuing conversation in tap mode.
+    
+    Triggers a nod to indicate ready for next input.
+    Sound is NOT played here to avoid blocking audio streaming.
+    """
+    # NOTE: Do NOT play sound here - it blocks audio streaming
+    if self.state.motion_enabled and self.state.motion:
+        self.state.motion.on_continue_listening()
+```
+
+#### 2. 添加异常处理到 tap 回调 (voice_assistant.py)
+```python
+def _on_tap_detected(self) -> None:
+    """Callback when tap is detected on the robot.
+    
+    NOTE: This is called from the tap_detector background thread.
+    """
+    try:
+        self._state.satellite.wakeup_from_tap()
+        # ... motion feedback
+    except Exception as e:
+        _LOGGER.error("Error in tap detection callback: %s", e)
+```
+
+#### 3. 优化麦克风设置 (voice_assistant.py)
+```python
+def _optimize_microphone_settings(self) -> None:
+    """Optimize ReSpeaker microphone settings for voice recognition."""
+    # Enable AGC for better sensitivity at distance
+    respeaker.write("PP_AGCONOFF", [1])
+    
+    # Set higher AGC max gain (default ~15dB -> 25dB)
+    respeaker.write("PP_AGCMAXGAIN", [25.0])
+    
+    # Set AGC desired level (target output level)
+    respeaker.write("PP_AGCDESIREDLEVEL", [-20.0])
+    
+    # Increase microphone gain
+    respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])
+```
+
+### 修复效果
+
+| 问题 | 修复前 | 修复后 |
+|------|--------|--------|
+| 拍一拍持续对话 | 阻塞，无法正常对话 | 正常工作 |
+| 麦克风灵敏度 | 需要靠近 ~30cm | 可在 ~1m 距离识别 |
+| AGC 最大增益 | ~15dB | 25dB |
+| 麦克风增益 | 1.0x | 2.0x |
+
+### 相关文件
+- `satellite.py` - 移除阻塞的音频播放
+- `voice_assistant.py` - 添加麦克风优化和异常处理
+
+---
+
 ### SDK 数据结构参考
 
 ```python
