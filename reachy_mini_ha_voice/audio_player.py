@@ -261,6 +261,7 @@ class AudioPlayer:
         """Handle incoming audio chunks from Sendspin server.
         
         Plays the audio through Reachy Mini's speaker using push_audio_sample().
+        Resamples audio if needed (Reachy Mini uses 16kHz).
         """
         if self.reachy_mini is None:
             return
@@ -295,6 +296,15 @@ class AudioPlayer:
                 # Mono: reshape to (samples, 1)
                 audio_float = audio_float.reshape(-1, 1)
             
+            # Resample if needed (Reachy Mini uses 16kHz)
+            target_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
+            if fmt.sample_rate != target_sample_rate and target_sample_rate > 0:
+                import scipy.signal
+                # Calculate new length
+                new_length = int(len(audio_float) * target_sample_rate / fmt.sample_rate)
+                if new_length > 0:
+                    audio_float = scipy.signal.resample(audio_float, new_length, axis=0)
+            
             # Apply volume
             audio_float = audio_float * self._current_volume
             
@@ -303,7 +313,7 @@ class AudioPlayer:
                 try:
                     self.reachy_mini.media.start_playing()
                     self._sendspin_playback_started = True
-                    _LOGGER.info("Started media playback for Sendspin audio")
+                    _LOGGER.info("Started media playback for Sendspin audio (target: %d Hz)", target_sample_rate)
                 except Exception as e:
                     _LOGGER.warning("Failed to start media playback: %s", e)
             

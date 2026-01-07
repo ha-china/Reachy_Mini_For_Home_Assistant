@@ -704,40 +704,74 @@ class MovementManager:
             except Exception as e:
                 logger.debug("Error getting face tracking offsets: %s", e)
 
-    def _compose_final_pose(self) -> Dict[str, float]:
-        """Compose final pose from all sources.
+    def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
+        """Compose final pose from all sources using SDK's compose_world_offset.
         
-        Uses simple addition for pose composition (same as original working version).
+        Returns:
+            Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
         """
-        # Primary pose (from actions)
-        pitch = self.state.target_pitch
-        yaw = self.state.target_yaw
-        roll = self.state.target_roll
-        x = self.state.target_x
-        y = self.state.target_y
-        z = self.state.target_z
+        # Build primary head pose from target state
+        if SDK_UTILS_AVAILABLE:
+            primary_head = create_head_pose(
+                x=self.state.target_x,
+                y=self.state.target_y,
+                z=self.state.target_z,
+                roll=self.state.target_roll,
+                pitch=self.state.target_pitch,
+                yaw=self.state.target_yaw,
+                degrees=False,
+                mm=False,
+            )
+        else:
+            # Fallback: build matrix manually
+            rotation = R.from_euler('xyz', [
+                self.state.target_roll,
+                self.state.target_pitch,
+                self.state.target_yaw,
+            ])
+            primary_head = np.eye(4)
+            primary_head[:3, :3] = rotation.as_matrix()
+            primary_head[0, 3] = self.state.target_x
+            primary_head[1, 3] = self.state.target_y
+            primary_head[2, 3] = self.state.target_z
 
-        # Add speech sway (secondary) - rotation and translation
-        pitch += self.state.speech_pitch
-        yaw += self.state.speech_yaw
-        roll += self.state.speech_roll
-        x += self.state.speech_x
-        y += self.state.speech_y
-        z += self.state.speech_z
-
-        # Add breathing
-        z += self.state.breathing_z
-
-        # Add face tracking offsets (from camera worker)
+        # Build secondary pose from speech sway + face tracking + breathing
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
 
-        x += face_offsets[0]
-        y += face_offsets[1]
-        z += face_offsets[2]
-        roll += face_offsets[3]
-        pitch += face_offsets[4]
-        yaw += face_offsets[5]
+        secondary_x = self.state.speech_x + face_offsets[0]
+        secondary_y = self.state.speech_y + face_offsets[1]
+        secondary_z = self.state.speech_z + face_offsets[2] + self.state.breathing_z
+        secondary_roll = self.state.speech_roll + face_offsets[3]
+        secondary_pitch = self.state.speech_pitch + face_offsets[4]
+        secondary_yaw = self.state.speech_yaw + face_offsets[5]
+
+        if SDK_UTILS_AVAILABLE:
+            secondary_head = create_head_pose(
+                x=secondary_x,
+                y=secondary_y,
+                z=secondary_z,
+                roll=secondary_roll,
+                pitch=secondary_pitch,
+                yaw=secondary_yaw,
+                degrees=False,
+                mm=False,
+            )
+            # Compose using SDK's compose_world_offset (same as conversation_app)
+            final_head = compose_world_offset(primary_head, secondary_head, reorthonormalize=True)
+        else:
+            # Fallback: simple addition (less accurate but works)
+            secondary_rotation = R.from_euler('xyz', [secondary_roll, secondary_pitch, secondary_yaw])
+            secondary_head = np.eye(4)
+            secondary_head[:3, :3] = secondary_rotation.as_matrix()
+            secondary_head[0, 3] = secondary_x
+            secondary_head[1, 3] = secondary_y
+            secondary_head[2, 3] = secondary_z
+            
+            # Simple composition: R_final = R_secondary @ R_primary, t_final = t_primary + t_secondary
+            final_head = np.eye(4)
+            final_head[:3, :3] = secondary_head[:3, :3] @ primary_head[:3, :3]
+            final_head[:3, 3] = primary_head[:3, 3] + secondary_head[:3, 3]
 
         # Antenna pose with freeze blending
         target_antenna_left = self.state.target_antenna_left + self.state.breathing_antenna_left
@@ -755,32 +789,38 @@ class MovementManager:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
 
-        return {
-            "pitch": pitch,
-            "yaw": yaw,
-            "roll": roll,
-            "x": x,
-            "y": y,
-            "z": z,
-            "antenna_left": antenna_left,
-            "antenna_right": antenna_right,
-            "body_yaw": self.state.target_body_yaw,
-        }
+        return final_head, (antenna_right, antenna_left), self.state.target_body_yaw
 
     # =========================================================================
     # Internal: Robot control (runs in control loop)
     # =========================================================================
 
-    def _issue_control_command(self, pose: Dict[str, float]) -> None:
+    def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
         """Send control command to robot with error throttling and connection health tracking."""
         if self.robot is None:
             return
 
         # Check if pose changed significantly (prevent unnecessary commands)
+        # Extract euler angles for comparison
+        rotation = R.from_matrix(head_pose[:3, :3])
+        euler = rotation.as_euler('xyz')  # [roll, pitch, yaw]
+        
+        current_pose = {
+            "x": head_pose[0, 3],
+            "y": head_pose[1, 3],
+            "z": head_pose[2, 3],
+            "roll": euler[0],
+            "pitch": euler[1],
+            "yaw": euler[2],
+            "antenna_right": antennas[0],
+            "antenna_left": antennas[1],
+            "body_yaw": body_yaw,
+        }
+        
         if self._last_sent_pose is not None:
             max_diff = max(
-                abs(pose[k] - self._last_sent_pose.get(k, 0.0))
-                for k in pose.keys()
+                abs(current_pose[k] - self._last_sent_pose.get(k, 0.0))
+                for k in current_pose.keys()
             )
             if max_diff < self._pose_change_threshold:
                 # No significant change, skip sending command
@@ -798,30 +838,17 @@ class MovementManager:
             logger.debug("Attempting to send command after connection loss...")
 
         try:
-            # Build head pose matrix
-            # SDK uses 'xyz' euler order with [roll, pitch, yaw] (same as create_head_pose)
-            rotation = R.from_euler('xyz', [
-                pose["roll"],
-                pose["pitch"],
-                pose["yaw"],
-            ])
-
-            head_pose = np.eye(4)
-            head_pose[:3, :3] = rotation.as_matrix()
-            head_pose[0, 3] = pose["x"]
-            head_pose[1, 3] = pose["y"]
-            head_pose[2, 3] = pose["z"]
-
             # Send to robot (single control point!)
+            # head_pose is already a 4x4 matrix from _compose_final_pose
             self.robot.set_target(
                 head=head_pose,
-                antennas=[pose["antenna_right"], pose["antenna_left"]],
-                body_yaw=pose["body_yaw"],
+                antennas=list(antennas),
+                body_yaw=body_yaw,
             )
 
             # Command succeeded - update connection health and cache
             self._last_successful_command = now
-            self._last_sent_pose = pose.copy()  # Cache sent pose
+            self._last_sent_pose = current_pose.copy()  # Cache sent pose
             self._consecutive_errors = 0  # Reset error counter
             
             if self._connection_lost:
@@ -900,11 +927,11 @@ class MovementManager:
                 # 6. Update face tracking offsets from camera server
                 self._update_face_tracking()
 
-                # 7. Compose final pose
-                pose = self._compose_final_pose()
+                # 7. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
+                head_pose, antennas, body_yaw = self._compose_final_pose()
 
                 # 8. Send to robot (single control point!)
-                self._issue_control_command(pose)
+                self._issue_control_command(head_pose, antennas, body_yaw)
 
             except Exception as e:
                 self._log_error_throttled(f"Control loop error: {e}")
