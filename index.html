@@ -86,6 +86,96 @@
 					</div>
 				</div>
 
+				<h2>Changelog</h2>
+				<div class="how-to-use changelog-container">
+					<div class="changelog-scroll">
+						<div class="changelog-entry">
+							<span class="version">v0.5.0</span>
+							<span class="date">2025-01-07</span>
+							<ul>
+								<li>Face tracking offset compensation (pitch +9°, yaw -7°)</li>
+								<li>Optimized shutdown mechanism (reduced timeout from ~7s to ~2s)</li>
+								<li>Sendspin multi-room audio integration (PLAYER role)</li>
+								<li>Audio resampling for Sendspin (44.1/48kHz → 16kHz)</li>
+								<li>Pose composition using SDK's compose_world_offset</li>
+								<li>Noise suppression default reduced to 15%</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
+							<span class="version">v0.4.0</span>
+							<span class="date">2024-12-xx</span>
+							<ul>
+								<li>Daemon stability fixes and microphone optimization</li>
+								<li>Face tracking enabled by default</li>
+								<li>Tap detection logging improvements</li>
+								<li>SDK compose_world_offset for proper pose composition</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
+							<span class="version">v0.3.0</span>
+							<span class="date">2024-12-xx</span>
+							<ul>
+								<li>Tap sensitivity slider entity for Home Assistant</li>
+								<li>Face tracking optimization</li>
+								<li>Music Assistant compatibility fixes</li>
+								<li>Reduced noise suppression for better mic sensitivity</li>
+								<li>Tap-to-wake blocking fixes</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
+							<span class="version">v0.2.x</span>
+							<span class="date">2024-12-xx</span>
+							<ul>
+								<li>v0.2.21: Fix daemon crash - reduce control loop to 2Hz</li>
+								<li>v0.2.18: Fix audio playback - restore wakeup sound</li>
+								<li>v0.2.17: Remove head_joints/passive_joints, move error_message to diagnostic</li>
+								<li>v0.2.16: Fix TTS playback - pause recording during playback</li>
+								<li>v0.2.12: Disable breathing animation to prevent serial port overflow</li>
+								<li>v0.2.9: Remove DOA/speech detection - replaced by face tracking</li>
+								<li>v0.2.8: Replace DOA with YOLO face tracking</li>
+								<li>v0.2.6: Thread-safe ReSpeaker USB access</li>
+								<li>v0.2.4: Fix microphone volume control via daemon HTTP API</li>
+								<li>v0.2.3: Fix daemon crash from conflicting pose commands</li>
+								<li>v0.2.2: Fix second conversation motion failure</li>
+								<li>v0.2.1: Fix daemon crash and optimize code</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
+							<span class="version">v0.2.0</span>
+							<span class="date">2024-12-xx</span>
+							<ul>
+								<li>Automatic facial expressions during conversation</li>
+								<li>Emotion playback integration with MovementManager</li>
+								<li>Event loop blocking fixes</li>
+								<li>SDK compliance refactoring</li>
+								<li>Improved shutdown and connection error handling</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
+							<span class="version">v0.1.x</span>
+							<span class="date">2024-12-xx</span>
+							<ul>
+								<li>v0.1.5: Code optimization and crash fixes</li>
+								<li>Reachy Mini 3D visualization card for Home Assistant</li>
+								<li>Home Assistant Material Design styling</li>
+								<li>Initial release with voice assistant functionality</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
+							<span class="version">v0.0.0</span>
+							<span class="date">2024-12-xx</span>
+							<ul>
+								<li>Initial project setup</li>
+								<li>Basic Home Assistant voice satellite integration</li>
+								<li>Reachy Mini SDK integration</li>
+								<li>Wake word detection ("Okay Nabu")</li>
+								<li>MJPEG camera streaming</li>
+								<li>30+ Home Assistant control entities</li>
+							</ul>
+						</div>
+					</div>
+				</div>
+
 				<h2>Usage</h2>
 				<div class="how-to-use">
 					<h3>After Installation:</h3>

@@ -221,3 +221,73 @@ body {
 		grid-template-columns: 1fr;
 	}
 }
+
+/* Changelog Styles */
+.changelog-container {
+	max-height: 400px;
+	overflow: hidden;
+	padding: 0;
+}
+
+.changelog-scroll {
+	max-height: 380px;
+	overflow-y: auto;
+	padding: 1.5rem;
+}
+
+.changelog-scroll::-webkit-scrollbar {
+	width: 8px;
+}
+
+.changelog-scroll::-webkit-scrollbar-track {
+	background: rgba(3, 169, 244, 0.1);
+	border-radius: 4px;
+}
+
+.changelog-scroll::-webkit-scrollbar-thumb {
+	background: var(--ha-primary);
+	border-radius: 4px;
+}
+
+.changelog-scroll::-webkit-scrollbar-thumb:hover {
+	background: var(--ha-primary-dark);
+}
+
+.changelog-entry {
+	border-bottom: 1px solid var(--ha-divider);
+	padding-bottom: 1rem;
+	margin-bottom: 1rem;
+}
+
+.changelog-entry:last-child {
+	border-bottom: none;
+	margin-bottom: 0;
+	padding-bottom: 0;
+}
+
+.changelog-entry .version {
+	display: inline-block;
+	background: var(--ha-primary);
+	color: white;
+	padding: 0.25rem 0.75rem;
+	border-radius: 20px;
+	font-weight: 600;
+	font-size: 0.9rem;
+	margin-right: 0.5rem;
+}
+
+.changelog-entry .date {
+	color: var(--ha-text-secondary);
+	font-size: 0.85rem;
+}
+
+.changelog-entry ul {
+	margin-top: 0.75rem;
+	margin-left: 1.5rem;
+	color: var(--ha-text-secondary);
+}
+
+.changelog-entry li {
+	margin-bottom: 0.25rem;
+	line-height: 1.5;
+}
