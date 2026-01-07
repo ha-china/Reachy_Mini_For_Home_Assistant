@@ -1,6 +1,6 @@
 """Gesture detection using MediaPipe Hands.
 
-Detects hand gestures for robot interaction:
+Detects 11 hand gestures for robot interaction:
 - thumbs_up: 👍 Confirmation/like
 - thumbs_down: 👎 Reject/dislike  
 - open_palm: ✋ Stop/halt

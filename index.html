@@ -81,6 +81,10 @@
 						<p>Automatic emotional feedback with head movements and antenna animations while listening and responding.</p>
 					</div>
 					<div class="info-box">
+						<h3>✋ Gesture Detection</h3>
+						<p>MediaPipe-based hand gesture recognition with 11 gestures for non-verbal interaction.</p>
+					</div>
+					<div class="info-box">
 						<h3>📹 Camera Streaming</h3>
 						<p>MJPEG video stream available in Home Assistant as a Generic Camera for real-time monitoring.</p>
 					</div>
@@ -98,6 +102,15 @@
 				<div class="how-to-use changelog-container">
 					<div class="changelog-scroll">
 						<div class="changelog-entry">
+							<span class="version">v0.6.0</span>
+							<span class="date">2026-01-07</span>
+							<ul>
+								<li>NEW: MediaPipe gesture detection with 11 gestures</li>
+								<li>Gestures: thumbs_up, thumbs_down, open_palm, fist, peace, ok, pointing_up, rock, call, three, four</li>
+								<li>Home Assistant entities for gesture detection (detected_gesture, gesture_detection_enabled)</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
 							<span class="version">v0.5.0</span>
 							<span class="date">2026-01-07</span>
 							<ul>
@@ -109,7 +122,7 @@
 								<li>Noise suppression default reduced to 15%</li>
 								<li>Tap-to-wake default threshold reduced to 0.5g (most sensitive)</li>
 								<li>Fix: Replace non-existent clear_output_buffer with stop_playing</li>
-								<li>NEW: Gesture detection (thumbs up, open palm/stop) via MediaPipe</li>
+								<li>NEW: Gesture detection (11 gestures) via MediaPipe</li>
 								<li>NEW: Home Assistant entities for gesture detection</li>
 							</ul>
 						</div>
