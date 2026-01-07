@@ -220,9 +220,15 @@ class MJPEGCameraServer:
                 # Convert normalized coordinates to pixel coordinates
                 h, w = frame.shape[:2]
                 eye_center_norm = (face_center + 1) / 2
+                
+                # Apply Y offset to look at eye level instead of face center
+                # YOLO detects face bounding box center, which is below eye level
+                # Positive offset moves the target point down in image (robot looks down)
+                y_offset_ratio = 0.08  # 8% of image height downward
+                
                 eye_center_pixels = [
                     eye_center_norm[0] * w,
-                    eye_center_norm[1] * h,
+                    (eye_center_norm[1] + y_offset_ratio) * h,
                 ]
                 
                 # Get the head pose needed to look at the target
