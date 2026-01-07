@@ -90,7 +90,6 @@ class VoiceSatelliteProtocol(APIServer):
             camera_server=camera_server,
             play_emotion_callback=self._play_emotion,
             tap_detector=tap_detector,
-            audio_player=state.tts_player,  # For Sendspin control
         )
 
         # Only setup entities once (check if already initialized)

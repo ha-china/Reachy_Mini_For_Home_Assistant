@@ -80,10 +80,7 @@ ENTITY_KEYS: Dict[str, int] = {
     "agc_max_gain": 1201,
     "noise_suppression": 1202,
     "echo_cancellation_converged": 1203,
-    # Phase 13: Sendspin audio output
-    "sendspin_enabled": 1300,
-    "sendspin_url": 1301,
-    "sendspin_connected": 1302,
+    # Phase 13: Sendspin - auto-enabled via mDNS, no user entities needed
     # Phase 20: Tap detection
     "tap_sensitivity": 1400,
 }
@@ -108,7 +105,6 @@ class EntityRegistry:
         camera_server: Optional["MJPEGCameraServer"] = None,
         play_emotion_callback: Optional[Callable[[str], None]] = None,
         tap_detector: Optional["TapDetector"] = None,
-        audio_player=None,
     ):
         """Initialize the entity registry.
 
@@ -118,14 +114,12 @@ class EntityRegistry:
             camera_server: Optional camera server for camera entity
             play_emotion_callback: Optional callback for playing emotions
             tap_detector: Optional tap detector for sensitivity control
-            audio_player: Optional audio player for Sendspin control
         """
         self.server = server
         self.reachy_controller = reachy_controller
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
         self.tap_detector = tap_detector
-        self.audio_player = audio_player
 
         # Emotion state
         self._current_emotion = "None"
@@ -138,9 +132,6 @@ class EntityRegistry:
             "Surprise": "surprise1",
             "Disgust": "disgust1",
         }
-        
-        # Sendspin state
-        self._sendspin_url = ""
 
     def setup_all_entities(self, entities: List) -> None:
         """Setup all entity phases.
@@ -160,8 +151,8 @@ class EntityRegistry:
         self._setup_phase10_entities(entities)
         # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
         self._setup_phase12_entities(entities)
-        self._setup_phase13_entities(entities)
-        # Phase 13-14 (head_joints, passive_joints) removed - not needed
+        # Phase 13 (Sendspin) - auto-enabled via mDNS discovery, no user entities
+        # Phase 14 (head_joints, passive_joints) removed - not needed
         self._setup_phase20_entities(entities)
 
         _LOGGER.info("All entities registered: %d total", len(entities))
@@ -743,99 +734,6 @@ class EntityRegistry:
         ))
 
         _LOGGER.debug("Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged")
-
-    def _setup_phase13_entities(self, entities: List) -> None:
-        """Setup Phase 13 entities: Sendspin audio output control."""
-        import asyncio
-
-        def get_sendspin_enabled() -> bool:
-            """Get Sendspin enabled state."""
-            if self.audio_player:
-                return self.audio_player.sendspin_enabled
-            return False
-
-        def set_sendspin_enabled(enabled: bool) -> None:
-            """Enable or disable Sendspin audio output."""
-            if not self.audio_player:
-                return
-            
-            if enabled:
-                # Enable Sendspin with current URL
-                if self._sendspin_url:
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(
-                                self.audio_player.enable_sendspin(self._sendspin_url)
-                            )
-                        else:
-                            loop.run_until_complete(
-                                self.audio_player.enable_sendspin(self._sendspin_url)
-                            )
-                    except Exception as e:
-                        _LOGGER.error("Failed to enable Sendspin: %s", e)
-                else:
-                    _LOGGER.warning("Cannot enable Sendspin: URL not set")
-            else:
-                # Disable Sendspin
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self.audio_player.disable_sendspin())
-                    else:
-                        loop.run_until_complete(self.audio_player.disable_sendspin())
-                except Exception as e:
-                    _LOGGER.error("Failed to disable Sendspin: %s", e)
-
-        def get_sendspin_url() -> str:
-            """Get Sendspin server URL."""
-            return self._sendspin_url
-
-        def set_sendspin_url(url: str) -> None:
-            """Set Sendspin server URL."""
-            self._sendspin_url = url
-            _LOGGER.info("Sendspin URL set to: %s", url)
-
-        def get_sendspin_connected() -> bool:
-            """Get Sendspin connection state."""
-            if self.audio_player:
-                return self.audio_player.sendspin_enabled
-            return False
-
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("sendspin_enabled"),
-            name="Sendspin Enabled",
-            object_id="sendspin_enabled",
-            icon="mdi:speaker-multiple",
-            device_class="switch",
-            entity_category=1,  # config
-            value_getter=get_sendspin_enabled,
-            value_setter=set_sendspin_enabled,
-        ))
-
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("sendspin_url"),
-            name="Sendspin URL",
-            object_id="sendspin_url",
-            icon="mdi:link",
-            entity_category=1,  # config
-            value_getter=get_sendspin_url,
-        ))
-
-        entities.append(BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("sendspin_connected"),
-            name="Sendspin Connected",
-            object_id="sendspin_connected",
-            icon="mdi:lan-connect",
-            device_class="connectivity",
-            entity_category=2,  # diagnostic
-            value_getter=get_sendspin_connected,
-        ))
-
-        _LOGGER.debug("Phase 13 entities registered: sendspin_enabled, sendspin_url, sendspin_connected")
 
     def _setup_phase20_entities(self, entities: List) -> None:
         """Setup Phase 20 entities: Tap detection settings (Wireless only)."""
