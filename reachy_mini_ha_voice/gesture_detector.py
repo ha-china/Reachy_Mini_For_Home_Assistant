@@ -1,14 +1,12 @@
-"""Gesture detection using OpenCV skin color detection and contour analysis.
+"""Gesture detection using MediaPipe Hands.
 
 Detects hand gestures for robot interaction:
 - thumbs_up: Confirmation/like
 - thumbs_down: Reject/dislike  
-- open_palm: Stop speaking/cancel (5 fingers)
-- fist: Pause/hold (0 fingers)
+- open_palm: Stop speaking/cancel
+- fist: Pause/hold
 - peace: Victory sign (2 fingers)
 - pointing_up: Attention (1 finger)
-
-Uses pure OpenCV - no additional dependencies required.
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ from enum import Enum
 from typing import Optional, Tuple, Callable
 import time
 
-import cv2
 import numpy as np
 from numpy.typing import NDArray
 
@@ -36,23 +33,23 @@ class Gesture(Enum):
 
 
 class GestureDetector:
-    """Gesture detector using OpenCV skin detection and convex hull analysis."""
+    """Gesture detector using MediaPipe Hands."""
 
     def __init__(
         self,
-        min_hand_area: int = 5000,
-        max_hand_area: int = 150000,
+        min_detection_confidence: float = 0.7,
+        min_tracking_confidence: float = 0.5,
+        max_num_hands: int = 1,
     ) -> None:
-        """Initialize gesture detector.
-
-        Args:
-            min_hand_area: Minimum contour area to consider as hand
-            max_hand_area: Maximum contour area to consider as hand
-        """
-        self._min_hand_area = min_hand_area
-        self._max_hand_area = max_hand_area
+        self._min_detection_confidence = min_detection_confidence
+        self._min_tracking_confidence = min_tracking_confidence
+        self._max_num_hands = max_num_hands
         
-        # Gesture callbacks
+        self._hands = None
+        self._mp_hands = None
+        self._available = False
+        
+        # Callbacks
         self._on_thumbs_up: Optional[Callable[[], None]] = None
         self._on_thumbs_down: Optional[Callable[[], None]] = None
         self._on_open_palm: Optional[Callable[[], None]] = None
@@ -60,7 +57,7 @@ class GestureDetector:
         self._on_peace: Optional[Callable[[], None]] = None
         self._on_pointing_up: Optional[Callable[[], None]] = None
         
-        # Gesture state
+        # State
         self._last_gesture = Gesture.NONE
         self._current_gesture = Gesture.NONE
         self._gesture_start_time: Optional[float] = None
@@ -70,16 +67,31 @@ class GestureDetector:
         self._gesture_clear_delay = 2.0
         self._last_gesture_time: float = 0
         
-        logger.info("OpenCV gesture detector initialized")
+        self._load_model()
+
+    def _load_model(self) -> None:
+        try:
+            import mediapipe as mp
+            self._mp_hands = mp.solutions.hands
+            self._hands = self._mp_hands.Hands(
+                static_image_mode=False,
+                max_num_hands=self._max_num_hands,
+                min_detection_confidence=self._min_detection_confidence,
+                min_tracking_confidence=self._min_tracking_confidence,
+            )
+            self._available = True
+            logger.info("MediaPipe Hands loaded for gesture detection")
+        except ImportError as e:
+            logger.warning("Gesture detection disabled - mediapipe not installed: %s", e)
+        except Exception as e:
+            logger.error("Failed to load MediaPipe Hands: %s", e)
 
     @property
     def is_available(self) -> bool:
-        """Always available - uses OpenCV only."""
-        return True
+        return self._available
 
     @property
     def current_gesture(self) -> Gesture:
-        """Get current detected gesture."""
         return self._current_gesture
 
     def set_callbacks(
@@ -92,7 +104,6 @@ class GestureDetector:
         on_ok: Optional[Callable[[], None]] = None,
         on_pointing_up: Optional[Callable[[], None]] = None,
     ) -> None:
-        """Set gesture callbacks."""
         self._on_thumbs_up = on_thumbs_up
         self._on_thumbs_down = on_thumbs_down
         self._on_open_palm = on_open_palm
@@ -100,230 +111,139 @@ class GestureDetector:
         self._on_peace = on_peace
         self._on_pointing_up = on_pointing_up
 
-    def _detect_skin(self, frame: NDArray[np.uint8]) -> NDArray[np.uint8]:
-        """Detect skin regions using YCrCb color space."""
-        # Convert to YCrCb
-        ycrcb = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
-        
-        # Skin color range in YCrCb
-        lower = np.array([0, 133, 77], dtype=np.uint8)
-        upper = np.array([255, 173, 127], dtype=np.uint8)
-        
-        # Create mask
-        mask = cv2.inRange(ycrcb, lower, upper)
-        
-        # Morphological operations to clean up
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        mask = cv2.GaussianBlur(mask, (5, 5), 0)
-        
-        return mask
+    def _get_landmark(self, landmarks, idx: int) -> Tuple[float, float, float]:
+        lm = landmarks.landmark[idx]
+        return lm.x, lm.y, lm.z
 
-    def _find_hand_contour(self, mask: NDArray[np.uint8]) -> Optional[NDArray]:
-        """Find the largest hand contour in the mask."""
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        if not contours:
-            return None
-        
-        # Find largest contour within size bounds
-        valid_contours = []
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if self._min_hand_area < area < self._max_hand_area:
-                valid_contours.append((area, cnt))
-        
-        if not valid_contours:
-            return None
-        
-        # Return largest valid contour
-        valid_contours.sort(key=lambda x: x[0], reverse=True)
-        return valid_contours[0][1]
+    def _is_finger_extended(self, landmarks, tip_idx: int, pip_idx: int) -> bool:
+        """Check if finger is extended (tip above PIP joint)."""
+        tip = self._get_landmark(landmarks, tip_idx)
+        pip = self._get_landmark(landmarks, pip_idx)
+        return tip[1] < pip[1]  # y increases downward
 
-    def _count_fingers(self, contour: NDArray, frame_height: int) -> Tuple[int, bool, float]:
-        """Count extended fingers using convex hull defects.
+    def _classify_gesture(self, landmarks) -> Gesture:
+        # Finger tip and PIP indices
+        # Thumb: 4 (tip), 3 (IP), 2 (MCP)
+        # Index: 8 (tip), 6 (PIP)
+        # Middle: 12 (tip), 10 (PIP)
+        # Ring: 16 (tip), 14 (PIP)
+        # Pinky: 20 (tip), 18 (PIP)
         
-        Returns:
-            Tuple of (finger_count, is_thumb_extended, hand_center_y_ratio)
-        """
-        # Get convex hull
-        hull = cv2.convexHull(contour, returnPoints=False)
+        thumb_tip = self._get_landmark(landmarks, 4)
+        thumb_ip = self._get_landmark(landmarks, 3)
+        thumb_mcp = self._get_landmark(landmarks, 2)
+        index_mcp = self._get_landmark(landmarks, 5)
+        wrist = self._get_landmark(landmarks, 0)
         
-        if len(hull) < 3:
-            return 0, False, 0.5
+        # Check finger extension
+        index_ext = self._is_finger_extended(landmarks, 8, 6)
+        middle_ext = self._is_finger_extended(landmarks, 12, 10)
+        ring_ext = self._is_finger_extended(landmarks, 16, 14)
+        pinky_ext = self._is_finger_extended(landmarks, 20, 18)
         
-        # Get convex hull points for centroid
-        hull_points = cv2.convexHull(contour)
+        # Thumb extended (horizontal distance from palm)
+        thumb_extended = abs(thumb_tip[0] - index_mcp[0]) > 0.1
         
-        # Calculate centroid
-        M = cv2.moments(contour)
-        if M["m00"] == 0:
-            return 0, False, 0.5
+        # Thumb direction
+        thumb_up = thumb_tip[1] < thumb_mcp[1] - 0.08
+        thumb_down = thumb_tip[1] > thumb_mcp[1] + 0.08
         
-        cx = int(M["m10"] / M["m00"])
-        cy = int(M["m01"] / M["m00"])
-        center_y_ratio = cy / frame_height
+        # Count extended fingers (excluding thumb)
+        ext_count = sum([index_ext, middle_ext, ring_ext, pinky_ext])
         
-        # Get bounding rect for reference
-        x, y, w, h = cv2.boundingRect(contour)
+        # All fingers curled
+        all_curled = not index_ext and not middle_ext and not ring_ext and not pinky_ext
         
-        # Get convexity defects
-        try:
-            defects = cv2.convexityDefects(contour, hull)
-        except cv2.error:
-            return 0, False, center_y_ratio
+        # Thumbs up: thumb up, all others curled
+        if thumb_up and thumb_extended and all_curled:
+            return Gesture.THUMBS_UP
         
-        if defects is None:
-            return 0, False, center_y_ratio
+        # Thumbs down: thumb down, all others curled
+        if thumb_down and thumb_extended and all_curled:
+            return Gesture.THUMBS_DOWN
         
-        # Count fingers based on defects
-        finger_count = 0
-        thumb_extended = False
-        
-        for i in range(defects.shape[0]):
-            s, e, f, d = defects[i, 0]
-            start = tuple(contour[s][0])
-            end = tuple(contour[e][0])
-            far = tuple(contour[f][0])
-            
-            # Calculate distances
-            a = np.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
-            b = np.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
-            c = np.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
-            
-            # Calculate angle using cosine rule
-            if b * c == 0:
-                continue
-            angle = np.arccos((b**2 + c**2 - a**2) / (2 * b * c))
-            
-            # Finger detected if angle < 90 degrees and defect depth is significant
-            if angle <= np.pi / 2 and d > 10000:
-                finger_count += 1
-                
-                # Check if this might be thumb (on side of hand)
-                if abs(start[0] - cx) > w * 0.3 or abs(end[0] - cx) > w * 0.3:
-                    thumb_extended = True
-        
-        # Add 1 because defects count spaces between fingers
-        if finger_count > 0:
-            finger_count += 1
-        
-        return min(finger_count, 5), thumb_extended, center_y_ratio
-
-    def _classify_gesture(self, contour: NDArray, frame_height: int) -> Gesture:
-        """Classify gesture based on contour analysis."""
-        finger_count, thumb_extended, center_y = self._count_fingers(contour, frame_height)
-        
-        # Get contour properties
-        x, y, w, h = cv2.boundingRect(contour)
-        aspect_ratio = float(w) / h if h > 0 else 1.0
-        
-        # Get hull area ratio (solidity)
-        hull = cv2.convexHull(contour)
-        hull_area = cv2.contourArea(hull)
-        contour_area = cv2.contourArea(contour)
-        solidity = contour_area / hull_area if hull_area > 0 else 0
-        
-        # Classify based on finger count and shape
-        if finger_count >= 4:
-            return Gesture.OPEN_PALM
-        elif finger_count == 2:
-            return Gesture.PEACE
-        elif finger_count == 1:
-            # Check if pointing up or thumb gesture
-            if aspect_ratio < 0.7:  # Tall and narrow = pointing up
-                return Gesture.POINTING_UP
-            elif thumb_extended:
-                # Check thumb direction based on position
-                if center_y < 0.5:  # Hand in upper half
-                    return Gesture.THUMBS_UP
-                else:
-                    return Gesture.THUMBS_DOWN
-        elif finger_count == 0 and solidity > 0.8:
+        # Fist: all fingers curled, thumb tucked
+        if all_curled and not thumb_extended:
             return Gesture.FIST
+        
+        # Peace: index and middle extended, others curled
+        if index_ext and middle_ext and not ring_ext and not pinky_ext:
+            return Gesture.PEACE
+        
+        # Pointing up: only index extended
+        if index_ext and not middle_ext and not ring_ext and not pinky_ext:
+            return Gesture.POINTING_UP
+        
+        # Open palm: 4+ fingers extended
+        if ext_count >= 4:
+            return Gesture.OPEN_PALM
         
         return Gesture.NONE
 
     def detect(self, frame: NDArray[np.uint8]) -> Gesture:
-        """Detect gesture in frame.
+        if not self._available:
+            return Gesture.NONE
         
-        Args:
-            frame: BGR image from camera
-            
-        Returns:
-            Detected gesture
-        """
         try:
-            # Detect skin
-            mask = self._detect_skin(frame)
+            import cv2
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self._hands.process(rgb)
             
-            # Find hand contour
-            contour = self._find_hand_contour(mask)
-            
-            if contour is None:
+            if not results.multi_hand_landmarks:
                 return Gesture.NONE
             
-            # Classify gesture
-            return self._classify_gesture(contour, frame.shape[0])
-            
+            return self._classify_gesture(results.multi_hand_landmarks[0])
         except Exception as e:
             logger.debug("Gesture detection error: %s", e)
             return Gesture.NONE
 
     def process_frame(self, frame: NDArray[np.uint8]) -> Optional[Gesture]:
-        """Process frame and trigger callbacks if gesture held."""
-        current_gesture = self.detect(frame)
-        current_time = time.time()
+        gesture = self.detect(frame)
+        now = time.time()
         
         # Update current gesture for HA entity
-        if current_gesture != Gesture.NONE:
-            self._current_gesture = current_gesture
-            self._last_gesture_time = current_time
-        elif current_time - self._last_gesture_time > self._gesture_clear_delay:
+        if gesture != Gesture.NONE:
+            self._current_gesture = gesture
+            self._last_gesture_time = now
+        elif now - self._last_gesture_time > self._gesture_clear_delay:
             self._current_gesture = Gesture.NONE
         
-        # Check cooldown
-        if current_time - self._last_trigger_time < self._gesture_cooldown:
+        # Cooldown check
+        if now - self._last_trigger_time < self._gesture_cooldown:
             return None
         
         # Gesture changed
-        if current_gesture != self._last_gesture:
-            self._last_gesture = current_gesture
-            self._gesture_start_time = current_time if current_gesture != Gesture.NONE else None
+        if gesture != self._last_gesture:
+            self._last_gesture = gesture
+            self._gesture_start_time = now if gesture != Gesture.NONE else None
             return None
         
-        # Same gesture - check if held long enough
-        if current_gesture != Gesture.NONE and self._gesture_start_time is not None:
-            hold_duration = current_time - self._gesture_start_time
-            
-            if hold_duration >= self._gesture_hold_threshold:
-                self._last_trigger_time = current_time
+        # Same gesture held long enough
+        if gesture != Gesture.NONE and self._gesture_start_time:
+            if now - self._gesture_start_time >= self._gesture_hold_threshold:
+                self._last_trigger_time = now
                 self._gesture_start_time = None
                 
-                callback = self._get_callback_for_gesture(current_gesture)
+                callback = {
+                    Gesture.THUMBS_UP: self._on_thumbs_up,
+                    Gesture.THUMBS_DOWN: self._on_thumbs_down,
+                    Gesture.OPEN_PALM: self._on_open_palm,
+                    Gesture.FIST: self._on_fist,
+                    Gesture.PEACE: self._on_peace,
+                    Gesture.POINTING_UP: self._on_pointing_up,
+                }.get(gesture)
+                
                 if callback:
-                    logger.info("Gesture triggered: %s", current_gesture.value)
+                    logger.info("Gesture triggered: %s", gesture.value)
                     try:
                         callback()
                     except Exception as e:
                         logger.error("Gesture callback error: %s", e)
-                    return current_gesture
+                    return gesture
         
         return None
 
-    def _get_callback_for_gesture(self, gesture: Gesture) -> Optional[Callable[[], None]]:
-        """Get callback for gesture."""
-        callbacks = {
-            Gesture.THUMBS_UP: self._on_thumbs_up,
-            Gesture.THUMBS_DOWN: self._on_thumbs_down,
-            Gesture.OPEN_PALM: self._on_open_palm,
-            Gesture.FIST: self._on_fist,
-            Gesture.PEACE: self._on_peace,
-            Gesture.POINTING_UP: self._on_pointing_up,
-        }
-        return callbacks.get(gesture)
-
     def close(self) -> None:
-        """Release resources."""
-        pass
+        if self._hands:
+            self._hands.close()
+            self._hands = None
