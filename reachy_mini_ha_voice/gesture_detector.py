@@ -13,15 +13,16 @@ Detects 11 hand gestures for robot interaction:
 - three: 3️⃣ Three fingers
 - four: 4️⃣ Four fingers
 
-On ARM64 (Raspberry Pi), uses mediapipe 0.10.18 with numpy compatibility shim.
-On x86_64, uses mediapipe 0.10.31+ with native numpy 2 support.
+Requires mediapipe to be pre-installed. If not available, gesture detection
+is silently disabled (no network installation attempts).
+
+For ARM64 (Raspberry Pi), install manually:
+    pip install mediapipe==0.10.18 --no-deps
+    pip install flatbuffers absl-py
 """
 
 from __future__ import annotations
 import logging
-import platform
-import subprocess
-import sys
 from enum import Enum
 from typing import Optional, Tuple, Callable
 import time
@@ -32,42 +33,7 @@ from numpy.typing import NDArray
 logger = logging.getLogger(__name__)
 
 
-def _try_install_mediapipe() -> bool:
-    """Try to install mediapipe for the current platform."""
-    arch = platform.machine().lower()
-    
-    if arch in ('aarch64', 'arm64'):
-        # ARM64: install older version without deps to avoid numpy conflict
-        logger.info("ARM64 detected, installing mediapipe 0.10.18...")
-        try:
-            subprocess.check_call([
-                sys.executable, '-m', 'pip', 'install', 
-                'mediapipe==0.10.18', '--no-deps', '-q'
-            ])
-            # Install required deps that don't conflict
-            subprocess.check_call([
-                sys.executable, '-m', 'pip', 'install',
-                'flatbuffers>=2.0', 'absl-py', '-q'
-            ])
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.warning("Failed to install mediapipe: %s", e)
-            return False
-    else:
-        # x86_64: install latest version
-        logger.info("x86_64 detected, installing mediapipe...")
-        try:
-            subprocess.check_call([
-                sys.executable, '-m', 'pip', 'install',
-                'mediapipe>=0.10.31', '-q'
-            ])
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.warning("Failed to install mediapipe: %s", e)
-            return False
-
-
-# Try to import mediapipe
+# Try to import mediapipe (no auto-install to avoid network issues)
 _mp_hands = None
 _mediapipe_available = False
 
@@ -75,19 +41,11 @@ try:
     import mediapipe as mp
     _mp_hands = mp.solutions.hands
     _mediapipe_available = True
-    logger.info("MediaPipe loaded successfully")
+    logger.info("MediaPipe loaded for gesture detection")
 except ImportError:
-    logger.info("MediaPipe not found, attempting installation...")
-    if _try_install_mediapipe():
-        try:
-            import mediapipe as mp
-            _mp_hands = mp.solutions.hands
-            _mediapipe_available = True
-            logger.info("MediaPipe installed and loaded successfully")
-        except ImportError as e:
-            logger.warning("MediaPipe import failed after install: %s", e)
-    else:
-        logger.warning("Gesture detection disabled - mediapipe unavailable")
+    logger.info("MediaPipe not installed - gesture detection disabled")
+except Exception as e:
+    logger.warning("MediaPipe load error: %s - gesture detection disabled", e)
 
 
 class Gesture(Enum):
@@ -144,9 +102,7 @@ class GestureDetector:
                 self._available = True
                 logger.info("MediaPipe Hands initialized")
             except Exception as e:
-                logger.error("Failed to initialize MediaPipe Hands: %s", e)
-        else:
-            logger.warning("Gesture detection disabled - MediaPipe not available")
+                logger.warning("Failed to initialize MediaPipe Hands: %s", e)
 
     @property
     def is_available(self) -> bool:
