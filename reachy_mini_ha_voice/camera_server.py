@@ -221,14 +221,9 @@ class MJPEGCameraServer:
                 h, w = frame.shape[:2]
                 eye_center_norm = (face_center + 1) / 2
                 
-                # Apply Y offset to look at eye level instead of face center
-                # YOLO detects face bounding box center, which is below eye level
-                # Positive offset moves the target point down in image (robot looks down)
-                y_offset_ratio = 0.08  # 8% of image height downward
-                
                 eye_center_pixels = [
                     eye_center_norm[0] * w,
-                    (eye_center_norm[1] + y_offset_ratio) * h,
+                    eye_center_norm[1] * h,
                 ]
                 
                 # Get the head pose needed to look at the target
@@ -258,8 +253,10 @@ class MJPEGCameraServer:
                         float(rotation[2]),
                     ]
                 
-                _LOGGER.debug("Face tracked: conf=%.2f, offsets=(%.3f, %.3f, %.3f)",
-                             confidence or 0, translation[0], translation[1], translation[2])
+                # Debug: log the actual values
+                _LOGGER.info("Face tracking: trans=(%.4f, %.4f, %.4f), rot=(%.2f, %.2f, %.2f) deg",
+                             translation[0], translation[1], translation[2],
+                             np.degrees(rotation[0]), np.degrees(rotation[1]), np.degrees(rotation[2]))
         
         except Exception as e:
             _LOGGER.debug("Face tracking error: %s", e)

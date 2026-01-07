@@ -391,7 +391,7 @@ class MovementManager:
         
         # Face tracking smoothing (exponential moving average)
         self._smoothed_face_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self._face_smoothing_factor = 0.15  # Lower = smoother but slower response
+        self._face_smoothing_factor = 0.3  # Higher = faster response, lower = smoother
 
         logger.info("MovementManager initialized")
 
