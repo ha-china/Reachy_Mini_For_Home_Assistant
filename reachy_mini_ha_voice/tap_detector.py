@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 # Tap detection parameters
-TAP_THRESHOLD_G_DEFAULT = 2.0  # Default acceleration threshold in g
+TAP_THRESHOLD_G_DEFAULT = 0.5  # Default acceleration threshold in g (most sensitive)
 TAP_THRESHOLD_G_MIN = 0.5  # Minimum threshold (very sensitive)
 TAP_THRESHOLD_G_MAX = 5.0  # Maximum threshold (less sensitive)
 TAP_COOLDOWN_SECONDS = 1.0  # Minimum time between tap detections
