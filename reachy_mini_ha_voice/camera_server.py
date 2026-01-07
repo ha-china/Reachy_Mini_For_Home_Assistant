@@ -51,7 +51,7 @@ class MJPEGCameraServer:
         reachy_mini: Optional["ReachyMini"] = None,
         host: str = "0.0.0.0",
         port: int = 8081,
-        fps: int = 10,  # Reduced from 15 to 10 fps for daemon stability
+        fps: int = 15,  # Increased to 15fps for smoother face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
     ):
@@ -93,11 +93,11 @@ class MJPEGCameraServer:
         self._last_face_detected_time: Optional[float] = None
         self._interpolation_start_time: Optional[float] = None
         self._interpolation_start_pose: Optional[np.ndarray] = None
-        self._face_lost_delay = 2.0  # seconds before interpolating back
-        self._interpolation_duration = 1.0  # seconds to interpolate back
+        self._face_lost_delay = 1.0  # Reduced from 2.0s to 1.0s for faster response
+        self._interpolation_duration = 0.8  # Reduced from 1.0s to 0.8s for faster return
         
         # Offset scaling (smaller movements for smoother tracking)
-        self._offset_scale = 0.6
+        self._offset_scale = 0.7  # Increased from 0.6 to 0.7 for more responsive tracking
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""

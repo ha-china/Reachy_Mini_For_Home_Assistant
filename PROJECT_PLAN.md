@@ -9,6 +9,7 @@
 2. [Reachy Mini SDK](reference/reachy_mini) 这是 Reachy Mini SDK 的本地项目目录，用于参考。
 3. [reachy_mini_conversation_app](reference/reachy_mini_conversation_app) - Reachy Mini 对话应用，用于参考
 4. [reachy-mini-desktop-app](reference/reachy-mini-desktop-app) - Reachy Mini 桌面应用，用于参考
+5. [sendspin](reference/sendspin-cli/) - sendspin client，用于参考
 
 ## 核心设计原则
 
@@ -316,16 +317,18 @@ dependencies = [
     - [x] `noise_suppression` - 噪声抑制级别 (0-100%)
     - [x] `echo_cancellation_converged` - 回声消除收敛状态（只读）
 
-13. **Phase 13 - Sendspin 音频播放支持** ❌ **待实现**
-    - [ ] 支持 sendspin 协议播放音频
-    - [ ] 与现有 AudioPlayer 集成
-    - [ ] TTS 音频通过 sendspin 输出
+13. **Phase 13 - Sendspin 音频播放支持** ✅ **已完成**
+    - [x] `sendspin_enabled` - Sendspin 开关 (Switch)
+    - [x] `sendspin_url` - Sendspin 服务器 URL (Text Sensor)
+    - [x] `sendspin_connected` - Sendspin 连接状态 (Binary Sensor)
+    - [x] AudioPlayer 集成 aiosendspin 库
+    - [x] TTS 音频同时发送到本地扬声器和 Sendspin 服务器
 
 ---
 
-## 🎉 Phase 1-12 实体已完成！
+## 🎉 Phase 1-13 实体已完成！
 
-**已完成总计：40 个实体**
+**已完成总计：43 个实体**
 - Phase 1: 4 个实体 (基础状态与音量)
 - Phase 2: 4 个实体 (电机控制)
 - Phase 3: 9 个实体 (姿态控制)
@@ -338,6 +341,7 @@ dependencies = [
 - Phase 10: 1 个实体 (摄像头)
 - Phase 11: 0 个实体 (LED 控制 - 已禁用)
 - Phase 12: 4 个实体 (音频处理参数)
+- Phase 13: 3 个实体 (Sendspin 音频输出)
 
 ---
 
@@ -676,7 +680,7 @@ def _tts_finished(self):
 ### ❌ 未实现功能
 
 #### 高优先级
-- **Phase 13** - Sendspin 音频播放支持 (待实现)
+- ~~**Phase 13** - Sendspin 音频播放支持~~ ✅ **已完成**
 - **Phase 14** - 自动情感动作反馈 (需与语音助手事件关联)
 - **Phase 15** - 持续声源追踪 (仅唤醒时转向)
 

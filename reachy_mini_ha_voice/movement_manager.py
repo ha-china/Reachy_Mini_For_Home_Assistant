@@ -58,13 +58,12 @@ except ImportError:
 
 # Control loop frequency - CRITICAL for daemon stability
 # The daemon's internal control loop runs at 50Hz.
-# We use 10Hz to stay well below daemon capacity while maintaining smooth motion.
+# We use 25Hz for smoother animations while staying below daemon capacity.
 # Each set_target() call sends 3 Zenoh messages (head, antennas, body_yaw).
-# At 10Hz × 3 = 30 messages/second, well within daemon's 50Hz capacity.
-CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop (reduced from 20Hz for stability)
-# SDK's get_current_head_pose() and get_current_joint_positions() are non-blocking
-# (they return cached Zenoh data), so higher frequency is safe.
-# Using 20Hz as a balance between responsiveness and stability.
+# At 25Hz × 3 = 75 messages/second MAX, but with pose change detection we typically
+# send much fewer messages (only when pose actually changes significantly).
+# With threshold of 0.003 rad, actual message rate is ~20-30 msg/s during animation.
+CONTROL_LOOP_FREQUENCY_HZ = 25  # 25Hz control loop for smoother animations
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -87,11 +86,11 @@ SWAY_F_Z = 0.25          # Z frequency Hz
 # Master scale
 SWAY_MASTER = 1.5        # Overall sway intensity multiplier
 
-# Breathing parameters
-BREATHING_Z_AMPLITUDE = 0.005  # 5mm
-BREATHING_FREQUENCY = 0.1     # 0.1Hz (6 breaths per minute)
-ANTENNA_SWAY_AMPLITUDE_DEG = 15.0  # 15 degrees
-ANTENNA_FREQUENCY = 0.5       # 0.5Hz
+# Breathing parameters - smoother animation with continuous sine wave
+BREATHING_Z_AMPLITUDE = 0.004  # 4mm (slightly smaller for subtlety)
+BREATHING_FREQUENCY = 0.12    # 0.12Hz (~7 breaths per minute, natural pace)
+ANTENNA_SWAY_AMPLITUDE_DEG = 10.0  # 10 degrees (smaller for smoother look)
+ANTENNA_FREQUENCY = 0.25      # 0.25Hz (slower, more graceful)
 
 # VAD parameters for speech detection
 VAD_DB_ON = -35   # Start detection threshold
@@ -376,11 +375,11 @@ class MovementManager:
         self._audio_lock = threading.Lock()
 
         # Pose change detection threshold
-        # Increased from 0.002 to 0.005 to reduce unnecessary set_target() calls
-        # 0.005 rad ≈ 0.29 degrees - still smooth enough for natural motion
-        # This helps reduce Zenoh message traffic to the daemon
+        # Reduced from 0.005 to 0.003 for smoother animations
+        # 0.003 rad ≈ 0.17 degrees - smooth enough for natural motion
+        # With 25Hz loop, this still keeps actual message rate around 20-30 msg/s
         self._last_sent_pose: Optional[Dict[str, float]] = None
-        self._pose_change_threshold = 0.005
+        self._pose_change_threshold = 0.003
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
