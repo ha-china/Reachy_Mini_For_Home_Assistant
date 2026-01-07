@@ -238,10 +238,6 @@ class MJPEGCameraServer:
                 translation = target_pose[:3, 3]
                 rotation = R.from_matrix(target_pose[:3, :3]).as_euler("xyz", degrees=False)
                 
-                # Fix pitch direction: negative pitch from look_at_image means looking up,
-                # but we want positive pitch to look down at the face
-                rotation[1] = -rotation[1]  # Invert pitch
-                
                 # Scale down for smoother tracking (same as conversation_app)
                 translation = translation * self._offset_scale
                 rotation = rotation * self._offset_scale
