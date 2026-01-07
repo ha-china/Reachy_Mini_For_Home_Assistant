@@ -259,7 +259,7 @@ class AudioPlayer:
     def _on_sendspin_audio_chunk(self, server_timestamp_us: int, audio_data: bytes, fmt: "PCMFormat") -> None:
         """Handle incoming audio chunks from Sendspin server.
         
-        Plays the audio through Reachy Mini's speaker.
+        Plays the audio through Reachy Mini's speaker using push_audio_sample().
         """
         if self.reachy_mini is None:
             return
@@ -268,31 +268,37 @@ class AudioPlayer:
             # Store format for potential use
             self._sendspin_audio_format = fmt
             
-            # Write audio data to a temp file and play it
-            # This is a simple approach - for better performance, 
-            # we could stream directly to the audio system
             import numpy as np
             
             # Convert bytes to numpy array based on format
             if fmt.bit_depth == 16:
                 dtype = np.int16
+                max_val = 32768.0
             elif fmt.bit_depth == 32:
                 dtype = np.int32
+                max_val = 2147483648.0
             else:
                 dtype = np.int16
+                max_val = 32768.0
             
             audio_array = np.frombuffer(audio_data, dtype=dtype)
             
-            # Convert to float32 for playback
-            audio_float = audio_array.astype(np.float32) / 32768.0
+            # Convert to float32 for playback (SDK expects float32)
+            audio_float = audio_array.astype(np.float32) / max_val
+            
+            # Reshape for channels if needed
+            if fmt.channels > 1:
+                # Reshape to (samples, channels)
+                audio_float = audio_float.reshape(-1, fmt.channels)
+            else:
+                # Mono: reshape to (samples, 1)
+                audio_float = audio_float.reshape(-1, 1)
             
             # Apply volume
             audio_float = audio_float * self._current_volume
             
-            # Play through Reachy Mini's media system
-            # Note: This is a simplified approach. For better sync,
-            # we'd need to buffer and schedule playback based on server_timestamp_us
-            self.reachy_mini.media.play_audio_data(audio_float, fmt.sample_rate)
+            # Play through Reachy Mini's media system using push_audio_sample
+            self.reachy_mini.media.push_audio_sample(audio_float)
             
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)

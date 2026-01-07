@@ -685,14 +685,21 @@ class MovementManager:
                 logger.debug("Antennas unfrozen")
 
     def _update_face_tracking(self) -> None:
-        """Get face tracking offsets from camera server."""
+        """Get face tracking offsets from camera server with smoothing."""
         if self._camera_server is not None:
             try:
                 raw_offsets = self._camera_server.get_face_tracking_offsets()
                 
-                # Temporarily disable smoothing for debugging
+                # Apply exponential moving average smoothing
+                alpha = self._face_smoothing_factor
+                for i in range(6):
+                    self._smoothed_face_offsets[i] = (
+                        alpha * raw_offsets[i] + 
+                        (1 - alpha) * self._smoothed_face_offsets[i]
+                    )
+                
                 with self._face_tracking_lock:
-                    self._face_tracking_offsets = raw_offsets
+                    self._face_tracking_offsets = tuple(self._smoothed_face_offsets)
                     
             except Exception as e:
                 logger.debug("Error getting face tracking offsets: %s", e)
