@@ -245,13 +245,13 @@ class MJPEGCameraServer:
                 # Apply pitch offset compensation (robot tends to look up)
                 # rotation[1] is pitch in xyz euler order
                 # Positive pitch = look down in robot coordinate system
-                pitch_offset_rad = np.radians(7.0)  # Look down 7 degrees
+                pitch_offset_rad = np.radians(9.0)  # Look down 9 degrees
                 rotation[1] += pitch_offset_rad
                 
                 # Apply yaw offset compensation (robot tends to look to user's right)
                 # rotation[2] is yaw in xyz euler order
                 # Negative yaw = turn right (towards user's left from robot's perspective)
-                yaw_offset_rad = np.radians(-5.0)  # Turn right 5 degrees
+                yaw_offset_rad = np.radians(-7.0)  # Turn right 7 degrees
                 rotation[2] += yaw_offset_rad
                 
                 # Update face tracking offsets
