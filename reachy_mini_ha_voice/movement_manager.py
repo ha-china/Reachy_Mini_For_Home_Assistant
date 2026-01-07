@@ -58,12 +58,12 @@ except ImportError:
 
 # Control loop frequency - CRITICAL for daemon stability
 # The daemon's internal control loop runs at 50Hz.
-# We use 25Hz for smoother animations while staying below daemon capacity.
+# We use 10Hz for IDLE state stability - breathing animation doesn't need high frequency.
 # Each set_target() call sends 3 Zenoh messages (head, antennas, body_yaw).
-# At 25Hz × 3 = 75 messages/second MAX, but with pose change detection we typically
+# At 10Hz × 3 = 30 messages/second MAX, but with pose change detection we typically
 # send much fewer messages (only when pose actually changes significantly).
-# With threshold of 0.003 rad, actual message rate is ~20-30 msg/s during animation.
-CONTROL_LOOP_FREQUENCY_HZ = 25  # 25Hz control loop for smoother animations
+# With threshold of 0.005 rad, actual message rate is ~5-10 msg/s during idle.
+CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop for daemon stability
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -87,10 +87,10 @@ SWAY_F_Z = 0.25          # Z frequency Hz
 SWAY_MASTER = 1.5        # Overall sway intensity multiplier
 
 # Breathing parameters - smoother animation with continuous sine wave
-BREATHING_Z_AMPLITUDE = 0.004  # 4mm (slightly smaller for subtlety)
-BREATHING_FREQUENCY = 0.12    # 0.12Hz (~7 breaths per minute, natural pace)
-ANTENNA_SWAY_AMPLITUDE_DEG = 10.0  # 10 degrees (smaller for smoother look)
-ANTENNA_FREQUENCY = 0.25      # 0.25Hz (slower, more graceful)
+BREATHING_Z_AMPLITUDE = 0.003  # 3mm (reduced for stability)
+BREATHING_FREQUENCY = 0.08    # 0.08Hz (~5 breaths per minute, slower pace)
+ANTENNA_SWAY_AMPLITUDE_DEG = 5.0  # 5 degrees (reduced to prevent excessive messages)
+ANTENNA_FREQUENCY = 0.15      # 0.15Hz (slower, more graceful)
 
 # VAD parameters for speech detection
 VAD_DB_ON = -35   # Start detection threshold
@@ -375,11 +375,11 @@ class MovementManager:
         self._audio_lock = threading.Lock()
 
         # Pose change detection threshold
-        # Reduced from 0.005 to 0.003 for smoother animations
-        # 0.003 rad ≈ 0.17 degrees - smooth enough for natural motion
-        # With 25Hz loop, this still keeps actual message rate around 20-30 msg/s
+        # Increased to 0.005 for daemon stability during idle breathing
+        # 0.005 rad ≈ 0.29 degrees - still smooth enough for natural motion
+        # With 10Hz loop and slower breathing, actual message rate is ~5-10 msg/s
         self._last_sent_pose: Optional[Dict[str, float]] = None
-        self._pose_change_threshold = 0.003
+        self._pose_change_threshold = 0.005
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
