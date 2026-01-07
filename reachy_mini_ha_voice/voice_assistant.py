@@ -303,10 +303,10 @@ class VoiceAssistantService:
             # Reduce noise suppression to preserve quiet speech
             # PP_MIN_NS: minimum noise suppression threshold
             # Lower values = less aggressive suppression = better voice pickup
-            # Default is ~0.5-0.7, reduce to 0.15 for voice commands
+            # UI shows percentage where 15% = PP_MIN_NS of 0.85
             try:
-                respeaker.write("PP_MIN_NS", [0.15])
-                _LOGGER.info("Noise suppression reduced (PP_MIN_NS=0.15)")
+                respeaker.write("PP_MIN_NS", [0.85])  # 15% noise suppression
+                _LOGGER.info("Noise suppression set to 15%% (PP_MIN_NS=0.85)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
             
