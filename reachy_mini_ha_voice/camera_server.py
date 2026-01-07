@@ -252,11 +252,6 @@ class MJPEGCameraServer:
                         float(rotation[1]),
                         float(rotation[2]),
                     ]
-                
-                # Debug: log the actual values
-                _LOGGER.info("Face tracking: trans=(%.4f, %.4f, %.4f), rot=(%.2f, %.2f, %.2f) deg",
-                             translation[0], translation[1], translation[2],
-                             np.degrees(rotation[0]), np.degrees(rotation[1]), np.degrees(rotation[2]))
         
         except Exception as e:
             _LOGGER.debug("Face tracking error: %s", e)
