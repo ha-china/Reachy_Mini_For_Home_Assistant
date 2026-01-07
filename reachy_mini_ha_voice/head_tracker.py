@@ -51,7 +51,7 @@ class HeadTracker:
         self._load_model()
 
     def _load_model(self) -> None:
-        """Load YOLO model at initialization time."""
+        """Load YOLO model with retry logic."""
         if self._model_load_attempted:
             return
         
@@ -61,22 +61,40 @@ class HeadTracker:
             from ultralytics import YOLO
             from supervision import Detections
             from huggingface_hub import hf_hub_download
+            import time
             
             self._detections_class = Detections
             
-            model_path = hf_hub_download(
-                repo_id=self._model_repo, 
-                filename=self._model_filename
-            )
+            # Download with retries
+            max_retries = 3
+            retry_delay = 5
+            model_path = None
+            last_error = None
+            
+            for attempt in range(max_retries):
+                try:
+                    model_path = hf_hub_download(
+                        repo_id=self._model_repo,
+                        filename=self._model_filename,
+                    )
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            "Model download failed (attempt %d/%d): %s. Retrying in %ds...",
+                            attempt + 1, max_retries, e, retry_delay
+                        )
+                        time.sleep(retry_delay)
+            
+            if model_path is None:
+                raise last_error
+            
             self.model = YOLO(model_path).to(self._device)
-            logger.info("YOLO face detection model loaded from %s", self._model_repo)
+            logger.info("YOLO face detection model loaded")
         except ImportError as e:
             self._model_load_error = f"Missing dependencies: {e}"
-            logger.warning(
-                "Face tracking disabled - missing dependencies: %s. "
-                "Install with: pip install ultralytics supervision huggingface_hub",
-                e
-            )
+            logger.warning("Face tracking disabled - missing dependencies: %s", e)
             self.model = None
         except Exception as e:
             self._model_load_error = str(e)
