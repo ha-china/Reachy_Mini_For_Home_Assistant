@@ -23,8 +23,14 @@ logger = logging.getLogger(__name__)
 class Gesture(Enum):
     """Recognized gestures."""
     NONE = "none"
-    THUMBS_UP = "thumbs_up"
-    OPEN_PALM = "open_palm"  # Stop gesture
+    THUMBS_UP = "thumbs_up"      # 👍 Confirm/like
+    THUMBS_DOWN = "thumbs_down"  # 👎 Reject/dislike
+    OPEN_PALM = "open_palm"      # ✋ Stop
+    FIST = "fist"                # ✊ Pause/hold
+    PEACE = "peace"              # ✌️ Victory/peace sign
+    OK = "ok"                    # 👌 OK sign
+    POINTING_UP = "pointing_up"  # ☝️ Attention/one
+    WAVE = "wave"                # 👋 Hello/goodbye (open palm moving)
 
 
 class GestureDetector:
@@ -57,7 +63,12 @@ class GestureDetector:
         
         # Gesture callbacks
         self._on_thumbs_up: Optional[Callable[[], None]] = None
+        self._on_thumbs_down: Optional[Callable[[], None]] = None
         self._on_open_palm: Optional[Callable[[], None]] = None
+        self._on_fist: Optional[Callable[[], None]] = None
+        self._on_peace: Optional[Callable[[], None]] = None
+        self._on_ok: Optional[Callable[[], None]] = None
+        self._on_pointing_up: Optional[Callable[[], None]] = None
         
         # Gesture state (for debouncing)
         self._last_gesture = Gesture.NONE
@@ -113,16 +124,31 @@ class GestureDetector:
     def set_callbacks(
         self,
         on_thumbs_up: Optional[Callable[[], None]] = None,
+        on_thumbs_down: Optional[Callable[[], None]] = None,
         on_open_palm: Optional[Callable[[], None]] = None,
+        on_fist: Optional[Callable[[], None]] = None,
+        on_peace: Optional[Callable[[], None]] = None,
+        on_ok: Optional[Callable[[], None]] = None,
+        on_pointing_up: Optional[Callable[[], None]] = None,
     ) -> None:
         """Set gesture callbacks.
         
         Args:
-            on_thumbs_up: Called when thumbs up is detected and held
-            on_open_palm: Called when open palm (stop) is detected and held
+            on_thumbs_up: Called when thumbs up is detected (confirm/like)
+            on_thumbs_down: Called when thumbs down is detected (reject)
+            on_open_palm: Called when open palm is detected (stop)
+            on_fist: Called when fist is detected (pause)
+            on_peace: Called when peace sign is detected
+            on_ok: Called when OK sign is detected
+            on_pointing_up: Called when pointing up is detected
         """
         self._on_thumbs_up = on_thumbs_up
+        self._on_thumbs_down = on_thumbs_down
         self._on_open_palm = on_open_palm
+        self._on_fist = on_fist
+        self._on_peace = on_peace
+        self._on_ok = on_ok
+        self._on_pointing_up = on_pointing_up
 
     def _get_landmark_coords(
         self, landmarks, idx: int
@@ -147,46 +173,96 @@ class GestureDetector:
         """
         # Get key landmarks
         wrist = self._get_landmark_coords(hand_landmarks, 0)
+        
+        # Thumb landmarks
         thumb_tip = self._get_landmark_coords(hand_landmarks, 4)
         thumb_ip = self._get_landmark_coords(hand_landmarks, 3)
         thumb_mcp = self._get_landmark_coords(hand_landmarks, 2)
+        thumb_cmc = self._get_landmark_coords(hand_landmarks, 1)
         
+        # Index finger landmarks
         index_tip = self._get_landmark_coords(hand_landmarks, 8)
+        index_dip = self._get_landmark_coords(hand_landmarks, 7)
+        index_pip = self._get_landmark_coords(hand_landmarks, 6)
         index_mcp = self._get_landmark_coords(hand_landmarks, 5)
         
+        # Middle finger landmarks
         middle_tip = self._get_landmark_coords(hand_landmarks, 12)
+        middle_dip = self._get_landmark_coords(hand_landmarks, 11)
+        middle_pip = self._get_landmark_coords(hand_landmarks, 10)
         middle_mcp = self._get_landmark_coords(hand_landmarks, 9)
         
+        # Ring finger landmarks
         ring_tip = self._get_landmark_coords(hand_landmarks, 16)
+        ring_dip = self._get_landmark_coords(hand_landmarks, 15)
+        ring_pip = self._get_landmark_coords(hand_landmarks, 14)
         ring_mcp = self._get_landmark_coords(hand_landmarks, 13)
         
+        # Pinky landmarks
         pinky_tip = self._get_landmark_coords(hand_landmarks, 20)
+        pinky_dip = self._get_landmark_coords(hand_landmarks, 19)
+        pinky_pip = self._get_landmark_coords(hand_landmarks, 18)
         pinky_mcp = self._get_landmark_coords(hand_landmarks, 17)
         
-        # Check if fingers are extended (tip above MCP in y)
-        # Note: y increases downward in image coordinates
-        index_extended = index_tip[1] < index_mcp[1]
-        middle_extended = middle_tip[1] < middle_mcp[1]
-        ring_extended = ring_tip[1] < ring_mcp[1]
-        pinky_extended = pinky_tip[1] < pinky_mcp[1]
+        # Check if fingers are extended (tip above PIP in y, y increases downward)
+        index_extended = index_tip[1] < index_pip[1]
+        middle_extended = middle_tip[1] < middle_pip[1]
+        ring_extended = ring_tip[1] < ring_pip[1]
+        pinky_extended = pinky_tip[1] < pinky_pip[1]
         
-        # Thumb is extended if tip is far from index MCP (horizontally)
-        thumb_extended = abs(thumb_tip[0] - index_mcp[0]) > 0.1
+        # Thumb extended check (horizontal distance from palm)
+        thumb_extended = abs(thumb_tip[0] - index_mcp[0]) > 0.08
         
-        # Thumbs up: thumb extended upward, other fingers closed
-        # Thumb tip should be above thumb MCP (pointing up)
-        thumb_pointing_up = thumb_tip[1] < thumb_mcp[1]
-        fingers_closed = not (index_extended or middle_extended or ring_extended or pinky_extended)
+        # Thumb pointing direction
+        thumb_pointing_up = thumb_tip[1] < thumb_mcp[1] - 0.05
+        thumb_pointing_down = thumb_tip[1] > thumb_mcp[1] + 0.05
         
-        if thumb_pointing_up and thumb_extended and fingers_closed:
+        # Count extended fingers (excluding thumb)
+        extended_count = sum([index_extended, middle_extended, ring_extended, pinky_extended])
+        
+        # Fingers curled (tip below MCP)
+        index_curled = index_tip[1] > index_mcp[1]
+        middle_curled = middle_tip[1] > middle_mcp[1]
+        ring_curled = ring_tip[1] > ring_mcp[1]
+        pinky_curled = pinky_tip[1] > pinky_mcp[1]
+        all_fingers_curled = index_curled and middle_curled and ring_curled and pinky_curled
+        
+        # ===== Gesture Classification =====
+        
+        # 👍 Thumbs up: thumb pointing up, all other fingers curled
+        if thumb_pointing_up and thumb_extended and all_fingers_curled:
             return Gesture.THUMBS_UP
         
-        # Open palm (stop): all fingers extended
-        all_extended = index_extended and middle_extended and ring_extended and pinky_extended
-        if all_extended:
+        # 👎 Thumbs down: thumb pointing down, all other fingers curled
+        if thumb_pointing_down and thumb_extended and all_fingers_curled:
+            return Gesture.THUMBS_DOWN
+        
+        # ✊ Fist: all fingers curled including thumb tucked
+        if all_fingers_curled and not thumb_extended:
+            return Gesture.FIST
+        
+        # ✌️ Peace: index and middle extended, others curled
+        if index_extended and middle_extended and not ring_extended and not pinky_extended:
+            return Gesture.PEACE
+        
+        # ☝️ Pointing up: only index extended
+        if index_extended and not middle_extended and not ring_extended and not pinky_extended:
+            return Gesture.POINTING_UP
+        
+        # 👌 OK sign: thumb and index tips close together, other fingers extended
+        thumb_index_distance = self._distance(thumb_tip, index_tip)
+        if thumb_index_distance < 0.05 and middle_extended and ring_extended and pinky_extended:
+            return Gesture.OK
+        
+        # ✋ Open palm: all fingers extended
+        if extended_count >= 4:
             return Gesture.OPEN_PALM
         
         return Gesture.NONE
+    
+    def _distance(self, p1: Tuple[float, float, float], p2: Tuple[float, float, float]) -> float:
+        """Calculate Euclidean distance between two points."""
+        return ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2) ** 0.5
 
     def detect(self, frame: NDArray[np.uint8]) -> Gesture:
         """Detect gesture in frame.
@@ -263,23 +339,30 @@ class GestureDetector:
                 self._last_trigger_time = current_time
                 self._gesture_start_time = None  # Reset to prevent re-trigger
                 
-                if current_gesture == Gesture.THUMBS_UP and self._on_thumbs_up:
-                    logger.info("Gesture triggered: THUMBS_UP")
+                # Get callback for this gesture
+                callback = self._get_callback_for_gesture(current_gesture)
+                if callback:
+                    logger.info("Gesture triggered: %s", current_gesture.value)
                     try:
-                        self._on_thumbs_up()
+                        callback()
                     except Exception as e:
-                        logger.error("Thumbs up callback error: %s", e)
-                    return Gesture.THUMBS_UP
-                    
-                elif current_gesture == Gesture.OPEN_PALM and self._on_open_palm:
-                    logger.info("Gesture triggered: OPEN_PALM (stop)")
-                    try:
-                        self._on_open_palm()
-                    except Exception as e:
-                        logger.error("Open palm callback error: %s", e)
-                    return Gesture.OPEN_PALM
+                        logger.error("Gesture callback error (%s): %s", current_gesture.value, e)
+                    return current_gesture
         
         return None
+    
+    def _get_callback_for_gesture(self, gesture: Gesture) -> Optional[Callable[[], None]]:
+        """Get the callback function for a gesture."""
+        callbacks = {
+            Gesture.THUMBS_UP: self._on_thumbs_up,
+            Gesture.THUMBS_DOWN: self._on_thumbs_down,
+            Gesture.OPEN_PALM: self._on_open_palm,
+            Gesture.FIST: self._on_fist,
+            Gesture.PEACE: self._on_peace,
+            Gesture.OK: self._on_ok,
+            Gesture.POINTING_UP: self._on_pointing_up,
+        }
+        return callbacks.get(gesture)
 
     def close(self) -> None:
         """Release resources."""

@@ -434,16 +434,34 @@ class MJPEGCameraServer:
     def set_gesture_callbacks(
         self,
         on_thumbs_up: Optional[Callable[[], None]] = None,
+        on_thumbs_down: Optional[Callable[[], None]] = None,
         on_open_palm: Optional[Callable[[], None]] = None,
+        on_fist: Optional[Callable[[], None]] = None,
+        on_peace: Optional[Callable[[], None]] = None,
+        on_ok: Optional[Callable[[], None]] = None,
+        on_pointing_up: Optional[Callable[[], None]] = None,
     ) -> None:
         """Set gesture detection callbacks.
         
         Args:
-            on_thumbs_up: Called when thumbs up gesture is detected and held
-            on_open_palm: Called when open palm (stop) gesture is detected and held
+            on_thumbs_up: Called when thumbs up gesture is detected (confirm/like)
+            on_thumbs_down: Called when thumbs down gesture is detected (reject)
+            on_open_palm: Called when open palm gesture is detected (stop)
+            on_fist: Called when fist gesture is detected (pause)
+            on_peace: Called when peace sign is detected
+            on_ok: Called when OK sign is detected
+            on_pointing_up: Called when pointing up is detected
         """
         if self._gesture_detector is not None:
-            self._gesture_detector.set_callbacks(on_thumbs_up, on_open_palm)
+            self._gesture_detector.set_callbacks(
+                on_thumbs_up=on_thumbs_up,
+                on_thumbs_down=on_thumbs_down,
+                on_open_palm=on_open_palm,
+                on_fist=on_fist,
+                on_peace=on_peace,
+                on_ok=on_ok,
+                on_pointing_up=on_pointing_up,
+            )
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""
