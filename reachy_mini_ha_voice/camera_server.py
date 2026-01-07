@@ -1,9 +1,9 @@
 """
-MJPEG Camera Server for Reachy Mini with Face Tracking.
+MJPEG Camera Server for Reachy Mini with Face Tracking and Gesture Detection.
 
 This module provides an HTTP server that streams camera frames from Reachy Mini
 as MJPEG, which can be integrated with Home Assistant via Generic Camera.
-Also provides face tracking for head movement control.
+Also provides face tracking for head movement control and gesture detection.
 
 Reference: reachy_mini_conversation_app/src/reachy_mini_conversation_app/camera_worker.py
 """
@@ -12,7 +12,7 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Optional, Tuple, List, TYPE_CHECKING
+from typing import Optional, Tuple, List, Callable, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -36,14 +36,15 @@ MJPEG_BOUNDARY = "frame"
 
 class MJPEGCameraServer:
     """
-    MJPEG streaming server for Reachy Mini camera with face tracking.
+    MJPEG streaming server for Reachy Mini camera with face tracking and gesture detection.
 
     Provides HTTP endpoints:
     - /stream - MJPEG video stream
     - /snapshot - Single JPEG image
     - / - Simple status page
     
-    Also provides face tracking offsets for head movement control.
+    Also provides face tracking offsets for head movement control
+    and gesture detection for interaction (thumbs up, open palm/stop).
     """
 
     def __init__(
@@ -54,6 +55,7 @@ class MJPEGCameraServer:
         fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
+        enable_gesture_detection: bool = True,
     ):
         """
         Initialize the MJPEG camera server.
@@ -65,6 +67,7 @@ class MJPEGCameraServer:
             fps: Target frames per second for the stream
             quality: JPEG quality (1-100)
             enable_face_tracking: Enable face tracking for head movement
+            enable_gesture_detection: Enable gesture detection (thumbs up, stop)
         """
         self.reachy_mini = reachy_mini
         self.host = host
@@ -72,6 +75,7 @@ class MJPEGCameraServer:
         self.fps = fps
         self.quality = quality
         self.enable_face_tracking = enable_face_tracking
+        self.enable_gesture_detection = enable_gesture_detection
 
         self._server: Optional[asyncio.Server] = None
         self._running = False
@@ -98,6 +102,10 @@ class MJPEGCameraServer:
         
         # Offset scaling (same as conversation_app)
         self._offset_scale = 0.6
+        
+        # Gesture detection state
+        self._gesture_detector = None
+        self._gesture_detection_enabled = True
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -121,6 +129,25 @@ class MJPEGCameraServer:
                 self._head_tracker = None
         else:
             _LOGGER.info("Face tracking disabled by configuration")
+        
+        # Initialize gesture detector if enabled
+        if self.enable_gesture_detection:
+            try:
+                from .gesture_detector import GestureDetector
+                self._gesture_detector = GestureDetector()
+                if self._gesture_detector.is_available:
+                    _LOGGER.info("Gesture detection enabled with MediaPipe Hands")
+                else:
+                    _LOGGER.warning("Gesture detection not available (MediaPipe not installed)")
+                    self._gesture_detector = None
+            except ImportError as e:
+                _LOGGER.warning("Failed to import gesture detector: %s", e)
+                self._gesture_detector = None
+            except Exception as e:
+                _LOGGER.warning("Failed to initialize gesture detector: %s", e)
+                self._gesture_detector = None
+        else:
+            _LOGGER.info("Gesture detection disabled by configuration")
 
         # Start frame capture thread
         self._capture_thread = threading.Thread(
@@ -157,8 +184,9 @@ class MJPEGCameraServer:
         _LOGGER.info("MJPEG Camera server stopped")
 
     def _capture_frames(self) -> None:
-        """Background thread to capture frames from Reachy Mini and do face tracking."""
-        _LOGGER.info("Starting camera capture thread (face_tracking=%s)", self._face_tracking_enabled)
+        """Background thread to capture frames from Reachy Mini and do face tracking + gesture detection."""
+        _LOGGER.info("Starting camera capture thread (face_tracking=%s, gesture_detection=%s)", 
+                    self._face_tracking_enabled, self._gesture_detection_enabled)
 
         frame_count = 0
         last_log_time = time.time()
@@ -187,11 +215,16 @@ class MJPEGCameraServer:
                     # Handle smooth interpolation when face lost
                     self._process_face_lost_interpolation(current_time)
                     
+                    # Do gesture detection if enabled (every other frame to save CPU)
+                    if self._gesture_detection_enabled and self._gesture_detector is not None:
+                        if frame_count % 2 == 0:  # Process every other frame
+                            self._gesture_detector.process_frame(frame)
+                    
                     # Log stats every 10 seconds
                     if current_time - last_log_time >= 10.0:
                         fps = frame_count / (current_time - last_log_time)
-                        _LOGGER.debug("Camera: %.1f fps, face_tracking=%s, head_tracker=%s",
-                                     fps, self._face_tracking_enabled, self._head_tracker is not None)
+                        _LOGGER.debug("Camera: %.1f fps, face_tracking=%s, gesture_detection=%s",
+                                     fps, self._face_tracking_enabled, self._gesture_detection_enabled)
                         frame_count = 0
                         last_log_time = current_time
 
@@ -378,6 +411,39 @@ class MJPEGCameraServer:
             self._last_face_detected_time = time.time()
             self._interpolation_start_time = None
         _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
+
+    # =========================================================================
+    # Public API for gesture detection
+    # =========================================================================
+    
+    def get_current_gesture(self) -> str:
+        """Get current detected gesture as string.
+        
+        Returns:
+            Gesture name: "none", "thumbs_up", "open_palm"
+        """
+        if self._gesture_detector is None:
+            return "none"
+        return self._gesture_detector.current_gesture.value
+    
+    def set_gesture_detection_enabled(self, enabled: bool) -> None:
+        """Enable or disable gesture detection."""
+        self._gesture_detection_enabled = enabled
+        _LOGGER.info("Gesture detection %s", "enabled" if enabled else "disabled")
+    
+    def set_gesture_callbacks(
+        self,
+        on_thumbs_up: Optional[Callable[[], None]] = None,
+        on_open_palm: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Set gesture detection callbacks.
+        
+        Args:
+            on_thumbs_up: Called when thumbs up gesture is detected and held
+            on_open_palm: Called when open palm (stop) gesture is detected and held
+        """
+        if self._gesture_detector is not None:
+            self._gesture_detector.set_callbacks(on_thumbs_up, on_open_palm)
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""

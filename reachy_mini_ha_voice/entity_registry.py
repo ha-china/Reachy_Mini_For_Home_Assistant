@@ -83,6 +83,9 @@ ENTITY_KEYS: Dict[str, int] = {
     # Phase 13: Sendspin - auto-enabled via mDNS, no user entities needed
     # Phase 20: Tap detection
     "tap_sensitivity": 1400,
+    # Phase 21: Gesture detection
+    "detected_gesture": 1500,
+    "gesture_detection_enabled": 1501,
 }
 
 
@@ -154,6 +157,7 @@ class EntityRegistry:
         # Phase 13 (Sendspin) - auto-enabled via mDNS discovery, no user entities
         # Phase 14 (head_joints, passive_joints) removed - not needed
         self._setup_phase20_entities(entities)
+        self._setup_phase21_entities(entities)
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -768,6 +772,48 @@ class EntityRegistry:
         ))
 
         _LOGGER.debug("Phase 20 entities registered: tap_sensitivity")
+
+    def _setup_phase21_entities(self, entities: List) -> None:
+        """Setup Phase 21 entities: Gesture detection."""
+        if self.camera_server is None:
+            _LOGGER.debug("Phase 21 skipped: no camera server")
+            return
+
+        def get_detected_gesture() -> str:
+            """Get current detected gesture."""
+            return self.camera_server.get_current_gesture()
+
+        def get_gesture_detection_enabled() -> bool:
+            """Get gesture detection enabled state."""
+            return self.camera_server._gesture_detection_enabled
+
+        def set_gesture_detection_enabled(value: bool) -> None:
+            """Set gesture detection enabled state."""
+            self.camera_server.set_gesture_detection_enabled(value)
+
+        # Text sensor for detected gesture
+        entities.append(TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("detected_gesture"),
+            name="Detected Gesture",
+            object_id="detected_gesture",
+            icon="mdi:hand-wave",
+            value_getter=get_detected_gesture,
+        ))
+
+        # Switch to enable/disable gesture detection
+        entities.append(SwitchEntity(
+            server=self.server,
+            key=get_entity_key("gesture_detection_enabled"),
+            name="Gesture Detection",
+            object_id="gesture_detection_enabled",
+            icon="mdi:gesture",
+            entity_category=1,  # config
+            value_getter=get_gesture_detection_enabled,
+            value_setter=set_gesture_detection_enabled,
+        ))
+
+        _LOGGER.debug("Phase 21 entities registered: detected_gesture, gesture_detection_enabled")
 
     def find_entity_references(self, entities: List) -> None:
         """Find and store references to special entities from existing list.
