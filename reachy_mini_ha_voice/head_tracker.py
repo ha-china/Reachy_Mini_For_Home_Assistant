@@ -1,12 +1,12 @@
 """Lightweight head tracker using YOLO for face detection.
 
-Ported from reachy_mini_conversation_app for voice assistant integration.
-Model is loaded at initialization time (not lazy) to ensure face tracking
-is ready immediately when the camera server starts.
+Model is downloaded from HuggingFace on first use and cached locally.
 """
 
 from __future__ import annotations
 import logging
+import time
+from pathlib import Path
 from typing import Tuple, Optional
 
 import numpy as np
@@ -15,43 +15,38 @@ from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
+# Model config
+_MODEL_REPO = "AdamCodd/YOLOv11n-face-detection"
+_MODEL_FILENAME = "model.pt"
+_MAX_RETRIES = 3
+_RETRY_DELAY = 5  # seconds
+
 
 class HeadTracker:
-    """Lightweight head tracker using YOLO for face detection.
-    
-    Model is loaded at initialization time to ensure face tracking
-    is ready immediately (matching conversation_app behavior).
-    """
+    """Lightweight head tracker using YOLO for face detection."""
 
     def __init__(
         self,
-        model_repo: str = "AdamCodd/YOLOv11n-face-detection",
-        model_filename: str = "model.pt",
         confidence_threshold: float = 0.3,
         device: str = "cpu",
     ) -> None:
         """Initialize YOLO-based head tracker.
 
         Args:
-            model_repo: HuggingFace model repository
-            model_filename: Model file name
             confidence_threshold: Minimum confidence for face detection
             device: Device to run inference on ('cpu' or 'cuda')
         """
         self.confidence_threshold = confidence_threshold
         self.model = None
-        self._model_repo = model_repo
-        self._model_filename = model_filename
         self._device = device
         self._detections_class = None
         self._model_load_attempted = False
         self._model_load_error: Optional[str] = None
         
-        # Load model immediately at init (not lazy)
         self._load_model()
 
     def _load_model(self) -> None:
-        """Load YOLO model at initialization time."""
+        """Load YOLO model with retry logic."""
         if self._model_load_attempted:
             return
         
@@ -64,19 +59,34 @@ class HeadTracker:
             
             self._detections_class = Detections
             
-            model_path = hf_hub_download(
-                repo_id=self._model_repo, 
-                filename=self._model_filename
-            )
+            # Download with retries
+            model_path = None
+            last_error = None
+            
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    model_path = hf_hub_download(
+                        repo_id=_MODEL_REPO,
+                        filename=_MODEL_FILENAME,
+                    )
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < _MAX_RETRIES - 1:
+                        logger.warning(
+                            "Model download failed (attempt %d/%d): %s. Retrying in %ds...",
+                            attempt + 1, _MAX_RETRIES, e, _RETRY_DELAY
+                        )
+                        time.sleep(_RETRY_DELAY)
+            
+            if model_path is None:
+                raise last_error
+            
             self.model = YOLO(model_path).to(self._device)
-            logger.info("YOLO face detection model loaded from %s", self._model_repo)
+            logger.info("YOLO face detection model loaded")
         except ImportError as e:
             self._model_load_error = f"Missing dependencies: {e}"
-            logger.warning(
-                "Face tracking disabled - missing dependencies: %s. "
-                "Install with: pip install ultralytics supervision huggingface_hub",
-                e
-            )
+            logger.warning("Face tracking disabled - missing dependencies: %s", e)
             self.model = None
         except Exception as e:
             self._model_load_error = str(e)
