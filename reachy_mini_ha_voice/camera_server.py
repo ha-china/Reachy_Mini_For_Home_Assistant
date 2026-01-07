@@ -250,8 +250,8 @@ class MJPEGCameraServer:
                 
                 # Apply yaw offset compensation (robot tends to look to user's right)
                 # rotation[2] is yaw in xyz euler order
-                # Positive yaw = turn left (towards user's left)
-                yaw_offset_rad = np.radians(5.0)  # Turn left 5 degrees
+                # Negative yaw = turn right (towards user's left from robot's perspective)
+                yaw_offset_rad = np.radians(-5.0)  # Turn right 5 degrees
                 rotation[2] += yaw_offset_rad
                 
                 # Update face tracking offsets
