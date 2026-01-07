@@ -812,6 +812,10 @@ class MovementManager:
         if self.robot is None:
             return
 
+        # Debug: log the final pose being sent
+        logger.info("Final pose: pitch=%.2f°, yaw=%.2f°, roll=%.2f°",
+                   np.degrees(pose["pitch"]), np.degrees(pose["yaw"]), np.degrees(pose["roll"]))
+
         # Check if pose changed significantly (prevent unnecessary commands)
         if self._last_sent_pose is not None:
             max_diff = max(
