@@ -568,13 +568,15 @@ class VoiceSatelliteProtocol(APIServer):
     def _tap_continue_feedback(self) -> None:
         """Provide feedback when continuing conversation in tap mode.
         
-        Triggers a nod to indicate ready for next input.
-        Sound is NOT played here to avoid blocking audio streaming.
+        Plays a short sound and triggers a nod to indicate ready for next input.
         """
         try:
+            # Play the wakeup sound (short beep) to indicate listening
+            # Use stop_first=False to avoid interrupting any ongoing audio
+            self.state.tts_player.play(self.state.wakeup_sound, stop_first=False)
+            _LOGGER.debug("Tap continue feedback: sound played")
+
             # Trigger a small nod to indicate ready for input
-            # NOTE: Do NOT play sound here - it blocks audio streaming
-            # The VoiceAssistantRequest already triggers HA to start listening
             if self.state.motion_enabled and self.state.motion:
                 self.state.motion.on_continue_listening()
                 _LOGGER.debug("Tap continue feedback: continue listening pose")
