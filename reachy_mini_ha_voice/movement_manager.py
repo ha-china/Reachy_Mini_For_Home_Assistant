@@ -799,10 +799,10 @@ class MovementManager:
 
         try:
             # Build head pose matrix
-            # SDK uses 'xyz' euler order with [pitch, roll, yaw] (same as old working version)
+            # SDK uses 'xyz' euler order with [roll, pitch, yaw] (same as create_head_pose)
             rotation = R.from_euler('xyz', [
-                pose["pitch"],
                 pose["roll"],
+                pose["pitch"],
                 pose["yaw"],
             ])
 

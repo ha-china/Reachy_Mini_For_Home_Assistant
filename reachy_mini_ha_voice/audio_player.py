@@ -101,6 +101,7 @@ class AudioPlayer:
         
         # Audio buffer for Sendspin playback
         self._sendspin_audio_format: Optional["PCMFormat"] = None
+        self._sendspin_playback_started = False
 
     def set_reachy_mini(self, reachy_mini) -> None:
         """Set the Reachy Mini instance."""
@@ -296,6 +297,15 @@ class AudioPlayer:
             
             # Apply volume
             audio_float = audio_float * self._current_volume
+            
+            # Ensure media playback is started
+            if not self._sendspin_playback_started:
+                try:
+                    self.reachy_mini.media.start_playing()
+                    self._sendspin_playback_started = True
+                    _LOGGER.info("Started media playback for Sendspin audio")
+                except Exception as e:
+                    _LOGGER.warning("Failed to start media playback: %s", e)
             
             # Play through Reachy Mini's media system using push_audio_sample
             self.reachy_mini.media.push_audio_sample(audio_float)
