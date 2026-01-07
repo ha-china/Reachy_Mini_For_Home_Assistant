@@ -85,17 +85,14 @@ class ReachyMiniMotion:
         """Called when wake word is detected.
 
         Non-blocking: command sent to MovementManager.
-        Enables face tracking to look at the user.
+        Face tracking is always enabled, so robot will look at user automatically.
         """
         _LOGGER.debug("on_wakeup called")
         if self._movement_manager is None:
             _LOGGER.warning("on_wakeup: movement_manager is None, skipping motion")
             return
 
-        # Enable face tracking when wake word detected
-        if self._camera_server is not None:
-            self._camera_server.set_face_tracking_enabled(True)
-            _LOGGER.info("Face tracking enabled on wake word")
+        # Face tracking is always enabled, no need to enable it here
 
         # Set listening state - face tracking will handle looking at user
         self._movement_manager.set_state(RobotState.LISTENING)
@@ -188,7 +185,7 @@ class ReachyMiniMotion:
         """Called when returning to idle state.
 
         Non-blocking: command sent to MovementManager.
-        Disables face tracking to save resources.
+        Face tracking remains enabled for continuous tracking.
         """
         if self._movement_manager is None:
             return
@@ -197,10 +194,8 @@ class ReachyMiniMotion:
         self._movement_manager.set_state(RobotState.IDLE)
         self._movement_manager.reset_to_neutral(duration=0.5)
 
-        # Disable face tracking when returning to idle (save resources)
-        if self._camera_server is not None:
-            self._camera_server.set_face_tracking_enabled(False)
-            _LOGGER.info("Face tracking disabled on idle")
+        # Note: Face tracking remains enabled for continuous tracking
+        # This allows the robot to always look at the user when they approach
 
         _LOGGER.debug("Reachy Mini: Idle pose")
 

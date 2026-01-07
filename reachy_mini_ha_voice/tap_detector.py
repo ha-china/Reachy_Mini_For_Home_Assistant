@@ -103,6 +103,16 @@ class TapDetector:
                     "(only available on Wireless version)"
                 )
                 return
+            
+            # Verify accelerometer data is present
+            if "accelerometer" not in imu_data:
+                _LOGGER.warning(
+                    "IMU accelerometer data not available - tap detection disabled"
+                )
+                return
+            
+            _LOGGER.info("IMU available, accelerometer data: %s", imu_data.get("accelerometer"))
+            
         except Exception as e:
             _LOGGER.warning("Failed to check IMU availability: %s", e)
             return
@@ -114,7 +124,8 @@ class TapDetector:
             name="tap-detector"
         )
         self._thread.start()
-        _LOGGER.info("TapDetector started (threshold=%.1fg)", self._threshold_ms2 / 9.81)
+        _LOGGER.info("TapDetector started (threshold=%.1fg, cooldown=%.1fs)", 
+                    self._threshold_g, self._cooldown_seconds)
 
     def stop(self) -> None:
         """Stop tap detection thread."""

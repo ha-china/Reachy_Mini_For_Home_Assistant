@@ -76,7 +76,7 @@ class MJPEGCameraServer:
         
         # Face tracking state
         self._head_tracker = None
-        self._face_tracking_enabled = False  # Disabled by default, enabled on wake word
+        self._face_tracking_enabled = True  # Enabled by default for always-on face tracking
         self._face_tracking_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
         
@@ -103,10 +103,16 @@ class MJPEGCameraServer:
             try:
                 from .head_tracker import HeadTracker
                 self._head_tracker = HeadTracker()
-                _LOGGER.info("Face tracking enabled")
+                _LOGGER.info("Face tracking enabled with YOLO head tracker")
+            except ImportError as e:
+                _LOGGER.warning("Failed to import head tracker (missing dependencies): %s", e)
+                _LOGGER.warning("Install with: pip install ultralytics supervision huggingface_hub")
+                self._head_tracker = None
             except Exception as e:
                 _LOGGER.warning("Failed to initialize head tracker: %s", e)
                 self._head_tracker = None
+        else:
+            _LOGGER.info("Face tracking disabled by configuration")
 
         # Start frame capture thread
         self._capture_thread = threading.Thread(
@@ -144,7 +150,10 @@ class MJPEGCameraServer:
 
     def _capture_frames(self) -> None:
         """Background thread to capture frames from Reachy Mini and do face tracking."""
-        _LOGGER.info("Starting camera capture thread")
+        _LOGGER.info("Starting camera capture thread (face_tracking=%s)", self._face_tracking_enabled)
+
+        frame_count = 0
+        last_log_time = time.time()
 
         while self._running:
             try:
@@ -152,6 +161,8 @@ class MJPEGCameraServer:
                 frame = self._get_camera_frame()
 
                 if frame is not None:
+                    frame_count += 1
+                    
                     # Encode frame as JPEG for streaming
                     encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
                     success, jpeg_data = cv2.imencode('.jpg', frame, encode_params)
@@ -167,6 +178,14 @@ class MJPEGCameraServer:
                     
                     # Handle smooth interpolation when face lost
                     self._process_face_lost_interpolation(current_time)
+                    
+                    # Log stats every 10 seconds
+                    if current_time - last_log_time >= 10.0:
+                        fps = frame_count / (current_time - last_log_time)
+                        _LOGGER.debug("Camera: %.1f fps, face_tracking=%s, head_tracker=%s",
+                                     fps, self._face_tracking_enabled, self._head_tracker is not None)
+                        frame_count = 0
+                        last_log_time = current_time
 
                 # Sleep to maintain target FPS
                 time.sleep(self._frame_interval)
