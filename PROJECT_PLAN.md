@@ -441,41 +441,52 @@ automation:
 | 功能 | 说明 | 实现位置 | 实现状态 |
 |------|------|---------|---------|
 | YOLO 人脸检测 | 使用 `AdamCodd/YOLOv11n-face-detection` 模型 | `head_tracker.py` | ✅ 已实现 |
-| 15Hz 人脸追踪 | 摄像头帧处理 + 人脸检测 | `camera_server.py` | ✅ 已实现 |
+| 自适应帧率追踪 | 对话时15fps，空闲无人脸时3fps | `camera_server.py` | ✅ 已实现 |
 | look_at_image() | 根据人脸位置计算目标姿态 | `camera_server.py` | ✅ 已实现 |
 | 平滑回中性位置 | 人脸丢失后 1 秒内平滑回归 | `camera_server.py` | ✅ 已实现 |
 | face_tracking_offsets | 作为 secondary pose 叠加到运动控制 | `movement_manager.py` | ✅ 已实现 |
 | 语音活动检测 | DOA 实体仍可用于检测语音 | `DoAInfo.speech_detected` | ✅ 已暴露为实体 |
+| 模型下载重试 | 3次重试，5秒间隔 | `head_tracker.py` | ✅ 已实现 |
+| 对话模式联动 | 语音助手状态变化时自动切换追踪频率 | `satellite.py` | ✅ 已实现 |
+
+**资源优化 (v0.5.1)**:
+- 对话期间（listening/thinking/speaking）：高频追踪 15fps
+- 空闲且检测到人脸：高频追踪 15fps
+- 空闲且10秒无人脸：低功耗模式 3fps（仅检测是否有人出现）
+- 检测到人脸后立即恢复高频追踪
 
 **代码位置**:
 - `head_tracker.py` - YOLO 人脸检测器 (`HeadTracker` 类)
-- `camera_server.py:_face_tracking_loop()` - 15Hz 人脸追踪循环
+- `camera_server.py:_capture_frames()` - 自适应帧率人脸追踪
+- `camera_server.py:set_conversation_mode()` - 对话模式切换 API
+- `satellite.py:_set_conversation_mode()` - 语音助手状态联动
 - `movement_manager.py:set_face_tracking_offsets()` - 人脸追踪偏移量 API
 
 **技术细节**:
 ```python
-# head_tracker.py - YOLO 人脸检测
-class HeadTracker:
+# camera_server.py - 自适应帧率人脸追踪
+class MJPEGCameraServer:
     def __init__(self):
-        self.model = YOLO("AdamCodd/YOLOv11n-face-detection")
+        self._fps_high = 15  # 对话/有人脸时
+        self._fps_low = 3    # 空闲无人脸时
+        self._low_power_threshold = 10.0  # 10秒无人脸切换低功耗
     
-    def detect_faces(self, frame) -> list[FaceDetection]:
-        # 返回检测到的人脸列表，包含 bbox 和置信度
+    def _should_run_face_tracking(self, current_time):
+        # 对话模式：始终高频追踪
+        if self._in_conversation:
+            return True
+        # 高频模式：每帧追踪
+        if self._current_fps == self._fps_high:
+            return True
+        # 低功耗模式：周期性检测
+        return time.since_last_check >= 1/self._fps_low
 
-# camera_server.py - 人脸追踪循环
-async def _face_tracking_loop(self):
-    while self._running:
-        frame = self._reachy_controller.get_camera_frame()
-        faces = self._head_tracker.detect_faces(frame)
-        if faces:
-            # 选择最大/最近的人脸
-            target_u, target_v = faces[0].center
-            pose = self._reachy_controller.look_at_image(target_u, target_v)
-            self._motion.set_face_tracking_offsets(pose)
-        else:
-            # 平滑回归中性位置
-            self._motion.clear_face_tracking_offsets()
-        await asyncio.sleep(1/15)  # 15Hz
+# satellite.py - 语音助手状态联动
+def _reachy_on_listening(self):
+    self._set_conversation_mode(True)  # 开始对话，高频追踪
+    
+def _reachy_on_idle(self):
+    self._set_conversation_mode(False)  # 结束对话，自适应追踪
 ```
 
 ### Phase 16 - 卡通风格运动模式 (部分实现) 🟡
