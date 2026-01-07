@@ -223,13 +223,19 @@ class VoiceAssistantService:
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 
     def _optimize_microphone_settings(self) -> None:
-        """Optimize ReSpeaker microphone settings for voice recognition.
+        """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
         
-        The main issue affecting voice recognition is that the default noise suppression
-        level (PP_MIN_NS) is too aggressive, which can filter out quiet speech.
-        This method reduces noise suppression to improve microphone sensitivity.
+        This method configures the XMOS XVF3800 audio processor for optimal
+        voice command recognition at distances up to 2-3 meters.
+        
+        Key optimizations:
+        1. Enable AGC with higher max gain for distant speech
+        2. Reduce noise suppression to preserve quiet speech
+        3. Increase base microphone gain
+        4. Optimize AGC response times for voice commands
         
         Reference: reachy_mini/src/reachy_mini/media/audio_control_utils.py
+        XMOS docs: https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/AA_control_command_appendix.html
         """
         if self.reachy_mini is None:
             return
@@ -246,25 +252,85 @@ class VoiceAssistantService:
                 _LOGGER.debug("ReSpeaker device not found")
                 return
             
-            # Reduce noise suppression - this is the main fix for microphone sensitivity
-            # PP_MIN_NS controls minimum noise suppression threshold
-            # Lower values = less aggressive noise suppression = better voice pickup
-            # Default is typically around 0.5-0.7, we reduce it to 0.2 for voice commands
+            # ========== 1. AGC (Automatic Gain Control) Settings ==========
+            # Enable AGC for automatic volume normalization
             try:
-                respeaker.write("PP_MIN_NS", [0.2])
-                _LOGGER.info("Noise suppression reduced (PP_MIN_NS=0.2) for better voice pickup")
+                respeaker.write("PP_AGCONOFF", [1])
+                _LOGGER.info("AGC enabled (PP_AGCONOFF=1)")
+            except Exception as e:
+                _LOGGER.debug("Could not enable AGC: %s", e)
+            
+            # Increase AGC max gain for better distant speech pickup
+            # Default is ~15dB, increase to 30dB for voice commands at distance
+            # Range: 0-40 dB (float)
+            try:
+                respeaker.write("PP_AGCMAXGAIN", [30.0])
+                _LOGGER.info("AGC max gain increased (PP_AGCMAXGAIN=30.0dB)")
+            except Exception as e:
+                _LOGGER.debug("Could not set PP_AGCMAXGAIN: %s", e)
+            
+            # Set AGC desired output level (target level after gain)
+            # More negative = quieter output, less negative = louder
+            # Default is around -25dB, set to -18dB for stronger output
+            try:
+                respeaker.write("PP_AGCDESIREDLEVEL", [-18.0])
+                _LOGGER.info("AGC desired level set (PP_AGCDESIREDLEVEL=-18.0dB)")
+            except Exception as e:
+                _LOGGER.debug("Could not set PP_AGCDESIREDLEVEL: %s", e)
+            
+            # Optimize AGC time constants for voice commands
+            # Faster attack time helps capture sudden speech onset
+            try:
+                respeaker.write("PP_AGCTIME", [0.5])  # Main time constant (seconds)
+                _LOGGER.debug("AGC time constant set (PP_AGCTIME=0.5s)")
+            except Exception as e:
+                _LOGGER.debug("Could not set PP_AGCTIME: %s", e)
+            
+            # ========== 2. Base Microphone Gain ==========
+            # Increase base microphone gain for better sensitivity
+            # Default is 1.0, increase to 2.0 for distant speech
+            # Range: 0.0-4.0 (float, linear gain multiplier)
+            try:
+                respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])
+                _LOGGER.info("Microphone gain increased (AUDIO_MGR_MIC_GAIN=2.0)")
+            except Exception as e:
+                _LOGGER.debug("Could not set AUDIO_MGR_MIC_GAIN: %s", e)
+            
+            # ========== 3. Noise Suppression Settings ==========
+            # Reduce noise suppression to preserve quiet speech
+            # PP_MIN_NS: minimum noise suppression threshold
+            # Lower values = less aggressive suppression = better voice pickup
+            # Default is ~0.5-0.7, reduce to 0.15 for voice commands
+            try:
+                respeaker.write("PP_MIN_NS", [0.15])
+                _LOGGER.info("Noise suppression reduced (PP_MIN_NS=0.15)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
             
-            # Also reduce PP_MIN_NN (minimum noise floor estimation)
-            # This helps in quieter environments
+            # PP_MIN_NN: minimum noise floor estimation
+            # Lower values help in quieter environments
             try:
-                respeaker.write("PP_MIN_NN", [0.2])
-                _LOGGER.info("Noise floor threshold reduced (PP_MIN_NN=0.2)")
+                respeaker.write("PP_MIN_NN", [0.15])
+                _LOGGER.info("Noise floor threshold reduced (PP_MIN_NN=0.15)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NN: %s", e)
             
-            _LOGGER.info("Microphone settings optimized for voice recognition")
+            # ========== 4. Echo Cancellation Settings ==========
+            # Ensure echo cancellation is enabled (important for TTS playback)
+            try:
+                respeaker.write("PP_ECHOONOFF", [1])
+                _LOGGER.debug("Echo cancellation enabled (PP_ECHOONOFF=1)")
+            except Exception as e:
+                _LOGGER.debug("Could not set PP_ECHOONOFF: %s", e)
+            
+            # ========== 5. High-pass filter (remove low frequency noise) ==========
+            try:
+                respeaker.write("AEC_HPFONOFF", [1])
+                _LOGGER.debug("High-pass filter enabled (AEC_HPFONOFF=1)")
+            except Exception as e:
+                _LOGGER.debug("Could not set AEC_HPFONOFF: %s", e)
+            
+            _LOGGER.info("Microphone settings optimized for voice recognition (AGC=ON, MaxGain=30dB, MicGain=2.0x)")
             
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)

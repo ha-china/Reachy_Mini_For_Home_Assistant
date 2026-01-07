@@ -26,18 +26,18 @@ class ReachyMiniMotion:
         self._camera_server = None  # Reference to camera server for face tracking control
         self._is_speaking = False
         
-        _LOGGER.warning("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
+        _LOGGER.debug("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
 
         # Initialize movement manager if robot is available
         if reachy_mini is not None:
             try:
                 self._movement_manager = MovementManager(reachy_mini)
-                _LOGGER.warning("MovementManager created successfully")
+                _LOGGER.debug("MovementManager created successfully")
             except Exception as e:
                 _LOGGER.error("Failed to create MovementManager: %s", e, exc_info=True)
                 self._movement_manager = None
         else:
-            _LOGGER.warning("reachy_mini is None, MovementManager not created")
+            _LOGGER.debug("reachy_mini is None, MovementManager not created")
 
     def set_reachy_mini(self, reachy_mini):
         """Set the Reachy Mini instance."""
@@ -62,9 +62,9 @@ class ReachyMiniMotion:
         """Start the movement manager control loop."""
         if self._movement_manager is not None:
             self._movement_manager.start()
-            _LOGGER.warning("Motion control started (movement_manager=%s)", self._movement_manager)
+            _LOGGER.info("Motion control started")
         else:
-            _LOGGER.warning("Motion control not started: movement_manager is None (reachy_mini=%s)", self.reachy_mini)
+            _LOGGER.warning("Motion control not started: movement_manager is None")
 
     def shutdown(self):
         """Shutdown the motion controller."""
@@ -257,33 +257,3 @@ class ReachyMiniMotion:
         """
         if self._movement_manager is not None:
             self._movement_manager.update_audio_loudness(loudness_db)
-
-    # -------------------------------------------------------------------------
-    # Legacy compatibility methods (deprecated, use MovementManager directly)
-    # -------------------------------------------------------------------------
-
-    def _nod(self, count: int = 1, amplitude: float = 15, duration: float = 0.5):
-        """Nod head up and down (legacy)."""
-        if self._movement_manager is None:
-            return
-        for _ in range(count):
-            self._movement_manager.nod(amplitude_deg=amplitude, duration=duration)
-
-    def _shake(self, count: int = 1, amplitude: float = 20, duration: float = 0.5):
-        """Shake head left and right (legacy)."""
-        if self._movement_manager is None:
-            return
-        for _ in range(count):
-            self._movement_manager.shake(amplitude_deg=amplitude, duration=duration)
-
-    def _look_at_user(self):
-        """Look at user (legacy)."""
-        if self._movement_manager is None:
-            return
-        self._movement_manager.reset_to_neutral(duration=0.3)
-
-    def _return_to_neutral(self):
-        """Return to neutral position (legacy)."""
-        if self._movement_manager is None:
-            return
-        self._movement_manager.reset_to_neutral(duration=0.5)

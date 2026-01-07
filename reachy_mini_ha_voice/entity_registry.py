@@ -694,7 +694,7 @@ class EntityRegistry:
             name="AGC Max Gain",
             object_id="agc_max_gain",
             min_value=0.0,
-            max_value=30.0,
+            max_value=40.0,  # XVF3800 supports up to 40dB
             step=1.0,
             icon="mdi:volume-plus",
             unit_of_measurement="dB",

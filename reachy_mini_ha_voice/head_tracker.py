@@ -1,6 +1,8 @@
 """Lightweight head tracker using YOLO for face detection.
 
 Ported from reachy_mini_conversation_app for voice assistant integration.
+Model is loaded at initialization time (not lazy) to ensure face tracking
+is ready immediately when the camera server starts.
 """
 
 from __future__ import annotations
@@ -13,29 +15,13 @@ from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
-# Lazy imports to avoid startup delay
-_YOLO = None
-_Detections = None
-
-
-def _load_yolo_deps():
-    """Lazy load YOLO dependencies."""
-    global _YOLO, _Detections
-    if _YOLO is None:
-        try:
-            from ultralytics import YOLO
-            from supervision import Detections
-            _YOLO = YOLO
-            _Detections = Detections
-        except ImportError as e:
-            raise ImportError(
-                "To use head tracker, install: pip install ultralytics supervision huggingface_hub"
-            ) from e
-    return _YOLO, _Detections
-
 
 class HeadTracker:
-    """Lightweight head tracker using YOLO for face detection."""
+    """Lightweight head tracker using YOLO for face detection.
+    
+    Model is loaded at initialization time to ensure face tracking
+    is ready immediately (matching conversation_app behavior).
+    """
 
     def __init__(
         self,
@@ -57,29 +43,50 @@ class HeadTracker:
         self._model_repo = model_repo
         self._model_filename = model_filename
         self._device = device
-        self._initialized = False
-
-    def _ensure_initialized(self) -> bool:
-        """Lazy initialization of YOLO model."""
-        if self._initialized:
-            return self.model is not None
+        self._detections_class = None
+        self._model_load_attempted = False
+        self._model_load_error: Optional[str] = None
         
-        self._initialized = True
+        # Load model immediately at init (not lazy)
+        self._load_model()
+
+    def _load_model(self) -> None:
+        """Load YOLO model at initialization time."""
+        if self._model_load_attempted:
+            return
+        
+        self._model_load_attempted = True
+        
         try:
-            YOLO, _ = _load_yolo_deps()
+            from ultralytics import YOLO
+            from supervision import Detections
             from huggingface_hub import hf_hub_download
+            
+            self._detections_class = Detections
             
             model_path = hf_hub_download(
                 repo_id=self._model_repo, 
                 filename=self._model_filename
             )
             self.model = YOLO(model_path).to(self._device)
-            logger.info(f"YOLO face detection model loaded from {self._model_repo}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to load YOLO model: {e}")
+            logger.info("YOLO face detection model loaded from %s", self._model_repo)
+        except ImportError as e:
+            self._model_load_error = f"Missing dependencies: {e}"
+            logger.warning(
+                "Face tracking disabled - missing dependencies: %s. "
+                "Install with: pip install ultralytics supervision huggingface_hub",
+                e
+            )
             self.model = None
-            return False
+        except Exception as e:
+            self._model_load_error = str(e)
+            logger.error("Failed to load YOLO model: %s", e)
+            self.model = None
+
+    @property
+    def is_available(self) -> bool:
+        """Check if the head tracker is available and ready."""
+        return self.model is not None and self._detections_class is not None
 
     def _select_best_face(self, detections) -> Optional[int]:
         """Select the best face based on confidence and area.
@@ -147,17 +154,15 @@ class HeadTracker:
         Returns:
             Tuple of (face_center [-1,1], confidence) or (None, None) if no face
         """
-        if not self._ensure_initialized():
+        if not self.is_available:
             return None, None
 
-        _, Detections = _load_yolo_deps()
-        
         h, w = img.shape[:2]
 
         try:
             # Run YOLO inference
             results = self.model(img, verbose=False)
-            detections = Detections.from_ultralytics(results[0])
+            detections = self._detections_class.from_ultralytics(results[0])
 
             # Select best face
             face_idx = self._select_best_face(detections)
@@ -175,5 +180,5 @@ class HeadTracker:
             return face_center, confidence
 
         except Exception as e:
-            logger.error(f"Error in head position detection: {e}")
+            logger.debug("Error in head position detection: %s", e)
             return None, None

@@ -20,7 +20,7 @@ TAP_THRESHOLD_G_DEFAULT = 2.0  # Default acceleration threshold in g
 TAP_THRESHOLD_G_MIN = 0.5  # Minimum threshold (very sensitive)
 TAP_THRESHOLD_G_MAX = 5.0  # Maximum threshold (less sensitive)
 TAP_COOLDOWN_SECONDS = 1.0  # Minimum time between tap detections
-TAP_DETECTION_RATE_HZ = 50  # IMU polling rate
+TAP_DETECTION_RATE_HZ = 20  # IMU polling rate (reduced from 50Hz for system stability)
 
 
 class TapDetector:

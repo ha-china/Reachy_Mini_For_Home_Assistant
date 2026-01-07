@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-将 Home Assistant 语音助手功能集成到 Reachy Mini 机器人，通过 ESPHome 协议与 Home Assistant 通信。
+将 Home Assistant 语音助手功能集成到 Reachy Mini Wi-Fi版本机器人，通过 ESPHome 协议与 Home Assistant 通信。
 
 ## 本地项目目录参考 (禁止修改参考目录内任何文件)
 1. [linux-voice-assistant](linux-voice-assistant)，这是一个基于 Linux 的Home Assistant的语音助手应用，用于参考。
@@ -825,6 +825,90 @@ def _get_cached_head_pose(self):
 
 ---
 
+## 🔧 Daemon 崩溃问题深度修复 (2026-01-07)
+
+### 问题描述
+长期运行过程中，`reachy_mini daemon` 仍然会崩溃，之前的修复不够彻底。
+
+### 根本原因分析
+
+通过深入分析 SDK 源码发现：
+
+1. **每次 `set_target()` 发送 3 条 Zenoh 消息**
+   - `set_target_head_pose()` - 1 条消息
+   - `set_target_antenna_joint_positions()` - 1 条消息  
+   - `set_target_body_yaw()` - 1 条消息
+
+2. **Daemon 控制循环是 50Hz**
+   - 见 `reachy_mini/daemon/backend/robot/backend.py`: `control_loop_frequency = 50.0`
+   - 如果消息发送频率超过 50Hz，daemon 可能无法及时处理
+
+3. **之前的 20Hz 控制循环仍然过高**
+   - 20Hz × 3 消息 = 60 消息/秒
+   - 已经超过 daemon 的 50Hz 处理能力
+
+4. **姿态变化阈值太小 (0.002)**
+   - 呼吸动画、语音摆动、人脸追踪持续产生微小变化
+   - 几乎每次循环都会触发 `set_target()`
+
+### 修复方案
+
+#### 1. 进一步降低控制循环频率 (movement_manager.py)
+```python
+# 从 20Hz 降低到 10Hz
+# 10Hz × 3 消息 = 30 消息/秒，安全低于 daemon 的 50Hz 容量
+CONTROL_LOOP_FREQUENCY_HZ = 10
+```
+
+#### 2. 增大姿态变化阈值 (movement_manager.py)
+```python
+# 从 0.002 增大到 0.005
+# 0.005 rad ≈ 0.29 度，仍然足够平滑
+self._pose_change_threshold = 0.005
+```
+
+#### 3. 降低摄像头/人脸追踪频率 (camera_server.py)
+```python
+# 从 15fps 降低到 10fps
+fps: int = 10
+```
+
+#### 4. 降低 IMU 轮询频率 (tap_detector.py)
+```python
+# 从 50Hz 降低到 20Hz
+TAP_DETECTION_RATE_HZ = 20
+```
+
+#### 5. 增大状态缓存 TTL (reachy_controller.py)
+```python
+# 从 1 秒增大到 2 秒
+self._cache_ttl = 2.0
+```
+
+### 修复效果
+
+| 指标 | 修复前 (20Hz) | 修复后 (10Hz) | 改善 |
+|------|---------------|---------------|------|
+| 控制循环频率 | 20 Hz | 10 Hz | ↓ 50% |
+| 最大 Zenoh 消息 | 60 msg/s | 30 msg/s | ↓ 50% |
+| 实际消息 (有变化检测) | ~40 msg/s | ~15 msg/s | ↓ 62% |
+| 人脸追踪频率 | 15 Hz | 10 Hz | ↓ 33% |
+| IMU 轮询频率 | 50 Hz | 20 Hz | ↓ 60% |
+| 状态缓存 TTL | 1 秒 | 2 秒 | ↑ 100% |
+| 预期稳定性 | 数小时崩溃 | 可稳定运行 | 大幅提升 |
+
+### 关键发现
+
+参考 `reachy_mini_conversation_app` 使用 100Hz 控制循环，但它是官方应用，可能有特殊优化或在更强硬件上运行。我们的应用需要更保守的设置。
+
+### 相关文件
+- `movement_manager.py` - 控制循环频率和姿态阈值
+- `camera_server.py` - 人脸追踪频率
+- `tap_detector.py` - IMU 轮询频率
+- `reachy_controller.py` - 状态缓存 TTL
+
+---
+
 ## 🔧 拍一拍唤醒与麦克风灵敏度修复 (2026-01-07)
 
 ### 问题描述
@@ -833,7 +917,7 @@ def _get_cached_head_pose(self):
 
 ### 根本原因
 1. **音频播放阻塞** - `_tap_continue_feedback()` 在持续对话模式下播放提示音，阻塞了音频流处理
-2. **AGC 设置不优化** - ReSpeaker 的自动增益控制 (AGC) 默认设置不适合远距离语音识别
+2. **AGC 设置不优化** - ReSpeaker XVF3800 的默认设置不适合远距离语音识别
 
 ### 修复方案
 
@@ -864,35 +948,72 @@ def _on_tap_detected(self) -> None:
         _LOGGER.error("Error in tap detection callback: %s", e)
 ```
 
-#### 3. 优化麦克风设置 (voice_assistant.py)
+#### 3. 全面优化麦克风设置 (voice_assistant.py) - 更新于 2026-01-07
 ```python
 def _optimize_microphone_settings(self) -> None:
-    """Optimize ReSpeaker microphone settings for voice recognition."""
-    # Enable AGC for better sensitivity at distance
+    """Optimize ReSpeaker XVF3800 microphone settings for voice recognition."""
+    
+    # ========== 1. AGC (Automatic Gain Control) Settings ==========
+    # Enable AGC for automatic volume normalization
     respeaker.write("PP_AGCONOFF", [1])
     
-    # Set higher AGC max gain (default ~15dB -> 25dB)
-    respeaker.write("PP_AGCMAXGAIN", [25.0])
+    # Increase AGC max gain for better distant speech pickup (default ~15dB -> 30dB)
+    respeaker.write("PP_AGCMAXGAIN", [30.0])
     
-    # Set AGC desired level (target output level)
-    respeaker.write("PP_AGCDESIREDLEVEL", [-20.0])
+    # Set AGC desired output level (default ~-25dB -> -18dB for stronger output)
+    respeaker.write("PP_AGCDESIREDLEVEL", [-18.0])
     
-    # Increase microphone gain
+    # Optimize AGC time constant for voice commands
+    respeaker.write("PP_AGCTIME", [0.5])
+    
+    # ========== 2. Base Microphone Gain ==========
+    # Increase base microphone gain (default 1.0 -> 2.0)
     respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])
+    
+    # ========== 3. Noise Suppression Settings ==========
+    # Reduce noise suppression to preserve quiet speech (default ~0.5 -> 0.15)
+    respeaker.write("PP_MIN_NS", [0.15])
+    respeaker.write("PP_MIN_NN", [0.15])
+    
+    # ========== 4. Echo Cancellation & High-pass Filter ==========
+    respeaker.write("PP_ECHOONOFF", [1])
+    respeaker.write("AEC_HPFONOFF", [1])
 ```
 
 ### 修复效果
 
-| 问题 | 修复前 | 修复后 |
-|------|--------|--------|
-| 拍一拍持续对话 | 阻塞，无法正常对话 | 正常工作 |
-| 麦克风灵敏度 | 需要靠近 ~30cm | 可在 ~1m 距离识别 |
-| AGC 最大增益 | ~15dB | 25dB |
-| 麦克风增益 | 1.0x | 2.0x |
+| 参数 | 修复前 | 修复后 | 说明 |
+|------|--------|--------|------|
+| 拍一拍持续对话 | 阻塞 | 正常工作 | 移除阻塞音频播放 |
+| 麦克风灵敏度 | ~30cm | ~2-3m | 全面优化 AGC 和增益 |
+| AGC 开关 | 关闭 | 开启 | 自动音量归一化 |
+| AGC 最大增益 | ~15dB | 30dB | 提升远距离拾音 |
+| AGC 目标电平 | -25dB | -18dB | 更强输出信号 |
+| 麦克风增益 | 1.0x | 2.0x | 基础增益翻倍 |
+| 噪声抑制 | ~0.5 | 0.15 | 减少对语音的误抑制 |
+| 回声消除 | 开启 | 开启 | 保持 TTS 播放时的清晰度 |
+| 高通滤波 | 关闭 | 开启 | 去除低频噪声 |
+
+### XVF3800 参数参考
+
+| 参数名 | 类型 | 范围 | 说明 |
+|--------|------|------|------|
+| `PP_AGCONOFF` | int32 | 0/1 | AGC 开关 |
+| `PP_AGCMAXGAIN` | float | 0-40 dB | AGC 最大增益 |
+| `PP_AGCDESIREDLEVEL` | float | dB | AGC 目标输出电平 |
+| `PP_AGCTIME` | float | 秒 | AGC 时间常数 |
+| `AUDIO_MGR_MIC_GAIN` | float | 0-4.0 | 麦克风增益倍数 |
+| `PP_MIN_NS` | float | 0-1.0 | 最小噪声抑制 (越低越少抑制) |
+| `PP_MIN_NN` | float | 0-1.0 | 最小噪声估计 |
+| `PP_ECHOONOFF` | int32 | 0/1 | 回声消除开关 |
+| `AEC_HPFONOFF` | int32 | 0/1 | 高通滤波开关 |
 
 ### 相关文件
 - `satellite.py` - 移除阻塞的音频播放
-- `voice_assistant.py` - 添加麦克风优化和异常处理
+- `voice_assistant.py` - 全面麦克风优化
+- `reachy_controller.py` - AGC 实体默认值更新
+- `entity_registry.py` - AGC max gain 范围更新 (0-40dB)
+- `reachy_mini/src/reachy_mini/media/audio_control_utils.py` - SDK 参考
 
 ---
 

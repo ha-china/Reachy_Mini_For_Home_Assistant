@@ -4,11 +4,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import List, Optional, Union
-
-import numpy as np
-import scipy.signal
 
 _LOGGER = logging.getLogger(__name__)
 

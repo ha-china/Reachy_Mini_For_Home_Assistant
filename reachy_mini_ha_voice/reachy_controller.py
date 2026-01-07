@@ -52,7 +52,7 @@ class ReachyController:
         # Note: get_current_head_pose() and get_current_joint_positions() are
         # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
         self._state_cache: Dict[str, Any] = {}
-        self._cache_ttl = 1.0  # 1 second cache TTL for status queries
+        self._cache_ttl = 2.0  # 2 second cache TTL for status queries (increased from 1s)
         self._last_status_query = 0.0
         
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
@@ -380,185 +380,89 @@ class ReachyController:
 
         return x, y, z, roll, pitch, yaw
 
-    def get_head_x(self) -> float:
-        """Get head X position in mm with caching."""
+    def _get_head_pose_component(self, component: str) -> float:
+        """Get a specific component from head pose.
+        
+        Args:
+            component: One of 'x', 'y', 'z' (mm), 'roll', 'pitch', 'yaw' (degrees)
+            
+        Returns:
+            The component value, or 0.0 on error
+        """
         pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            return x * 1000  # Convert m to mm
+            components = {
+                'x': x * 1000,  # m to mm
+                'y': y * 1000,
+                'z': z * 1000,
+                'roll': math.degrees(roll),
+                'pitch': math.degrees(pitch),
+                'yaw': math.degrees(yaw),
+            }
+            return components.get(component, 0.0)
         except Exception as e:
-            logger.error(f"Error getting head X: {e}")
+            logger.error(f"Error getting head {component}: {e}")
             return 0.0
+
+    def _disabled_pose_setter(self, name: str) -> None:
+        """Log warning for disabled pose setters."""
+        logger.debug(f"set_{name} is disabled - MovementManager controls pose")
+
+    # Head position getters (read-only, setters disabled for MovementManager)
+    def get_head_x(self) -> float:
+        """Get head X position in mm."""
+        return self._get_head_pose_component('x')
 
     def set_head_x(self, x_mm: float) -> None:
-        """Set head X position in mm.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        The MovementManager handles all head pose control during voice conversations.
-        """
-        logger.warning("set_head_x is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     pose = self.reachy.get_current_head_pose()
-        #     # Modify the X position in the matrix
-        #     new_pose = pose.copy()
-        #     new_pose[0, 3] = x_mm / 1000  # Convert mm to m
-        #     self.reachy.goto_target(head=new_pose)
-        # except Exception as e:
-        #     logger.error(f"Error setting head X: {e}")
+        """Disabled - MovementManager controls head pose."""
+        self._disabled_pose_setter('head_x')
 
     def get_head_y(self) -> float:
-        """Get head Y position in mm with caching."""
-        pose = self._get_head_pose()
-        if pose is None:
-            return 0.0
-        try:
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            return y * 1000
-        except Exception as e:
-            logger.error(f"Error getting head Y: {e}")
-            return 0.0
+        """Get head Y position in mm."""
+        return self._get_head_pose_component('y')
 
     def set_head_y(self, y_mm: float) -> None:
-        """Set head Y position in mm.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_head_y is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     pose = self.reachy.get_current_head_pose()
-        #     new_pose = pose.copy()
-        #     new_pose[1, 3] = y_mm / 1000
-        #     self.reachy.goto_target(head=new_pose)
-        # except Exception as e:
-        #     logger.error(f"Error setting head Y: {e}")
+        """Disabled - MovementManager controls head pose."""
+        self._disabled_pose_setter('head_y')
 
     def get_head_z(self) -> float:
-        """Get head Z position in mm with caching."""
-        pose = self._get_head_pose()
-        if pose is None:
-            return 0.0
-        try:
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            return z * 1000
-        except Exception as e:
-            logger.error(f"Error getting head Z: {e}")
-            return 0.0
+        """Get head Z position in mm."""
+        return self._get_head_pose_component('z')
 
     def set_head_z(self, z_mm: float) -> None:
-        """Set head Z position in mm.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_head_z is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     pose = self.reachy.get_current_head_pose()
-        #     new_pose = pose.copy()
-        #     new_pose[2, 3] = z_mm / 1000
-        #     self.reachy.goto_target(head=new_pose)
-        # except Exception as e:
-        #     logger.error(f"Error setting head Z: {e}")
+        """Disabled - MovementManager controls head pose."""
+        self._disabled_pose_setter('head_z')
 
+    # Head orientation getters (read-only, setters disabled for MovementManager)
     def get_head_roll(self) -> float:
-        """Get head roll angle in degrees with caching."""
-        pose = self._get_head_pose()
-        if pose is None:
-            return 0.0
-        try:
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            return math.degrees(roll)
-        except Exception as e:
-            logger.error(f"Error getting head roll: {e}")
-            return 0.0
+        """Get head roll angle in degrees."""
+        return self._get_head_pose_component('roll')
 
     def set_head_roll(self, roll_deg: float) -> None:
-        """Set head roll angle in degrees.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_head_roll is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     pose = self.reachy.get_current_head_pose()
-        #     x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-        #     # Create new rotation with updated roll
-        #     new_rotation = R.from_euler('xyz', [math.radians(roll_deg), pitch, yaw])
-        #     new_pose = pose.copy()
-        #     new_pose[:3, :3] = new_rotation.as_matrix()
-        #     self.reachy.goto_target(head=new_pose)
-        # except Exception as e:
-        #     logger.error(f"Error setting head roll: {e}")
+        """Disabled - MovementManager controls head pose."""
+        self._disabled_pose_setter('head_roll')
 
     def get_head_pitch(self) -> float:
-        """Get head pitch angle in degrees with caching."""
-        pose = self._get_head_pose()
-        if pose is None:
-            return 0.0
-        try:
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            return math.degrees(pitch)
-        except Exception as e:
-            logger.error(f"Error getting head pitch: {e}")
-            return 0.0
+        """Get head pitch angle in degrees."""
+        return self._get_head_pose_component('pitch')
 
     def set_head_pitch(self, pitch_deg: float) -> None:
-        """Set head pitch angle in degrees.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_head_pitch is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     pose = self.reachy.get_current_head_pose()
-        #     x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-        #     new_rotation = R.from_euler('xyz', [roll, math.radians(pitch_deg), yaw])
-        #     new_pose = pose.copy()
-        #     new_pose[:3, :3] = new_rotation.as_matrix()
-        #     self.reachy.goto_target(head=new_pose)
-        # except Exception as e:
-        #     logger.error(f"Error setting head pitch: {e}")
+        """Disabled - MovementManager controls head pose."""
+        self._disabled_pose_setter('head_pitch')
 
     def get_head_yaw(self) -> float:
-        """Get head yaw angle in degrees with caching."""
-        pose = self._get_head_pose()
-        if pose is None:
-            return 0.0
-        try:
-            x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-            return math.degrees(yaw)
-        except Exception as e:
-            logger.error(f"Error getting head yaw: {e}")
-            return 0.0
+        """Get head yaw angle in degrees."""
+        return self._get_head_pose_component('yaw')
 
     def set_head_yaw(self, yaw_deg: float) -> None:
-        """Set head yaw angle in degrees.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_head_yaw is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     pose = self.reachy.get_current_head_pose()
-        #     x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
-        #     new_rotation = R.from_euler('xyz', [roll, pitch, math.radians(yaw_deg)])
-        #     new_pose = pose.copy()
-        #     new_pose[:3, :3] = new_rotation.as_matrix()
-        #     self.reachy.goto_target(head=new_pose)
-        # except Exception as e:
-        #     logger.error(f"Error setting head yaw: {e}")
+        """Disabled - MovementManager controls head pose."""
+        self._disabled_pose_setter('head_yaw')
 
     def get_body_yaw(self) -> float:
-        """Get body yaw angle in degrees with caching."""
+        """Get body yaw angle in degrees."""
         joints = self._get_joint_positions()
         if joints is None:
             return 0.0
@@ -570,20 +474,11 @@ class ReachyController:
             return 0.0
 
     def set_body_yaw(self, yaw_deg: float) -> None:
-        """Set body yaw angle in degrees.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_body_yaw is disabled - MovementManager controls body pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     self.reachy.goto_target(body_yaw=math.radians(yaw_deg))
-        # except Exception as e:
-        #     logger.error(f"Error setting body yaw: {e}")
+        """Disabled - MovementManager controls body pose."""
+        self._disabled_pose_setter('body_yaw')
 
     def get_antenna_left(self) -> float:
-        """Get left antenna angle in degrees with caching."""
+        """Get left antenna angle in degrees."""
         joints = self._get_joint_positions()
         if joints is None:
             return 0.0
@@ -595,22 +490,11 @@ class ReachyController:
             return 0.0
 
     def set_antenna_left(self, angle_deg: float) -> None:
-        """Set left antenna angle in degrees.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_antenna_left is disabled - MovementManager controls antennas")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     _, antennas = self.reachy.get_current_joint_positions()
-        #     right = antennas[0]
-        #     self.reachy.goto_target(antennas=[right, math.radians(angle_deg)])
-        # except Exception as e:
-        #     logger.error(f"Error setting left antenna: {e}")
+        """Disabled - MovementManager controls antennas."""
+        self._disabled_pose_setter('antenna_left')
 
     def get_antenna_right(self) -> float:
-        """Get right antenna angle in degrees with caching."""
+        """Get right antenna angle in degrees."""
         joints = self._get_joint_positions()
         if joints is None:
             return 0.0
@@ -622,19 +506,8 @@ class ReachyController:
             return 0.0
 
     def set_antenna_right(self, angle_deg: float) -> None:
-        """Set right antenna angle in degrees.
-        
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("set_antenna_right is disabled - MovementManager controls antennas")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     _, antennas = self.reachy.get_current_joint_positions()
-        #     left = antennas[1]
-        #     self.reachy.goto_target(antennas=[math.radians(angle_deg), left])
-        # except Exception as e:
-        #     logger.error(f"Error setting right antenna: {e}")
+        """Disabled - MovementManager controls antennas."""
+        self._disabled_pose_setter('antenna_right')
 
     # ========== Phase 4: Look At Control ==========
 
@@ -738,98 +611,59 @@ class ReachyController:
 
     # ========== Phase 7: IMU Sensors (Wireless only) ==========
 
-    def get_imu_accel_x(self) -> float:
-        """Get IMU X-axis acceleration in m/s²."""
+    def _get_imu_value(self, sensor_type: str, index: int) -> float:
+        """Get a specific IMU sensor value.
+        
+        Args:
+            sensor_type: 'accelerometer', 'gyroscope', or 'temperature'
+            index: Array index (0=x, 1=y, 2=z) or -1 for scalar values
+            
+        Returns:
+            The sensor value, or 0.0 on error
+        """
         if not self.is_available:
             return 0.0
         try:
             imu_data = self.reachy.imu
-            if imu_data is not None and 'accelerometer' in imu_data:
-                return float(imu_data['accelerometer'][0])
-            return 0.0
+            if imu_data is None or sensor_type not in imu_data:
+                return 0.0
+            value = imu_data[sensor_type]
+            return float(value[index]) if index >= 0 else float(value)
         except Exception as e:
-            logger.error(f"Error getting IMU accel X: {e}")
+            logger.debug(f"Error getting IMU {sensor_type}: {e}")
             return 0.0
+
+    def get_imu_accel_x(self) -> float:
+        """Get IMU X-axis acceleration in m/s²."""
+        return self._get_imu_value('accelerometer', 0)
 
     def get_imu_accel_y(self) -> float:
         """Get IMU Y-axis acceleration in m/s²."""
-        if not self.is_available:
-            return 0.0
-        try:
-            imu_data = self.reachy.imu
-            if imu_data is not None and 'accelerometer' in imu_data:
-                return float(imu_data['accelerometer'][1])
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting IMU accel Y: {e}")
-            return 0.0
+        return self._get_imu_value('accelerometer', 1)
 
     def get_imu_accel_z(self) -> float:
         """Get IMU Z-axis acceleration in m/s²."""
-        if not self.is_available:
-            return 0.0
-        try:
-            imu_data = self.reachy.imu
-            if imu_data is not None and 'accelerometer' in imu_data:
-                return float(imu_data['accelerometer'][2])
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting IMU accel Z: {e}")
-            return 0.0
+        return self._get_imu_value('accelerometer', 2)
 
     def get_imu_gyro_x(self) -> float:
         """Get IMU X-axis angular velocity in rad/s."""
-        if not self.is_available:
-            return 0.0
-        try:
-            imu_data = self.reachy.imu
-            if imu_data is not None and 'gyroscope' in imu_data:
-                return float(imu_data['gyroscope'][0])
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting IMU gyro X: {e}")
-            return 0.0
+        return self._get_imu_value('gyroscope', 0)
 
     def get_imu_gyro_y(self) -> float:
         """Get IMU Y-axis angular velocity in rad/s."""
-        if not self.is_available:
-            return 0.0
-        try:
-            imu_data = self.reachy.imu
-            if imu_data is not None and 'gyroscope' in imu_data:
-                return float(imu_data['gyroscope'][1])
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting IMU gyro Y: {e}")
-            return 0.0
+        return self._get_imu_value('gyroscope', 1)
 
     def get_imu_gyro_z(self) -> float:
         """Get IMU Z-axis angular velocity in rad/s."""
-        if not self.is_available:
-            return 0.0
-        try:
-            imu_data = self.reachy.imu
-            if imu_data is not None and 'gyroscope' in imu_data:
-                return float(imu_data['gyroscope'][2])
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting IMU gyro Z: {e}")
-            return 0.0
+        return self._get_imu_value('gyroscope', 2)
 
     def get_imu_temperature(self) -> float:
         """Get IMU temperature in °C."""
-        if not self.is_available:
-            return 0.0
-        try:
-            imu_data = self.reachy.imu
-            if imu_data is not None and 'temperature' in imu_data:
-                return float(imu_data['temperature'])
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting IMU temperature: {e}")
-            return 0.0
+        return self._get_imu_value('temperature', -1)
 
-    # ========== Phase 11: LED Control (via local SDK) ==========
+    # ========== Phase 11: LED Control (DISABLED) ==========
+    # LED control is disabled because LEDs are hidden inside the robot.
+    # See PROJECT_PLAN.md principle 8.
 
     def _get_respeaker(self):
         """Get ReSpeaker device from media manager with thread-safe access.
@@ -841,159 +675,14 @@ class ReachyController:
                     respeaker.read("...")
         """
         if not self.is_available:
-            logger.debug("ReSpeaker not available: robot not connected")
             return _ReSpeakerContext(None, self._respeaker_lock)
         try:
-            if not self.reachy.media:
-                logger.debug("ReSpeaker not available: media manager is None")
-                return _ReSpeakerContext(None, self._respeaker_lock)
-            if not self.reachy.media.audio:
-                logger.debug("ReSpeaker not available: audio is None")
+            if not self.reachy.media or not self.reachy.media.audio:
                 return _ReSpeakerContext(None, self._respeaker_lock)
             respeaker = self.reachy.media.audio._respeaker
-            if respeaker is None:
-                logger.debug("ReSpeaker not available: _respeaker is None (USB device not found)")
             return _ReSpeakerContext(respeaker, self._respeaker_lock)
-        except Exception as e:
-            logger.debug(f"ReSpeaker not available: {e}")
+        except Exception:
             return _ReSpeakerContext(None, self._respeaker_lock)
-
-    # ========== Phase 11: LED Control (DISABLED - LEDs are inside the robot and not visible) ==========
-    # According to PROJECT_PLAN.md principle 8: "LED都被隐藏在了机器人内部，所有的LED控制全部都忽�?
-    # The following LED methods are kept but commented out for reference.
-    # They are not registered as entities in entity_registry.py.
-
-    # def get_led_brightness(self) -> float:
-    #     """Get LED brightness (0-100)."""
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return getattr(self, '_led_brightness', 50.0)
-    #     try:
-    #         result = respeaker.read("LED_BRIGHTNESS")
-    #         if result is not None:
-    #             self._led_brightness = (result[1] / 255.0) * 100.0
-    #             return self._led_brightness
-    #     except Exception as e:
-    #         logger.debug(f"Error getting LED brightness: {e}")
-    #     return getattr(self, '_led_brightness', 50.0)
-
-    # def set_led_brightness(self, brightness: float) -> None:
-    #     """Set LED brightness (0-100)."""
-    #     brightness = max(0.0, min(100.0, brightness))
-    #     self._led_brightness = brightness
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return
-    #     try:
-    #         value = int((brightness / 100.0) * 255)
-    #         respeaker.write("LED_BRIGHTNESS", [value])
-    #         logger.info(f"LED brightness set to {brightness}%")
-    #     except Exception as e:
-    #         logger.error(f"Error setting LED brightness: {e}")
-
-    # def get_led_effect(self) -> str:
-    #     """Get current LED effect."""
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return getattr(self, '_led_effect', 'off')
-    #     try:
-    #         result = respeaker.read("LED_EFFECT")
-    #         if result is not None:
-    #             effect_map = {0: 'off', 1: 'solid', 2: 'breathing', 3: 'rainbow', 4: 'doa'}
-    #             self._led_effect = effect_map.get(result[1], 'off')
-    #             return self._led_effect
-    #     except Exception as e:
-    #         logger.debug(f"Error getting LED effect: {e}")
-    #     return getattr(self, '_led_effect', 'off')
-
-    # def set_led_effect(self, effect: str) -> None:
-    #     """Set LED effect."""
-    #     self._led_effect = effect
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return
-    #     try:
-    #         effect_map = {'off': 0, 'solid': 1, 'breathing': 2, 'rainbow': 3, 'doa': 4}
-    #         value = effect_map.get(effect, 0)
-    #         respeaker.write("LED_EFFECT", [value])
-    #         logger.info(f"LED effect set to {effect}")
-    #     except Exception as e:
-    #         logger.error(f"Error setting LED effect: {e}")
-
-    # def get_led_color_r(self) -> float:
-    #     """Get LED red color component (0-255)."""
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return getattr(self, '_led_color_r', 0.0)
-    #     try:
-    #         result = respeaker.read("LED_COLOR")
-    #         if result is not None:
-    #             color = result[1] if len(result) > 1 else 0
-    #             self._led_color_r = float((color >> 16) & 0xFF)
-    #             return self._led_color_r
-    #     except Exception as e:
-    #         logger.debug(f"Error getting LED color R: {e}")
-    #     return getattr(self, '_led_color_r', 0.0)
-
-    # def set_led_color_r(self, value: float) -> None:
-    #     """Set LED red color component (0-255)."""
-    #     self._led_color_r = max(0.0, min(255.0, value))
-    #     self._update_led_color()
-
-    # def get_led_color_g(self) -> float:
-    #     """Get LED green color component (0-255)."""
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return getattr(self, '_led_color_g', 0.0)
-    #     try:
-    #         result = respeaker.read("LED_COLOR")
-    #         if result is not None:
-    #             color = result[1] if len(result) > 1 else 0
-    #             self._led_color_g = float((color >> 8) & 0xFF)
-    #             return self._led_color_g
-    #     except Exception as e:
-    #         logger.debug(f"Error getting LED color G: {e}")
-    #     return getattr(self, '_led_color_g', 0.0)
-
-    # def set_led_color_g(self, value: float) -> None:
-    #     """Set LED green color component (0-255)."""
-    #     self._led_color_g = max(0.0, min(255.0, value))
-    #     self._update_led_color()
-
-    # def get_led_color_b(self) -> float:
-    #     """Get LED blue color component (0-255)."""
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return getattr(self, '_led_color_b', 0.0)
-    #     try:
-    #         result = respeaker.read("LED_COLOR")
-    #         if result is not None:
-    #             color = result[1] if len(result) > 1 else 0
-    #             self._led_color_b = float(color & 0xFF)
-    #             return self._led_color_b
-    #     except Exception as e:
-    #         logger.debug(f"Error getting LED color B: {e}")
-    #     return getattr(self, '_led_color_b', 0.0)
-
-    # def set_led_color_b(self, value: float) -> None:
-    #     """Set LED blue color component (0-255)."""
-    #     self._led_color_b = max(0.0, min(255.0, value))
-    #     self._update_led_color()
-
-    # def _update_led_color(self) -> None:
-    #     """Update LED color from R, G, B components."""
-    #     respeaker = self._get_respeaker()
-    #     if respeaker is None:
-    #         return
-    #     try:
-    #         r = int(getattr(self, '_led_color_r', 0))
-    #         g = int(getattr(self, '_led_color_g', 0))
-    #         b = int(getattr(self, '_led_color_b', 0))
-    #         color = (r << 16) | (g << 8) | b
-    #         respeaker.write("LED_COLOR", [color])
-    #         logger.info(f"LED color set to RGB({r}, {g}, {b})")
-    #     except Exception as e:
-    #         logger.error(f"Error setting LED color: {e}")
 
     # ========== Phase 12: Audio Processing (via local SDK with thread-safe access) ==========
 
@@ -1001,7 +690,7 @@ class ReachyController:
         """Get AGC (Automatic Gain Control) enabled status."""
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_agc_enabled', False)
+                return getattr(self, '_agc_enabled', True)  # Default to enabled
             try:
                 result = respeaker.read("PP_AGCONOFF")
                 if result is not None:
@@ -1009,7 +698,7 @@ class ReachyController:
                     return self._agc_enabled
             except Exception as e:
                 logger.debug(f"Error getting AGC status: {e}")
-        return getattr(self, '_agc_enabled', False)
+        return getattr(self, '_agc_enabled', True)
 
     def set_agc_enabled(self, enabled: bool) -> None:
         """Set AGC (Automatic Gain Control) enabled status."""
@@ -1024,10 +713,10 @@ class ReachyController:
                 logger.error(f"Error setting AGC status: {e}")
 
     def get_agc_max_gain(self) -> float:
-        """Get AGC maximum gain in dB."""
+        """Get AGC maximum gain in dB (0-40 dB range)."""
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_agc_max_gain', 15.0)
+                return getattr(self, '_agc_max_gain', 30.0)  # Default to optimized value
             try:
                 result = respeaker.read("PP_AGCMAXGAIN")
                 if result is not None:
@@ -1035,11 +724,11 @@ class ReachyController:
                     return self._agc_max_gain
             except Exception as e:
                 logger.debug(f"Error getting AGC max gain: {e}")
-        return getattr(self, '_agc_max_gain', 15.0)
+        return getattr(self, '_agc_max_gain', 30.0)
 
     def set_agc_max_gain(self, gain: float) -> None:
-        """Set AGC maximum gain in dB."""
-        gain = max(0.0, min(30.0, gain))
+        """Set AGC maximum gain in dB (0-40 dB range)."""
+        gain = max(0.0, min(40.0, gain))  # XVF3800 supports up to 40dB
         self._agc_max_gain = gain
         with self._get_respeaker() as respeaker:
             if respeaker is None:

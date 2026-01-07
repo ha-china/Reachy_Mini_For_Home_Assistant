@@ -4,6 +4,8 @@ MJPEG Camera Server for Reachy Mini with Face Tracking.
 This module provides an HTTP server that streams camera frames from Reachy Mini
 as MJPEG, which can be integrated with Home Assistant via Generic Camera.
 Also provides face tracking for head movement control.
+
+Reference: reachy_mini_conversation_app/src/reachy_mini_conversation_app/camera_worker.py
 """
 
 import asyncio
@@ -15,6 +17,13 @@ from typing import Optional, Tuple, List, TYPE_CHECKING
 import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+# Import SDK interpolation utilities (same as conversation_app)
+try:
+    from reachy_mini.utils.interpolation import linear_pose_interpolation
+    SDK_INTERPOLATION_AVAILABLE = True
+except ImportError:
+    SDK_INTERPOLATION_AVAILABLE = False
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -42,7 +51,7 @@ class MJPEGCameraServer:
         reachy_mini: Optional["ReachyMini"] = None,
         host: str = "0.0.0.0",
         port: int = 8081,
-        fps: int = 15,
+        fps: int = 10,  # Reduced from 15 to 10 fps for daemon stability
         quality: int = 80,
         enable_face_tracking: bool = True,
     ):
@@ -105,8 +114,7 @@ class MJPEGCameraServer:
                 self._head_tracker = HeadTracker()
                 _LOGGER.info("Face tracking enabled with YOLO head tracker")
             except ImportError as e:
-                _LOGGER.warning("Failed to import head tracker (missing dependencies): %s", e)
-                _LOGGER.warning("Install with: pip install ultralytics supervision huggingface_hub")
+                _LOGGER.error("Failed to import head tracker: %s", e)
                 self._head_tracker = None
             except Exception as e:
                 _LOGGER.warning("Failed to initialize head tracker: %s", e)
@@ -307,7 +315,15 @@ class MJPEGCameraServer:
     def _linear_pose_interpolation(
         self, start: np.ndarray, end: np.ndarray, t: float
     ) -> np.ndarray:
-        """Linear interpolation between two 4x4 pose matrices."""
+        """Linear interpolation between two 4x4 pose matrices.
+        
+        Uses SDK's linear_pose_interpolation if available, otherwise falls back
+        to manual SLERP implementation.
+        """
+        if SDK_INTERPOLATION_AVAILABLE:
+            return linear_pose_interpolation(start, end, t)
+        
+        # Fallback: manual interpolation
         # Interpolate translation
         start_trans = start[:3, 3]
         end_trans = end[:3, 3]
@@ -317,9 +333,9 @@ class MJPEGCameraServer:
         start_rot = R.from_matrix(start[:3, :3])
         end_rot = R.from_matrix(end[:3, :3])
         
-        # Use scipy's slerp
+        # Use scipy's slerp - create Rotation array from list
         from scipy.spatial.transform import Slerp
-        key_rots = R.concatenate([start_rot, end_rot])
+        key_rots = R.from_quat(np.array([start_rot.as_quat(), end_rot.as_quat()]))
         slerp = Slerp([0, 1], key_rots)
         interp_rot = slerp(t)
         

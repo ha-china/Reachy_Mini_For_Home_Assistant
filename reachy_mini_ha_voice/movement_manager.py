@@ -40,6 +40,8 @@ from scipy.spatial.transform import Rotation as R
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
+logger = logging.getLogger(__name__)
+
 # Import SDK utilities for pose composition (same as conversation_app)
 try:
     from reachy_mini.utils import create_head_pose
@@ -49,14 +51,17 @@ except ImportError:
     SDK_UTILS_AVAILABLE = False
     logger.warning("SDK utils not available, using fallback pose composition")
 
-logger = logging.getLogger(__name__)
-
 
 # =============================================================================
 # Constants (borrowed from conversation_app)
 # =============================================================================
 
-CONTROL_LOOP_FREQUENCY_HZ = 20  # 20Hz control loop (increased from 5Hz based on SDK analysis)
+# Control loop frequency - CRITICAL for daemon stability
+# The daemon's internal control loop runs at 50Hz.
+# We use 10Hz to stay well below daemon capacity while maintaining smooth motion.
+# Each set_target() call sends 3 Zenoh messages (head, antennas, body_yaw).
+# At 10Hz × 3 = 30 messages/second, well within daemon's 50Hz capacity.
+CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop (reduced from 20Hz for stability)
 # SDK's get_current_head_pose() and get_current_joint_positions() are non-blocking
 # (they return cached Zenoh data), so higher frequency is safe.
 # Using 20Hz as a balance between responsiveness and stability.
@@ -371,10 +376,11 @@ class MovementManager:
         self._audio_lock = threading.Lock()
 
         # Pose change detection threshold
-        # 0.002 rad ≈ 0.11 degrees - small enough for smooth motion
-        # SDK's set_target() is the only method that sends Zenoh messages
+        # Increased from 0.002 to 0.005 to reduce unnecessary set_target() calls
+        # 0.005 rad ≈ 0.29 degrees - still smooth enough for natural motion
+        # This helps reduce Zenoh message traffic to the daemon
         self._last_sent_pose: Optional[Dict[str, float]] = None
-        self._pose_change_threshold = 0.002
+        self._pose_change_threshold = 0.005
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -821,9 +827,10 @@ class MovementManager:
 
         try:
             # Build head pose matrix
+            # SDK uses 'xyz' euler order with [roll, pitch, yaw]
             rotation = R.from_euler('xyz', [
+                pose["roll"],
                 pose["pitch"],
-                pose["roll"],  # Note: SDK uses different order
                 pose["yaw"],
             ])
 
