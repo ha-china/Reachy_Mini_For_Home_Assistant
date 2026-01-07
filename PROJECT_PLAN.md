@@ -614,7 +614,7 @@ VAD_DB_OFF = -45  # 停止检测阈值
 **技术实现**:
 - `tap_detector.py` - IMU 加速度突变检测
 - `satellite.py:_tap_conversation_mode` - 持续对话模式标志
-- 阈值: 2.0g (可配置)
+- 阈值: 0.5g (可配置，默认最敏感)
 - 冷却时间: 1.0s (防止重复触发)
 - 仅限无线版本 (Wireless) 可用
 
@@ -644,7 +644,75 @@ def _tts_finished(self):
 | 倾斜/倒下 | 播放求助动作 + 语音 "我倒了，帮帮我" | ❌ 未实现 |
 | 长时间静止 | 进入休眠动画 | ❌ 未实现 |
 
-### Phase 21 - Home Assistant 场景联动 (未实现) ❌
+### Phase 21 - 手势识别 ✅ **已完成**
+
+**目标**: 使用 MediaPipe Hands 检测手势，实现非语音交互。
+
+**技术方案**:
+- 使用 MediaPipe Hands（完全本地运行，无云端依赖）
+- 与 YOLO 人脸检测并行运行（每隔一帧处理手势，节省 CPU）
+- 手势需保持 0.5 秒才触发，1.5 秒冷却期
+
+**已实现手势**:
+
+| 手势 | 英文值 | 含义 | 检测逻辑 |
+|------|--------|------|---------|
+| 👍 | `thumbs_up` | 确认/点赞 | 拇指向上，其他手指握拳 |
+| 👎 | `thumbs_down` | 拒绝/不喜欢 | 拇指向下，其他手指握拳 |
+| ✋ | `open_palm` | 停止 | 所有手指伸展 |
+| ✊ | `fist` | 暂停/保持 | 所有手指握拳 |
+| ✌️ | `peace` | 胜利/和平 | 食指和中指伸展，其他握拳 |
+| 👌 | `ok` | OK | 拇指和食指形成圆圈，其他伸展 |
+| ☝️ | `pointing_up` | 注意/一 | 仅食指伸展 |
+
+**Home Assistant 实体**:
+
+| ESPHome 实体类型 | 名称 | 说明 |
+|-----------------|------|------|
+| `Text Sensor` | `detected_gesture` | 当前检测到的手势 (英文) |
+| `Switch` | `gesture_detection_enabled` | 手势检测开关 |
+
+**代码位置**:
+- `gesture_detector.py` - MediaPipe 手势检测器
+- `camera_server.py` - 集成手势检测到摄像头处理循环
+- `entity_registry.py` - Home Assistant 实体注册
+
+**技术细节**:
+```python
+# gesture_detector.py - 手势分类
+class Gesture(Enum):
+    NONE = "none"
+    THUMBS_UP = "thumbs_up"
+    THUMBS_DOWN = "thumbs_down"
+    OPEN_PALM = "open_palm"
+    FIST = "fist"
+    PEACE = "peace"
+    OK = "ok"
+    POINTING_UP = "pointing_up"
+
+# 手势检测参数
+min_detection_confidence = 0.6
+min_tracking_confidence = 0.5
+gesture_hold_threshold = 0.5  # 保持 0.5 秒触发
+gesture_cooldown = 1.5  # 触发后 1.5 秒冷却
+gesture_clear_delay = 2.0  # 手势消失 2 秒后清除
+```
+
+**回调支持**:
+```python
+# 可为每种手势设置回调
+camera_server.set_gesture_callbacks(
+    on_thumbs_up=lambda: print("确认"),
+    on_thumbs_down=lambda: print("拒绝"),
+    on_open_palm=lambda: print("停止"),
+    on_fist=lambda: print("暂停"),
+    on_peace=lambda: print("和平"),
+    on_ok=lambda: print("OK"),
+    on_pointing_up=lambda: print("注意"),
+)
+```
+
+### Phase 22 - Home Assistant 场景联动 (未实现) ❌
 
 **目标**: 根据 Home Assistant 的场景/自动化触发机器人动作。
 
@@ -673,16 +741,20 @@ def _tts_finished(self):
 - **音频处理** - AGC、噪声抑制、回声消除
 - **摄像头流** - MJPEG 实时预览
 
-#### 部分实现功能 (Phase 14-21)
+#### 扩展功能 (Phase 13-21)
+- **Phase 13** - Sendspin 多房间音频支持 ✅
+- **Phase 15** - YOLO 人脸追踪 ✅
+- **Phase 20** - 拍一拍唤醒 ✅
+- **Phase 21** - 手势识别 (7 种手势) ✅
+
+#### 部分实现功能
 - **Phase 14** - 情感动作 API 基础设施 (手动触发可用)
 - **Phase 19** - 重力补偿模式切换 (教学流程未实现)
 
 ### ❌ 未实现功能
 
 #### 高优先级
-- ~~**Phase 13** - Sendspin 音频播放支持~~ ✅ **已完成**
 - **Phase 14** - 自动情感动作反馈 (需与语音助手事件关联)
-- **Phase 15** - 持续声源追踪 (仅唤醒时转向)
 
 #### 中优先级
 - **Phase 16** - 卡通风格运动模式 (需动态插值切换)
@@ -691,8 +763,8 @@ def _tts_finished(self):
 
 #### 低优先级
 - **Phase 19** - 教学模式录制/播放功能
-- **Phase 20** - IMU 环境感知响应
-- **Phase 21** - Home Assistant 场景联动
+- **Phase 20** - IMU 环境感知响应 (摇晃/倾斜检测)
+- **Phase 22** - Home Assistant 场景联动
 
 ---
 
@@ -702,42 +774,40 @@ def _tts_finished(self):
 - ✅ **Phase 1-12**: 基础 ESPHome 实体 (45+ 个)
 - ✅ 核心语音助手功能
 - ✅ 基础运动反馈 (点头、摇头、注视)
+- ✅ **Phase 13**: Sendspin 多房间音频
+- ✅ **Phase 15**: YOLO 人脸追踪
+- ✅ **Phase 21**: 手势识别 (7 种手势)
 
 ### 高优先级 (部分实现 🟡)
-- 🟡 **Phase 13**: 情感动作反馈系统
+- 🟡 **Phase 14**: 情感动作反馈系统
   - ✅ Emotion Selector 实体与 API 基础设施
   - ❌ 自动根据语音助手响应触发情感动作
   - ❌ 意图识别与情感匹配
   - ❌ 舞蹈动作库集成
 
-### 高优先级 (未实现 ❌)
-- ❌ **Phase 14**: 智能声源追踪增强
-  - ✅ 唤醒时转向声源
-  - ❌ 持续声源追踪
-  - ❌ 多人对话切换
-  - ❌ 声源可视化
-
 ### 中优先级 (部分实现 🟡)
-- 🟡 **Phase 15**: 卡通风格运动模式
-  - ✅ 20Hz 统一控制循环架构 (优化以防止 daemon 崩溃)
+- 🟡 **Phase 16**: 卡通风格运动模式
+  - ✅ 10Hz 统一控制循环架构 (优化以防止 daemon 崩溃)
   - ✅ 姿态变化检测 + 状态查询缓存 (减少 daemon 负载)
   - ✅ 平滑插值动作 + 呼吸动画
   - ❌ 动态插值技术切换 (CARTOON 等)
-- 🟡 **Phase 16**: 说话时天线同步
+- 🟡 **Phase 17**: 说话时天线同步
   - ✅ 语音驱动头部摆动 (SpeechSwayGenerator)
   - ❌ 天线随音频节奏摆动
 
 ### 中优先级 (未实现 ❌)
-- ❌ **Phase 17**: 视觉注视交互 - 眼神交流
+- ❌ **Phase 18**: 视觉注视交互 - 眼神交流
 
 ### 低优先级 (部分实现 🟡)
-- 🟡 **Phase 18**: 重力补偿互动模式
+- 🟡 **Phase 19**: 重力补偿互动模式
   - ✅ 重力补偿模式切换
   - ❌ 教学式交互 (录制/播放功能)
+- 🟡 **Phase 20**: 环境感知响应
+  - ✅ 拍一拍唤醒 (IMU 加速度检测)
+  - ❌ 摇晃/倾斜检测
 
 ### 低优先级 (未实现 ❌)
-- ❌ **Phase 19**: 环境感知响应 - IMU 触发动作
-- ❌ **Phase 20**: Home Assistant 场景联动 - 智能家居整合
+- ❌ **Phase 22**: Home Assistant 场景联动 - 智能家居整合
 
 ---
 
@@ -745,17 +815,19 @@ def _tts_finished(self):
 
 | 阶段 | 状态 | 完成度 | 说明 |
 |------|------|--------|------|
-| Phase 1-12 | ✅ 完成 | 100% | 40 个 ESPHome 实体已实现（Phase 11 LED 已禁用） |
-| Phase 13 | 🟡 部分完成 | 30% | API 基础设施就绪,缺自动触发 |
-| Phase 14 | ❌ 未完成 | 20% | 仅实现唤醒时转向 |
-| Phase 15 | 🟡 部分完成 | 70% | 20Hz控制循环+姿态变化检测+状态缓存+呼吸动画已实现 |
-| Phase 16 | 🟡 部分完成 | 50% | 语音驱动头部摆动已实现 |
-| Phase 17 | ❌ 未完成 | 10% | 摄像头已实现,缺人脸检测 |
-| Phase 18 | 🟡 部分完成 | 40% | 模式切换已实现,缺教学流程 |
-| Phase 19 | ❌ 未完成 | 10% | IMU 数据已暴露,缺触发逻辑 |
-| Phase 20 | ❌ 未完成 | 0% | 完全未实现 |
+| Phase 1-12 | ✅ 完成 | 100% | 45 个 ESPHome 实体已实现（Phase 11 LED 已禁用） |
+| Phase 13 | ✅ 完成 | 100% | Sendspin 多房间音频支持 |
+| Phase 14 | 🟡 部分完成 | 30% | API 基础设施就绪,缺自动触发 |
+| Phase 15 | ✅ 完成 | 100% | YOLO 人脸追踪 |
+| Phase 16 | 🟡 部分完成 | 70% | 10Hz控制循环+姿态变化检测+状态缓存+呼吸动画已实现 |
+| Phase 17 | 🟡 部分完成 | 50% | 语音驱动头部摆动已实现 |
+| Phase 18 | ❌ 未完成 | 10% | 摄像头已实现,缺眼神交流 |
+| Phase 19 | 🟡 部分完成 | 40% | 模式切换已实现,缺教学流程 |
+| Phase 20 | 🟡 部分完成 | 50% | 拍一拍唤醒已实现,缺摇晃/倾斜检测 |
+| Phase 21 | ✅ 完成 | 100% | 手势识别 (7 种手势) |
+| Phase 22 | ❌ 未完成 | 0% | 完全未实现 |
 
-**总体完成度**: **Phase 1-12: 100%** | **Phase 13-20: ~35%**
+**总体完成度**: **Phase 1-12: 100%** | **Phase 13-22: ~60%**
 
 ---
 
