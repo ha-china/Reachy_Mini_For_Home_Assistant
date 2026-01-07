@@ -5,10 +5,10 @@
 将 Home Assistant 语音助手功能集成到 Reachy Mini Wi-Fi版本机器人，通过 ESPHome 协议与 Home Assistant 通信。
 
 ## 本地项目目录参考 (禁止修改参考目录内任何文件)
-1. [linux-voice-assistant](linux-voice-assistant)，这是一个基于 Linux 的Home Assistant的语音助手应用，用于参考。
-2. [Reachy Mini SDK](reachy_mini) 这是 Reachy Mini SDK 的本地项目目录，用于参考。
-3. [reachy_mini_conversation_app](reachy_mini_conversation_app) - Reachy Mini 对话应用，用于参考
-4. [reachy-mini-desktop-app](reachy-mini-desktop-app) - Reachy Mini 桌面应用，用于参考
+1. [linux-voice-assistant](reference/linux-voice-assistant)，这是一个基于 Linux 的Home Assistant的语音助手应用，用于参考。
+2. [Reachy Mini SDK](reference/reachy_mini) 这是 Reachy Mini SDK 的本地项目目录，用于参考。
+3. [reachy_mini_conversation_app](reference/reachy_mini_conversation_app) - Reachy Mini 对话应用，用于参考
+4. [reachy-mini-desktop-app](reference/reachy-mini-desktop-app) - Reachy Mini 桌面应用，用于参考
 
 ## 核心设计原则
 

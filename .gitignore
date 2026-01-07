@@ -70,9 +70,6 @@ models/
 *.onnx
 
 # SDK Reference (local development only)
-reachy_mini/
-reachy_mini_conversation_app/
-linux-voice-assistant/
-reachy-mini-desktop-app/
+reference/
 # ha/ - temporarily commented out for path fixes
 # ha/ will be moved to separate repository soon
