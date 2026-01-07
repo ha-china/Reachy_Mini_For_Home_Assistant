@@ -44,6 +44,11 @@ class MJPEGCameraServer:
     - / - Simple status page
     
     Also provides face tracking offsets for head movement control.
+    
+    Resource Optimization:
+    - Adaptive frame rate: high (15fps) when face detected or in conversation,
+      low (3fps) when idle and no face for extended period
+    - Face detection pauses after prolonged absence to save CPU
     """
 
     def __init__(
@@ -98,6 +103,25 @@ class MJPEGCameraServer:
         
         # Offset scaling (same as conversation_app)
         self._offset_scale = 0.6
+        
+        # =====================================================================
+        # Resource optimization: Adaptive frame rate for face tracking
+        # =====================================================================
+        # High frequency when: face detected, in conversation, or recently active
+        # Low frequency when: idle and no face for extended period
+        self._fps_high = fps  # Normal tracking rate (15fps)
+        self._fps_low = 3     # Low power rate (3fps) - just checking if someone appears
+        self._current_fps = fps
+        
+        # Conversation state (set by voice assistant)
+        self._in_conversation = False
+        self._conversation_lock = threading.Lock()
+        
+        # Adaptive tracking timing
+        self._no_face_duration = 0.0  # How long since last face detection
+        self._low_power_threshold = 10.0  # Switch to low power after 10s without face
+        self._face_check_interval_low = 1.0 / self._fps_low  # ~333ms between checks
+        self._last_face_check_time = 0.0
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -157,10 +181,17 @@ class MJPEGCameraServer:
         _LOGGER.info("MJPEG Camera server stopped")
 
     def _capture_frames(self) -> None:
-        """Background thread to capture frames from Reachy Mini and do face tracking."""
+        """Background thread to capture frames from Reachy Mini and do face tracking.
+        
+        Resource optimization:
+        - High frequency (15fps) when face detected or in conversation
+        - Low frequency (3fps) when idle and no face for extended period
+        - YOLO inference only runs when needed, not every frame
+        """
         _LOGGER.info("Starting camera capture thread (face_tracking=%s)", self._face_tracking_enabled)
 
         frame_count = 0
+        face_detect_count = 0
         last_log_time = time.time()
 
         while self._running:
@@ -180,9 +211,27 @@ class MJPEGCameraServer:
                             self._last_frame = jpeg_data.tobytes()
                             self._last_frame_time = time.time()
                     
-                    # Do face tracking if enabled
-                    if self._face_tracking_enabled and self._head_tracker is not None:
-                        self._process_face_tracking(frame, current_time)
+                    # Adaptive face tracking: decide whether to run YOLO this frame
+                    should_track = self._should_run_face_tracking(current_time)
+                    
+                    if should_track and self._face_tracking_enabled and self._head_tracker is not None:
+                        face_detect_count += 1
+                        face_detected = self._process_face_tracking(frame, current_time)
+                        
+                        # Update adaptive timing based on detection result
+                        if face_detected:
+                            self._no_face_duration = 0.0
+                            self._current_fps = self._fps_high
+                        else:
+                            # Accumulate no-face duration
+                            if self._last_face_detected_time is not None:
+                                self._no_face_duration = current_time - self._last_face_detected_time
+                            
+                            # Switch to low power mode if no face for extended period
+                            if self._no_face_duration > self._low_power_threshold:
+                                self._current_fps = self._fps_low
+                        
+                        self._last_face_check_time = current_time
                     
                     # Handle smooth interpolation when face lost
                     self._process_face_lost_interpolation(current_time)
@@ -190,13 +239,17 @@ class MJPEGCameraServer:
                     # Log stats every 10 seconds
                     if current_time - last_log_time >= 10.0:
                         fps = frame_count / (current_time - last_log_time)
-                        _LOGGER.debug("Camera: %.1f fps, face_tracking=%s, head_tracker=%s",
-                                     fps, self._face_tracking_enabled, self._head_tracker is not None)
+                        detect_fps = face_detect_count / (current_time - last_log_time)
+                        mode = "HIGH" if self._current_fps == self._fps_high else "LOW"
+                        _LOGGER.debug("Camera: %.1f fps, face_detect: %.1f fps (%s mode), no_face: %.1fs",
+                                     fps, detect_fps, mode, self._no_face_duration)
                         frame_count = 0
+                        face_detect_count = 0
                         last_log_time = current_time
 
-                # Sleep to maintain target FPS
-                time.sleep(self._frame_interval)
+                # Sleep to maintain target FPS (use current adaptive rate)
+                sleep_time = 1.0 / self._current_fps
+                time.sleep(sleep_time)
 
             except Exception as e:
                 _LOGGER.error("Error capturing frame: %s", e)
@@ -204,10 +257,35 @@ class MJPEGCameraServer:
 
         _LOGGER.info("Camera capture thread stopped")
     
-    def _process_face_tracking(self, frame: np.ndarray, current_time: float) -> None:
-        """Process face tracking on a frame."""
+    def _should_run_face_tracking(self, current_time: float) -> bool:
+        """Determine if face tracking should run this frame.
+        
+        Returns True if:
+        - In conversation mode (always track)
+        - Face was recently detected (high frequency tracking)
+        - In low power mode and enough time has passed since last check
+        """
+        # Always track during conversation
+        with self._conversation_lock:
+            if self._in_conversation:
+                return True
+        
+        # High frequency mode: track every frame
+        if self._current_fps == self._fps_high:
+            return True
+        
+        # Low power mode: only check periodically
+        time_since_last_check = current_time - self._last_face_check_time
+        return time_since_last_check >= self._face_check_interval_low
+    
+    def _process_face_tracking(self, frame: np.ndarray, current_time: float) -> bool:
+        """Process face tracking on a frame.
+        
+        Returns:
+            True if face was detected, False otherwise
+        """
         if self._head_tracker is None or self.reachy_mini is None:
-            return
+            return False
         
         try:
             face_center, confidence = self._head_tracker.get_head_position(frame)
@@ -264,9 +342,14 @@ class MJPEGCameraServer:
                         float(rotation[1]),
                         float(rotation[2]),
                     ]
+                
+                return True
+            
+            return False
         
         except Exception as e:
             _LOGGER.debug("Face tracking error: %s", e)
+            return False
     
     def _process_face_lost_interpolation(self, current_time: float) -> None:
         """Handle smooth interpolation back to neutral when face is lost."""
@@ -378,6 +461,25 @@ class MJPEGCameraServer:
             self._last_face_detected_time = time.time()
             self._interpolation_start_time = None
         _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
+    
+    def set_conversation_mode(self, in_conversation: bool) -> None:
+        """Set conversation mode for adaptive face tracking.
+        
+        When in conversation mode, face tracking runs at high frequency
+        regardless of whether a face is currently detected.
+        
+        Args:
+            in_conversation: True when voice assistant is actively conversing
+        """
+        with self._conversation_lock:
+            self._in_conversation = in_conversation
+        
+        if in_conversation:
+            # Immediately switch to high frequency mode
+            self._current_fps = self._fps_high
+            _LOGGER.debug("Face tracking: conversation mode ON (high frequency)")
+        else:
+            _LOGGER.debug("Face tracking: conversation mode OFF (adaptive)")
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""

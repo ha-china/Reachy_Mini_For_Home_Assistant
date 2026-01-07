@@ -523,6 +523,9 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""
+        # Enable high-frequency face tracking during conversation
+        self._set_conversation_mode(True)
+        
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -556,6 +559,9 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
+        # Disable high-frequency face tracking, switch to adaptive mode
+        self._set_conversation_mode(False)
+        
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -564,6 +570,18 @@ class VoiceSatelliteProtocol(APIServer):
                 self.state.motion.on_idle()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
+    
+    def _set_conversation_mode(self, in_conversation: bool) -> None:
+        """Set conversation mode for adaptive face tracking.
+        
+        When in conversation, face tracking runs at high frequency.
+        When idle, face tracking uses adaptive rate to save CPU.
+        """
+        if self._camera_server is not None:
+            try:
+                self._camera_server.set_conversation_mode(in_conversation)
+            except Exception as e:
+                _LOGGER.debug("Failed to set conversation mode: %s", e)
 
     def _tap_continue_feedback(self) -> None:
         """Provide feedback when continuing conversation in tap mode.
