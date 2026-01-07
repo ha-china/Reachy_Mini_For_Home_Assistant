@@ -37,7 +37,10 @@ logger = logging.getLogger(__name__)
 # Constants (borrowed from conversation_app)
 # =============================================================================
 
-CONTROL_LOOP_FREQUENCY_HZ = 5  # 5Hz control loop (reduced from 10Hz to prevent daemon serial port overload)
+CONTROL_LOOP_FREQUENCY_HZ = 20  # 20Hz control loop (increased from 5Hz based on SDK analysis)
+# SDK's get_current_head_pose() and get_current_joint_positions() are non-blocking
+# (they return cached Zenoh data), so higher frequency is safe.
+# Using 20Hz as a balance between responsiveness and stability.
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Speech sway parameters (from conversation_app SwayRollRT)
@@ -348,11 +351,11 @@ class MovementManager:
         self._audio_loudness_db: float = -100.0
         self._audio_lock = threading.Lock()
 
-        # Pose change detection (prevent unnecessary commands)
+        # Pose change detection threshold
+        # 0.002 rad ≈ 0.11 degrees - small enough for smooth motion
+        # SDK's set_target() is the only method that sends Zenoh messages
         self._last_sent_pose: Optional[Dict[str, float]] = None
-        # Increased threshold to reduce command frequency
-        # 0.01 rad ≈ 0.57 degrees, prevents micro-movements from triggering commands
-        self._pose_change_threshold = 0.01
+        self._pose_change_threshold = 0.002
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)

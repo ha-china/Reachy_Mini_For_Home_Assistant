@@ -48,19 +48,12 @@ class ReachyController:
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
         
-        # State caching to reduce daemon load
-        # Increased TTL to 1 second to prevent overwhelming the daemon
-        # when Home Assistant subscribes to all entities at once
+        # Status caching - only for get_status() which may trigger I/O
+        # Note: get_current_head_pose() and get_current_joint_positions() are
+        # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
         self._state_cache: Dict[str, Any] = {}
-        self._cache_ttl = 1.0  # 1 second cache TTL (was 100ms)
+        self._cache_ttl = 1.0  # 1 second cache TTL for status queries
         self._last_status_query = 0.0
-        self._last_pose_query = 0.0
-        self._last_joints_query = 0.0
-        
-        # Request throttling to prevent daemon overload
-        self._min_request_interval = 0.1  # Minimum 100ms between SDK requests
-        self._last_sdk_request = 0.0
-        self._request_lock = __import__('threading').Lock()
         
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
         self._respeaker_lock = __import__('threading').Lock()
@@ -73,20 +66,18 @@ class ReachyController:
     # ========== Phase 1: Basic Status & Volume ==========
 
     def _get_cached_status(self) -> Optional[Dict]:
-        """Get cached daemon status to reduce query frequency."""
+        """Get cached daemon status to reduce query frequency.
+        
+        Note: get_status() may trigger I/O, so we cache it.
+        Unlike get_current_head_pose() and get_current_joint_positions()
+        which are non-blocking in the SDK.
+        """
         now = time.time()
         if now - self._last_status_query < self._cache_ttl:
             return self._state_cache.get('status')
         
         if not self.is_available:
             return None
-        
-        # Throttle SDK requests to prevent daemon overload
-        with self._request_lock:
-            if now - self._last_sdk_request < self._min_request_interval:
-                # Return cached value if we're requesting too fast
-                return self._state_cache.get('status')
-            self._last_sdk_request = now
         
         try:
             status = self.reachy.client.get_status(wait=False)
@@ -336,53 +327,35 @@ class ReachyController:
 
     # ========== Phase 3: Pose Control ==========
 
-    def _get_cached_head_pose(self) -> Optional[np.ndarray]:
-        """Get cached head pose to reduce query frequency."""
-        now = time.time()
-        if now - self._last_pose_query < self._cache_ttl:
-            return self._state_cache.get('head_pose')
+    def _get_head_pose(self) -> Optional[np.ndarray]:
+        """Get current head pose from SDK.
         
+        Note: SDK's get_current_head_pose() is non-blocking - it returns
+        cached data from Zenoh subscriptions, so no throttling needed.
+        """
         if not self.is_available:
             return None
         
-        # Throttle SDK requests to prevent daemon overload
-        with self._request_lock:
-            if now - self._last_sdk_request < self._min_request_interval:
-                return self._state_cache.get('head_pose')
-            self._last_sdk_request = now
-        
         try:
-            pose = self.reachy.get_current_head_pose()
-            self._state_cache['head_pose'] = pose
-            self._last_pose_query = now
-            return pose
+            return self.reachy.get_current_head_pose()
         except Exception as e:
             logger.error(f"Error getting head pose: {e}")
-            return self._state_cache.get('head_pose')  # Return stale cache on error
+            return None
 
-    def _get_cached_joint_positions(self) -> Optional[tuple]:
-        """Get cached joint positions to reduce query frequency."""
-        now = time.time()
-        if now - self._last_joints_query < self._cache_ttl:
-            return self._state_cache.get('joint_positions')
+    def _get_joint_positions(self) -> Optional[tuple]:
+        """Get current joint positions from SDK.
         
+        Note: SDK's get_current_joint_positions() is non-blocking - it returns
+        cached data from Zenoh subscriptions, so no throttling needed.
+        """
         if not self.is_available:
             return None
         
-        # Throttle SDK requests to prevent daemon overload
-        with self._request_lock:
-            if now - self._last_sdk_request < self._min_request_interval:
-                return self._state_cache.get('joint_positions')
-            self._last_sdk_request = now
-        
         try:
-            joints = self.reachy.get_current_joint_positions()
-            self._state_cache['joint_positions'] = joints
-            self._last_joints_query = now
-            return joints
+            return self.reachy.get_current_joint_positions()
         except Exception as e:
             logger.error(f"Error getting joint positions: {e}")
-            return self._state_cache.get('joint_positions')  # Return stale cache on error
+            return None
 
     def _extract_pose_from_matrix(self, pose_matrix: np.ndarray) -> tuple:
         """
@@ -409,7 +382,7 @@ class ReachyController:
 
     def get_head_x(self) -> float:
         """Get head X position in mm with caching."""
-        pose = self._get_cached_head_pose()
+        pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
@@ -439,7 +412,7 @@ class ReachyController:
 
     def get_head_y(self) -> float:
         """Get head Y position in mm with caching."""
-        pose = self._get_cached_head_pose()
+        pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
@@ -467,7 +440,7 @@ class ReachyController:
 
     def get_head_z(self) -> float:
         """Get head Z position in mm with caching."""
-        pose = self._get_cached_head_pose()
+        pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
@@ -495,7 +468,7 @@ class ReachyController:
 
     def get_head_roll(self) -> float:
         """Get head roll angle in degrees with caching."""
-        pose = self._get_cached_head_pose()
+        pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
@@ -526,7 +499,7 @@ class ReachyController:
 
     def get_head_pitch(self) -> float:
         """Get head pitch angle in degrees with caching."""
-        pose = self._get_cached_head_pose()
+        pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
@@ -556,7 +529,7 @@ class ReachyController:
 
     def get_head_yaw(self) -> float:
         """Get head yaw angle in degrees with caching."""
-        pose = self._get_cached_head_pose()
+        pose = self._get_head_pose()
         if pose is None:
             return 0.0
         try:
@@ -586,7 +559,7 @@ class ReachyController:
 
     def get_body_yaw(self) -> float:
         """Get body yaw angle in degrees with caching."""
-        joints = self._get_cached_joint_positions()
+        joints = self._get_joint_positions()
         if joints is None:
             return 0.0
         try:
@@ -611,7 +584,7 @@ class ReachyController:
 
     def get_antenna_left(self) -> float:
         """Get left antenna angle in degrees with caching."""
-        joints = self._get_cached_joint_positions()
+        joints = self._get_joint_positions()
         if joints is None:
             return 0.0
         try:
@@ -638,7 +611,7 @@ class ReachyController:
 
     def get_antenna_right(self) -> float:
         """Get right antenna angle in degrees with caching."""
-        joints = self._get_cached_joint_positions()
+        joints = self._get_joint_positions()
         if joints is None:
             return 0.0
         try:
@@ -886,7 +859,7 @@ class ReachyController:
             return _ReSpeakerContext(None, self._respeaker_lock)
 
     # ========== Phase 11: LED Control (DISABLED - LEDs are inside the robot and not visible) ==========
-    # According to PROJECT_PLAN.md principle 8: "LED都被隐藏在了机器人内部，所有的LED控制全部都忽略"
+    # According to PROJECT_PLAN.md principle 8: "LED都被隐藏在了机器人内部，所有的LED控制全部都忽�?
     # The following LED methods are kept but commented out for reference.
     # They are not registered as entities in entity_registry.py.
 
