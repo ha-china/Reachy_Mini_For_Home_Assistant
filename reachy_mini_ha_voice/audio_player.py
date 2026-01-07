@@ -1,16 +1,18 @@
 """Audio player using Reachy Mini's media system with automatic Sendspin support.
 
 Sendspin integration allows synchronized multi-room audio playback through
-a Sendspin server. When a Sendspin server is discovered via mDNS, TTS and 
-media audio will be automatically sent to the server for distribution to 
-all connected players.
+a Sendspin server. Reachy Mini connects as a PLAYER to receive audio streams
+from Home Assistant or other Sendspin controllers.
 
 Sendspin is automatically enabled by default - no user configuration needed.
 The system uses mDNS to discover Sendspin servers on the local network.
 """
 
 import asyncio
+import hashlib
 import logging
+import socket
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -20,8 +22,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Check if aiosendspin is available
 try:
-    from aiosendspin.client import SendspinClient
+    from aiosendspin.client import SendspinClient, PCMFormat
     from aiosendspin.models.types import Roles
+    from aiosendspin.models.core import StreamStartMessage
     SENDSPIN_AVAILABLE = True
 except ImportError:
     SENDSPIN_AVAILABLE = False
@@ -41,17 +44,30 @@ SENDSPIN_SERVICE_TYPE = "_sendspin-server._tcp.local."
 SENDSPIN_DEFAULT_PATH = "/sendspin"
 
 
-class AudioPlayer:
-    """Audio player using Reachy Mini's media system with automatic Sendspin output.
+def _get_stable_client_id() -> str:
+    """Generate a stable client ID based on machine identity.
     
-    Supports three audio output modes:
+    Uses hostname and MAC address to create a consistent ID across restarts.
+    """
+    try:
+        hostname = socket.gethostname()
+        # Create a hash of hostname for stability
+        hash_input = f"reachy-mini-{hostname}"
+        return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+    except Exception:
+        return "reachy-mini-default"
+
+
+class AudioPlayer:
+    """Audio player using Reachy Mini's media system with automatic Sendspin support.
+    
+    Supports audio playback modes:
     1. Reachy Mini's built-in media system (default)
-    2. Sendspin synchronized multi-room playback (auto-enabled via mDNS discovery)
+    2. Sendspin synchronized multi-room playback (as PLAYER - receives audio)
     3. Sounddevice fallback (when Reachy Mini not available)
     
-    Sendspin is automatically enabled when a server is discovered on the network.
-    Audio is sent to both the local speaker AND the Sendspin server for 
-    synchronized playback across multiple devices.
+    When connected to Sendspin as a PLAYER, Reachy Mini receives audio streams
+    from Home Assistant or other controllers for synchronized playback.
     """
 
     def __init__(self, reachy_mini=None) -> None:
@@ -71,6 +87,8 @@ class AudioPlayer:
         self._stop_flag = threading.Event()
         
         # Sendspin support (auto-enabled via mDNS discovery)
+        # Uses stable client_id so HA recognizes the same device after restart
+        self._sendspin_client_id = _get_stable_client_id()
         self._sendspin_client: Optional["SendspinClient"] = None
         self._sendspin_enabled = False
         self._sendspin_url: Optional[str] = None
@@ -78,6 +96,10 @@ class AudioPlayer:
         self._sendspin_discovery_task: Optional[asyncio.Task] = None
         self._sendspin_zeroconf: Optional["AsyncZeroconf"] = None
         self._sendspin_browser: Optional["AsyncServiceBrowser"] = None
+        self._sendspin_unsubscribers: List[Callable] = []
+        
+        # Audio buffer for Sendspin playback
+        self._sendspin_audio_format: Optional["PCMFormat"] = None
 
     def set_reachy_mini(self, reachy_mini) -> None:
         """Set the Reachy Mini instance."""
@@ -159,7 +181,7 @@ class AudioPlayer:
             self._sendspin_zeroconf = None
 
     async def _connect_to_server(self, server_url: str) -> bool:
-        """Connect to a discovered Sendspin server.
+        """Connect to a discovered Sendspin server as PLAYER.
         
         Args:
             server_url: WebSocket URL of the Sendspin server.
@@ -179,21 +201,28 @@ class AudioPlayer:
             await self._disconnect_sendspin()
 
         try:
-            import uuid
-            client_id = str(uuid.uuid4())
-            
+            # Use stable client_id so HA recognizes the same device after restart
             self._sendspin_client = SendspinClient(
-                client_id=client_id,
+                client_id=self._sendspin_client_id,
                 client_name="Reachy Mini",
-                roles=[Roles.CONTROLLER],
+                roles=[Roles.PLAYER],  # PLAYER role to receive audio
             )
             
             await self._sendspin_client.connect(server_url)
             
+            # Register audio listeners
+            self._sendspin_unsubscribers = [
+                self._sendspin_client.add_audio_chunk_listener(self._on_sendspin_audio_chunk),
+                self._sendspin_client.add_stream_start_listener(self._on_sendspin_stream_start),
+                self._sendspin_client.add_stream_end_listener(self._on_sendspin_stream_end),
+                self._sendspin_client.add_stream_clear_listener(self._on_sendspin_stream_clear),
+            ]
+            
             self._sendspin_url = server_url
             self._sendspin_enabled = True
             
-            _LOGGER.info("Sendspin connected: %s", server_url)
+            _LOGGER.info("Sendspin connected as PLAYER: %s (client_id=%s)", 
+                        server_url, self._sendspin_client_id)
             return True
             
         except Exception as e:
@@ -202,8 +231,81 @@ class AudioPlayer:
             self._sendspin_enabled = False
             return False
 
+    def _on_sendspin_audio_chunk(self, server_timestamp_us: int, audio_data: bytes, fmt: "PCMFormat") -> None:
+        """Handle incoming audio chunks from Sendspin server.
+        
+        Plays the audio through Reachy Mini's speaker.
+        """
+        if self.reachy_mini is None:
+            return
+        
+        try:
+            # Store format for potential use
+            self._sendspin_audio_format = fmt
+            
+            # Write audio data to a temp file and play it
+            # This is a simple approach - for better performance, 
+            # we could stream directly to the audio system
+            import numpy as np
+            
+            # Convert bytes to numpy array based on format
+            if fmt.bit_depth == 16:
+                dtype = np.int16
+            elif fmt.bit_depth == 32:
+                dtype = np.int32
+            else:
+                dtype = np.int16
+            
+            audio_array = np.frombuffer(audio_data, dtype=dtype)
+            
+            # Convert to float32 for playback
+            audio_float = audio_array.astype(np.float32) / 32768.0
+            
+            # Apply volume
+            audio_float = audio_float * self._current_volume
+            
+            # Play through Reachy Mini's media system
+            # Note: This is a simplified approach. For better sync,
+            # we'd need to buffer and schedule playback based on server_timestamp_us
+            self.reachy_mini.media.play_audio_data(audio_float, fmt.sample_rate)
+            
+        except Exception as e:
+            _LOGGER.debug("Error playing Sendspin audio: %s", e)
+
+    def _on_sendspin_stream_start(self, message: "StreamStartMessage") -> None:
+        """Handle stream start from Sendspin server."""
+        _LOGGER.debug("Sendspin stream started")
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.clear_output_buffer()
+            except Exception:
+                pass
+
+    def _on_sendspin_stream_end(self, roles: Optional[List[Roles]]) -> None:
+        """Handle stream end from Sendspin server."""
+        if roles is None or Roles.PLAYER in roles:
+            _LOGGER.debug("Sendspin stream ended")
+
+    def _on_sendspin_stream_clear(self, roles: Optional[List[Roles]]) -> None:
+        """Handle stream clear from Sendspin server."""
+        if roles is None or Roles.PLAYER in roles:
+            _LOGGER.debug("Sendspin stream cleared")
+            if self.reachy_mini is not None:
+                try:
+                    self.reachy_mini.media.clear_output_buffer()
+                except Exception:
+                    pass
+
     async def _disconnect_sendspin(self) -> None:
         """Disconnect from current Sendspin server."""
+        # Unsubscribe from listeners
+        for unsub in self._sendspin_unsubscribers:
+            try:
+                unsub()
+            except Exception:
+                pass
+        self._sendspin_unsubscribers.clear()
+        
         if self._sendspin_client is not None:
             try:
                 await self._sendspin_client.disconnect()
@@ -213,6 +315,7 @@ class AudioPlayer:
         
         self._sendspin_enabled = False
         self._sendspin_url = None
+        self._sendspin_audio_format = None
 
     async def stop_sendspin(self) -> None:
         """Stop Sendspin discovery and disconnect from server."""

@@ -96,8 +96,8 @@ class MJPEGCameraServer:
         self._face_lost_delay = 1.0  # Reduced from 2.0s to 1.0s for faster response
         self._interpolation_duration = 0.8  # Reduced from 1.0s to 0.8s for faster return
         
-        # Offset scaling (smaller movements for smoother tracking)
-        self._offset_scale = 0.7  # Increased from 0.6 to 0.7 for more responsive tracking
+        # Offset scaling (same as conversation_app)
+        self._offset_scale = 0.6
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -237,11 +237,7 @@ class MJPEGCameraServer:
                 translation = target_pose[:3, 3]
                 rotation = R.from_matrix(target_pose[:3, :3]).as_euler("xyz", degrees=False)
                 
-                # Apply Y-axis offset compensation (face tends to be tracked too high)
-                # Negative Y offset moves the gaze point down
-                translation[1] -= 0.015  # 15mm downward compensation
-                
-                # Scale down for smoother tracking
+                # Scale down for smoother tracking (same as conversation_app)
                 translation = translation * self._offset_scale
                 rotation = rotation * self._offset_scale
                 
