@@ -204,9 +204,19 @@ class AudioPlayer:
 
         try:
             # Use stable client_id so HA recognizes the same device after restart
-            # Configure player support with common audio formats
+            # Configure player support with audio formats
+            # Prioritize 16kHz since ReSpeaker hardware only supports 16kHz output
+            # Higher sample rates will be resampled down, causing quality loss
             player_support = ClientHelloPlayerSupport(
                 supported_formats=[
+                    # Prefer 16kHz (native ReSpeaker sample rate - no resampling needed)
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=2, sample_rate=16000, bit_depth=16
+                    ),
+                    SupportedAudioFormat(
+                        codec=AudioCodec.PCM, channels=1, sample_rate=16000, bit_depth=16
+                    ),
+                    # Also support higher sample rates (will be resampled to 16kHz)
                     SupportedAudioFormat(
                         codec=AudioCodec.PCM, channels=2, sample_rate=48000, bit_depth=16
                     ),
@@ -218,9 +228,6 @@ class AudioPlayer:
                     ),
                     SupportedAudioFormat(
                         codec=AudioCodec.PCM, channels=1, sample_rate=44100, bit_depth=16
-                    ),
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=1, sample_rate=16000, bit_depth=16
                     ),
                 ],
                 buffer_capacity=32_000_000,
@@ -296,7 +303,7 @@ class AudioPlayer:
                 # Mono: reshape to (samples, 1)
                 audio_float = audio_float.reshape(-1, 1)
             
-            # Resample if needed (Reachy Mini uses 16kHz)
+            # Resample if needed (ReSpeaker hardware only supports 16kHz)
             target_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
             if fmt.sample_rate != target_sample_rate and target_sample_rate > 0:
                 import scipy.signal
@@ -304,6 +311,11 @@ class AudioPlayer:
                 new_length = int(len(audio_float) * target_sample_rate / fmt.sample_rate)
                 if new_length > 0:
                     audio_float = scipy.signal.resample(audio_float, new_length, axis=0)
+                    # Log resampling only once per stream
+                    if not hasattr(self, '_logged_resample') or not self._logged_resample:
+                        _LOGGER.debug("Resampling Sendspin audio: %d Hz -> %d Hz", 
+                                     fmt.sample_rate, target_sample_rate)
+                        self._logged_resample = True
             
             # Apply volume
             audio_float = audio_float * self._current_volume
