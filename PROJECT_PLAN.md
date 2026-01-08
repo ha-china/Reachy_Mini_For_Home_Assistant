@@ -26,43 +26,98 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 ## Technical Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Reachy Mini                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ Microphone  │→ │ Wake Word   │→ │ ESPHome Protocol    │ │
-│  │ (ReSpeaker) │  │ Detection   │  │ Server (Port 6053)  │ │
-│  └─────────────┘  └─────────────┘  └──────────┬──────────┘ │
-│                                                │            │
-│  ┌─────────────┐  ┌─────────────┐             │            │
-│  │ Speaker     │← │ Audio       │←────────────┘            │
-│  │ (ReSpeaker) │  │ Player      │                          │
-│  └─────────────┘  └─────────────┘                          │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Camera + Face Tracking (YOLO)                       │   │
-│  │ - 15Hz face detection and tracking                  │   │
-│  │ - look_at_image() calculates target pose            │   │
-│  │ - Smooth return to neutral position after face lost │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Motion Controller (Head + Antennas) - 5Hz           │   │
-│  │ - Face tracking offsets (secondary pose)            │   │
-│  │ - Speech sway (voice-driven micro-movements)        │   │
-│  │ - Breathing animation (idle breathing)              │   │
-│  │ - on_wakeup → on_listening → on_speaking → on_idle  │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ ESPHome Protocol
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Home Assistant                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ STT Engine  │  │ Intent      │  │ TTS Engine          │ │
-│  │             │  │ Processing  │  │                     │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              Reachy Mini (ARM64)                             │
+│                                                                              │
+│  ┌─────────────────────────────── AUDIO INPUT ───────────────────────────┐  │
+│  │  ReSpeaker XVF3800 (16kHz)                                            │  │
+│  │  ┌──────────────┐   ┌──────────────────────────────────────────────┐  │  │
+│  │  │ 4-Mic Array  │ → │ XVF3800 DSP                                  │  │  │
+│  │  └──────────────┘   │ • Echo Cancellation (AEC)                    │  │  │
+│  │                     │ • Noise Suppression (NS)                     │  │  │
+│  │                     │ • Auto Gain Control (AGC, max 30dB)          │  │  │
+│  │                     │ • Direction of Arrival (DOA)                 │  │  │
+│  │                     │ • Voice Activity Detection (VAD)             │  │  │
+│  │                     └──────────────────────────────────────────────┘  │  │
+│  │                                      │                                │  │
+│  │                                      ▼                                │  │
+│  │                     ┌──────────────────────────────────────────────┐  │  │
+│  │                     │ Wake Word Detection (microWakeWord)          │  │  │
+│  │                     │ • "Okay Nabu" / "Hey Jarvis"                 │  │  │
+│  │                     │ • Stop word detection                        │  │  │
+│  │                     └──────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌─────────────────────────────── AUDIO OUTPUT ──────────────────────────┐  │
+│  │  ┌──────────────────────────┐    ┌──────────────────────────────────┐ │  │
+│  │  │ TTS Player               │    │ Music Player (Sendspin)          │ │  │
+│  │  │ • Voice assistant speech │    │ • Multi-room audio streaming     │ │  │
+│  │  │ • Sound effects          │    │ • Auto-discovery via mDNS        │ │  │
+│  │  │ • Priority over music    │    │ • Auto-pause during conversation │ │  │
+│  │  └──────────────────────────┘    └──────────────────────────────────┘ │  │
+│  │                 │                              │                      │  │
+│  │                 └──────────────┬───────────────┘                      │  │
+│  │                                ▼                                      │  │
+│  │                 ┌──────────────────────────────────────────────────┐  │  │
+│  │                 │ ReSpeaker Speaker (16kHz)                        │  │  │
+│  │                 └──────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌─────────────────────────── VISION & TRACKING ─────────────────────────┐  │
+│  │  ┌──────────────────────────┐    ┌──────────────────────────────────┐ │  │
+│  │  │ Camera (VPU accelerated) │ →  │ YOLO Face Detection              │ │  │
+│  │  │ • MJPEG stream server    │    │ • AdamCodd/YOLOv11n-face         │ │  │
+│  │  │ • ESPHome Camera entity  │    │ • Adaptive frame rate:           │ │  │
+│  │  └──────────────────────────┘    │   - 15fps: conversation/face     │ │  │
+│  │                                  │   - 3fps: idle (power saving)    │ │  │
+│  │                                  │ • look_at_image() pose calc      │ │  │
+│  │                                  │ • Smooth return after face lost  │ │  │
+│  │                                  └──────────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌─────────────────────────── MOTION CONTROL ────────────────────────────┐  │
+│  │  MovementManager (10Hz Control Loop)                                  │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐   │  │
+│  │  │ Motion Layers (Priority: Move > Action > SpeechSway > Breath)  │   │  │
+│  │  │ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────────┐  │   │  │
+│  │  │ │ Move Queue │ │ Actions    │ │ SpeechSway │ │ Breathing    │  │   │  │
+│  │  │ │ (Emotions) │ │ (Nod/Shake)│ │ (Voice VAD)│ │ (Idle anim)  │  │   │  │
+│  │  │ └────────────┘ └────────────┘ └────────────┘ └──────────────┘  │   │  │
+│  │  └────────────────────────────────────────────────────────────────┘   │  │
+│  │                                                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐   │  │
+│  │  │ Face Tracking Offsets (Secondary Pose Overlay)                 │   │  │
+│  │  │ • Pitch offset: +9° (down compensation)                        │   │  │
+│  │  │ • Yaw offset: -7° (right compensation)                         │   │  │
+│  │  └────────────────────────────────────────────────────────────────┘   │  │
+│  │                                                                       │  │
+│  │  State Machine: on_wakeup → on_listening → on_speaking → on_idle     │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌─────────────────────────── TAP DETECTION ─────────────────────────────┐  │
+│  │  IMU Accelerometer (Wireless version only, 20Hz polling)              │  │
+│  │  • Tap-to-wake: Enter continuous conversation mode                    │  │
+│  │  • Second tap: Exit continuous conversation mode                      │  │
+│  │  • Threshold: 0.5g (configurable, persisted)                          │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
+│  │  Port 6053 (mDNS auto-discovery)                                      │  │
+│  │  • 43+ entities (sensors, controls, media player, camera)             │  │
+│  │  • Voice Assistant pipeline integration                               │  │
+│  │  • Real-time state synchronization                                    │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       │ ESPHome Protocol (protobuf)
+                                       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            Home Assistant                                    │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────────┐ │
+│  │ STT Engine       │  │ Intent Processing│  │ TTS Engine                 │ │
+│  │ (Local: Whisper) │  │ (Conversation)   │  │ (Local: Piper)             │ │
+│  └──────────────────┘  └──────────────────┘  └────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Completed Features
