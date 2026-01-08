@@ -746,10 +746,15 @@ class EntityRegistry:
             return TAP_THRESHOLD_G_DEFAULT
 
         def set_tap_sensitivity(value: float) -> None:
-            """Set tap sensitivity threshold in g."""
+            """Set tap sensitivity threshold in g and save to preferences."""
             if self.tap_detector:
                 self.tap_detector.threshold_g = value
                 _LOGGER.info("Tap sensitivity set to %.2fg", value)
+            # Save to preferences for persistence across restarts
+            if self.state:
+                self.state.preferences.tap_sensitivity = value
+                self.state.save_preferences()
+                _LOGGER.debug("Tap sensitivity saved to preferences")
 
         entities.append(NumberEntity(
             server=self.server,

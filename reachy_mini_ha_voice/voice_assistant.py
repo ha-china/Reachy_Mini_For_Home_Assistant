@@ -174,12 +174,15 @@ class VoiceAssistantService:
         # Start tap detector for "tap to wake" (Wireless version only)
         if self.reachy_mini is not None:
             from .tap_detector import TAP_THRESHOLD_G_DEFAULT
+            # Use saved preference or default
+            tap_threshold = preferences.tap_sensitivity if preferences.tap_sensitivity > 0 else TAP_THRESHOLD_G_DEFAULT
             self._tap_detector = TapDetector(
                 reachy_mini=self.reachy_mini,
                 on_tap_callback=self._on_tap_detected,
-                threshold_g=TAP_THRESHOLD_G_DEFAULT,  # 0.5g (most sensitive)
+                threshold_g=tap_threshold,
                 cooldown_seconds=1.0,
             )
+            _LOGGER.info("Tap detector started with threshold: %.1fg", tap_threshold)
             self._tap_detector.start()
             # Store tap_detector in state for entity registry access
             self._state.tap_detector = self._tap_detector
