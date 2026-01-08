@@ -346,6 +346,9 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.info("Tap detected - exiting continuous conversation mode")
             self._tap_conversation_mode = False
             self._is_streaming_audio = False
+            self._continue_conversation = False  # Also clear HA continue flag
+            # Send stop request to Home Assistant
+            self.send_messages([VoiceAssistantRequest(start=False)])
             # Stop any ongoing TTS
             self.state.tts_player.stop()
             self.unduck()
