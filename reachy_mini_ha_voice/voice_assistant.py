@@ -780,16 +780,18 @@ class VoiceAssistantService:
         if self._state is None or self._state.satellite is None:
             return
         
-        # Check refractory period
-        now = time.monotonic()
-        if now - self._last_tap_wakeup < self._state.refractory_seconds:
-            _LOGGER.debug("Tap ignored (refractory period)")
-            return
+        # Check if we're already in conversation mode (second tap to exit)
+        is_in_conversation = self._state.satellite.is_tap_conversation_active()
         
-        self._last_tap_wakeup = now
-        
-        # Check if we're exiting conversation mode
-        is_exiting = self._state.satellite.is_tap_conversation_active()
+        # Only apply refractory period for ENTERING conversation, not exiting
+        # This allows quick exit from conversation mode
+        if not is_in_conversation:
+            # Check refractory period only when entering conversation
+            now = time.monotonic()
+            if now - self._last_tap_wakeup < self._state.refractory_seconds:
+                _LOGGER.debug("Tap ignored (refractory period)")
+                return
+            self._last_tap_wakeup = now
         
         try:
             # Trigger tap handling in satellite (handles mode toggle)
@@ -798,8 +800,8 @@ class VoiceAssistantService:
             
             # Trigger motion feedback (non-blocking)
             if self._motion is not None:
-                if is_exiting:
-                    # Exiting conversation - return to idle
+                if is_in_conversation:
+                    # Was in conversation, now exiting - return to idle
                     self._motion.on_idle()
                 else:
                     # Starting conversation
