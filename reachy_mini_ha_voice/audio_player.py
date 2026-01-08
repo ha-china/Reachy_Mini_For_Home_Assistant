@@ -102,6 +102,7 @@ class AudioPlayer:
         # Audio buffer for Sendspin playback
         self._sendspin_audio_format: Optional["PCMFormat"] = None
         self._sendspin_playback_started = False
+        self._sendspin_paused = False  # Pause Sendspin when voice assistant is active
 
     def set_reachy_mini(self, reachy_mini) -> None:
         """Set the Reachy Mini instance."""
@@ -123,6 +124,28 @@ class AudioPlayer:
     def sendspin_url(self) -> Optional[str]:
         """Get current Sendspin server URL."""
         return self._sendspin_url
+
+    def pause_sendspin(self) -> None:
+        """Pause Sendspin audio playback.
+        
+        Called when voice assistant is activated to prevent audio conflicts.
+        Incoming Sendspin audio chunks will be dropped until resumed.
+        """
+        if self._sendspin_paused:
+            return
+        self._sendspin_paused = True
+        _LOGGER.debug("Sendspin audio paused (voice assistant active)")
+
+    def resume_sendspin(self) -> None:
+        """Resume Sendspin audio playback.
+        
+        Called when voice assistant returns to idle state.
+        """
+        if not self._sendspin_paused:
+            return
+        self._sendspin_paused = False
+        self._logged_resample = False  # Reset resample log flag for new stream
+        _LOGGER.debug("Sendspin audio resumed")
 
     async def start_sendspin_discovery(self) -> None:
         """Start mDNS discovery for Sendspin servers.
@@ -269,8 +292,14 @@ class AudioPlayer:
         
         Plays the audio through Reachy Mini's speaker using push_audio_sample().
         Resamples audio if needed (Reachy Mini uses 16kHz).
+        
+        Note: Audio is dropped when Sendspin is paused (e.g., during voice assistant interaction).
         """
         if self.reachy_mini is None:
+            return
+        
+        # Drop audio when paused (voice assistant is active)
+        if self._sendspin_paused:
             return
         
         try:
@@ -515,11 +544,21 @@ class AudioPlayer:
                 _LOGGER.exception("Unexpected error running done callback")
 
     def pause(self) -> None:
-        """Pause playback."""
+        """Pause playback.
+        
+        Stops current audio output but preserves playlist for resume.
+        """
+        self._stop_flag.set()
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.stop_playing()
+            except Exception:
+                pass
         self.is_playing = False
 
     def resume(self) -> None:
-        """Resume playback."""
+        """Resume playback from where it was paused."""
+        self._stop_flag.clear()
         if self._playlist:
             self._play_next()
 
