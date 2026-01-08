@@ -399,13 +399,13 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Ducking music")
         self.state.music_player.duck()
         # Pause Sendspin to prevent audio conflicts during voice interaction
-        self.state.tts_player.pause_sendspin()
+        self.state.music_player.pause_sendspin()
 
     def unduck(self) -> None:
         _LOGGER.debug("Unducking music")
         self.state.music_player.unduck()
         # Resume Sendspin audio
-        self.state.tts_player.resume_sendspin()
+        self.state.music_player.resume_sendspin()
 
     def _tts_finished(self) -> None:
         self.state.active_wake_words.discard(self.state.stop_word.id)

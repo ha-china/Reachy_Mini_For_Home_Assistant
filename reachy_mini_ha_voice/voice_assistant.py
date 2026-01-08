@@ -225,7 +225,8 @@ class VoiceAssistantService:
         await self._discovery.register_server()
 
         # Start Sendspin auto-discovery (auto-enabled, no user config needed)
-        await tts_player.start_sendspin_discovery()
+        # Sendspin is for music playback, so connect to music_player
+        await music_player.start_sendspin_discovery()
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 
@@ -381,8 +382,8 @@ class VoiceAssistantService:
             await self._discovery.unregister_server()
 
         # 6.5. Stop Sendspin
-        if self._state and self._state.tts_player:
-            await self._state.tts_player.stop_sendspin()
+        if self._state and self._state.music_player:
+            await self._state.music_player.stop_sendspin()
 
         # 7. Stop camera server
         if self._camera_server:
