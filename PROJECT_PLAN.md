@@ -115,7 +115,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │                            Home Assistant                                    │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────────┐ │
 │  │ STT Engine       │  │ Intent Processing│  │ TTS Engine                 │ │
-│  │ (Local: Whisper) │  │ (Conversation)   │  │ (Local: Piper)             │ │
+│  │ (User configured)│  │ (Conversation)   │  │ (User configured)          │ │
 │  └──────────────────┘  └──────────────────┘  └────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
