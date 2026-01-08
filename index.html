@@ -98,6 +98,18 @@
 				<div class="how-to-use changelog-container">
 					<div class="changelog-scroll">
 						<div class="changelog-entry">
+							<span class="version">v0.5.1</span>
+							<span class="date">2026-01-08</span>
+							<ul>
+								<li>Fix: Sendspin now connects to music_player (fixes music not resuming after voice conversation)</li>
+								<li>Fix: tap_sensitivity persistence - saved to preferences.json and restored on startup</li>
+								<li>Fix: Audio conflict prevention - Sendspin pauses during voice assistant wakeup</li>
+								<li>Fix: AttributeError for _camera_server in satellite.py</li>
+								<li>Fix: tap_sensitivity default changed from 2.0g to 0.5g</li>
+								<li>Optimize: ReSpeaker 16kHz prioritized in Sendspin supported formats</li>
+							</ul>
+						</div>
+						<div class="changelog-entry">
 							<span class="version">v0.5.0</span>
 							<span class="date">2026-01-07</span>
 							<ul>
@@ -109,7 +121,6 @@
 								<li>Audio resampling for Sendspin (44.1/48kHz → 16kHz)</li>
 								<li>Pose composition using SDK's compose_world_offset</li>
 								<li>Noise suppression default reduced to 15%</li>
-								<li>Tap-to-wake default threshold reduced to 0.5g (most sensitive)</li>
 								<li>Fix: Replace non-existent clear_output_buffer with stop_playing</li>
 							</ul>
 						</div>
