@@ -581,9 +581,9 @@ class VoiceSatelliteProtocol(APIServer):
         When in conversation, face tracking runs at high frequency.
         When idle, face tracking uses adaptive rate to save CPU.
         """
-        if self._camera_server is not None:
+        if self.camera_server is not None:
             try:
-                self._camera_server.set_conversation_mode(in_conversation)
+                self.camera_server.set_conversation_mode(in_conversation)
             except Exception as e:
                 _LOGGER.debug("Failed to set conversation mode: %s", e)
 

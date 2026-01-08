@@ -173,10 +173,11 @@ class VoiceAssistantService:
 
         # Start tap detector for "tap to wake" (Wireless version only)
         if self.reachy_mini is not None:
+            from .tap_detector import TAP_THRESHOLD_G_DEFAULT
             self._tap_detector = TapDetector(
                 reachy_mini=self.reachy_mini,
                 on_tap_callback=self._on_tap_detected,
-                threshold_g=2.0,
+                threshold_g=TAP_THRESHOLD_G_DEFAULT,  # 0.5g (most sensitive)
                 cooldown_seconds=1.0,
             )
             self._tap_detector.start()
