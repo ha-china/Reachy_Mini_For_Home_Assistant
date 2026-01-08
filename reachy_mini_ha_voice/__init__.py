@@ -1,5 +1,5 @@
 """
-Reachy Mini Home Assistant Voice Assistant
+Reachy Mini for Home Assistant
 
 A voice assistant application that runs on Reachy Mini robot and integrates
 with Home Assistant via the ESPHome protocol.

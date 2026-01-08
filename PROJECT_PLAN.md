@@ -1,4 +1,4 @@
-# Reachy Mini Home Assistant Voice Assistant - Project Plan
+# Reachy Mini for Home Assistant - Project Plan
 
 ## Project Overview
 

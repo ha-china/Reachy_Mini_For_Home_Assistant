@@ -1,11 +1,11 @@
 ---
-title: Reachy Mini Home Assistant Voice Assistant
+title: Reachy Mini for Home Assistant
 emoji: 🤖
 colorFrom: blue
 colorTo: purple
 sdk: static
 pinned: false
-short_description: Voice assistant for Home Assistant integration
+short_description: Home Assistant integration for Reachy Mini robot
 tags:
   - reachy_mini
   - reachy_mini_python_app

@@ -1,5 +1,5 @@
 """
-Reachy Mini Home Assistant Voice Assistant Application
+Reachy Mini for Home Assistant Application
 
 This is the main entry point for the Reachy Mini application that integrates
 with Home Assistant via ESPHome protocol for voice control.
@@ -53,9 +53,9 @@ from .motion import ReachyMiniMotion
 
 class ReachyMiniHaVoice(ReachyMiniApp):
     """
-    Reachy Mini Home Assistant Voice Assistant Application.
+    Reachy Mini for Home Assistant Application.
 
-    This app runs an ESPHome-compatible voice satellite that connects
+    This app runs an ESPHome-compatible server that connects
     to Home Assistant for STT/TTS processing while providing local
     wake word detection and robot motion feedback.
     """
@@ -117,21 +117,21 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             reachy_mini: The Reachy Mini robot instance (can be None)
             stop_event: Event to signal graceful shutdown
         """
-        logger.info("Starting Home Assistant Voice Assistant...")
+        logger.info("Starting Reachy Mini for Home Assistant...")
 
-        # Create and run the voice assistant service
+        # Create and run the HA service
         service = VoiceAssistantService(reachy_mini)
 
         # Always create a new event loop to avoid conflicts with SDK
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        logger.debug("Created new event loop for voice assistant")
+        logger.debug("Created new event loop for HA service")
 
         try:
             loop.run_until_complete(service.start())
 
             logger.info("=" * 50)
-            logger.info("Home Assistant Voice Assistant Started!")
+            logger.info("Reachy Mini for Home Assistant Started!")
             logger.info("=" * 50)
             logger.info("ESPHome Server: 0.0.0.0:6053")
             logger.info("Camera Server: 0.0.0.0:8081")
@@ -157,10 +157,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         except KeyboardInterrupt:
             logger.info("Keyboard interruption in main thread... closing server.")
         except Exception as e:
-            logger.error(f"Error running voice assistant: {e}")
+            logger.error(f"Error running Reachy Mini HA: {e}")
             raise
         finally:
-            logger.info("Shutting down voice assistant...")
+            logger.info("Shutting down Reachy Mini HA...")
             try:
                 loop.run_until_complete(service.stop())
             except Exception as e:
@@ -175,7 +175,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             except Exception as e:
                 logger.debug(f"Error closing event loop: {e}")
 
-            logger.info("Voice assistant stopped.")
+            logger.info("Reachy Mini HA stopped.")
 
 
 # This is called when running as: python -m reachy_mini_ha_voice.main
