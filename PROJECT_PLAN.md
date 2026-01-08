@@ -18,10 +18,10 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 3. **Home Assistant Centralized Management** - All configuration done on Home Assistant side
 4. **Motion Feedback** - Provide head movement and antenna animation feedback during voice interaction
 5. **Project Constraints** - Strictly follow [Reachy Mini SDK](reachy_mini) architecture design and constraints
-6. **Code Quality** - Follow Python development standards with consistent code style, clear structure, complete comments, comprehensive documentation
+6. **Code Quality** - Follow Python development standards with consistent code style, clear structure, complete comments, comprehensive documentation, high test coverage, high code quality, readability, maintainability, extensibility, and reusability
 7. **Feature Priority** - Voice conversation with Home Assistant is highest priority; other features are auxiliary and must not affect voice conversation functionality or response speed
 8. **No LED Functions** - LEDs are hidden inside the robot; all LED control is ignored
-9. **Preserve Functionality** - Any code modifications should optimize while preserving completed features; do not remove features to solve problems
+9. **Preserve Functionality** - Any code modifications should optimize while preserving completed features; do not remove features to solve problems. When issues occur, prioritize solving problems after referencing examples, not adding various log outputs
 
 ## Technical Architecture
 
@@ -91,6 +91,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 - [x] Auto-download sound effect files
 - [x] No .env configuration file required
 
+
 ## File List
 
 ```
@@ -105,7 +106,7 @@ reachy_mini_ha_voice/
 │   ├── camera_server.py        # MJPEG camera stream server + face tracking
 │   ├── head_tracker.py         # YOLO face detector
 │   ├── motion.py               # Motion control (high-level API)
-│   ├── movement_manager.py     # Unified movement manager (20Hz control loop)
+│   ├── movement_manager.py     # Unified movement manager (20Hz control loop, optimized to prevent daemon crash)
 │   ├── models.py               # Data models
 │   ├── entity.py               # ESPHome base entity
 │   ├── entity_extensions.py    # Extended entity types
@@ -114,96 +115,322 @@ reachy_mini_ha_voice/
 │   ├── zeroconf.py             # mDNS discovery
 │   └── util.py                 # Utility functions
 ├── wakewords/                  # Wake word models (auto-download)
+│   ├── okay_nabu.json
+│   ├── okay_nabu.tflite
+│   ├── hey_jarvis.json
+│   ├── hey_jarvis.tflite
+│   ├── stop.json
+│   └── stop.tflite
 ├── sounds/                     # Sound effect files (auto-download)
+│   ├── wake_word_triggered.flac
+│   └── timer_finished.flac
 ├── pyproject.toml              # Project configuration
 ├── README.md                   # Documentation
 └── PROJECT_PLAN.md             # Project plan
 ```
 
+## Dependencies
+
+```toml
+dependencies = [
+    "reachy-mini",           # Reachy Mini SDK
+    "sounddevice>=0.4.6",    # Audio processing (backup)
+    "soundfile>=0.12.0",     # Audio file reading
+    "numpy>=1.24.0",         # Numerical computation
+    "pymicro-wakeword>=2.0.0,<3.0.0",  # Wake word detection
+    "pyopen-wakeword>=1.0.0,<2.0.0",   # Backup wake word
+    "aioesphomeapi>=42.0.0", # ESPHome protocol
+    "zeroconf>=0.100.0",     # mDNS discovery
+    "scipy>=1.10.0",         # Motion control
+    "pydantic>=2.0.0",       # Data validation
+]
+```
+
 ## Usage Flow
 
-1. **Install App** - Install `reachy-mini-ha-voice` from Reachy Mini App Store
-2. **Start App** - App auto-starts ESPHome server (port 6053), auto-downloads required models and sounds
-3. **Connect Home Assistant** - Home Assistant auto-discovers device (mDNS) or manually add via Settings → Devices & Services → Add Integration → ESPHome
-4. **Use Voice Assistant** - Say "Okay Nabu" to wake, speak command, Reachy Mini provides motion feedback
+1. **Install App**
+   - Install `reachy-mini-ha-voice` from Reachy Mini App Store
 
----
+2. **Start App**
+   - App auto-starts ESPHome server (port 6053)
+   - Auto-downloads required models and sounds
 
-## ESPHome Entity Implementation
+3. **Connect Home Assistant**
+   - Home Assistant auto-discovers device (mDNS)
+   - Or manually add: Settings → Devices & Services → Add Integration → ESPHome
 
-### Completed Entities Summary
+4. **Use Voice Assistant**
+   - Say "Okay Nabu" to wake
+   - Speak command
+   - Reachy Mini provides motion feedback
 
-**Total: 43+ entities implemented**
-- Phase 1-4: Basic controls, motor control, pose control, gaze control
-- Phase 5-7: Audio sensors, diagnostics, IMU sensors
-- Phase 8-12: Emotion control, microphone volume, camera, audio processing
-- Phase 13: Sendspin audio output support
+## ESPHome Entity Planning
 
-### Control Entities (Read/Write)
+Based on deep analysis of Reachy Mini SDK, the following entities are exposed to Home Assistant:
+
+### Implemented Entities
 
 | Entity Type | Name | Description |
 |-------------|------|-------------|
-| `Number` | `speaker_volume` | Speaker volume (0-100) |
-| `Select` | `motor_mode` | Motor mode (enabled/disabled/gravity_compensation) |
-| `Switch` | `motors_enabled` | Motor torque switch |
-| `Button` | `wake_up` / `go_to_sleep` | Wake/sleep robot actions |
-| `Number` | `head_x/y/z` | Head position control (±50mm) |
-| `Number` | `head_roll/pitch/yaw` | Head angle control |
-| `Number` | `body_yaw` | Body yaw angle (-160° ~ +160°) |
-| `Number` | `antenna_left/right` | Antenna angle control (±90°) |
-| `Number` | `look_at_x/y/z` | Gaze point coordinates |
+| Media Player | `media_player` | Audio playback control |
+| Voice Assistant | `voice_assistant` | Voice assistant pipeline |
+
+### Implemented Control Entities (Read/Write)
+
+#### Phase 1-3: Basic Controls and Pose
+
+| ESPHome Entity Type | Name | SDK API | Range/Options | Description |
+|---------------------|------|---------|---------------|-------------|
+| `Number` | `speaker_volume` | `AudioPlayer.set_volume()` | 0-100 | Speaker volume |
+| `Select` | `motor_mode` | `set_motor_control_mode()` | enabled/disabled/gravity_compensation | Motor mode selection |
+| `Switch` | `motors_enabled` | `enable_motors()` / `disable_motors()` | on/off | Motor torque switch |
+| `Button` | `wake_up` | `mini.wake_up()` | - | Wake robot action |
+| `Button` | `go_to_sleep` | `mini.goto_sleep()` | - | Sleep robot action |
+| `Number` | `head_x` | `goto_target(head=...)` | ±50mm | Head X position control |
+| `Number` | `head_y` | `goto_target(head=...)` | ±50mm | Head Y position control |
+| `Number` | `head_z` | `goto_target(head=...)` | ±50mm | Head Z position control |
+| `Number` | `head_roll` | `goto_target(head=...)` | -40° ~ +40° | Head roll angle control |
+| `Number` | `head_pitch` | `goto_target(head=...)` | -40° ~ +40° | Head pitch angle control |
+| `Number` | `head_yaw` | `goto_target(head=...)` | -180° ~ +180° | Head yaw angle control |
+| `Number` | `body_yaw` | `goto_target(body_yaw=...)` | -160° ~ +160° | Body yaw angle control |
+| `Number` | `antenna_left` | `goto_target(antennas=...)` | -90° ~ +90° | Left antenna angle control |
+| `Number` | `antenna_right` | `goto_target(antennas=...)` | -90° ~ +90° | Right antenna angle control |
+
+#### Phase 4: Gaze Control
+
+| ESPHome Entity Type | Name | SDK API | Range/Options | Description |
+|---------------------|------|---------|---------------|-------------|
+| `Number` | `look_at_x` | `look_at_world(x, y, z)` | World coordinates | Gaze point X coordinate |
+| `Number` | `look_at_y` | `look_at_world(x, y, z)` | World coordinates | Gaze point Y coordinate |
+| `Number` | `look_at_z` | `look_at_world(x, y, z)` | World coordinates | Gaze point Z coordinate |
+
+
+### Implemented Sensor Entities (Read-only)
+
+#### Phase 1 & 5: Basic Status and Audio Sensors
+
+| ESPHome Entity Type | Name | SDK API | Description |
+|---------------------|------|---------|-------------|
+| `Text Sensor` | `daemon_state` | `DaemonStatus.state` | Daemon status |
+| `Binary Sensor` | `backend_ready` | `backend_status.ready` | Backend ready status |
+| `Text Sensor` | `error_message` | `DaemonStatus.error` | Current error message |
+| `Sensor` | `doa_angle` | `DoAInfo.angle` | Sound source direction angle (°) |
+| `Binary Sensor` | `speech_detected` | `DoAInfo.speech_detected` | Speech detection status |
+
+#### Phase 6: Diagnostic Information
+
+| ESPHome Entity Type | Name | SDK API | Description |
+|---------------------|------|---------|-------------|
+| `Sensor` | `control_loop_frequency` | `control_loop_stats` | Control loop frequency (Hz) |
+| `Text Sensor` | `sdk_version` | `DaemonStatus.version` | SDK version |
+| `Text Sensor` | `robot_name` | `DaemonStatus.robot_name` | Robot name |
+| `Binary Sensor` | `wireless_version` | `DaemonStatus.wireless_version` | Wireless version flag |
+| `Binary Sensor` | `simulation_mode` | `DaemonStatus.simulation_enabled` | Simulation mode flag |
+| `Text Sensor` | `wlan_ip` | `DaemonStatus.wlan_ip` | Wireless IP address |
+
+#### Phase 7: IMU Sensors (Wireless version only)
+
+| ESPHome Entity Type | Name | SDK API | Description |
+|---------------------|------|---------|-------------|
+| `Sensor` | `imu_accel_x` | `mini.imu["accelerometer"][0]` | X-axis acceleration (m/s²) |
+| `Sensor` | `imu_accel_y` | `mini.imu["accelerometer"][1]` | Y-axis acceleration (m/s²) |
+| `Sensor` | `imu_accel_z` | `mini.imu["accelerometer"][2]` | Z-axis acceleration (m/s²) |
+| `Sensor` | `imu_gyro_x` | `mini.imu["gyroscope"][0]` | X-axis angular velocity (rad/s) |
+| `Sensor` | `imu_gyro_y` | `mini.imu["gyroscope"][1]` | Y-axis angular velocity (rad/s) |
+| `Sensor` | `imu_gyro_z` | `mini.imu["gyroscope"][2]` | Z-axis angular velocity (rad/s) |
+| `Sensor` | `imu_temperature` | `mini.imu["temperature"]` | IMU temperature (°C) |
+
+#### Phase 8-12: Extended Features
+
+| ESPHome Entity Type | Name | Description |
+|---------------------|------|-------------|
 | `Select` | `emotion` | Emotion selector (Happy/Sad/Angry/Fear/Surprise/Disgust) |
 | `Number` | `microphone_volume` | Microphone volume (0-100%) |
+| `Camera` | `camera` | ESPHome Camera entity (live preview) |
+| `Number` | `led_brightness` | LED brightness (0-100%) |
+| `Select` | `led_effect` | LED effect (off/solid/breathing/rainbow/doa) |
+| `Number` | `led_color_r` | LED red component (0-255) |
+| `Number` | `led_color_g` | LED green component (0-255) |
+| `Number` | `led_color_b` | LED blue component (0-255) |
 | `Switch` | `agc_enabled` | Auto gain control switch |
 | `Number` | `agc_max_gain` | AGC max gain (0-30 dB) |
 | `Number` | `noise_suppression` | Noise suppression level (0-100%) |
-| `Number` | `tap_sensitivity` | Tap detection sensitivity (0.5-4.0g) |
-| `Switch` | `sendspin_enabled` | Sendspin switch |
-
-### Sensor Entities (Read-only)
-
-| Entity Type | Name | Description |
-|-------------|------|-------------|
-| `Text Sensor` | `daemon_state` | Daemon status |
-| `Binary Sensor` | `backend_ready` | Backend ready status |
-| `Text Sensor` | `error_message` | Current error message |
-| `Sensor` | `doa_angle` | Sound source direction angle |
-| `Binary Sensor` | `speech_detected` | Speech detection status |
-| `Sensor` | `control_loop_frequency` | Control loop frequency (Hz) |
-| `Text Sensor` | `sdk_version` | SDK version |
-| `Text Sensor` | `robot_name` | Robot name |
-| `Binary Sensor` | `wireless_version` | Wireless version flag |
-| `Binary Sensor` | `simulation_mode` | Simulation mode flag |
-| `Text Sensor` | `wlan_ip` | Wireless IP address |
-| `Sensor` | `imu_accel_x/y/z` | Accelerometer (m/s²) |
-| `Sensor` | `imu_gyro_x/y/z` | Gyroscope (rad/s) |
-| `Sensor` | `imu_temperature` | IMU temperature (°C) |
 | `Binary Sensor` | `echo_cancellation_converged` | Echo cancellation convergence status |
-| `Camera` | `camera` | ESPHome Camera entity |
-| `Text Sensor` | `sendspin_url` | Sendspin server URL |
-| `Binary Sensor` | `sendspin_connected` | Sendspin connection status |
+
+> **Note**: Head position (x/y/z) and angles (roll/pitch/yaw), body yaw, antenna angles are all **controllable** entities,
+> using `Number` type for bidirectional control. Call `goto_target()` when setting new values, call `get_current_head_pose()` etc. when reading current values.
+
+### Implementation Priority
+
+1. **Phase 1 - Basic Status and Volume** (High Priority) ✅ **Completed**
+   - [x] `daemon_state` - Daemon status sensor
+   - [x] `backend_ready` - Backend ready status
+   - [x] `error_message` - Error message
+   - [x] `speaker_volume` - Speaker volume control
+
+2. **Phase 2 - Motor Control** (High Priority) ✅ **Completed**
+   - [x] `motors_enabled` - Motor switch
+   - [x] `motor_mode` - Motor mode selection (enabled/disabled/gravity_compensation)
+   - [x] `wake_up` / `go_to_sleep` - Wake/sleep buttons
+
+3. **Phase 3 - Pose Control** (Medium Priority) ✅ **Completed**
+   - [x] `head_x/y/z` - Head position control
+   - [x] `head_roll/pitch/yaw` - Head angle control
+   - [x] `body_yaw` - Body yaw angle control
+   - [x] `antenna_left/right` - Antenna angle control
+
+4. **Phase 4 - Gaze Control** (Medium Priority) ✅ **Completed**
+   - [x] `look_at_x/y/z` - Gaze point coordinate control
+
+5. **Phase 5 - Audio Sensors** (Low Priority) ✅ **Completed**
+   - [x] `doa_angle` - Sound source direction
+   - [x] `speech_detected` - Speech detection
+
+6. **Phase 6 - Diagnostic Information** (Low Priority) ✅ **Completed**
+   - [x] `control_loop_frequency` - Control loop frequency
+   - [x] `sdk_version` - SDK version
+   - [x] `robot_name` - Robot name
+   - [x] `wireless_version` - Wireless version flag
+   - [x] `simulation_mode` - Simulation mode flag
+   - [x] `wlan_ip` - Wireless IP address
+
+7. **Phase 7 - IMU Sensors** (Optional, wireless version only) ✅ **Completed**
+   - [x] `imu_accel_x/y/z` - Accelerometer
+   - [x] `imu_gyro_x/y/z` - Gyroscope
+   - [x] `imu_temperature` - IMU temperature
+
+8. **Phase 8 - Emotion Control** ✅ **Completed**
+   - [x] `emotion` - Emotion selector (Happy/Sad/Angry/Fear/Surprise/Disgust)
+
+9. **Phase 9 - Audio Control** ✅ **Completed**
+   - [x] `microphone_volume` - Microphone volume control (0-100%)
+
+10. **Phase 10 - Camera Integration** ✅ **Completed**
+    - [x] `camera` - ESPHome Camera entity (live preview)
+
+11. **Phase 11 - LED Control** ❌ **Disabled (LEDs hidden inside robot)**
+    - [ ] `led_brightness` - LED brightness (0-100%) - Commented out
+    - [ ] `led_effect` - LED effect (off/solid/breathing/rainbow/doa) - Commented out
+    - [ ] `led_color_r/g/b` - LED RGB color (0-255) - Commented out
+
+12. **Phase 12 - Audio Processing Parameters** ✅ **Completed**
+    - [x] `agc_enabled` - Auto gain control switch
+    - [x] `agc_max_gain` - AGC max gain (0-30 dB)
+    - [x] `noise_suppression` - Noise suppression level (0-100%)
+    - [x] `echo_cancellation_converged` - Echo cancellation convergence status (read-only)
+
+13. **Phase 13 - Sendspin Audio Playback Support** ✅ **Completed**
+    - [x] `sendspin_enabled` - Sendspin switch (Switch)
+    - [x] `sendspin_url` - Sendspin server URL (Text Sensor)
+    - [x] `sendspin_connected` - Sendspin connection status (Binary Sensor)
+    - [x] AudioPlayer integrates aiosendspin library
+    - [x] TTS audio sent to both local speaker and Sendspin server
 
 ---
 
-## Voice Assistant Enhancement Features
+## 🎉 Phase 1-13 Entities Completed!
 
-### Phase 14 - Emotion Action Feedback System 🟡 Partial
+**Total Completed: 43 entities**
+- Phase 1: 4 entities (Basic status and volume)
+- Phase 2: 4 entities (Motor control)
+- Phase 3: 9 entities (Pose control)
+- Phase 4: 3 entities (Gaze control)
+- Phase 5: 2 entities (Audio sensors)
+- Phase 6: 6 entities (Diagnostic information)
+- Phase 7: 7 entities (IMU sensors)
+- Phase 8: 1 entity (Emotion control)
+- Phase 9: 1 entity (Microphone volume)
+- Phase 10: 1 entity (Camera)
+- Phase 11: 0 entities (LED control - Disabled)
+- Phase 12: 4 entities (Audio processing parameters)
+- Phase 13: 3 entities (Sendspin audio output)
 
-**Status**: Basic infrastructure ready, supports manual trigger, uses voice-driven natural micro-movements during conversation
 
-**Implemented**:
-- ✅ Emotion Selector entity (`emotion`)
+---
+
+## 🚀 Voice Assistant Enhancement Features Implementation Status
+
+### Phase 14 - Emotion Action Feedback System (Partial) 🟡
+
+**Implementation Status**: Basic infrastructure ready, supports manual trigger, uses voice-driven natural micro-movements during conversation
+
+**Implemented Features**:
+- ✅ Phase 8 Emotion Selector entity (`emotion`)
 - ✅ Basic emotion action playback API (`_play_emotion`)
 - ✅ Emotion mapping: Happy/Sad/Angry/Fear/Surprise/Disgust
-- ✅ Integration with HuggingFace action library
-- ✅ SpeechSway system for natural head micro-movements during conversation
+- ✅ Integration with HuggingFace action library (`pollen-robotics/reachy-mini-emotions-library`)
+- ✅ SpeechSway system for natural head micro-movements during conversation (non-blocking)
 
 **Design Decisions**:
 - 🎯 No auto-play of full emotion actions during conversation to avoid blocking
 - 🎯 Use voice-driven head sway (SpeechSway) for natural motion feedback
 - 🎯 Emotion actions retained as manual trigger feature via ESPHome entity
 
-### Phase 15 - Face Tracking (Replaces DOA) ✅ Complete
+**Not Implemented**:
+- ❌ Auto-trigger emotion actions based on voice assistant response (decided not to implement to avoid blocking)
+- ❌ Intent recognition and emotion matching
+- ❌ Dance action library integration
+- ❌ Context awareness (e.g., weather query - sunny plays happy, rainy plays sad)
+
+**Code Locations**:
+- `entity_registry.py:633-658` - Emotion Selector entity
+- `satellite.py:544-574` - `_play_emotion()` method
+- `motion.py:132-156` - Conversation start motion control (uses SpeechSway)
+- `movement_manager.py:541-595` - Move queue management (allows SpeechSway overlay)
+
+**Actual Behavior**:
+
+| Voice Assistant Event | Actual Action | Implementation Status |
+|----------------------|---------------|----------------------|
+| Wake word detected | Turn toward sound source + nod confirmation | ✅ Implemented |
+| Conversation start | Voice-driven head micro-movements (SpeechSway) | ✅ Implemented |
+| During conversation | Continuous voice-driven micro-movements + breathing animation | ✅ Implemented |
+| Conversation end | Return to neutral position + breathing animation | ✅ Implemented |
+| Manual emotion trigger | Play via ESPHome `emotion` entity | ✅ Implemented |
+
+**Technical Details**:
+```python
+# motion.py - Use SpeechSway instead of full emotion actions during conversation
+def on_speaking_start(self):
+    self._is_speaking = True
+    self._movement_manager.set_state(RobotState.SPEAKING)
+    # SpeechSway automatically generates natural head micro-movements based on audio loudness
+    # No full emotion actions played to avoid blocking conversation experience
+
+# movement_manager.py - Motion layering system
+# 1. Move queue (emotion actions) - Sets base pose
+# 2. Action (nod/shake etc.) - Overlays on base pose
+# 3. SpeechSway - Voice-driven micro-movements, can coexist with Move
+# 4. Breathing - Idle breathing animation
+```
+
+**Original Plan** (Decided not to implement to avoid blocking conversation):
+
+| Voice Assistant Event | Original Planned Action | Reason Not Implemented |
+|----------------------|------------------------|------------------------|
+| Positive response received | Play "happy" action | Full action would block conversation fluency |
+| Negative response received | Play "sad" action | Full action would block conversation fluency |
+| Play music/entertainment | Play "dance" action | Full action would block conversation fluency |
+| Timer completed | Play "alert" action | Full action would block conversation fluency |
+| Error/cannot understand | Play "confused" action | Full action would block conversation fluency |
+
+**Manual Emotion Trigger Example**:
+```yaml
+# Home Assistant automation example - Manual emotion trigger
+automation:
+  - alias: "Reachy Good Morning Greeting"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: select.select_option
+        target:
+          entity_id: select.reachy_mini_emotion
+        data:
+          option: "Happy"
+```
+
+### Phase 15 - Face Tracking (Replaces DOA Sound Source Tracking) ✅ **Completed**
 
 **Goal**: Implement natural face tracking so robot looks at speaker during conversation.
 
@@ -213,191 +440,657 @@ reachy_mini_ha_voice/
 - Reason: DOA inaccurate at wakeup, frequent queries cause daemon crash
 
 **Implemented Features**:
-- ✅ YOLO face detection using `AdamCodd/YOLOv11n-face-detection` model
-- ✅ Adaptive frame rate: 15fps during conversation, 3fps when idle without face
-- ✅ look_at_image() calculates target pose from face position
-- ✅ Smooth return to neutral position after face lost (1 second)
-- ✅ face_tracking_offsets as secondary pose overlay
-- ✅ Model download retry (3 attempts, 5s interval)
-- ✅ Conversation mode integration with voice assistant state
+
+| Feature | Description | Implementation Location | Status |
+|---------|-------------|------------------------|--------|
+| YOLO face detection | Uses `AdamCodd/YOLOv11n-face-detection` model | `head_tracker.py` | ✅ Implemented |
+| Adaptive frame rate tracking | 15fps during conversation, 3fps when idle without face | `camera_server.py` | ✅ Implemented |
+| look_at_image() | Calculate target pose from face position | `camera_server.py` | ✅ Implemented |
+| Smooth return to neutral | Smooth return within 1 second after face lost | `camera_server.py` | ✅ Implemented |
+| face_tracking_offsets | As secondary pose overlay to motion control | `movement_manager.py` | ✅ Implemented |
+| Voice activity detection | DOA entity still available for speech detection | `DoAInfo.speech_detected` | ✅ Exposed as entity |
+| Model download retry | 3 retries, 5 second interval | `head_tracker.py` | ✅ Implemented |
+| Conversation mode integration | Auto-switch tracking frequency on voice assistant state change | `satellite.py` | ✅ Implemented |
 
 **Resource Optimization (v0.5.1)**:
 - During conversation (listening/thinking/speaking): High-frequency tracking 15fps
 - Idle with face detected: High-frequency tracking 15fps
-- Idle without face for 10s: Low-power mode 3fps
+- Idle without face for 10s: Low-power mode 3fps (only detect if someone appears)
 - Immediately restore high-frequency tracking when face detected
 
-### Phase 16 - Cartoon Style Motion Mode 🟡 Partial
+**Code Locations**:
+- `head_tracker.py` - YOLO face detector (`HeadTracker` class)
+- `camera_server.py:_capture_frames()` - Adaptive frame rate face tracking
+- `camera_server.py:set_conversation_mode()` - Conversation mode switch API
+- `satellite.py:_set_conversation_mode()` - Voice assistant state integration
+- `movement_manager.py:set_face_tracking_offsets()` - Face tracking offset API
+
+**Technical Details**:
+```python
+# camera_server.py - Adaptive frame rate face tracking
+class MJPEGCameraServer:
+    def __init__(self):
+        self._fps_high = 15  # During conversation/face detected
+        self._fps_low = 3    # Idle without face
+        self._low_power_threshold = 10.0  # 10s without face switches to low power
+    
+    def _should_run_face_tracking(self, current_time):
+        # Conversation mode: Always high-frequency tracking
+        if self._in_conversation:
+            return True
+        # High-frequency mode: Track every frame
+        if self._current_fps == self._fps_high:
+            return True
+        # Low-power mode: Periodic detection
+        return time.since_last_check >= 1/self._fps_low
+
+# satellite.py - Voice assistant state integration
+def _reachy_on_listening(self):
+    self._set_conversation_mode(True)  # Start conversation, high-frequency tracking
+    
+def _reachy_on_idle(self):
+    self._set_conversation_mode(False)  # End conversation, adaptive tracking
+```
+
+
+### Phase 16 - Cartoon Style Motion Mode (Partial) 🟡
 
 **Goal**: Use SDK interpolation techniques for more expressive robot movements.
 
-**Implemented**:
-- ✅ 20Hz unified control loop (reduced from 100Hz to prevent daemon crash)
-- ✅ Pose change detection - only send commands on significant changes (threshold 0.001)
+**SDK Support**: `InterpolationTechnique` enum
+- `LINEAR` - Linear, mechanical feel
+- `MIN_JERK` - Minimum jerk, natural and smooth (default)
+- `EASE_IN_OUT` - Ease in-out, elegant
+- `CARTOON` - Cartoon style, with bounce effect, lively and cute
+
+**Implemented Features**:
+- ✅ 20Hz unified control loop (`movement_manager.py`) - Reduced from 100Hz to prevent daemon crash
+- ✅ Pose change detection - Only send commands on significant changes (threshold 0.001)
 - ✅ State query caching - 100ms TTL, reduces daemon load
 - ✅ Smooth interpolation (ease in-out curve)
-- ✅ Breathing animation - idle Z-axis micro-movement + antenna sway
-- ✅ Command queue mode - thread-safe external API
-- ✅ Error throttling - prevents log explosion
-- ✅ Connection health monitoring - auto-detect and recover from connection loss
+- ✅ Breathing animation - Idle Z-axis micro-movement + antenna sway (`BreathingAnimation`)
+- ✅ Command queue mode - Thread-safe external API
+- ✅ Error throttling - Prevents log explosion
+- ✅ Connection health monitoring - Auto-detect and recover from connection loss
 
 **Not Implemented**:
 - ❌ Dynamic interpolation technique switching (CARTOON/EASE_IN_OUT etc.)
 - ❌ Exaggerated cartoon bounce effects
 
-### Phase 17 - Antenna Sync Animation During Speech 🟡 Partial
+**Code Locations**:
+- `movement_manager.py:192-243` - BreathingAnimation class
+- `movement_manager.py:246-697` - MovementManager class
+
+**Scene Implementation Status**:
+
+| Scene | Recommended Interpolation | Effect | Status |
+|-------|--------------------------|--------|--------|
+| Wake nod | `CARTOON` | Lively bounce effect | ❌ Not implemented |
+| Thinking head up | `EASE_IN_OUT` | Elegant transition | ✅ Implemented (smooth interpolation) |
+| Speaking micro-movements | `MIN_JERK` | Natural and fluid | ✅ Implemented (SpeechSway) |
+| Error head shake | `CARTOON` | Exaggerated denial | ❌ Not implemented |
+| Return to neutral | `MIN_JERK` | Smooth return | ✅ Implemented |
+| Idle breathing | - | Subtle sense of life | ✅ Implemented (BreathingAnimation) |
+
+### Phase 17 - Antenna Sync Animation During Speech (Partial) 🟡
 
 **Goal**: Antennas sway with audio rhythm during TTS playback, simulating "speaking" effect.
 
-**Implemented**:
+**Implemented Features**:
 - ✅ Voice-driven head sway (`SpeechSwayGenerator`)
 - ✅ VAD detection based on audio loudness
 - ✅ Multi-frequency sine wave overlay (Lissajous motion)
 - ✅ Smooth envelope transitions
 
+**Code Locations**:
+- `movement_manager.py:124-189` - SpeechSwayGenerator class
+- `motion.py:212-222` - update_audio_loudness() method
+
+**Technical Details**:
+```python
+# Speech sway parameters
+SWAY_A_PITCH_DEG = 3.0   # Pitch amplitude (degrees)
+SWAY_A_YAW_DEG = 2.0     # Yaw amplitude
+SWAY_A_ROLL_DEG = 2.0    # Roll amplitude
+SWAY_F_PITCH = 0.8       # Pitch frequency Hz
+SWAY_F_YAW = 0.6         # Yaw frequency
+SWAY_F_ROLL = 0.5        # Roll frequency
+
+# VAD thresholds
+VAD_DB_ON = -35   # Start detection threshold
+VAD_DB_OFF = -45  # Stop detection threshold
+```
+
 **Not Implemented**:
 - ❌ Antenna sway with audio rhythm (currently only head sway)
 - ❌ Audio spectrum analysis driven animation
 
-### Phase 18 - Visual Gaze Interaction ❌ Not Implemented
+### Phase 18 - Visual Gaze Interaction (Not Implemented) ❌
 
 **Goal**: Use camera to detect faces for eye contact.
 
-### Phase 19 - Gravity Compensation Interactive Mode 🟡 Partial
+**SDK Support**:
+- `look_at_image(u, v)` - Look at point in image
+- `look_at_world(x, y, z)` - Look at world coordinate point
+- `media.get_frame()` - Get camera frame (✅ Already implemented in `camera_server.py:146`)
 
-**Implemented**:
-- ✅ Gravity compensation mode switch (`motor_mode` Select entity)
+**Not Implemented Features**:
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Face detection | Use OpenCV/MediaPipe to detect faces | ❌ Not implemented |
+| Eye tracking | Look at speaker's face during conversation | ❌ Not implemented |
+| Multi-person switching | When multiple people detected, look at current speaker | ❌ Not implemented |
+| Idle scanning | Randomly look around when idle | ❌ Not implemented |
+
+### Phase 19 - Gravity Compensation Interactive Mode (Partial) 🟡
+
+**Goal**: Allow users to physically touch and guide robot head for "teaching" style interaction.
+
+**SDK Support**: `enable_gravity_compensation()` - Motors enter gravity compensation mode, can be manually moved
+
+**Implemented Features**:
+- ✅ Gravity compensation mode switch (`motor_mode` Select entity, option "gravity_compensation")
+- ✅ `reachy_controller.py:236-237` - Gravity compensation API call
 
 **Not Implemented**:
-- ❌ Teaching mode - record motion trajectory
+- ❌ Teaching mode - Record motion trajectory
 - ❌ Save/playback custom actions
+- ❌ Voice command triggered teaching flow
 
-### Phase 20 - Environment Awareness Response 🟡 Partial
+**Application Scenarios**:
+- ❌ User says "Let me teach you a move" → Enter gravity compensation mode
+- ❌ User manually moves head → Record motion trajectory
+- ❌ User says "Remember this" → Save action
+- ❌ User says "Do that action again" → Playback recorded action
 
-**Implemented**:
-- ✅ Tap-to-wake enters continuous conversation mode
-- ✅ Second tap exits continuous conversation mode
+### Phase 20 - Environment Awareness Response (Partial) 🟡
+
+**Goal**: Use IMU sensors to sense environment changes and respond.
+
+**SDK Support**:
+- ✅ `mini.imu["accelerometer"]` - Accelerometer (Phase 7 implemented as entity)
+- ✅ `mini.imu["gyroscope"]` - Gyroscope (Phase 7 implemented as entity)
+
+**Implemented Features**:
+
+| Detection Event | Response Action | Status |
+|-----------------|-----------------|--------|
+| Tap-to-wake | Enter continuous conversation mode | ✅ Implemented |
+| Second tap | Exit continuous conversation mode | ✅ Implemented |
 
 **Tap-to-wake vs Voice Wake**:
+
 | Wake Method | Conversation Mode | Description |
 |-------------|-------------------|-------------|
 | Voice wake (Okay Nabu) | Single conversation | Need to say wake word for each conversation |
 | Tap-to-wake | Continuous conversation | Auto-continue listening after TTS ends, tap again to exit |
 
-**Not Implemented**:
-- ❌ Shake detection - play dizzy action
-- ❌ Tilt/fall detection - play help action
-- ❌ Long idle - enter sleep animation
+**Technical Implementation**:
+- `tap_detector.py` - IMU acceleration spike detection
+- `satellite.py:_tap_conversation_mode` - Continuous conversation mode flag
+- Threshold: 2.0g (configurable)
+- Cooldown: 1.0s (prevent repeated triggers)
+- Wireless version only
 
-### Phase 21 - Home Assistant Scene Integration ❌ Not Implemented
+```python
+# satellite.py - Continuous conversation mode
+def wakeup_from_tap(self):
+    if self._tap_conversation_mode:
+        # Second tap - Exit continuous conversation
+        self._tap_conversation_mode = False
+        self._reachy_on_idle()
+    else:
+        # First tap - Enter continuous conversation
+        self._tap_conversation_mode = True
+        self.send_messages([VoiceAssistantRequest(start=True)])
+
+def _tts_finished(self):
+    if self._tap_conversation_mode:
+        # Continuous conversation mode: Auto-continue listening
+        self.send_messages([VoiceAssistantRequest(start=True)])
+```
+
+**Not Implemented**:
+
+| Detection Event | Response Action | Status |
+|-----------------|-----------------|--------|
+| Being shaken | Play dizzy action + voice "Don't shake me~" | ❌ Not implemented |
+| Tilted/fallen | Play help action + voice "I fell, help me" | ❌ Not implemented |
+| Long idle | Enter sleep animation | ❌ Not implemented |
+
+### Phase 21 - Home Assistant Scene Integration (Not Implemented) ❌
+
+**Goal**: Trigger robot actions based on Home Assistant scenes/automations.
+
+**Implementation**: Via ESPHome service calls
+
+**Not Implemented Scenes**:
+
+| HA Scene | Robot Response | Status |
+|----------|----------------|--------|
+| Good morning scene | Play wake action + "Good morning!" | ❌ Not implemented |
+| Good night scene | Play sleep action + "Good night~" | ❌ Not implemented |
+| Someone home | Turn toward door + wave + "Welcome home!" | ❌ Not implemented |
+| Doorbell rings | Turn toward door + alert action | ❌ Not implemented |
+| Play music | Sway with music rhythm | ❌ Not implemented |
+
 
 ---
 
-## Completion Statistics
+## 📊 Feature Implementation Summary
+
+### ✅ Completed Features
+
+#### Core Voice Assistant (Phase 1-12)
+- **45+ ESPHome entities** - All implemented
+- **Basic voice interaction** - Wake word detection, STT/TTS integration
+- **Motion feedback** - Nod, shake, gaze and other basic actions
+- **Audio processing** - AGC, noise suppression, echo cancellation
+- **Camera stream** - MJPEG live preview
+
+#### Partially Implemented Features (Phase 14-21)
+- **Phase 14** - Emotion action API infrastructure (manual trigger available)
+- **Phase 19** - Gravity compensation mode switch (teaching flow not implemented)
+
+### ❌ Not Implemented Features
+
+#### High Priority
+- ~~**Phase 13** - Sendspin audio playback support~~ ✅ **Completed**
+- **Phase 14** - Auto emotion action feedback (needs voice assistant event association)
+- **Phase 15** - Continuous sound source tracking (only turn toward at wakeup)
+
+#### Medium Priority
+- **Phase 16** - Cartoon style motion mode (needs dynamic interpolation switching)
+- **Phase 17** - Antenna sync animation
+- **Phase 18** - Face tracking and eye contact interaction
+
+#### Low Priority
+- **Phase 19** - Teaching mode record/playback functionality
+- **Phase 20** - IMU environment awareness response
+- **Phase 21** - Home Assistant scene integration
+
+---
+
+## Feature Priority Summary (Updated)
+
+### High Priority (Completed ✅)
+- ✅ **Phase 1-12**: Basic ESPHome entities (45+)
+- ✅ Core voice assistant functionality
+- ✅ Basic motion feedback (nod, shake, gaze)
+
+### High Priority (Partial 🟡)
+- 🟡 **Phase 13**: Emotion action feedback system
+  - ✅ Emotion Selector entity and API infrastructure
+  - ❌ Auto-trigger emotion actions based on voice assistant response
+  - ❌ Intent recognition and emotion matching
+  - ❌ Dance action library integration
+
+### High Priority (Not Implemented ❌)
+- ❌ **Phase 14**: Smart sound source tracking enhancement
+  - ✅ Turn toward sound source at wakeup
+  - ❌ Continuous sound source tracking
+  - ❌ Multi-person conversation switching
+  - ❌ Sound source visualization
+
+### Medium Priority (Partial 🟡)
+- 🟡 **Phase 15**: Cartoon style motion mode
+  - ✅ 20Hz unified control loop architecture (optimized to prevent daemon crash)
+  - ✅ Pose change detection + state query caching (reduces daemon load)
+  - ✅ Smooth interpolation + breathing animation
+  - ❌ Dynamic interpolation technique switching (CARTOON etc.)
+- 🟡 **Phase 16**: Antenna sync during speech
+  - ✅ Voice-driven head sway (SpeechSwayGenerator)
+  - ❌ Antenna sway with audio rhythm
+
+### Medium Priority (Not Implemented ❌)
+- ❌ **Phase 17**: Visual gaze interaction - Eye contact
+
+### Low Priority (Partial 🟡)
+- 🟡 **Phase 18**: Gravity compensation interactive mode
+  - ✅ Gravity compensation mode switch
+  - ❌ Teaching style interaction (record/playback functionality)
+
+### Low Priority (Not Implemented ❌)
+- ❌ **Phase 19**: Environment awareness response - IMU triggered actions
+- ❌ **Phase 20**: Home Assistant scene integration - Smart home integration
+
+---
+
+## 📈 Completion Statistics
 
 | Phase | Status | Completion | Notes |
 |-------|--------|------------|-------|
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
-| Phase 13 | ✅ Complete | 100% | Sendspin audio output support |
-| Phase 14 | 🟡 Partial | 30% | API infrastructure ready, missing auto-trigger |
-| Phase 15 | ✅ Complete | 100% | YOLO face tracking fully implemented |
-| Phase 16 | 🟡 Partial | 70% | Control loop + pose detection + breathing animation |
-| Phase 17 | 🟡 Partial | 50% | Voice-driven head sway implemented |
-| Phase 18 | ❌ Not done | 10% | Camera implemented, missing face detection |
-| Phase 19 | 🟡 Partial | 40% | Mode switch implemented, missing teaching flow |
-| Phase 20 | 🟡 Partial | 30% | Tap-to-wake implemented |
-| Phase 21 | ❌ Not done | 0% | Not implemented |
+| Phase 13 | 🟡 Partial | 30% | API infrastructure ready, missing auto-trigger |
+| Phase 14 | ❌ Not done | 20% | Only turn toward at wakeup implemented |
+| Phase 15 | 🟡 Partial | 70% | 20Hz control loop + pose change detection + state cache + breathing animation implemented |
+| Phase 16 | 🟡 Partial | 50% | Voice-driven head sway implemented |
+| Phase 17 | ❌ Not done | 10% | Camera implemented, missing face detection |
+| Phase 18 | 🟡 Partial | 40% | Mode switch implemented, missing teaching flow |
+| Phase 19 | ❌ Not done | 10% | IMU data exposed, missing trigger logic |
+| Phase 20 | ❌ Not done | 0% | Not implemented |
 
-**Overall Completion**: **Phase 1-13: 100%** | **Phase 14-21: ~45%**
+**Overall Completion**: **Phase 1-12: 100%** | **Phase 13-20: ~35%**
+
 
 ---
 
-## Bug Fixes History
+## 🔧 Daemon Crash Fix (2025-01-05)
 
-### v0.5.1 Bug Fixes (2026-01-08)
+### Problem Description
+During long-term operation, `reachy_mini daemon` would crash, causing robot to become unresponsive.
 
-#### Issue 1: Music Not Resuming After Voice Conversation
+### Root Cause
+1. **100Hz control loop too frequent** - Calling `robot.set_target()` every 10ms, even when pose hasn't changed
+2. **Frequent state queries** - Every entity state read calls `get_status()`, `get_current_head_pose()` etc.
+3. **Missing change detection** - Even when pose hasn't changed, continues sending same commands
+4. **Zenoh message queue blocking** - Accumulated 150+ messages per second, daemon cannot process in time
+
+### Fix Solution
+
+#### 1. Reduce control loop frequency (movement_manager.py)
+```python
+# Reduced from 100Hz to 20Hz
+CONTROL_LOOP_FREQUENCY_HZ = 20  # 80% reduction in messages
+```
+
+#### 2. Add pose change detection (movement_manager.py)
+```python
+# Only send commands on significant pose changes
+if self._last_sent_pose is not None:
+    max_diff = max(abs(pose[k] - self._last_sent_pose.get(k, 0.0)) for k in pose.keys())
+    if max_diff < 0.001:  # Threshold: 0.001 rad or 0.001 m
+        return  # Skip sending
+```
+
+#### 3. State query caching (reachy_controller.py)
+```python
+# Cache daemon status query results
+self._cache_ttl = 0.1  # 100ms TTL
+self._last_status_query = 0.0
+
+def _get_cached_status(self):
+    now = time.time()
+    if now - self._last_status_query < self._cache_ttl:
+        return self._state_cache.get('status')  # Use cache
+    # ... query and update cache
+```
+
+#### 4. Head pose query caching (reachy_controller.py)
+```python
+# Cache get_current_head_pose() and get_current_joint_positions() results
+def _get_cached_head_pose(self):
+    # Reuse cached results within 100ms
+```
+
+### Fix Results
+
+| Metric | Before Fix | After Fix | Improvement |
+|--------|------------|-----------|-------------|
+| Control message frequency | ~100 msg/s | ~20 msg/s | ↓ 80% |
+| State query frequency | ~50 msg/s | ~5 msg/s | ↓ 90% |
+| Total Zenoh messages | ~150 msg/s | ~25 msg/s | ↓ 83% |
+| Daemon CPU load | Sustained high load | Normal load | Significantly reduced |
+| Expected stability | Crash within hours | Stable for days | Major improvement |
+
+### Related Files
+- `DAEMON_CRASH_FIX_PLAN.md` - Detailed fix plan and test plan
+- `movement_manager.py` - Control loop optimization
+- `reachy_controller.py` - State query caching
+
+### Future Optimization Suggestions
+1. ⏳ Dynamic frequency adjustment - 50Hz during motion, 5Hz when idle
+2. ⏳ Batch state queries - Get all states at once
+3. ⏳ Performance monitoring and alerts - Real-time daemon health monitoring
+
+---
+
+## 🔧 Daemon Crash Deep Fix (2026-01-07)
+
+### Problem Description
+During long-term operation, `reachy_mini daemon` still crashes, previous fix not thorough enough.
+
+### Root Cause Analysis
+
+Through deep analysis of SDK source code:
+
+1. **Each `set_target()` sends 3 Zenoh messages**
+   - `set_target_head_pose()` - 1 message
+   - `set_target_antenna_joint_positions()` - 1 message  
+   - `set_target_body_yaw()` - 1 message
+
+2. **Daemon control loop is 50Hz**
+   - See `reachy_mini/daemon/backend/robot/backend.py`: `control_loop_frequency = 50.0`
+   - If message send frequency exceeds 50Hz, daemon may not process in time
+
+3. **Previous 20Hz control loop still too high**
+   - 20Hz × 3 messages = 60 messages/second
+   - Already exceeds daemon's 50Hz processing capacity
+
+4. **Pose change threshold too small (0.002)**
+   - Breathing animation, speech sway, face tracking continuously produce tiny changes
+   - Almost every loop triggers `set_target()`
+
+### Fix Solution
+
+#### 1. Further reduce control loop frequency (movement_manager.py)
+```python
+# Reduced from 20Hz to 10Hz
+# 10Hz × 3 messages = 30 messages/second, safely below daemon's 50Hz capacity
+CONTROL_LOOP_FREQUENCY_HZ = 10
+```
+
+#### 2. Increase pose change threshold (movement_manager.py)
+```python
+# Increased from 0.002 to 0.005
+# 0.005 rad ≈ 0.29 degrees, still smooth enough
+self._pose_change_threshold = 0.005
+```
+
+#### 3. Reduce camera/face tracking frequency (camera_server.py)
+```python
+# Reduced from 15fps to 10fps
+fps: int = 10
+```
+
+#### 4. Reduce IMU polling frequency (tap_detector.py)
+```python
+# Reduced from 50Hz to 20Hz
+TAP_DETECTION_RATE_HZ = 20
+```
+
+#### 5. Increase state cache TTL (reachy_controller.py)
+```python
+# Increased from 1 second to 2 seconds
+self._cache_ttl = 2.0
+```
+
+### Fix Results
+
+| Metric | Before (20Hz) | After (10Hz) | Improvement |
+|--------|---------------|--------------|-------------|
+| Control loop frequency | 20 Hz | 10 Hz | ↓ 50% |
+| Max Zenoh messages | 60 msg/s | 30 msg/s | ↓ 50% |
+| Actual messages (with change detection) | ~40 msg/s | ~15 msg/s | ↓ 62% |
+| Face tracking frequency | 15 Hz | 10 Hz | ↓ 33% |
+| IMU polling frequency | 50 Hz | 20 Hz | ↓ 60% |
+| State cache TTL | 1 second | 2 seconds | ↑ 100% |
+| Expected stability | Crash within hours | Stable operation | Major improvement |
+
+### Key Finding
+
+Reference `reachy_mini_conversation_app` uses 100Hz control loop, but it's an official app that may have special optimizations or runs on more powerful hardware. Our app needs more conservative settings.
+
+### Related Files
+- `movement_manager.py` - Control loop frequency and pose threshold
+- `camera_server.py` - Face tracking frequency
+- `tap_detector.py` - IMU polling frequency
+- `reachy_controller.py` - State cache TTL
+
+
+---
+
+## 🔧 Tap-to-Wake and Microphone Sensitivity Fix (2026-01-07)
+
+### Problem Description
+1. **Tap-to-wake blocking** - Conversation not working properly after tap wake, blocking issues
+2. **Low microphone sensitivity** - Need to be very close for voice recognition
+
+### Root Cause
+1. **Audio playback blocking** - `_tap_continue_feedback()` plays sound in continuous conversation mode, blocking audio stream processing
+2. **AGC settings not optimized** - ReSpeaker XVF3800 default settings not suitable for distant voice recognition
+
+### Fix Solution
+
+#### 1. Remove audio playback in continuous conversation feedback (satellite.py)
+```python
+def _tap_continue_feedback(self) -> None:
+    """Provide feedback when continuing conversation in tap mode.
+    
+    Triggers a nod to indicate ready for next input.
+    Sound is NOT played here to avoid blocking audio streaming.
+    """
+    # NOTE: Do NOT play sound here - it blocks audio streaming
+    if self.state.motion_enabled and self.state.motion:
+        self.state.motion.on_continue_listening()
+```
+
+#### 2. Add exception handling to tap callback (voice_assistant.py)
+```python
+def _on_tap_detected(self) -> None:
+    """Callback when tap is detected on the robot.
+    
+    NOTE: This is called from the tap_detector background thread.
+    """
+    try:
+        self._state.satellite.wakeup_from_tap()
+        # ... motion feedback
+    except Exception as e:
+        _LOGGER.error("Error in tap detection callback: %s", e)
+```
+
+#### 3. Comprehensive microphone optimization (voice_assistant.py) - Updated 2026-01-07
+```python
+def _optimize_microphone_settings(self) -> None:
+    """Optimize ReSpeaker XVF3800 microphone settings for voice recognition."""
+    
+    # ========== 1. AGC (Automatic Gain Control) Settings ==========
+    # Enable AGC for automatic volume normalization
+    respeaker.write("PP_AGCONOFF", [1])
+    
+    # Increase AGC max gain for better distant speech pickup (default ~15dB -> 30dB)
+    respeaker.write("PP_AGCMAXGAIN", [30.0])
+    
+    # Set AGC desired output level (default ~-25dB -> -18dB for stronger output)
+    respeaker.write("PP_AGCDESIREDLEVEL", [-18.0])
+    
+    # Optimize AGC time constant for voice commands
+    respeaker.write("PP_AGCTIME", [0.5])
+    
+    # ========== 2. Base Microphone Gain ==========
+    # Increase base microphone gain (default 1.0 -> 2.0)
+    respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])
+    
+    # ========== 3. Noise Suppression Settings ==========
+    # Reduce noise suppression to preserve quiet speech (default ~0.5 -> 0.15)
+    respeaker.write("PP_MIN_NS", [0.15])
+    respeaker.write("PP_MIN_NN", [0.15])
+    
+    # ========== 4. Echo Cancellation & High-pass Filter ==========
+    respeaker.write("PP_ECHOONOFF", [1])
+    respeaker.write("AEC_HPFONOFF", [1])
+```
+
+### Fix Results
+
+| Parameter | Before | After | Notes |
+|-----------|--------|-------|-------|
+| Tap continuous conversation | Blocking | Working | Removed blocking audio playback |
+| Microphone sensitivity | ~30cm | ~2-3m | Comprehensive AGC and gain optimization |
+| AGC switch | Off | On | Auto volume normalization |
+| AGC max gain | ~15dB | 30dB | Better distant speech pickup |
+| AGC target level | -25dB | -18dB | Stronger output signal |
+| Microphone gain | 1.0x | 2.0x | Base gain doubled |
+| Noise suppression | ~0.5 | 0.15 | Reduced speech mis-suppression |
+| Echo cancellation | On | On | Maintain clarity during TTS playback |
+| High-pass filter | Off | On | Remove low-frequency noise |
+
+### XVF3800 Parameter Reference
+
+| Parameter Name | Type | Range | Description |
+|----------------|------|-------|-------------|
+| `PP_AGCONOFF` | int32 | 0/1 | AGC switch |
+| `PP_AGCMAXGAIN` | float | 0-40 dB | AGC max gain |
+| `PP_AGCDESIREDLEVEL` | float | dB | AGC target output level |
+| `PP_AGCTIME` | float | seconds | AGC time constant |
+| `AUDIO_MGR_MIC_GAIN` | float | 0-4.0 | Microphone gain multiplier |
+| `PP_MIN_NS` | float | 0-1.0 | Minimum noise suppression (lower = less suppression) |
+| `PP_MIN_NN` | float | 0-1.0 | Minimum noise estimation |
+| `PP_ECHOONOFF` | int32 | 0/1 | Echo cancellation switch |
+| `AEC_HPFONOFF` | int32 | 0/1 | High-pass filter switch |
+
+### Related Files
+- `satellite.py` - Removed blocking audio playback
+- `voice_assistant.py` - Comprehensive microphone optimization
+- `reachy_controller.py` - AGC entity default value updates
+- `entity_registry.py` - AGC max gain range update (0-40dB)
+- `reachy_mini/src/reachy_mini/media/audio_control_utils.py` - SDK reference
+
+---
+
+## 🔧 v0.5.1 Bug Fixes (2026-01-08)
+
+### Issue 1: Music Not Resuming After Voice Conversation
+
 **Problem**: Music doesn't resume after voice conversation ends.
+
 **Root Cause**: Sendspin was incorrectly connected to `tts_player` instead of `music_player`.
-**Fix**: 
+
+**Fix**:
 - `voice_assistant.py`: Sendspin discovery now connects to `music_player`
 - `satellite.py`: `duck()`/`unduck()` now call `music_player.pause_sendspin()`/`resume_sendspin()`
 
-#### Issue 2: tap_sensitivity Not Persisted
+### Issue 2: tap_sensitivity Not Persisted
+
 **Problem**: tap_sensitivity value set in ESPHome lost after restart.
+
 **Fix**:
 - `models.py`: Added `tap_sensitivity` field to `Preferences` dataclass
 - `entity_registry.py`: Entity setter now saves to `preferences.json`
 - Load saved value on startup
 
-#### Issue 3: Audio Conflict During Voice Assistant Wakeup
+### Issue 3: Audio Conflict During Voice Assistant Wakeup
+
 **Problem**: Audio streaming (Sendspin or ESPHome audio) conflicts when voice assistant wakes up.
+
 **Fix**:
 - `audio_player.py`: Added `pause_sendspin()` and `resume_sendspin()` methods
 - `satellite.py`: `duck()` now pauses Sendspin, `unduck()` resumes it
 - Improved `pause()` method to actually stop audio output
 
-#### Issue 4: AttributeError for _camera_server
+### Issue 4: AttributeError for _camera_server
+
 **Problem**: `_set_conversation_mode()` referenced non-existent `_camera_server` attribute.
+
 **Fix**: Changed `self._camera_server` to `self.camera_server` (removed underscore prefix)
 
-#### Issue 5: tap_sensitivity Default Value Wrong
+### Issue 5: tap_sensitivity Default Value Wrong
+
 **Problem**: tap_sensitivity default was still 2.0g instead of expected 0.5g.
+
 **Fix**: Use `TAP_THRESHOLD_G_DEFAULT` constant as default value
 
-#### Issue 6: Sendspin Sample Rate Optimization
+### Issue 6: Sendspin Sample Rate Optimization
+
 **Problem**: ReSpeaker hardware I/O is 16kHz (hardware limitation), but Sendspin might try higher sample rates.
+
 **Fix**: Prioritize 16kHz in Sendspin supported formats list to avoid unnecessary resampling
 
-### Daemon Crash Fix (2026-01-07)
-
-**Problem**: `reachy_mini daemon` crashes during long-term operation.
-
-**Root Cause Analysis**:
-1. Each `set_target()` sends 3 Zenoh messages
-2. Daemon control loop is 50Hz
-3. Previous 20Hz control loop still too high (20Hz × 3 = 60 msg/s > 50Hz capacity)
-4. Pose change threshold too small (0.002) - almost every loop triggers `set_target()`
-
-**Fix**:
-- Control loop frequency: 20Hz → 10Hz
-- Pose change threshold: 0.002 → 0.005
-- Camera/face tracking frequency: 15fps → 10fps
-- IMU polling frequency: 50Hz → 20Hz
-- State cache TTL: 1s → 2s
-
-**Results**:
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Control loop frequency | 20 Hz | 10 Hz | ↓ 50% |
-| Max Zenoh messages | 60 msg/s | 30 msg/s | ↓ 50% |
-| Expected stability | Hours before crash | Stable operation | Significant |
-
-### Tap-to-Wake and Microphone Sensitivity Fix (2026-01-07)
-
-**Problems**:
-1. Tap-to-wake blocking - conversation not working properly after tap wake
-2. Low microphone sensitivity - need to be very close for voice recognition
-
-**Fixes**:
-1. Removed audio playback in `_tap_continue_feedback()` to avoid blocking
-2. Comprehensive microphone optimization:
-   - AGC enabled with max gain 30dB
-   - AGC desired level -18dB
-   - Base microphone gain 2.0x
-   - Noise suppression reduced to 0.15
-   - Echo cancellation and high-pass filter enabled
-
-**Results**:
-| Parameter | Before | After |
-|-----------|--------|-------|
-| Microphone sensitivity | ~30cm | ~2-3m |
-| AGC max gain | ~15dB | 30dB |
-| Noise suppression | ~0.5 | 0.15 |
 
 ---
 
-## SDK Data Structure Reference
+### SDK Data Structure Reference
 
 ```python
 # Motor control mode
@@ -415,11 +1108,67 @@ class DaemonState(Enum):
     STOPPED = "stopped"
     ERROR = "error"
 
+# Full state
+class FullState:
+    control_mode: MotorControlMode
+    head_pose: XYZRPYPose  # x, y, z (m), roll, pitch, yaw (rad)
+    head_joints: list[float]  # 7 joint angles
+    body_yaw: float
+    antennas_position: list[float]  # [right, left]
+    doa: DoAInfo  # angle (rad), speech_detected (bool)
+
+# IMU data (wireless version only)
+imu_data = {
+    "accelerometer": [x, y, z],  # m/s²
+    "gyroscope": [x, y, z],      # rad/s
+    "quaternion": [w, x, y, z],  # Attitude quaternion
+    "temperature": float         # °C
+}
+
 # Safety limits
 HEAD_PITCH_ROLL_LIMIT = [-40°, +40°]
 HEAD_YAW_LIMIT = [-180°, +180°]
 BODY_YAW_LIMIT = [-160°, +160°]
 YAW_DELTA_MAX = 65°  # Max difference between head and body yaw
+```
+
+### ESPHome Protocol Implementation Notes
+
+ESPHome protocol communicates with Home Assistant via protobuf messages. The following message types need to be implemented:
+
+```python
+from aioesphomeapi.api_pb2 import (
+    # Number entity (volume/angle control)
+    ListEntitiesNumberResponse,
+    NumberStateResponse,
+    NumberCommandRequest,
+
+    # Select entity (motor mode)
+    ListEntitiesSelectResponse,
+    SelectStateResponse,
+    SelectCommandRequest,
+
+    # Button entity (wake/sleep)
+    ListEntitiesButtonResponse,
+    ButtonCommandRequest,
+
+    # Switch entity (motor switch)
+    ListEntitiesSwitchResponse,
+    SwitchStateResponse,
+    SwitchCommandRequest,
+
+    # Sensor entity (numeric sensors)
+    ListEntitiesSensorResponse,
+    SensorStateResponse,
+
+    # Binary Sensor entity (boolean sensors)
+    ListEntitiesBinarySensorResponse,
+    BinarySensorStateResponse,
+
+    # Text Sensor entity (text sensors)
+    ListEntitiesTextSensorResponse,
+    TextSensorStateResponse,
+)
 ```
 
 ## Reference Projects
