@@ -683,7 +683,12 @@ class VoiceSatelliteProtocol(APIServer):
             # In robot frame: Y+ is left, so yaw = -atan2(dir_y, dir_x)
             # But since dir_x = sin(doa), dir_y = cos(doa):
             # yaw = -atan2(cos(doa), sin(doa)) = -(π/2 - doa) = doa - π/2
-            yaw_rad = angle_rad - math.pi / 2
+            # 
+            # CORRECTION: The above was inverted. Testing shows:
+            # - Sound on left → robot turns right (wrong)
+            # - Sound on right → robot turns left (wrong)
+            # So we need to negate the yaw: yaw = π/2 - doa
+            yaw_rad = math.pi / 2 - angle_rad
             yaw_deg = math.degrees(yaw_rad)
             
             _LOGGER.info("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", 
