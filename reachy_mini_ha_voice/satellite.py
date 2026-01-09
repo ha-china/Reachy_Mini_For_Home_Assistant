@@ -824,16 +824,6 @@ class VoiceSatelliteProtocol(APIServer):
             if tap_detector:
                 tap_detector.set_enabled(False)
                 _LOGGER.debug("Tap detection disabled during emotion playback")
-                
-                # Re-enable after emotion completes (estimated 3 seconds)
-                def reenable_tap():
-                    import time
-                    time.sleep(3.0)
-                    if tap_detector:
-                        tap_detector.set_enabled(True)
-                        _LOGGER.debug("Tap detection re-enabled after emotion")
-                
-                threading.Thread(target=reenable_tap, daemon=True).start()
 
             # Get WLAN IP from daemon status
             wlan_ip = "localhost"
@@ -850,9 +840,28 @@ class VoiceSatelliteProtocol(APIServer):
 
             response = requests.post(url, timeout=5)
             if response.status_code == 200:
-                _LOGGER.info(f"Playing emotion: {emotion_name}")
+                result = response.json()
+                move_uuid = result.get('uuid')
+                _LOGGER.info(f"Playing emotion: {emotion_name} (uuid={move_uuid})")
+                
+                # Wait for move completion in background thread
+                if tap_detector and move_uuid:
+                    def wait_for_completion():
+                        self._wait_for_move_completion(wlan_ip, move_uuid, tap_detector)
+                    threading.Thread(target=wait_for_completion, daemon=True).start()
+                elif tap_detector:
+                    # Fallback: re-enable after 5 seconds if no UUID
+                    def reenable_tap_fallback():
+                        time.sleep(5.0)
+                        if tap_detector:
+                            tap_detector.set_enabled(True)
+                            _LOGGER.debug("Tap detection re-enabled (fallback timeout)")
+                    threading.Thread(target=reenable_tap_fallback, daemon=True).start()
             else:
                 _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
+                # Re-enable tap detection on failure
+                if tap_detector:
+                    tap_detector.set_enabled(True)
 
         except Exception as e:
             _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
@@ -860,3 +869,44 @@ class VoiceSatelliteProtocol(APIServer):
             tap_detector = getattr(self.state, 'tap_detector', None)
             if tap_detector:
                 tap_detector.set_enabled(True)
+
+    def _wait_for_move_completion(self, wlan_ip: str, move_uuid: str, tap_detector) -> None:
+        """Wait for a move to complete by polling the daemon API.
+        
+        Args:
+            wlan_ip: IP address of the daemon
+            move_uuid: UUID of the move to wait for
+            tap_detector: TapDetector instance to re-enable after completion
+        """
+        import requests
+        
+        MAX_WAIT_SECONDS = 30.0  # Maximum wait time to prevent infinite loops
+        POLL_INTERVAL = 0.3  # Poll every 300ms
+        
+        start_time = time.time()
+        running_url = f"http://{wlan_ip}:8000/api/move/running"
+        
+        try:
+            while time.time() - start_time < MAX_WAIT_SECONDS:
+                try:
+                    response = requests.get(running_url, timeout=2)
+                    if response.status_code == 200:
+                        running_moves = response.json()
+                        # Check if our move is still in the running list
+                        running_uuids = [m.get('uuid') for m in running_moves]
+                        if move_uuid not in running_uuids:
+                            _LOGGER.debug(f"Move {move_uuid} completed")
+                            break
+                    else:
+                        _LOGGER.debug(f"Failed to get running moves: HTTP {response.status_code}")
+                except requests.RequestException as e:
+                    _LOGGER.debug(f"Error polling move status: {e}")
+                
+                time.sleep(POLL_INTERVAL)
+            else:
+                _LOGGER.warning(f"Move {move_uuid} did not complete within {MAX_WAIT_SECONDS}s")
+        finally:
+            # Always re-enable tap detection
+            if tap_detector:
+                tap_detector.set_enabled(True)
+                _LOGGER.debug("Tap detection re-enabled after move completion")

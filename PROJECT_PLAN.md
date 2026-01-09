@@ -336,9 +336,10 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
    - [x] `look_at_x/y/z` - Gaze point coordinate control
 
 5. **Phase 5 - DOA (Direction of Arrival)** ✅ **Re-added for wakeup turn-to-sound**
-   - [x] `doa_angle` - Sound source direction (degrees, -90 to 90)
+   - [x] `doa_angle` - Sound source direction (degrees, 0-180°, where 0°=left, 90°=front, 180°=right)
    - [x] `speech_detected` - Speech detection status
    - [x] Turn-to-sound at wakeup (robot turns toward speaker when wake word detected)
+   - [x] Direction correction: `yaw = π/2 - doa` (fixed left/right inversion)
    - Note: DOA only read once at wakeup to avoid daemon pressure; face tracking takes over after
 
 6. **Phase 6 - Diagnostic Information** (Low Priority) ✅ **Completed**
@@ -415,11 +416,13 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 - ✅ Emotion mapping: Happy/Sad/Angry/Fear/Surprise/Disgust
 - ✅ Integration with HuggingFace action library (`pollen-robotics/reachy-mini-emotions-library`)
 - ✅ SpeechSway system for natural head micro-movements during conversation (non-blocking)
+- ✅ Tap detection disabled during emotion playback (polls daemon API for completion)
 
 **Design Decisions**:
 - 🎯 No auto-play of full emotion actions during conversation to avoid blocking
 - 🎯 Use voice-driven head sway (SpeechSway) for natural motion feedback
 - 🎯 Emotion actions retained as manual trigger feature via ESPHome entity
+- 🎯 Tap detection waits for actual move completion via `/api/move/running` polling
 
 **Not Implemented**:
 - ❌ Auto-trigger emotion actions based on voice assistant response (decided not to implement to avoid blocking)
@@ -429,7 +432,8 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 
 **Code Locations**:
 - `entity_registry.py:633-658` - Emotion Selector entity
-- `satellite.py:544-574` - `_play_emotion()` method
+- `satellite.py:_play_emotion()` - Emotion playback with move UUID tracking
+- `satellite.py:_wait_for_move_completion()` - Polls daemon API for move completion
 - `motion.py:132-156` - Conversation start motion control (uses SpeechSway)
 - `movement_manager.py:541-595` - Move queue management (allows SpeechSway overlay)
 
