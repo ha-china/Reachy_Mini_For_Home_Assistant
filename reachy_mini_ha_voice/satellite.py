@@ -83,6 +83,9 @@ class VoiceSatelliteProtocol(APIServer):
         self._conversation_id: Optional[str] = None
         self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
         self._last_conversation_time = 0.0
+        
+        # Pipeline state tracking - prevent multiple concurrent pipelines
+        self._pipeline_active = False
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -133,6 +136,8 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
+            # Mark pipeline as active
+            self._pipeline_active = True
             self._tts_url = data.get("url")
             self._tts_played = False
             self._continue_conversation = False
@@ -165,7 +170,8 @@ class VoiceSatelliteProtocol(APIServer):
             self.play_tts()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
-            # Pipeline run ended - this is the safe point to start a new conversation
+            # Pipeline run ended - mark as inactive
+            self._pipeline_active = False
             self._tts_played = False
             self._is_streaming_audio = False
             
@@ -347,8 +353,14 @@ class VoiceSatelliteProtocol(APIServer):
         self._conversation_id = None
         self._tap_conversation_mode = False
         self._continue_conversation = False
+        self._pipeline_active = False
 
     def wakeup(self, wake_word: Union[MicroWakeWord, OpenWakeWord]) -> None:
+        # Prevent starting new conversation if pipeline is already active
+        if self._pipeline_active:
+            _LOGGER.warning("Pipeline already active, ignoring wake word")
+            return
+            
         if self._timer_finished:
             # Stop timer instead
             self._timer_finished = False
@@ -390,6 +402,11 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.tts_player.stop()
             self.unduck()
             self._reachy_on_idle()
+            return
+        
+        # Prevent starting new conversation if pipeline is already active
+        if self._pipeline_active:
+            _LOGGER.warning("Pipeline already active, ignoring tap")
             return
         
         if self._timer_finished:
@@ -481,6 +498,10 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)", 
                         self._tap_conversation_mode, self._continue_conversation)
             
+            # Play prompt sound to indicate ready for next input
+            # Use wakeup sound as the prompt (short beep)
+            self.state.tts_player.play(self.state.wakeup_sound)
+            
             # Use same conversation_id for context continuity
             conv_id = self._get_or_create_conversation_id()
             self.send_messages([VoiceAssistantRequest(
@@ -490,7 +511,7 @@ class VoiceSatelliteProtocol(APIServer):
             self._is_streaming_audio = True
             
             if self._tap_conversation_mode:
-                # Provide feedback for continuous conversation mode
+                # Provide motion feedback for continuous conversation mode
                 self._tap_continue_feedback()
             
             # Stay in listening mode, don't go to idle

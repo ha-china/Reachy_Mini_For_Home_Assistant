@@ -26,9 +26,9 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 ## Technical Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                              Reachy Mini (ARM64)                             │
-│                                                                              │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Reachy Mini (ARM64)                            │
+│                                                                             │
 │  ┌─────────────────────────────── AUDIO INPUT ───────────────────────────┐  │
 │  │  ReSpeaker XVF3800 (16kHz)                                            │  │
 │  │  ┌──────────────┐   ┌──────────────────────────────────────────────┐  │  │
@@ -47,7 +47,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │                     │ • Stop word detection                        │  │  │
 │  │                     └──────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌─────────────────────────────── AUDIO OUTPUT ──────────────────────────┐  │
 │  │  ┌──────────────────────────┐    ┌──────────────────────────────────┐ │  │
 │  │  │ TTS Player               │    │ Music Player (Sendspin)          │ │  │
@@ -62,7 +62,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │                 │ ReSpeaker Speaker (16kHz)                        │  │  │
 │  │                 └──────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌─────────────────────────── VISION & TRACKING ─────────────────────────┐  │
 │  │  ┌──────────────────────────┐    ┌──────────────────────────────────┐ │  │
 │  │  │ Camera (VPU accelerated) │ →  │ YOLO Face Detection              │ │  │
@@ -74,7 +74,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │                                  │ • Smooth return after face lost  │ │  │
 │  │                                  └──────────────────────────────────┘ │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌─────────────────────────── MOTION CONTROL ────────────────────────────┐  │
 │  │  MovementManager (10Hz Control Loop)                                  │  │
 │  │  ┌────────────────────────────────────────────────────────────────┐   │  │
@@ -91,33 +91,33 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │  │ • Yaw offset: -7° (right compensation)                         │   │  │
 │  │  └────────────────────────────────────────────────────────────────┘   │  │
 │  │                                                                       │  │
-│  │  State Machine: on_wakeup → on_listening → on_speaking → on_idle     │  │
+│  │   State Machine: on_wakeup → on_listening → on_speaking → on_idle     │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌─────────────────────────── TAP DETECTION ─────────────────────────────┐  │
 │  │  IMU Accelerometer (Wireless version only, 20Hz polling)              │  │
 │  │  • Tap-to-wake: Enter continuous conversation mode                    │  │
 │  │  • Second tap: Exit continuous conversation mode                      │  │
 │  │  • Threshold: 0.5g (configurable, persisted)                          │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
 │  │  Port 6053 (mDNS auto-discovery)                                      │  │
 │  │  • 43+ entities (sensors, controls, media player, camera)             │  │
 │  │  • Voice Assistant pipeline integration                               │  │
 │  │  • Real-time state synchronization                                    │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────────────────┘
                                        │
                                        │ ESPHome Protocol (protobuf)
                                        ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                            Home Assistant                                    │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            Home Assistant                                   │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────────┐ │
 │  │ STT Engine       │  │ Intent Processing│  │ TTS Engine                 │ │
 │  │ (User configured)│  │ (Conversation)   │  │ (User configured)          │ │
 │  └──────────────────┘  └──────────────────┘  └────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Completed Features
@@ -1230,3 +1230,6 @@ from aioesphomeapi.api_pb2 import (
 
 - [OHF-Voice/linux-voice-assistant](https://github.com/OHF-Voice/linux-voice-assistant)
 - [pollen-robotics/reachy_mini](https://github.com/pollen-robotics/reachy_mini)
+- [reachy_mini_conversation_app](https://github.com/pollen-robotics/reachy_mini_conversation_app)
+- [sendspin-cli](https://github.com/Sendspin/sendspin-cli)
+- [home-assistant-voice](https://github.com/esphome/home-assistant-voice-pe/blob/dev/home-assistant-voice.yaml)
