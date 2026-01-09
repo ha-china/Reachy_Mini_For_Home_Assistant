@@ -337,9 +337,11 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 4. **Phase 4 - Gaze Control** (Medium Priority) ✅ **Completed**
    - [x] `look_at_x/y/z` - Gaze point coordinate control
 
-5. **Phase 5 - Audio Sensors** (Low Priority) ✅ **Completed**
-   - [x] `doa_angle` - Sound source direction
-   - [x] `speech_detected` - Speech detection
+5. **Phase 5 - DOA (Direction of Arrival)** ✅ **Re-added for wakeup turn-to-sound**
+   - [x] `doa_angle` - Sound source direction (degrees, -90 to 90)
+   - [x] `speech_detected` - Speech detection status
+   - [x] Turn-to-sound at wakeup (robot turns toward speaker when wake word detected)
+   - Note: DOA only read once at wakeup to avoid daemon pressure; face tracking takes over after
 
 6. **Phase 6 - Diagnostic Information** (Low Priority) ✅ **Completed**
    - [x] `control_loop_frequency` - Control loop frequency
@@ -485,25 +487,31 @@ automation:
           option: "Happy"
 ```
 
-### Phase 15 - Face Tracking (Replaces DOA Sound Source Tracking) ✅ **Completed**
+### Phase 15 - Face Tracking (Complements DOA Turn-to-Sound) ✅ **Completed**
 
 **Goal**: Implement natural face tracking so robot looks at speaker during conversation.
 
 **Design Decision**: 
-- ❌ Original plan: DOA (Direction of Arrival) sound source tracking
-- ✅ Changed to: YOLO face detection - more stable and accurate
-- Reason: DOA inaccurate at wakeup, frequent queries cause daemon crash
+- ✅ DOA (Direction of Arrival): Used once at wakeup to turn toward sound source
+- ✅ YOLO face detection: Takes over after initial turn for continuous tracking
+- Reason: DOA provides quick initial orientation, face tracking provides accurate continuous tracking
+
+**Wakeup Turn-to-Sound Flow**:
+1. Wake word detected → Read DOA angle once (avoid daemon pressure)
+2. If DOA angle > 10°: Turn head toward sound source (80% of angle, conservative)
+3. Face tracking takes over for continuous tracking during conversation
 
 **Implemented Features**:
 
 | Feature | Description | Implementation Location | Status |
 |---------|-------------|------------------------|--------|
+| DOA turn-to-sound | Turn toward speaker at wakeup | `satellite.py:_turn_to_sound_source()` | ✅ Implemented |
 | YOLO face detection | Uses `AdamCodd/YOLOv11n-face-detection` model | `head_tracker.py` | ✅ Implemented |
 | Adaptive frame rate tracking | 15fps during conversation, 3fps when idle without face | `camera_server.py` | ✅ Implemented |
 | look_at_image() | Calculate target pose from face position | `camera_server.py` | ✅ Implemented |
 | Smooth return to neutral | Smooth return within 1 second after face lost | `camera_server.py` | ✅ Implemented |
 | face_tracking_offsets | As secondary pose overlay to motion control | `movement_manager.py` | ✅ Implemented |
-| Voice activity detection | DOA entity still available for speech detection | `DoAInfo.speech_detected` | ✅ Exposed as entity |
+| DOA entities | `doa_angle` and `speech_detected` exposed to Home Assistant | `entity_registry.py` | ✅ Implemented |
 | Model download retry | 3 retries, 5 second interval | `head_tracker.py` | ✅ Implemented |
 | Conversation mode integration | Auto-switch tracking frequency on voice assistant state change | `satellite.py` | ✅ Implemented |
 
@@ -514,6 +522,7 @@ automation:
 - Immediately restore high-frequency tracking when face detected
 
 **Code Locations**:
+- `satellite.py:_turn_to_sound_source()` - DOA turn-to-sound at wakeup
 - `head_tracker.py` - YOLO face detector (`HeadTracker` class)
 - `camera_server.py:_capture_frames()` - Adaptive frame rate face tracking
 - `camera_server.py:set_conversation_mode()` - Conversation mode switch API

@@ -46,6 +46,9 @@ ENTITY_KEYS: Dict[str, int] = {
     "look_at_x": 400,
     "look_at_y": 401,
     "look_at_z": 402,
+    # Phase 5: DOA (Direction of Arrival) - re-added for wakeup turn-to-sound
+    "doa_angle": 500,
+    "speech_detected": 501,
     # Phase 6: Diagnostic information
     "control_loop_frequency": 600,
     "sdk_version": 601,
@@ -197,7 +200,7 @@ class EntityRegistry:
         self._setup_phase2_entities(entities)
         self._setup_phase3_entities(entities)
         self._setup_phase4_entities(entities)
-        # Phase 5 (DOA/speech detection) removed - replaced by face tracking
+        self._setup_phase5_entities(entities)  # DOA for wakeup turn-to-sound
         self._setup_phase6_entities(entities)
         self._setup_phase7_entities(entities)
         self._setup_phase8_entities(entities)
@@ -484,6 +487,34 @@ class EntityRegistry:
         ))
 
         _LOGGER.debug("Phase 4 entities registered: look_at_x/y/z")
+
+    def _setup_phase5_entities(self, entities: List) -> None:
+        """Setup Phase 5 entities: DOA (Direction of Arrival) for wakeup turn-to-sound."""
+        rc = self.reachy_controller
+
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("doa_angle"),
+            name="DOA Angle",
+            object_id="doa_angle",
+            icon="mdi:surround-sound",
+            unit_of_measurement="°",
+            accuracy_decimals=1,
+            state_class="measurement",
+            value_getter=rc.get_doa_angle_degrees,
+        ))
+
+        entities.append(BinarySensorEntity(
+            server=self.server,
+            key=get_entity_key("speech_detected"),
+            name="Speech Detected",
+            object_id="speech_detected",
+            icon="mdi:account-voice",
+            device_class="sound",
+            value_getter=rc.get_speech_detected,
+        ))
+
+        _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected")
 
     def _setup_phase6_entities(self, entities: List) -> None:
         """Setup Phase 6 entities: Diagnostic information."""
@@ -834,5 +865,5 @@ class EntityRegistry:
         Args:
             entities: The list of existing entities to search
         """
-        # No special entity references needed after DOA removal
+        # DOA entities are read-only sensors, no special references needed
         pass

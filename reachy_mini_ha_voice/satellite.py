@@ -376,6 +376,11 @@ class VoiceSatelliteProtocol(APIServer):
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
+        # Turn toward sound source using DOA (Direction of Arrival)
+        # Only read DOA once at wakeup to avoid daemon pressure
+        # Face tracking will take over after initial turn
+        self._turn_to_sound_source()
+
         # Get or create conversation_id for context tracking
         conv_id = self._get_or_create_conversation_id()
         
@@ -633,6 +638,67 @@ class VoiceSatelliteProtocol(APIServer):
     # -------------------------------------------------------------------------
     # Reachy Mini Motion Control
     # -------------------------------------------------------------------------
+
+    def _turn_to_sound_source(self) -> None:
+        """Turn robot head toward sound source using DOA at wakeup.
+        
+        This is called once at wakeup to orient the robot toward the speaker.
+        Face tracking will take over after the initial turn.
+        
+        DOA angle convention (from SDK):
+        - 0 radians = left
+        - π/2 radians = front
+        - π radians = right
+        
+        We convert to yaw angle where:
+        - Negative = turn left
+        - Positive = turn right
+        """
+        if not self.state.motion_enabled or not self.state.reachy_mini:
+            return
+        
+        try:
+            # Get DOA from reachy_controller (only read once)
+            doa = self.reachy_controller.get_doa_angle()
+            if doa is None:
+                _LOGGER.debug("DOA not available, skipping turn-to-sound")
+                return
+            
+            angle_rad, speech_detected = doa
+            if not speech_detected:
+                _LOGGER.debug("No speech detected in DOA, skipping turn-to-sound")
+                return
+            
+            # Convert DOA to yaw angle
+            # SDK: 0 = left, π/2 = front, π = right
+            # Yaw: negative = left, 0 = front, positive = right
+            # Formula: yaw = angle - π/2
+            import math
+            yaw_rad = angle_rad - math.pi / 2
+            yaw_deg = math.degrees(yaw_rad)
+            
+            # Only turn if angle is significant (> 10°) to avoid noise
+            DOA_THRESHOLD_DEG = 10.0
+            if abs(yaw_deg) < DOA_THRESHOLD_DEG:
+                _LOGGER.debug("DOA angle %.1f° below threshold, skipping turn", yaw_deg)
+                return
+            
+            # Apply 80% of DOA angle as conservative strategy
+            # This accounts for potential DOA inaccuracy
+            DOA_SCALE = 0.8
+            target_yaw_deg = yaw_deg * DOA_SCALE
+            
+            _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°", 
+                        yaw_deg, target_yaw_deg)
+            
+            # Use MovementManager to turn (non-blocking)
+            if self.state.motion and self.state.motion.movement_manager:
+                self.state.motion.movement_manager.turn_to_angle(
+                    target_yaw_deg, 
+                    duration=0.5  # Quick turn
+                )
+        except Exception as e:
+            _LOGGER.error("Error in turn-to-sound: %s", e)
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""

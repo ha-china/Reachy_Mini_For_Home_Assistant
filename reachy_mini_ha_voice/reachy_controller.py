@@ -811,3 +811,52 @@ class ReachyController:
             except Exception as e:
                 logger.debug(f"Error getting AEC converged status: {e}")
         return False
+
+    # ========== DOA (Direction of Arrival) ==========
+
+    def get_doa_angle(self) -> tuple[float, bool] | None:
+        """Get Direction of Arrival angle from microphone array.
+        
+        The DOA angle indicates the direction of the sound source relative to the robot.
+        Angle is in radians: 0 = left, π/2 = front/back, π = right.
+        
+        Returns:
+            Tuple of (angle_radians, speech_detected), or None if unavailable.
+            - angle_radians: Sound source direction in radians
+            - speech_detected: Whether speech is currently detected
+        """
+        if not self.is_available:
+            return None
+        try:
+            if self.reachy.media and self.reachy.media.audio:
+                return self.reachy.media.audio.get_DoA()
+        except Exception as e:
+            logger.debug(f"Error getting DOA: {e}")
+        return None
+
+    def get_doa_angle_degrees(self) -> float:
+        """Get DOA angle in degrees for Home Assistant entity.
+        
+        Returns angle in degrees (-180 to 180), or 0 if unavailable.
+        Converts from SDK's 0-π range to -90 to 90 range for intuitive display.
+        """
+        doa = self.get_doa_angle()
+        if doa is None:
+            return 0.0
+        angle_rad, _ = doa
+        # Convert: 0 rad = left (-90°), π/2 rad = front (0°), π rad = right (90°)
+        # SDK: 0 = left, π/2 = front, π = right
+        # We want: -90 = left, 0 = front, 90 = right
+        angle_deg = math.degrees(angle_rad) - 90.0
+        return angle_deg
+
+    def get_speech_detected(self) -> bool:
+        """Get speech detection status from DOA.
+        
+        Returns True if speech is currently detected.
+        """
+        doa = self.get_doa_angle()
+        if doa is None:
+            return False
+        _, speech_detected = doa
+        return speech_detected
