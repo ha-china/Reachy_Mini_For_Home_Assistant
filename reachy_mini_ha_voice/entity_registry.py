@@ -123,14 +123,23 @@ class EntityRegistry:
 
         # Emotion state
         self._current_emotion = "None"
+        # Map emotion names to available robot emotions
+        # Available emotions from robot: fear1, surprised1, rage1, resigned1, go_away1, loving1,
+        # impatient1/2, enthusiastic1/2, cheerful1, laughing1/2, irritated1/2, oops1/2, curious1,
+        # electric1, contempt1, inquiring1/2/3, attentive1/2, frustrated1, dance1/2/3, no1, sad1/2,
+        # understanding1/2, come1, calming1, exhausted1, scared1, downcast1, success1/2, disgusted1,
+        # amazed1, displeased1/2, dying1, no_excited1, thoughtful1/2, lonely1, welcoming1/2,
+        # no_sad1, reprimand1/2/3, boredom1/2, grateful1, uncertain1, furious1, anxiety1, yes_sad1,
+        # proud1/2/3, shy1, indifferent1, tired1, serenity1, helpful1/2, incomprehensible2, relief1/2,
+        # confused1, sleep1, yes1, uncomfortable1, lost1
         self._emotion_map = {
             "None": None,
-            "Happy": "happy1",
+            "Happy": "cheerful1",
             "Sad": "sad1",
-            "Angry": "angry1",
+            "Angry": "rage1",
             "Fear": "fear1",
-            "Surprise": "surprise1",
-            "Disgust": "disgust1",
+            "Surprise": "surprised1",
+            "Disgust": "disgusted1",
         }
 
     def setup_all_entities(self, entities: List) -> None:
