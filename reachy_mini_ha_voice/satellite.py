@@ -78,6 +78,11 @@ class VoiceSatelliteProtocol(APIServer):
         
         # Tap-to-talk continuous conversation mode
         self._tap_conversation_mode = False  # When True, auto-continue after TTS
+        
+        # Conversation tracking for continuous conversation
+        self._conversation_id: Optional[str] = None
+        self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
+        self._last_conversation_time = 0.0
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -321,6 +326,28 @@ class VoiceSatelliteProtocol(APIServer):
             return
         self.send_messages([VoiceAssistantAudio(data=audio_chunk)])
 
+    def _get_or_create_conversation_id(self) -> str:
+        """Get existing conversation_id or create a new one.
+        
+        Reuses conversation_id if within timeout period, otherwise creates new one.
+        """
+        now = time.time()
+        if (self._conversation_id is None or 
+            now - self._last_conversation_time > self._conversation_timeout):
+            # Create new conversation_id
+            import uuid
+            self._conversation_id = str(uuid.uuid4())
+            _LOGGER.debug("Created new conversation_id: %s", self._conversation_id)
+        
+        self._last_conversation_time = now
+        return self._conversation_id
+
+    def _clear_conversation(self) -> None:
+        """Clear conversation state when exiting conversation mode."""
+        self._conversation_id = None
+        self._tap_conversation_mode = False
+        self._continue_conversation = False
+
     def wakeup(self, wake_word: Union[MicroWakeWord, OpenWakeWord]) -> None:
         if self._timer_finished:
             # Stop timer instead
@@ -332,8 +359,15 @@ class VoiceSatelliteProtocol(APIServer):
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
+        # Get or create conversation_id for context tracking
+        conv_id = self._get_or_create_conversation_id()
+        
         self.send_messages(
-            [VoiceAssistantRequest(start=True, wake_word_phrase=wake_word_phrase)]
+            [VoiceAssistantRequest(
+                start=True, 
+                wake_word_phrase=wake_word_phrase,
+                conversation_id=conv_id,
+            )]
         )
         self.duck()
         self._is_streaming_audio = True
@@ -348,9 +382,8 @@ class VoiceSatelliteProtocol(APIServer):
         # If already in tap conversation mode, exit it
         if self._tap_conversation_mode:
             _LOGGER.info("Tap detected - exiting continuous conversation mode")
-            self._tap_conversation_mode = False
+            self._clear_conversation()
             self._is_streaming_audio = False
-            self._continue_conversation = False  # Also clear HA continue flag
             # Send stop request to Home Assistant
             self.send_messages([VoiceAssistantRequest(start=False)])
             # Stop any ongoing TTS
@@ -369,8 +402,15 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Tap detected - entering continuous conversation mode")
         self._tap_conversation_mode = True
 
+        # Get or create conversation_id for context tracking
+        conv_id = self._get_or_create_conversation_id()
+        
         self.send_messages(
-            [VoiceAssistantRequest(start=True, wake_word_phrase="tap")]
+            [VoiceAssistantRequest(
+                start=True, 
+                wake_word_phrase="tap",
+                conversation_id=conv_id,
+            )]
         )
         self.duck()
         self._is_streaming_audio = True
@@ -419,14 +459,20 @@ class VoiceSatelliteProtocol(APIServer):
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
         # Check if should continue conversation
-        # 1. HA requested continue (intent not matched)
-        # 2. Tap conversation mode is active
+        # 1. HA requested continue (continue_conversation=1 in INTENT_END)
+        # 2. Tap conversation mode is active (user tapped to start continuous mode)
         should_continue = self._continue_conversation or self._tap_conversation_mode
 
         if should_continue:
             _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)", 
                         self._tap_conversation_mode, self._continue_conversation)
-            self.send_messages([VoiceAssistantRequest(start=True)])
+            
+            # Use same conversation_id for context continuity
+            conv_id = self._get_or_create_conversation_id()
+            self.send_messages([VoiceAssistantRequest(
+                start=True,
+                conversation_id=conv_id,
+            )])
             self._is_streaming_audio = True
             
             if self._tap_conversation_mode:
@@ -436,9 +482,11 @@ class VoiceSatelliteProtocol(APIServer):
             # Stay in listening mode, don't go to idle
             self._reachy_on_listening()
         else:
+            # Conversation ended, clear state
+            self._clear_conversation()
             self._is_streaming_audio = False
             self.unduck()
-            _LOGGER.debug("TTS response finished")
+            _LOGGER.debug("TTS response finished, conversation ended")
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
 
