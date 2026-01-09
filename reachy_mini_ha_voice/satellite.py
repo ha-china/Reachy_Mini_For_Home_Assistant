@@ -658,17 +658,18 @@ class VoiceSatelliteProtocol(APIServer):
         detection completes, the user may have stopped speaking.
         """
         if not self.state.motion_enabled or not self.state.reachy_mini:
+            _LOGGER.info("DOA turn-to-sound: motion disabled or no robot")
             return
         
         try:
             # Get DOA from reachy_controller (only read once)
             doa = self.reachy_controller.get_doa_angle()
             if doa is None:
-                _LOGGER.debug("DOA not available, skipping turn-to-sound")
+                _LOGGER.info("DOA not available, skipping turn-to-sound")
                 return
             
             angle_rad, speech_detected = doa
-            _LOGGER.debug("DOA raw: angle=%.3f rad (%.1f°), speech=%s", 
+            _LOGGER.info("DOA raw: angle=%.3f rad (%.1f°), speech=%s", 
                          angle_rad, math.degrees(angle_rad), speech_detected)
             
             # Convert DOA to direction vector in head frame
@@ -685,13 +686,14 @@ class VoiceSatelliteProtocol(APIServer):
             yaw_rad = angle_rad - math.pi / 2
             yaw_deg = math.degrees(yaw_rad)
             
-            _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", 
+            _LOGGER.info("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", 
                          dir_x, dir_y, yaw_deg)
             
             # Only turn if angle is significant (> 10°) to avoid noise
             DOA_THRESHOLD_DEG = 10.0
             if abs(yaw_deg) < DOA_THRESHOLD_DEG:
-                _LOGGER.debug("DOA angle %.1f° below threshold, skipping turn", yaw_deg)
+                _LOGGER.info("DOA angle %.1f° below threshold (%.1f°), skipping turn", 
+                            yaw_deg, DOA_THRESHOLD_DEG)
                 return
             
             # Apply 80% of DOA angle as conservative strategy
