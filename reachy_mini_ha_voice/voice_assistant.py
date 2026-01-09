@@ -307,19 +307,20 @@ class VoiceAssistantService:
             # ========== 3. Noise Suppression Settings ==========
             # Reduce noise suppression to preserve quiet speech
             # PP_MIN_NS: minimum noise suppression threshold
-            # Lower values = less aggressive suppression = better voice pickup
-            # UI shows percentage where 15% = PP_MIN_NS of 0.85
+            # Higher values = less aggressive suppression = better voice pickup
+            # PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% max suppression
+            # UI shows "noise suppression strength" so 15% = PP_MIN_NS of 0.85
             try:
-                respeaker.write("PP_MIN_NS", [0.85])  # 15% noise suppression
-                _LOGGER.info("Noise suppression set to 15%% (PP_MIN_NS=0.85)")
+                respeaker.write("PP_MIN_NS", [0.85])  # 15% noise suppression strength
+                _LOGGER.info("Noise suppression set to 15%% strength (PP_MIN_NS=0.85)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
             
             # PP_MIN_NN: minimum noise floor estimation
-            # Lower values help in quieter environments
+            # Higher values = less aggressive noise floor tracking
             try:
-                respeaker.write("PP_MIN_NN", [0.15])
-                _LOGGER.info("Noise floor threshold reduced (PP_MIN_NN=0.15)")
+                respeaker.write("PP_MIN_NN", [0.85])  # Match PP_MIN_NS
+                _LOGGER.info("Noise floor threshold set (PP_MIN_NN=0.85)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NN: %s", e)
             

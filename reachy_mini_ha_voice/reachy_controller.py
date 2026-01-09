@@ -769,16 +769,25 @@ class ReachyController:
                 logger.error(f"Error setting AGC max gain: {e}")
 
     def get_noise_suppression(self) -> float:
-        """Get noise suppression level (0-100%)."""
+        """Get noise suppression level (0-100%).
+        
+        PP_MIN_NS represents "minimum signal preservation ratio":
+        - PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% suppression
+        - PP_MIN_NS = 0.15 means "keep at least 15% of signal" = 85% suppression
+        
+        We display "noise suppression strength" to user, so:
+        - suppression_percent = (1.0 - PP_MIN_NS) * 100
+        """
         with self._get_respeaker() as respeaker:
             if respeaker is None:
                 return getattr(self, '_noise_suppression', 15.0)
             try:
                 result = respeaker.read("PP_MIN_NS")
                 if result is not None:
-                    # PP_MIN_NS is typically a float value, convert to percentage
-                    # Lower values = more suppression
-                    self._noise_suppression = max(0.0, min(100.0, (1.0 - result[0]) * 100.0))
+                    raw_value = result[0]
+                    # Convert: PP_MIN_NS=0.85 -> 15% suppression, PP_MIN_NS=0.15 -> 85% suppression
+                    self._noise_suppression = max(0.0, min(100.0, (1.0 - raw_value) * 100.0))
+                    logger.debug(f"Noise suppression: PP_MIN_NS={raw_value:.2f} -> {self._noise_suppression:.1f}%")
                     return self._noise_suppression
             except Exception as e:
                 logger.debug(f"Error getting noise suppression: {e}")
