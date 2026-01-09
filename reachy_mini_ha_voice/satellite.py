@@ -165,12 +165,12 @@ class VoiceSatelliteProtocol(APIServer):
             self.play_tts()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
-            # Note: Don't set _is_streaming_audio = False here
-            # _tts_finished() will handle it based on whether we continue conversation
-            if not self._tts_played:
-                self._tts_finished()
+            # Pipeline run ended - this is the safe point to start a new conversation
             self._tts_played = False
-            # Note: _reachy_on_idle() is called inside _tts_finished() if not continuing
+            self._is_streaming_audio = False
+            
+            # Check if should continue conversation (after RUN_END is safe)
+            self._handle_run_end()
 
     def handle_timer_event(
         self,
@@ -421,6 +421,7 @@ class VoiceSatelliteProtocol(APIServer):
         return self._tap_conversation_mode
 
     def stop(self) -> None:
+        """Stop current TTS playback (e.g., user said stop word)."""
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.state.tts_player.stop()
 
@@ -430,7 +431,9 @@ class VoiceSatelliteProtocol(APIServer):
         else:
             _LOGGER.debug("TTS response stopped manually")
 
-        self._tts_finished()
+        # Send announce finished to HA
+        self.send_messages([VoiceAssistantAnnounceFinished()])
+        # Note: RUN_END event will handle the rest
 
     def play_tts(self) -> None:
         if (not self._tts_url) or self._tts_played:
@@ -455,9 +458,20 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.music_player.resume_sendspin()
 
     def _tts_finished(self) -> None:
+        """Called when TTS audio playback finishes.
+        
+        Note: This is called from the audio player callback, NOT from HA events.
+        We should NOT start a new conversation here - wait for RUN_END event.
+        """
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.send_messages([VoiceAssistantAnnounceFinished()])
+        _LOGGER.debug("TTS playback finished, waiting for RUN_END event")
 
+    def _handle_run_end(self) -> None:
+        """Handle pipeline RUN_END event - safe point to continue conversation.
+        
+        This is called after HA has fully completed the pipeline run.
+        """
         # Check if should continue conversation
         # 1. HA requested continue (continue_conversation=1 in INTENT_END)
         # 2. Tap conversation mode is active (user tapped to start continuous mode)
@@ -484,9 +498,8 @@ class VoiceSatelliteProtocol(APIServer):
         else:
             # Conversation ended, clear state
             self._clear_conversation()
-            self._is_streaming_audio = False
             self.unduck()
-            _LOGGER.debug("TTS response finished, conversation ended")
+            _LOGGER.debug("Pipeline ended, conversation finished")
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
 
