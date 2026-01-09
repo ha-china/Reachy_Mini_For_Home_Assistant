@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import math
 import posixpath
 import shutil
 import time
@@ -646,13 +647,15 @@ class VoiceSatelliteProtocol(APIServer):
         Face tracking will take over after the initial turn.
         
         DOA angle convention (from SDK):
-        - 0 radians = left
-        - π/2 radians = front
-        - π radians = right
+        - 0 radians = left (Y+ direction in head frame)
+        - π/2 radians = front (X+ direction in head frame)
+        - π radians = right (Y- direction in head frame)
         
-        We convert to yaw angle where:
-        - Negative = turn left
-        - Positive = turn right
+        The SDK uses: p_head = [sin(doa), cos(doa), 0]
+        So we need to convert this to yaw angle.
+        
+        Note: We don't check speech_detected because by the time wake word
+        detection completes, the user may have stopped speaking.
         """
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
@@ -665,17 +668,25 @@ class VoiceSatelliteProtocol(APIServer):
                 return
             
             angle_rad, speech_detected = doa
-            if not speech_detected:
-                _LOGGER.debug("No speech detected in DOA, skipping turn-to-sound")
-                return
+            _LOGGER.debug("DOA raw: angle=%.3f rad (%.1f°), speech=%s", 
+                         angle_rad, math.degrees(angle_rad), speech_detected)
             
-            # Convert DOA to yaw angle
-            # SDK: 0 = left, π/2 = front, π = right
-            # Yaw: negative = left, 0 = front, positive = right
-            # Formula: yaw = angle - π/2
-            import math
+            # Convert DOA to direction vector in head frame
+            # SDK convention: p_head = [sin(doa), cos(doa), 0]
+            # where X+ is front, Y+ is left
+            dir_x = math.sin(angle_rad)  # Front component
+            dir_y = math.cos(angle_rad)  # Left component
+            
+            # Calculate yaw angle from direction vector
+            # yaw = atan2(y, x), but we want: positive yaw = turn right
+            # In robot frame: Y+ is left, so yaw = -atan2(dir_y, dir_x)
+            # But since dir_x = sin(doa), dir_y = cos(doa):
+            # yaw = -atan2(cos(doa), sin(doa)) = -(π/2 - doa) = doa - π/2
             yaw_rad = angle_rad - math.pi / 2
             yaw_deg = math.degrees(yaw_rad)
+            
+            _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", 
+                         dir_x, dir_y, yaw_deg)
             
             # Only turn if angle is significant (> 10°) to avoid noise
             DOA_THRESHOLD_DEG = 10.0

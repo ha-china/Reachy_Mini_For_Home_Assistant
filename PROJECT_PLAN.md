@@ -142,9 +142,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 
 ### Application Architecture
 - [x] Compliant with Reachy Mini App architecture
-- [x] Auto-download wake word models
-- [x] Auto-download sound effect files
-- [x] No .env configuration file required
+
 
 
 ## File List
