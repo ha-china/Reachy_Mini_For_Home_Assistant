@@ -136,6 +136,11 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
+            # Check if pipeline is already active (shouldn't happen, but be safe)
+            if self._pipeline_active:
+                _LOGGER.warning("RUN_START received but pipeline already active, stopping previous")
+                self.state.tts_player.stop()
+            
             # Mark pipeline as active
             self._pipeline_active = True
             self._tts_url = data.get("url")
@@ -170,12 +175,12 @@ class VoiceSatelliteProtocol(APIServer):
             self.play_tts()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
-            # Pipeline run ended - mark as inactive
-            self._pipeline_active = False
+            # Pipeline run ended
             self._tts_played = False
             self._is_streaming_audio = False
             
             # Check if should continue conversation (after RUN_END is safe)
+            # Note: _pipeline_active is managed inside _handle_run_end
             self._handle_run_end()
 
     def handle_timer_event(
@@ -489,6 +494,15 @@ class VoiceSatelliteProtocol(APIServer):
         
         This is called after HA has fully completed the pipeline run.
         """
+        # Mark current pipeline as ended
+        was_active = self._pipeline_active
+        self._pipeline_active = False
+        
+        # If pipeline wasn't active, this might be a duplicate RUN_END - ignore
+        if not was_active:
+            _LOGGER.debug("RUN_END received but pipeline wasn't active, ignoring")
+            return
+        
         # Check if should continue conversation
         # 1. HA requested continue (continue_conversation=1 in INTENT_END)
         # 2. Tap conversation mode is active (user tapped to start continuous mode)
@@ -497,6 +511,9 @@ class VoiceSatelliteProtocol(APIServer):
         if should_continue:
             _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)", 
                         self._tap_conversation_mode, self._continue_conversation)
+            
+            # Mark pipeline as active BEFORE sending request to prevent duplicates
+            self._pipeline_active = True
             
             # Play prompt sound to indicate ready for next input
             # Use wakeup sound as the prompt (short beep)
