@@ -816,6 +816,24 @@ class VoiceSatelliteProtocol(APIServer):
         """
         try:
             import requests
+            import threading
+
+            # Temporarily disable tap detection during emotion playback
+            # to prevent false triggers from robot movement
+            tap_detector = getattr(self.state, 'tap_detector', None)
+            if tap_detector:
+                tap_detector.set_enabled(False)
+                _LOGGER.debug("Tap detection disabled during emotion playback")
+                
+                # Re-enable after emotion completes (estimated 3 seconds)
+                def reenable_tap():
+                    import time
+                    time.sleep(3.0)
+                    if tap_detector:
+                        tap_detector.set_enabled(True)
+                        _LOGGER.debug("Tap detection re-enabled after emotion")
+                
+                threading.Thread(target=reenable_tap, daemon=True).start()
 
             # Get WLAN IP from daemon status
             wlan_ip = "localhost"
@@ -838,3 +856,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         except Exception as e:
             _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
+            # Re-enable tap detection on error
+            tap_detector = getattr(self.state, 'tap_detector', None)
+            if tap_detector:
+                tap_detector.set_enabled(True)
