@@ -81,6 +81,10 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
+        
+        # Connect MovementManager to ReachyController for pose control from HA
+        if state.motion is not None and state.motion.movement_manager is not None:
+            self.reachy_controller.set_movement_manager(state.motion.movement_manager)
 
         # Initialize entity registry (tap_detector from state if available)
         tap_detector = getattr(state, 'tap_detector', None)
@@ -156,12 +160,12 @@ class VoiceSatelliteProtocol(APIServer):
             self.play_tts()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
-            self._is_streaming_audio = False
+            # Note: Don't set _is_streaming_audio = False here
+            # _tts_finished() will handle it based on whether we continue conversation
             if not self._tts_played:
                 self._tts_finished()
             self._tts_played = False
-            # Reachy Mini: Return to idle
-            self._reachy_on_idle()
+            # Note: _reachy_on_idle() is called inside _tts_finished() if not continuing
 
     def handle_timer_event(
         self,
@@ -420,16 +424,19 @@ class VoiceSatelliteProtocol(APIServer):
         should_continue = self._continue_conversation or self._tap_conversation_mode
 
         if should_continue:
+            _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)", 
+                        self._tap_conversation_mode, self._continue_conversation)
             self.send_messages([VoiceAssistantRequest(start=True)])
             self._is_streaming_audio = True
             
             if self._tap_conversation_mode:
-                _LOGGER.debug("Continuing tap conversation mode")
                 # Provide feedback for continuous conversation mode
                 self._tap_continue_feedback()
-            else:
-                _LOGGER.debug("Continuing conversation (HA requested)")
+            
+            # Stay in listening mode, don't go to idle
+            self._reachy_on_listening()
         else:
+            self._is_streaming_audio = False
             self.unduck()
             _LOGGER.debug("TTS response finished")
             # Reachy Mini: Return to idle

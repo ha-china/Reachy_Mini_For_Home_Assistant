@@ -47,6 +47,7 @@ class ReachyController:
         """
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
+        self._movement_manager = None  # Set later via set_movement_manager()
         
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
@@ -57,6 +58,15 @@ class ReachyController:
         
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
         self._respeaker_lock = __import__('threading').Lock()
+
+    def set_movement_manager(self, movement_manager) -> None:
+        """Set the MovementManager instance for pose control.
+        
+        Args:
+            movement_manager: MovementManager instance
+        """
+        self._movement_manager = movement_manager
+        logger.info("MovementManager set for ReachyController")
 
     @property
     def is_available(self) -> bool:
@@ -408,58 +418,74 @@ class ReachyController:
             return 0.0
 
     def _disabled_pose_setter(self, name: str) -> None:
-        """Log warning for disabled pose setters."""
-        logger.debug(f"set_{name} is disabled - MovementManager controls pose")
+        """Log warning when MovementManager is not available."""
+        logger.warning(f"set_{name} failed - MovementManager not set")
 
-    # Head position getters (read-only, setters disabled for MovementManager)
+    def _set_pose_via_manager(self, **kwargs) -> bool:
+        """Set pose via MovementManager if available.
+        
+        Returns True if successful, False if MovementManager not available.
+        """
+        if self._movement_manager is None:
+            return False
+        self._movement_manager.set_target_pose(**kwargs)
+        return True
+
+    # Head position getters and setters
     def get_head_x(self) -> float:
         """Get head X position in mm."""
         return self._get_head_pose_component('x')
 
     def set_head_x(self, x_mm: float) -> None:
-        """Disabled - MovementManager controls head pose."""
-        self._disabled_pose_setter('head_x')
+        """Set head X position in mm via MovementManager."""
+        if not self._set_pose_via_manager(x=x_mm / 1000.0):  # mm to m
+            self._disabled_pose_setter('head_x')
 
     def get_head_y(self) -> float:
         """Get head Y position in mm."""
         return self._get_head_pose_component('y')
 
     def set_head_y(self, y_mm: float) -> None:
-        """Disabled - MovementManager controls head pose."""
-        self._disabled_pose_setter('head_y')
+        """Set head Y position in mm via MovementManager."""
+        if not self._set_pose_via_manager(y=y_mm / 1000.0):  # mm to m
+            self._disabled_pose_setter('head_y')
 
     def get_head_z(self) -> float:
         """Get head Z position in mm."""
         return self._get_head_pose_component('z')
 
     def set_head_z(self, z_mm: float) -> None:
-        """Disabled - MovementManager controls head pose."""
-        self._disabled_pose_setter('head_z')
+        """Set head Z position in mm via MovementManager."""
+        if not self._set_pose_via_manager(z=z_mm / 1000.0):  # mm to m
+            self._disabled_pose_setter('head_z')
 
-    # Head orientation getters (read-only, setters disabled for MovementManager)
+    # Head orientation getters and setters
     def get_head_roll(self) -> float:
         """Get head roll angle in degrees."""
         return self._get_head_pose_component('roll')
 
     def set_head_roll(self, roll_deg: float) -> None:
-        """Disabled - MovementManager controls head pose."""
-        self._disabled_pose_setter('head_roll')
+        """Set head roll angle in degrees via MovementManager."""
+        if not self._set_pose_via_manager(roll=math.radians(roll_deg)):
+            self._disabled_pose_setter('head_roll')
 
     def get_head_pitch(self) -> float:
         """Get head pitch angle in degrees."""
         return self._get_head_pose_component('pitch')
 
     def set_head_pitch(self, pitch_deg: float) -> None:
-        """Disabled - MovementManager controls head pose."""
-        self._disabled_pose_setter('head_pitch')
+        """Set head pitch angle in degrees via MovementManager."""
+        if not self._set_pose_via_manager(pitch=math.radians(pitch_deg)):
+            self._disabled_pose_setter('head_pitch')
 
     def get_head_yaw(self) -> float:
         """Get head yaw angle in degrees."""
         return self._get_head_pose_component('yaw')
 
     def set_head_yaw(self, yaw_deg: float) -> None:
-        """Disabled - MovementManager controls head pose."""
-        self._disabled_pose_setter('head_yaw')
+        """Set head yaw angle in degrees via MovementManager."""
+        if not self._set_pose_via_manager(yaw=math.radians(yaw_deg)):
+            self._disabled_pose_setter('head_yaw')
 
     def get_body_yaw(self) -> float:
         """Get body yaw angle in degrees."""
@@ -474,8 +500,9 @@ class ReachyController:
             return 0.0
 
     def set_body_yaw(self, yaw_deg: float) -> None:
-        """Disabled - MovementManager controls body pose."""
-        self._disabled_pose_setter('body_yaw')
+        """Set body yaw angle in degrees via MovementManager."""
+        if not self._set_pose_via_manager(body_yaw=math.radians(yaw_deg)):
+            self._disabled_pose_setter('body_yaw')
 
     def get_antenna_left(self) -> float:
         """Get left antenna angle in degrees."""
@@ -490,8 +517,9 @@ class ReachyController:
             return 0.0
 
     def set_antenna_left(self, angle_deg: float) -> None:
-        """Disabled - MovementManager controls antennas."""
-        self._disabled_pose_setter('antenna_left')
+        """Set left antenna angle in degrees via MovementManager."""
+        if not self._set_pose_via_manager(antenna_left=math.radians(angle_deg)):
+            self._disabled_pose_setter('antenna_left')
 
     def get_antenna_right(self) -> float:
         """Get right antenna angle in degrees."""
@@ -506,8 +534,9 @@ class ReachyController:
             return 0.0
 
     def set_antenna_right(self, angle_deg: float) -> None:
-        """Disabled - MovementManager controls antennas."""
-        self._disabled_pose_setter('antenna_right')
+        """Set right antenna angle in degrees via MovementManager."""
+        if not self._set_pose_via_manager(antenna_right=math.radians(angle_deg)):
+            self._disabled_pose_setter('antenna_right')
 
     # ========== Phase 4: Look At Control ==========
 

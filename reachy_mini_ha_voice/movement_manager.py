@@ -479,6 +479,41 @@ class MovementManager:
         with self._face_tracking_lock:
             self._face_tracking_offsets = offsets
 
+    def set_target_pose(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        roll: Optional[float] = None,
+        pitch: Optional[float] = None,
+        yaw: Optional[float] = None,
+        body_yaw: Optional[float] = None,
+        antenna_left: Optional[float] = None,
+        antenna_right: Optional[float] = None,
+    ) -> None:
+        """Thread-safe: Set target pose components.
+        
+        Only provided values will be updated. Values are in meters for position
+        and radians for angles.
+        
+        Args:
+            x, y, z: Head position in meters
+            roll, pitch, yaw: Head orientation in radians
+            body_yaw: Body yaw in radians
+            antenna_left, antenna_right: Antenna angles in radians
+        """
+        self._command_queue.put(("set_pose", {
+            "x": x,
+            "y": y,
+            "z": z,
+            "roll": roll,
+            "pitch": pitch,
+            "yaw": yaw,
+            "body_yaw": body_yaw,
+            "antenna_left": antenna_left,
+            "antenna_right": antenna_right,
+        }))
+
     # =========================================================================
     # Internal: Command processing (runs in control loop)
     # =========================================================================
@@ -533,6 +568,28 @@ class MovementManager:
         elif cmd == "shake":
             amplitude_deg, duration = payload
             self._do_shake(amplitude_deg, duration)
+
+        elif cmd == "set_pose":
+            # Update target pose from external control (e.g., Home Assistant)
+            if payload.get("x") is not None:
+                self.state.target_x = payload["x"]
+            if payload.get("y") is not None:
+                self.state.target_y = payload["y"]
+            if payload.get("z") is not None:
+                self.state.target_z = payload["z"]
+            if payload.get("roll") is not None:
+                self.state.target_roll = payload["roll"]
+            if payload.get("pitch") is not None:
+                self.state.target_pitch = payload["pitch"]
+            if payload.get("yaw") is not None:
+                self.state.target_yaw = payload["yaw"]
+            if payload.get("body_yaw") is not None:
+                self.state.target_body_yaw = payload["body_yaw"]
+            if payload.get("antenna_left") is not None:
+                self.state.target_antenna_left = payload["antenna_left"]
+            if payload.get("antenna_right") is not None:
+                self.state.target_antenna_right = payload["antenna_right"]
+            logger.debug("External pose update: %s", payload)
 
     def _start_action(self, action: PendingAction) -> None:
         """Start a new motion action."""

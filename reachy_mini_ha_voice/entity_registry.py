@@ -124,22 +124,67 @@ class EntityRegistry:
         # Emotion state
         self._current_emotion = "None"
         # Map emotion names to available robot emotions
-        # Available emotions from robot: fear1, surprised1, rage1, resigned1, go_away1, loving1,
-        # impatient1/2, enthusiastic1/2, cheerful1, laughing1/2, irritated1/2, oops1/2, curious1,
-        # electric1, contempt1, inquiring1/2/3, attentive1/2, frustrated1, dance1/2/3, no1, sad1/2,
-        # understanding1/2, come1, calming1, exhausted1, scared1, downcast1, success1/2, disgusted1,
-        # amazed1, displeased1/2, dying1, no_excited1, thoughtful1/2, lonely1, welcoming1/2,
-        # no_sad1, reprimand1/2/3, boredom1/2, grateful1, uncertain1, furious1, anxiety1, yes_sad1,
-        # proud1/2/3, shy1, indifferent1, tired1, serenity1, helpful1/2, incomprehensible2, relief1/2,
-        # confused1, sleep1, yes1, uncomfortable1, lost1
+        # Full list of available emotions from robot
         self._emotion_map = {
             "None": None,
+            # Basic emotions
             "Happy": "cheerful1",
             "Sad": "sad1",
             "Angry": "rage1",
             "Fear": "fear1",
             "Surprise": "surprised1",
             "Disgust": "disgusted1",
+            # Extended emotions
+            "Laughing": "laughing1",
+            "Loving": "loving1",
+            "Proud": "proud1",
+            "Grateful": "grateful1",
+            "Enthusiastic": "enthusiastic1",
+            "Curious": "curious1",
+            "Amazed": "amazed1",
+            "Shy": "shy1",
+            "Confused": "confused1",
+            "Thoughtful": "thoughtful1",
+            "Anxious": "anxiety1",
+            "Scared": "scared1",
+            "Frustrated": "frustrated1",
+            "Irritated": "irritated1",
+            "Furious": "furious1",
+            "Contempt": "contempt1",
+            "Bored": "boredom1",
+            "Tired": "tired1",
+            "Exhausted": "exhausted1",
+            "Lonely": "lonely1",
+            "Downcast": "downcast1",
+            "Resigned": "resigned1",
+            "Uncertain": "uncertain1",
+            "Uncomfortable": "uncomfortable1",
+            "Lost": "lost1",
+            "Indifferent": "indifferent1",
+            # Positive actions
+            "Yes": "yes1",
+            "No": "no1",
+            "Welcoming": "welcoming1",
+            "Helpful": "helpful1",
+            "Attentive": "attentive1",
+            "Understanding": "understanding1",
+            "Calming": "calming1",
+            "Relief": "relief1",
+            "Success": "success1",
+            "Serenity": "serenity1",
+            # Negative actions
+            "Oops": "oops1",
+            "Displeased": "displeased1",
+            "Impatient": "impatient1",
+            "Reprimand": "reprimand1",
+            "GoAway": "go_away1",
+            # Special
+            "Come": "come1",
+            "Inquiring": "inquiring1",
+            "Sleep": "sleep1",
+            "Dance": "dance1",
+            "Electric": "electric1",
+            "Dying": "dying1",
         }
 
     def setup_all_entities(self, entities: List) -> None:
