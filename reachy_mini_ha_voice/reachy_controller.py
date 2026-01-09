@@ -837,17 +837,15 @@ class ReachyController:
     def get_doa_angle_degrees(self) -> float:
         """Get DOA angle in degrees for Home Assistant entity.
         
-        Returns angle in degrees (-180 to 180), or 0 if unavailable.
-        Converts from SDK's 0-π range to -90 to 90 range for intuitive display.
+        Returns the raw DOA angle in degrees (0-180°).
+        SDK convention: 0° = left, 90° = front, 180° = right
         """
         doa = self.get_doa_angle()
         if doa is None:
             return 0.0
         angle_rad, _ = doa
-        # Convert: 0 rad = left (-90°), π/2 rad = front (0°), π rad = right (90°)
-        # SDK: 0 = left, π/2 = front, π = right
-        # We want: -90 = left, 0 = front, 90 = right
-        angle_deg = math.degrees(angle_rad) - 90.0
+        # Return raw angle in degrees (0-180°)
+        angle_deg = math.degrees(angle_rad)
         return angle_deg
 
     def get_speech_detected(self) -> bool:
