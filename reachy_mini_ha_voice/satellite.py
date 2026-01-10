@@ -386,6 +386,9 @@ class VoiceSatelliteProtocol(APIServer):
         tap_detector = getattr(self.state, 'tap_detector', None)
         if tap_detector:
             tap_detector.set_enabled(False)
+            _LOGGER.info("Tap detection disabled at wakeup")
+        else:
+            _LOGGER.warning("tap_detector not found in state")
 
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
@@ -449,6 +452,9 @@ class VoiceSatelliteProtocol(APIServer):
         tap_detector = getattr(self.state, 'tap_detector', None)
         if tap_detector:
             tap_detector.set_enabled(False)
+            _LOGGER.info("Tap detection disabled at tap wakeup")
+        else:
+            _LOGGER.warning("tap_detector not found in state")
 
         # Get or create conversation_id for context tracking
         conv_id = self._get_or_create_conversation_id()
