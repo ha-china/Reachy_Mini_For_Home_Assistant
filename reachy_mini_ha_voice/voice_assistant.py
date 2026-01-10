@@ -643,10 +643,23 @@ class VoiceAssistantService:
     def _update_wake_words_list(self, ctx: AudioProcessingContext) -> None:
         """Update wake words list if changed."""
         from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
+        from pymicro_wakeword import MicroWakeWordFeatures
 
         if (not ctx.wake_words) or (self._state.wake_words_changed and self._state.wake_words):
             self._state.wake_words_changed = False
             ctx.wake_words.clear()
+            
+            # Reset feature extractors to clear any residual audio data
+            # This prevents false triggers when switching wake words
+            ctx.micro_features = MicroWakeWordFeatures()
+            ctx.micro_inputs.clear()
+            if ctx.oww_features is not None:
+                ctx.oww_features = OpenWakeWordFeatures.from_builtin()
+            ctx.oww_inputs.clear()
+            
+            # Also reset the refractory period to prevent immediate trigger
+            ctx.last_active = time.monotonic()
+            
             # state.wake_words is Dict[str, MicroWakeWord/OpenWakeWord]
             # We need to filter by active_wake_words (which contains the IDs/keys)
             for ww_id, ww_model in self._state.wake_words.items():
@@ -660,7 +673,7 @@ class VoiceAssistantService:
             if ctx.has_oww and ctx.oww_features is None:
                 ctx.oww_features = OpenWakeWordFeatures.from_builtin()
 
-            _LOGGER.info("Active wake words updated: %s", list(self._state.active_wake_words))
+            _LOGGER.info("Active wake words updated: %s (features reset)", list(self._state.active_wake_words))
 
     def _get_reachy_audio_chunk(self) -> Optional[bytes]:
         """Get audio chunk from Reachy Mini's microphone.
