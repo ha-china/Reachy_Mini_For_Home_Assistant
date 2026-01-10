@@ -8,67 +8,67 @@
     },
     "listening": {
       "description": "Attentive pose while listening to user",
-      "pitch_amplitude_rad": 0.08,
-      "pitch_offset_rad": -0.05,
-      "z_amplitude_m": 0.005,
-      "antenna_amplitude_rad": 0.3,
+      "pitch_amplitude_rad": 0.05,
+      "pitch_offset_rad": -0.03,
+      "z_amplitude_m": 0.003,
+      "antenna_amplitude_rad": 0.2,
       "antenna_move_name": "both",
-      "frequency_hz": 0.8
+      "frequency_hz": 0.6
     },
     "thinking": {
       "description": "Processing/thinking animation - head tilts side to side",
-      "pitch_amplitude_rad": 0.1,
-      "yaw_amplitude_rad": 0.15,
-      "roll_amplitude_rad": 0.06,
-      "z_amplitude_m": 0.008,
-      "antenna_amplitude_rad": 0.5,
+      "pitch_amplitude_rad": 0.06,
+      "yaw_amplitude_rad": 0.1,
+      "roll_amplitude_rad": 0.04,
+      "z_amplitude_m": 0.005,
+      "antenna_amplitude_rad": 0.35,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 0.6
+      "frequency_hz": 0.5
     },
     "speaking": {
       "description": "Animation while TTS is playing - lively head movement",
-      "pitch_amplitude_rad": 0.1,
-      "yaw_amplitude_rad": 0.08,
-      "roll_amplitude_rad": 0.06,
-      "z_amplitude_m": 0.006,
-      "antenna_amplitude_rad": 0.5,
+      "pitch_amplitude_rad": 0.06,
+      "yaw_amplitude_rad": 0.05,
+      "roll_amplitude_rad": 0.04,
+      "z_amplitude_m": 0.004,
+      "antenna_amplitude_rad": 0.35,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 1.2
+      "frequency_hz": 0.9
     },
     "happy": {
       "description": "Happy/positive response",
-      "pitch_amplitude_rad": 0.12,
-      "z_amplitude_m": 0.015,
-      "antenna_amplitude_rad": 0.7,
+      "pitch_amplitude_rad": 0.08,
+      "z_amplitude_m": 0.01,
+      "antenna_amplitude_rad": 0.5,
       "antenna_move_name": "both",
-      "frequency_hz": 1.5
+      "frequency_hz": 1.2
     },
     "sad": {
       "description": "Sad/negative response - head droops",
-      "pitch_amplitude_rad": 0.05,
-      "pitch_offset_rad": 0.15,
-      "z_amplitude_m": 0.003,
-      "z_offset_m": -0.015,
-      "antenna_amplitude_rad": 0.15,
+      "pitch_amplitude_rad": 0.04,
+      "pitch_offset_rad": 0.1,
+      "z_amplitude_m": 0.002,
+      "z_offset_m": -0.01,
+      "antenna_amplitude_rad": 0.1,
       "antenna_move_name": "both",
-      "frequency_hz": 0.4
+      "frequency_hz": 0.3
     },
     "confused": {
       "description": "Confused/error state - head tilts",
-      "roll_amplitude_rad": 0.15,
-      "yaw_amplitude_rad": 0.18,
-      "pitch_amplitude_rad": 0.08,
-      "antenna_amplitude_rad": 0.6,
+      "roll_amplitude_rad": 0.1,
+      "yaw_amplitude_rad": 0.12,
+      "pitch_amplitude_rad": 0.05,
+      "antenna_amplitude_rad": 0.4,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 1.0
+      "frequency_hz": 0.7
     },
     "alert": {
       "description": "Alert/timer finished - quick movements",
-      "pitch_amplitude_rad": 0.15,
-      "z_amplitude_m": 0.02,
-      "antenna_amplitude_rad": 0.8,
+      "pitch_amplitude_rad": 0.1,
+      "z_amplitude_m": 0.012,
+      "antenna_amplitude_rad": 0.6,
       "antenna_move_name": "both",
-      "frequency_hz": 2.0
+      "frequency_hz": 1.5
     }
   },
   "settings": {

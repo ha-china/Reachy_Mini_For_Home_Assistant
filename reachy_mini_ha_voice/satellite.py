@@ -508,16 +508,12 @@ class VoiceSatelliteProtocol(APIServer):
         
         This is called after HA has fully completed the pipeline run.
         """
-        # Mark current pipeline as ended
-        was_active = self._pipeline_active
-        self._pipeline_active = False
-        
         # If pipeline wasn't active, this might be a duplicate RUN_END - ignore
-        if not was_active:
+        if not self._pipeline_active:
             _LOGGER.debug("RUN_END received but pipeline wasn't active, ignoring")
             return
         
-        # Check if should continue conversation
+        # Check if should continue conversation BEFORE clearing pipeline state
         # 1. HA requested continue (continue_conversation=1 in INTENT_END)
         # 2. Tap conversation mode is active (user tapped to start continuous mode)
         should_continue = self._continue_conversation or self._tap_conversation_mode
@@ -526,8 +522,8 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)", 
                         self._tap_conversation_mode, self._continue_conversation)
             
-            # Mark pipeline as active BEFORE sending request to prevent duplicates
-            self._pipeline_active = True
+            # Keep pipeline active - no gap for wake word detection
+            # _pipeline_active stays True
             
             # Play prompt sound to indicate ready for next input
             # Use wakeup sound as the prompt (short beep)
@@ -549,6 +545,7 @@ class VoiceSatelliteProtocol(APIServer):
             self._reachy_on_listening()
         else:
             # Conversation ended, clear state
+            self._pipeline_active = False
             self._clear_conversation()
             self.unduck()
             _LOGGER.debug("Pipeline ended, conversation finished")
