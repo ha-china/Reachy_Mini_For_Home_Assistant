@@ -57,7 +57,7 @@ class VoiceAssistantService:
         name: str = "Reachy Mini",
         host: str = "0.0.0.0",
         port: int = 6053,
-        wake_model: str = "okay_nabu",
+        wake_model: str = "hey_reachy",
         camera_port: int = 8081,
         camera_enabled: bool = True,
     ):

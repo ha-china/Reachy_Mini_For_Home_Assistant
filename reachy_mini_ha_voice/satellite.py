@@ -303,7 +303,7 @@ class VoiceSatelliteProtocol(APIServer):
 
             for wake_word_id in msg.active_wake_words:
                 if wake_word_id in self.state.wake_words:
-                    # Already active
+                    # Already loaded, just add to active set
                     active_wake_words.add(wake_word_id)
                     continue
 
@@ -312,6 +312,7 @@ class VoiceSatelliteProtocol(APIServer):
                     # Check external wake words (may require download)
                     external_wake_word = self._external_wake_words.get(wake_word_id)
                     if not external_wake_word:
+                        _LOGGER.warning("Wake word not found: %s", wake_word_id)
                         continue
 
                     model_info = self._download_external_wake_word(external_wake_word)
@@ -322,9 +323,9 @@ class VoiceSatelliteProtocol(APIServer):
 
                 _LOGGER.debug("Loading wake word: %s", model_info.wake_word_path)
                 self.state.wake_words[wake_word_id] = model_info.load()
-                _LOGGER.info("Wake word set: %s", wake_word_id)
+                _LOGGER.info("Wake word loaded: %s", wake_word_id)
                 active_wake_words.add(wake_word_id)
-                break
+                # Don't break - load ALL requested wake words, not just the first one
 
             self.state.active_wake_words = active_wake_words
             _LOGGER.debug("Active wake words: %s", active_wake_words)
