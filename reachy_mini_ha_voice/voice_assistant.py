@@ -733,6 +733,11 @@ class VoiceAssistantService:
         # Stream audio to Home Assistant
         self._state.satellite.handle_audio(audio_chunk)
 
+        # Skip wake word processing entirely if pipeline is active
+        # This prevents model state accumulation during conversation
+        if self._state.satellite.is_pipeline_active():
+            return
+
         # Process wake word features
         self._process_features(ctx, audio_chunk)
 
@@ -755,10 +760,6 @@ class VoiceAssistantService:
         """Detect wake words in the processed audio features."""
         from pymicro_wakeword import MicroWakeWord
         from pyopen_wakeword import OpenWakeWord
-
-        # Skip wake word detection if pipeline is already active
-        if self._state.satellite.is_pipeline_active():
-            return
 
         for wake_word in ctx.wake_words:
             activated = False
