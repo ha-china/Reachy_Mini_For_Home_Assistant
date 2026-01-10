@@ -26,14 +26,14 @@
       "frequency_hz": 0.5
     },
     "speaking": {
-      "description": "Animation while TTS is playing - lively head movement",
-      "pitch_amplitude_rad": 0.06,
-      "yaw_amplitude_rad": 0.05,
-      "roll_amplitude_rad": 0.04,
-      "z_amplitude_m": 0.004,
-      "antenna_amplitude_rad": 0.35,
+      "description": "Speaking animation - lively nodding like talking",
+      "pitch_amplitude_rad": 0.08,
+      "yaw_amplitude_rad": 0.06,
+      "roll_amplitude_rad": 0.03,
+      "z_amplitude_m": 0.005,
+      "antenna_amplitude_rad": 0.4,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 0.9
+      "frequency_hz": 1.5
     },
     "happy": {
       "description": "Happy/positive response",

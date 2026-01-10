@@ -747,8 +747,15 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""
-        # Enable high-frequency face tracking during conversation
+        # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
+        
+        # Resume face tracking (may have been paused during speaking)
+        if self.camera_server is not None:
+            try:
+                self.camera_server.set_face_tracking_enabled(True)
+            except Exception as e:
+                _LOGGER.debug("Failed to resume face tracking: %s", e)
         
         # Disable tap detection during conversation to prevent false triggers from robot movement
         tap_detector = getattr(self.state, 'tap_detector', None)
@@ -767,6 +774,13 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_thinking(self) -> None:
         """Called when processing speech (HA state: Processing)."""
+        # Resume face tracking (may have been paused during speaking)
+        if self.camera_server is not None:
+            try:
+                self.camera_server.set_face_tracking_enabled(True)
+            except Exception as e:
+                _LOGGER.debug("Failed to resume face tracking: %s", e)
+        
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -778,6 +792,14 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_speaking(self) -> None:
         """Called when TTS is playing (HA state: Responding)."""
+        # Pause face tracking during speaking - robot will use speaking animation instead
+        if self.camera_server is not None:
+            try:
+                self.camera_server.set_face_tracking_enabled(False)
+                _LOGGER.debug("Face tracking paused during speaking")
+            except Exception as e:
+                _LOGGER.debug("Failed to pause face tracking: %s", e)
+        
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -787,10 +809,17 @@ class VoiceSatelliteProtocol(APIServer):
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
-    def _reachy_on_idle(self) -> None:
+    def _reachy_on_listening(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
+        
+        # Resume face tracking (may have been paused during speaking)
+        if self.camera_server is not None:
+            try:
+                self.camera_server.set_face_tracking_enabled(True)
+            except Exception as e:
+                _LOGGER.debug("Failed to resume face tracking: %s", e)
         
         # Re-enable tap detection when conversation ends
         tap_detector = getattr(self.state, 'tap_detector', None)
