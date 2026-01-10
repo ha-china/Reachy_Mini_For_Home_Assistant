@@ -452,6 +452,10 @@ class VoiceSatelliteProtocol(APIServer):
         """Check if tap-triggered continuous conversation is active."""
         return self._tap_conversation_mode
 
+    def is_pipeline_active(self) -> bool:
+        """Check if voice pipeline is currently active (listening/thinking/speaking)."""
+        return self._pipeline_active
+
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
         self.state.active_wake_words.discard(self.state.stop_word.id)

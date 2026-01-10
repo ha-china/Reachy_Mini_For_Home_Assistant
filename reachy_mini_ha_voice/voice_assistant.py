@@ -756,6 +756,10 @@ class VoiceAssistantService:
         from pymicro_wakeword import MicroWakeWord
         from pyopen_wakeword import OpenWakeWord
 
+        # Skip wake word detection if pipeline is already active
+        if self._state.satellite.is_pipeline_active():
+            return
+
         for wake_word in ctx.wake_words:
             activated = False
 
