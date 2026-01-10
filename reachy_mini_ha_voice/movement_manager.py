@@ -50,8 +50,8 @@ from .animation_player import AnimationPlayer
 # Constants
 # =============================================================================
 
-# Control loop frequency - CRITICAL for daemon stability
-CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop
+# Control loop frequency - daemon now supports higher rates
+CONTROL_LOOP_FREQUENCY_HZ = 100  # 100Hz control loop (same as conversation_app)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Antenna freeze parameters (listening mode)

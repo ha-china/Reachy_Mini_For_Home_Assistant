@@ -13,7 +13,7 @@
       "z_amplitude_m": 0.005,
       "antenna_amplitude_rad": 0.3,
       "antenna_move_name": "both",
-      "frequency_hz": 0.4
+      "frequency_hz": 0.8
     },
     "thinking": {
       "description": "Processing/thinking animation - head tilts side to side",
@@ -23,7 +23,7 @@
       "z_amplitude_m": 0.008,
       "antenna_amplitude_rad": 0.5,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 0.3
+      "frequency_hz": 0.6
     },
     "speaking": {
       "description": "Animation while TTS is playing - lively head movement",
@@ -33,7 +33,7 @@
       "z_amplitude_m": 0.006,
       "antenna_amplitude_rad": 0.5,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 0.6
+      "frequency_hz": 1.2
     },
     "happy": {
       "description": "Happy/positive response",
@@ -41,7 +41,7 @@
       "z_amplitude_m": 0.015,
       "antenna_amplitude_rad": 0.7,
       "antenna_move_name": "both",
-      "frequency_hz": 0.8
+      "frequency_hz": 1.5
     },
     "sad": {
       "description": "Sad/negative response - head droops",
@@ -51,7 +51,7 @@
       "z_offset_m": -0.015,
       "antenna_amplitude_rad": 0.15,
       "antenna_move_name": "both",
-      "frequency_hz": 0.2
+      "frequency_hz": 0.4
     },
     "confused": {
       "description": "Confused/error state - head tilts",
@@ -60,7 +60,7 @@
       "pitch_amplitude_rad": 0.08,
       "antenna_amplitude_rad": 0.6,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 0.5
+      "frequency_hz": 1.0
     },
     "alert": {
       "description": "Alert/timer finished - quick movements",
@@ -68,11 +68,11 @@
       "z_amplitude_m": 0.02,
       "antenna_amplitude_rad": 0.8,
       "antenna_move_name": "both",
-      "frequency_hz": 1.2
+      "frequency_hz": 2.0
     }
   },
   "settings": {
     "amplitude_scale": 1.0,
-    "transition_duration_s": 0.5
+    "transition_duration_s": 0.3
   }
 }
