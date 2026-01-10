@@ -521,7 +521,10 @@ class VoiceAssistantService:
 
                 try:
                     _LOGGER.debug("Loading wake model: %s", wake_word_id)
-                    wake_models[wake_word_id] = wake_word.load()
+                    loaded_model = wake_word.load()
+                    # Set id attribute on the model for later identification
+                    setattr(loaded_model, 'id', wake_word_id)
+                    wake_models[wake_word_id] = loaded_model
                     active_wake_words.add(wake_word_id)
                 except Exception as e:
                     _LOGGER.warning("Failed to load wake model %s: %s", wake_word_id, e)
@@ -532,7 +535,10 @@ class VoiceAssistantService:
             if wake_word:
                 try:
                     _LOGGER.debug("Loading default wake model: %s", self.wake_model)
-                    wake_models[self.wake_model] = wake_word.load()
+                    loaded_model = wake_word.load()
+                    # Set id attribute on the model for later identification
+                    setattr(loaded_model, 'id', self.wake_model)
+                    wake_models[self.wake_model] = loaded_model
                     active_wake_words.add(self.wake_model)
                 except Exception as e:
                     _LOGGER.error("Failed to load default wake model: %s", e)
@@ -641,16 +647,20 @@ class VoiceAssistantService:
         if (not ctx.wake_words) or (self._state.wake_words_changed and self._state.wake_words):
             self._state.wake_words_changed = False
             ctx.wake_words.clear()
-            ctx.wake_words.extend([
-                ww for ww in self._state.wake_words.values()
-                if ww.id in self._state.active_wake_words
-            ])
+            # state.wake_words is Dict[str, MicroWakeWord/OpenWakeWord]
+            # We need to filter by active_wake_words (which contains the IDs/keys)
+            for ww_id, ww_model in self._state.wake_words.items():
+                if ww_id in self._state.active_wake_words:
+                    # Ensure the model has an 'id' attribute for later use
+                    if not hasattr(ww_model, 'id'):
+                        setattr(ww_model, 'id', ww_id)
+                    ctx.wake_words.append(ww_model)
 
             ctx.has_oww = any(isinstance(ww, OpenWakeWord) for ww in ctx.wake_words)
             if ctx.has_oww and ctx.oww_features is None:
                 ctx.oww_features = OpenWakeWordFeatures.from_builtin()
 
-            _LOGGER.debug("Wake words updated: %s", [ww.id for ww in ctx.wake_words])
+            _LOGGER.info("Active wake words updated: %s", list(self._state.active_wake_words))
 
     def _get_reachy_audio_chunk(self) -> Optional[bytes]:
         """Get audio chunk from Reachy Mini's microphone.

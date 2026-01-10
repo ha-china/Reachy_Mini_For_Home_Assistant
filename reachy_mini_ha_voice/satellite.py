@@ -322,7 +322,10 @@ class VoiceSatelliteProtocol(APIServer):
                     self.state.available_wake_words[wake_word_id] = model_info
 
                 _LOGGER.debug("Loading wake word: %s", model_info.wake_word_path)
-                self.state.wake_words[wake_word_id] = model_info.load()
+                loaded_model = model_info.load()
+                # Set id attribute on the model for later identification
+                setattr(loaded_model, 'id', wake_word_id)
+                self.state.wake_words[wake_word_id] = loaded_model
                 _LOGGER.info("Wake word loaded: %s", wake_word_id)
                 active_wake_words.add(wake_word_id)
                 # Don't break - load ALL requested wake words, not just the first one
