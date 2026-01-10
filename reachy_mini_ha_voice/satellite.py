@@ -378,6 +378,10 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
             return
 
+        # Mark pipeline as active IMMEDIATELY to prevent duplicate wakeups
+        # This is set before sending request to HA, as there's network delay
+        self._pipeline_active = True
+
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
@@ -728,6 +732,12 @@ class VoiceSatelliteProtocol(APIServer):
         # Enable high-frequency face tracking during conversation
         self._set_conversation_mode(True)
         
+        # Disable tap detection during conversation to prevent false triggers from robot movement
+        tap_detector = getattr(self.state, 'tap_detector', None)
+        if tap_detector:
+            tap_detector.set_enabled(False)
+            _LOGGER.debug("Tap detection disabled during conversation")
+        
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -763,6 +773,12 @@ class VoiceSatelliteProtocol(APIServer):
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
+        
+        # Re-enable tap detection when conversation ends
+        tap_detector = getattr(self.state, 'tap_detector', None)
+        if tap_detector:
+            tap_detector.set_enabled(True)
+            _LOGGER.debug("Tap detection re-enabled after conversation")
         
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return

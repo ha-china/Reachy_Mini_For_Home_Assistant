@@ -159,14 +159,20 @@ reachy_mini_ha_voice/
 │   ├── camera_server.py        # MJPEG camera stream server + face tracking
 │   ├── head_tracker.py         # YOLO face detector
 │   ├── motion.py               # Motion control (high-level API)
-│   ├── movement_manager.py     # Unified movement manager (20Hz control loop, optimized to prevent daemon crash)
+│   ├── movement_manager.py     # Unified movement manager (100Hz control loop)
+│   ├── animation_player.py     # JSON-driven animation system
 │   ├── models.py               # Data models
 │   ├── entity.py               # ESPHome base entity
 │   ├── entity_extensions.py    # Extended entity types
+│   ├── entity_registry.py      # Entity registry
 │   ├── reachy_controller.py    # Reachy Mini controller wrapper
+│   ├── tap_detector.py         # IMU tap detection
+│   ├── gesture_detector.py     # Gesture detection
 │   ├── api_server.py           # API server
 │   ├── zeroconf.py             # mDNS discovery
 │   └── util.py                 # Utility functions
+├── animations/                 # Animation definitions
+│   └── conversation_animations.json  # Conversation state animations
 ├── wakewords/                  # Wake word models (auto-download)
 │   ├── okay_nabu.json
 │   ├── okay_nabu.tflite
@@ -570,22 +576,30 @@ def _reachy_on_idle(self):
 - `CARTOON` - Cartoon style, with bounce effect, lively and cute
 
 **Implemented Features**:
-- ✅ 20Hz unified control loop (`movement_manager.py`) - Reduced from 100Hz to prevent daemon crash
-- ✅ Pose change detection - Only send commands on significant changes (threshold 0.001)
-- ✅ State query caching - 100ms TTL, reduces daemon load
+- ✅ 100Hz unified control loop (`movement_manager.py`) - Restored to 100Hz after daemon update
+- ✅ JSON-driven animation system (`AnimationPlayer`) - Inspired by SimpleDances project
+- ✅ Conversation state animations (idle/listening/thinking/speaking)
+- ✅ Pose change detection - Only send commands on significant changes (threshold 0.005)
+- ✅ State query caching - 2s TTL, reduces daemon load
 - ✅ Smooth interpolation (ease in-out curve)
-- ✅ Breathing animation - Idle Z-axis micro-movement + antenna sway (`BreathingAnimation`)
 - ✅ Command queue mode - Thread-safe external API
 - ✅ Error throttling - Prevents log explosion
 - ✅ Connection health monitoring - Auto-detect and recover from connection loss
+
+**Animation System (v0.5.13)**:
+- `AnimationPlayer` class loads animations from `conversation_animations.json`
+- Each animation defines: pitch/yaw/roll amplitudes, position offsets, antenna movements, frequency
+- Smooth transitions between animations (configurable duration)
+- State-to-animation mapping: idle→idle, listening→listening, thinking→thinking, speaking→speaking
 
 **Not Implemented**:
 - ❌ Dynamic interpolation technique switching (CARTOON/EASE_IN_OUT etc.)
 - ❌ Exaggerated cartoon bounce effects
 
 **Code Locations**:
-- `movement_manager.py:192-243` - BreathingAnimation class
-- `movement_manager.py:246-697` - MovementManager class
+- `animation_player.py` - AnimationPlayer class
+- `animations/conversation_animations.json` - Animation definitions
+- `movement_manager.py` - 100Hz control loop with animation integration
 
 **Scene Implementation Status**:
 
@@ -598,38 +612,20 @@ def _reachy_on_idle(self):
 | Return to neutral | `MIN_JERK` | Smooth return | ✅ Implemented |
 | Idle breathing | - | Subtle sense of life | ✅ Implemented (BreathingAnimation) |
 
-### Phase 17 - Antenna Sync Animation During Speech (Partial) 🟡
+### Phase 17 - Antenna Sync Animation During Speech (Completed) ✅
 
 **Goal**: Antennas sway with audio rhythm during TTS playback, simulating "speaking" effect.
 
 **Implemented Features**:
-- ✅ Voice-driven head sway (`SpeechSwayGenerator`)
-- ✅ VAD detection based on audio loudness
-- ✅ Multi-frequency sine wave overlay (Lissajous motion)
-- ✅ Smooth envelope transitions
+- ✅ JSON-driven animation system with antenna movements
+- ✅ Different antenna patterns: "both" (sync), "wiggle" (opposite phase)
+- ✅ State-specific antenna animations (listening/thinking/speaking)
+- ✅ Smooth transitions between animation states
 
 **Code Locations**:
-- `movement_manager.py:124-189` - SpeechSwayGenerator class
-- `motion.py:212-222` - update_audio_loudness() method
-
-**Technical Details**:
-```python
-# Speech sway parameters
-SWAY_A_PITCH_DEG = 3.0   # Pitch amplitude (degrees)
-SWAY_A_YAW_DEG = 2.0     # Yaw amplitude
-SWAY_A_ROLL_DEG = 2.0    # Roll amplitude
-SWAY_F_PITCH = 0.8       # Pitch frequency Hz
-SWAY_F_YAW = 0.6         # Yaw frequency
-SWAY_F_ROLL = 0.5        # Roll frequency
-
-# VAD thresholds
-VAD_DB_ON = -35   # Start detection threshold
-VAD_DB_OFF = -45  # Stop detection threshold
-```
-
-**Not Implemented**:
-- ❌ Antenna sway with audio rhythm (currently only head sway)
-- ❌ Audio spectrum analysis driven animation
+- `animation_player.py` - AnimationPlayer with antenna offset calculation
+- `animations/conversation_animations.json` - Antenna amplitude and pattern definitions
+- `movement_manager.py` - Antenna offset composition in final pose
 
 ### Phase 18 - Visual Gaze Interaction (Not Implemented) ❌
 
@@ -799,15 +795,16 @@ def _tts_finished(self):
   - ❌ Multi-person conversation switching
   - ❌ Sound source visualization
 
-### Medium Priority (Partial 🟡)
-- 🟡 **Phase 15**: Cartoon style motion mode
-  - ✅ 20Hz unified control loop architecture (optimized to prevent daemon crash)
+### Medium Priority (Completed ✅)
+- ✅ **Phase 15**: Cartoon style motion mode
+  - ✅ 100Hz unified control loop architecture (restored after daemon update)
+  - ✅ JSON-driven animation system (AnimationPlayer)
+  - ✅ Conversation state animations (idle/listening/thinking/speaking)
   - ✅ Pose change detection + state query caching (reduces daemon load)
-  - ✅ Smooth interpolation + breathing animation
   - ❌ Dynamic interpolation technique switching (CARTOON etc.)
-- 🟡 **Phase 16**: Antenna sync during speech
-  - ✅ Voice-driven head sway (SpeechSwayGenerator)
-  - ❌ Antenna sway with audio rhythm
+- ✅ **Phase 16**: Antenna sync during speech
+  - ✅ JSON-driven antenna animations with different patterns (both/wiggle)
+  - ✅ State-specific antenna movements
 
 ### Medium Priority (Not Implemented ❌)
 - ❌ **Phase 17**: Visual gaze interaction - Eye contact
@@ -830,8 +827,8 @@ def _tts_finished(self):
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
 | Phase 13 | 🟡 Partial | 30% | API infrastructure ready, missing auto-trigger |
 | Phase 14 | ❌ Not done | 20% | Only turn toward at wakeup implemented |
-| Phase 15 | 🟡 Partial | 70% | 20Hz control loop + pose change detection + state cache + breathing animation implemented |
-| Phase 16 | 🟡 Partial | 50% | Voice-driven head sway implemented |
+| Phase 15 | 🟡 Partial | 80% | 100Hz control loop + JSON animation system + pose change detection + state cache implemented |
+| Phase 16 | ✅ Complete | 100% | JSON-driven animation with antenna movements |
 | Phase 17 | ❌ Not done | 10% | Camera implemented, missing face detection |
 | Phase 18 | 🟡 Partial | 40% | Mode switch implemented, missing teaching flow |
 | Phase 19 | ❌ Not done | 10% | IMU data exposed, missing trigger logic |
