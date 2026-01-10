@@ -381,6 +381,11 @@ class VoiceSatelliteProtocol(APIServer):
         # Mark pipeline as active IMMEDIATELY to prevent duplicate wakeups
         # This is set before sending request to HA, as there's network delay
         self._pipeline_active = True
+        
+        # Disable tap detection IMMEDIATELY to prevent false triggers during conversation
+        tap_detector = getattr(self.state, 'tap_detector', None)
+        if tap_detector:
+            tap_detector.set_enabled(False)
 
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
@@ -437,6 +442,13 @@ class VoiceSatelliteProtocol(APIServer):
 
         _LOGGER.info("Tap detected - entering continuous conversation mode")
         self._tap_conversation_mode = True
+        self._pipeline_active = True
+        
+        # Disable tap detection IMMEDIATELY - it will be re-enabled when conversation ends
+        # Note: This tap callback won't be called again until re-enabled
+        tap_detector = getattr(self.state, 'tap_detector', None)
+        if tap_detector:
+            tap_detector.set_enabled(False)
 
         # Get or create conversation_id for context tracking
         conv_id = self._get_or_create_conversation_id()
