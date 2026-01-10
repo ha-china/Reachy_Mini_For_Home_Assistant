@@ -1,0 +1,74 @@
+{
+  "animations": {
+    "idle": {
+      "description": "Subtle breathing animation when idle",
+      "z_amplitude_m": 0.003,
+      "antenna_amplitude_rad": 0.1,
+      "antenna_move_name": "both",
+      "frequency_hz": 0.3
+    },
+    "listening": {
+      "description": "Attentive pose while listening to user",
+      "pitch_amplitude_rad": 0.03,
+      "z_amplitude_m": 0.002,
+      "antenna_amplitude_rad": 0.15,
+      "antenna_move_name": "both",
+      "frequency_hz": 0.5
+    },
+    "thinking": {
+      "description": "Processing/thinking animation",
+      "pitch_amplitude_rad": 0.05,
+      "yaw_amplitude_rad": 0.08,
+      "roll_amplitude_rad": 0.02,
+      "antenna_amplitude_rad": 0.25,
+      "antenna_move_name": "wiggle",
+      "frequency_hz": 0.4
+    },
+    "speaking": {
+      "description": "Animation while TTS is playing",
+      "pitch_amplitude_rad": 0.04,
+      "roll_amplitude_rad": 0.03,
+      "antenna_amplitude_rad": 0.3,
+      "antenna_move_name": "wiggle",
+      "frequency_hz": 0.8
+    },
+    "happy": {
+      "description": "Happy/positive response",
+      "pitch_amplitude_rad": 0.06,
+      "z_amplitude_m": 0.008,
+      "antenna_amplitude_rad": 0.5,
+      "antenna_move_name": "both",
+      "frequency_hz": 1.0
+    },
+    "sad": {
+      "description": "Sad/negative response",
+      "pitch_amplitude_rad": 0.03,
+      "pitch_offset_rad": 0.1,
+      "z_amplitude_m": 0.002,
+      "z_offset_m": -0.01,
+      "antenna_amplitude_rad": 0.1,
+      "antenna_move_name": "both",
+      "frequency_hz": 0.25
+    },
+    "confused": {
+      "description": "Confused/error state",
+      "roll_amplitude_rad": 0.08,
+      "yaw_amplitude_rad": 0.1,
+      "antenna_amplitude_rad": 0.4,
+      "antenna_move_name": "wiggle",
+      "frequency_hz": 0.6
+    },
+    "alert": {
+      "description": "Alert/timer finished",
+      "pitch_amplitude_rad": 0.08,
+      "z_amplitude_m": 0.01,
+      "antenna_amplitude_rad": 0.6,
+      "antenna_move_name": "both",
+      "frequency_hz": 1.5
+    }
+  },
+  "settings": {
+    "amplitude_scale": 1.0,
+    "transition_duration_s": 0.3
+  }
+}

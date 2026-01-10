@@ -3,354 +3,249 @@
 
 <head>
 	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Reachy Mini for Home Assistant</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
-	<div class="hero">
-		<div class="hero-content">
-			<div class="app-icon">🤖⚡</div>
-			<h1>Reachy Mini for Home Assistant</h1>
-			<p class="tagline">Control your Home Assistant with voice using Reachy Mini robot</p>
+	<header class="hero">
+		<div class="topline">
+			<div class="brand">
+				<span class="logo">🤖</span>
+				<span class="brand-name">Reachy Mini</span>
+			</div>
+			<div class="pill">Voice assistant · Smart home · Expressive motion</div>
 		</div>
-	</div>
-
-	<div class="container">
-		<div class="main-card">
-			<div class="app-details">
-				<h2>What is this?</h2>
-				<p style="text-align: center; color: #475569; line-height: 1.8; margin-bottom: 2rem;">
-					This app integrates your <strong>Reachy Mini robot</strong> with <strong>Home Assistant</strong>.
-					Speak to Reachy Mini, and it will control your smart home devices through Home Assistant's voice commands.
-					Reachy Mini provides visual feedback with head movements and antenna animations while listening and responding.
+		<div class="hero-grid">
+			<div class="hero-copy">
+				<p class="eyebrow">Home Assistant Integration</p>
+				<h1>Your robot, your smart home.</h1>
+				<p class="lede">
+					Control your Home Assistant with voice using Reachy Mini robot. Speak naturally, watch it respond with expressive movements, and manage your entire smart home hands-free.
 				</p>
-
-				<h2>Installation</h2>
-				<div class="how-to-use">
-					<h3>Install from Reachy Mini Dashboard:</h3>
-					<div class="steps">
-						<div class="step">
-							<div class="step-number">1</div>
-							<div>
-								<h4>Open Reachy Mini Dashboard</h4>
-								<p>Navigate to the Applications section in your browser</p>
-							</div>
-						</div>
-						<div class="step">
-							<div class="step-number">2</div>
-							<div>
-								<h4>Show Community Apps</h4>
-								<p>Check the "Show community apps" checkbox to see third-party applications</p>
-							</div>
-						</div>
-						<div class="step">
-							<div class="step-number">3</div>
-							<div>
-								<h4>Find and Install</h4>
-								<p>Search for "Reachy Mini for Home Assistant" and click Install</p>
-							</div>
-						</div>
-						<div class="step">
-							<div class="step-number">4</div>
-							<div>
-								<h4>Connect to Home Assistant</h4>
-								<p>The app will be automatically discovered by Home Assistant via mDNS</p>
-							</div>
-						</div>
-					</div>
+				<div class="hero-actions">
+					<a class="btn primary" href="#features">Explore features</a>
+					<a class="btn ghost" href="#install">Get started</a>
 				</div>
-
-				<h2>Features</h2>
-				<div class="template-info">
-					<div class="info-box">
-						<h3>🎤 Voice & Tap Wake</h3>
-						<p>Say "Okay Nabu" or tap Reachy Mini's head to activate. Multiple wake options for convenience.</p>
-					</div>
-					<div class="info-box">
-						<h3>🏠 Smart Home Control</h3>
-						<p>Home Assistant processes your voice commands and controls your smart home devices automatically.</p>
-					</div>
-					<div class="info-box">
-						<h3>👀 Face Tracking</h3>
-						<p>YOLO-based face detection enables Reachy Mini to look at you during conversations for natural interaction.</p>
-					</div>
-					<div class="info-box">
-						<h3>😊 Facial Expressions</h3>
-						<p>Automatic emotional feedback with head movements and antenna animations while listening and responding.</p>
-					</div>
-					<div class="info-box">
-						<h3>📹 Camera Streaming</h3>
-						<p>MJPEG video stream available in Home Assistant as a Generic Camera for real-time monitoring.</p>
-					</div>
-					<div class="info-box">
-						<h3>🔊 Sendspin Audio</h3>
-						<p>Multi-room audio support via Sendspin protocol. Sync playback with other speakers in your home.</p>
-					</div>
-					<div class="info-box">
-						<h3>🎛️ 30+ Control Entities</h3>
-						<p>Complete robot control via Home Assistant: motors, head position, LEDs, emotions, tap sensitivity, and more.</p>
-					</div>
+				<div class="hero-badges">
+					<span>Wake word detection</span>
+					<span>Tap-to-wake</span>
+					<span>Face tracking</span>
+					<span>30+ HA entities</span>
 				</div>
-
-				<h2>Changelog</h2>
-				<div class="how-to-use changelog-container">
-					<div class="changelog-scroll">
-						<div class="changelog-entry">
-							<span class="version">v0.5.12</span>
-							<span class="date">2026-01-10</span>
-							<ul>
-								<li>Remove: Deleted broken hey_reachy wake word model (constant false triggers)</li>
-								<li>Revert: Default wake word back to "Okay Nabu"</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.11</span>
-							<span class="date">2026-01-10</span>
-							<ul>
-								<li>Fix: Reset feature extractors when switching wake words to prevent false triggers</li>
-								<li>Fix: Add refractory period after wake word switch</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.10</span>
-							<span class="date">2026-01-10</span>
-							<ul>
-								<li>Fix: Wake word models now have 'id' attribute set correctly</li>
-								<li>Fix: Wake word switching from Home Assistant now actually works</li>
-								<li>Fix: _update_wake_words_list properly filters by active_wake_words</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.9</span>
-							<span class="date">2026-01-10</span>
-							<ul>
-								<li>New: Default wake word changed to "Hey Reachy"</li>
-								<li>Fix: Wake word switching from Home Assistant now works correctly</li>
-								<li>Fix: All selected wake words are loaded (was only loading first one)</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.8</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: Tap detection now waits for emotion playback to complete (polls daemon API)</li>
-								<li>Fix: Prevents false tap triggers during long emotion animations</li>
-								<li>New: DOA turn-to-sound at wakeup (robot turns toward speaker)</li>
-								<li>New: DOA angle and speech_detected entities in Home Assistant</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.7</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: DOA direction inversion corrected (left/right now correct)</li>
-								<li>Fix: Home Assistant shows raw DOA angle (0-180°)</li>
-								<li>Fix: EntityRegistry 'state' attribute error in tap_sensitivity</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.6</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: Better pipeline state tracking to prevent duplicate audio playback</li>
-								<li>Fix: Ignore duplicate RUN_END events during network lag</li>
-								<li>Fix: Stop previous TTS if new pipeline starts unexpectedly</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.5</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: Prevent concurrent pipelines (only one conversation at a time)</li>
-								<li>New: Play prompt sound when ready for next input in continuous conversation</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.4</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: Wait for RUN_END event before starting new conversation</li>
-								<li>Fix: Prevents APIConnectionError during continuous conversation</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.3</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: Continuous conversation now uses conversation_id for context tracking</li>
-								<li>Fix: Conversation state properly cleared when conversation ends</li>
-								<li>Improve: conversation_id reused within 5-minute timeout (same as ESPHome)</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.2</span>
-							<span class="date">2026-01-09</span>
-							<ul>
-								<li>Fix: Home Assistant pose control restored (head, antennas, body yaw)</li>
-								<li>Fix: Continuous conversation (tap-to-wake) now properly continues after TTS</li>
-								<li>Fix: Emotion mapping updated to use available robot emotions</li>
-								<li>New: 50+ emotions available in Home Assistant emotion selector</li>
-								<li>Rename: Project renamed to "Reachy Mini for Home Assistant"</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.1</span>
-							<span class="date">2026-01-08</span>
-							<ul>
-								<li>Fix: Sendspin now connects to music_player (fixes music not resuming after voice conversation)</li>
-								<li>Fix: tap_sensitivity persistence - saved to preferences.json and restored on startup</li>
-								<li>Fix: Audio conflict prevention - Sendspin pauses during voice assistant wakeup</li>
-								<li>Fix: AttributeError for _camera_server in satellite.py</li>
-								<li>Fix: tap_sensitivity default changed from 2.0g to 0.5g</li>
-								<li>Optimize: ReSpeaker 16kHz prioritized in Sendspin supported formats</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.5.0</span>
-							<span class="date">2026-01-07</span>
-							<ul>
-								<li>Face tracking offset compensation (pitch +9°, yaw -7°)</li>
-								<li>Adaptive face tracking: high freq (15fps) during conversation, low freq (3fps) when idle</li>
-								<li>Auto switch to low-power mode after 10s without face detection</li>
-								<li>Optimized shutdown mechanism (reduced timeout from ~7s to ~2s)</li>
-								<li>Sendspin multi-room audio integration (PLAYER role)</li>
-								<li>Audio resampling for Sendspin (44.1/48kHz → 16kHz)</li>
-								<li>Pose composition using SDK's compose_world_offset</li>
-								<li>Noise suppression default reduced to 15%</li>
-								<li>Fix: Replace non-existent clear_output_buffer with stop_playing</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.4.0</span>
-							<span class="date">2026-01-07</span>
-							<ul>
-								<li>Daemon stability fixes and microphone optimization</li>
-								<li>Face tracking enabled by default</li>
-								<li>Tap detection logging improvements</li>
-								<li>SDK compose_world_offset for proper pose composition</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.3.0</span>
-							<span class="date">2026-01-06</span>
-							<ul>
-								<li>Tap sensitivity slider entity for Home Assistant</li>
-								<li>Face tracking optimization</li>
-								<li>Music Assistant compatibility fixes</li>
-								<li>Reduced noise suppression for better mic sensitivity</li>
-								<li>Tap-to-wake blocking fixes</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.2.x</span>
-							<span class="date">2026-01-05 ~ 2026-01-06</span>
-							<ul>
-								<li>v0.2.21: Fix daemon crash - reduce control loop to 2Hz</li>
-								<li>v0.2.18: Fix audio playback - restore wakeup sound</li>
-								<li>v0.2.17: Remove head_joints/passive_joints, move error_message to diagnostic</li>
-								<li>v0.2.16: Fix TTS playback - pause recording during playback</li>
-								<li>v0.2.12: Disable breathing animation to prevent serial port overflow</li>
-								<li>v0.2.9: Remove DOA/speech detection - replaced by face tracking</li>
-								<li>v0.2.8: Replace DOA with YOLO face tracking</li>
-								<li>v0.2.6: Thread-safe ReSpeaker USB access</li>
-								<li>v0.2.4: Fix microphone volume control via daemon HTTP API</li>
-								<li>v0.2.3: Fix daemon crash from conflicting pose commands</li>
-								<li>v0.2.2: Fix second conversation motion failure</li>
-								<li>v0.2.1: Fix daemon crash and optimize code</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.2.0</span>
-							<span class="date">2026-01-05</span>
-							<ul>
-								<li>Automatic facial expressions during conversation</li>
-								<li>Emotion playback integration with MovementManager</li>
-								<li>Event loop blocking fixes</li>
-								<li>SDK compliance refactoring</li>
-								<li>Improved shutdown and connection error handling</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.1.x</span>
-							<span class="date">2026-01-04</span>
-							<ul>
-								<li>v0.1.5: Code optimization and crash fixes</li>
-								<li>Reachy Mini 3D visualization card for Home Assistant</li>
-								<li>Home Assistant Material Design styling</li>
-								<li>Initial release with voice assistant functionality</li>
-							</ul>
-						</div>
-						<div class="changelog-entry">
-							<span class="version">v0.0.0</span>
-							<span class="date">2026-01-01</span>
-							<ul>
-								<li>Initial project setup</li>
-								<li>Basic Home Assistant voice satellite integration</li>
-								<li>Reachy Mini SDK integration</li>
-								<li>Wake word detection ("Okay Nabu")</li>
-								<li>MJPEG camera streaming</li>
-								<li>30+ Home Assistant control entities</li>
-							</ul>
-						</div>
-					</div>
-				</div>
-
-				<h2>Usage</h2>
-				<div class="how-to-use">
-					<h3>After Installation:</h3>
-					<div class="steps">
-						<div class="step">
-							<div class="step-number">1</div>
-							<div>
-								<h4>Automatic Discovery (Recommended)</h4>
-								<p>Home Assistant will automatically discover your Reachy Mini via mDNS. A notification will appear - just click to add.</p>
-							</div>
-						</div>
-						<div class="step">
-							<div class="step-number">2</div>
-							<div>
-								<h4>Manual Setup (if needed)</h4>
-								<p>Settings → Devices & Services → Add Integration → ESPHome → Enter Reachy Mini IP:6053</p>
-							</div>
-						</div>
-						<div class="step">
-							<div class="step-number">3</div>
-							<div>
-								<h4>Start Using</h4>
-								<p>Say "Okay Nabu" or tap Reachy Mini's head, then speak your command (e.g., "turn on the lights")</p>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<h2>Links</h2>
-				<div class="template-info">
-					<div class="info-box">
-						<h3>📦 Source Code</h3>
-						<p><a href="https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice/tree/main" target="_blank">View on HuggingFace</a></p>
-					</div>
-					<div class="info-box">
-						<h3>🔧 Original Project</h3>
-						<p><a href="https://github.com/OHF-Voice/linux-voice-assistant" target="_blank">OHF-Voice/linux-voice-assistant</a></p>
-					</div>
-					<div class="info-box">
-						<h3>🤖 Pollen Robotics</h3>
-						<p><a href="https://www.pollen-robotics.com/" target="_blank">Visit Website</a></p>
-					</div>
+			</div>
+			<div class="hero-visual">
+				<div class="glass-card">
+					<div class="hero-emoji">🤖⚡🏠</div>
+					<p class="caption">Reachy Mini listens, responds, and controls your smart home through Home Assistant.</p>
 				</div>
 			</div>
 		</div>
-	</div>
+	</header>
 
-	<div class="footer">
+	<section id="features" class="section features">
+		<div class="section-header">
+			<p class="eyebrow">What's inside</p>
+			<h2>Complete voice assistant for your robot</h2>
+			<p class="intro">
+				Seamlessly integrates Reachy Mini with Home Assistant via ESPHome protocol.
+			</p>
+		</div>
+		<div class="feature-grid">
+			<div class="feature-card">
+				<span class="icon">🎤</span>
+				<h3>Voice & Tap Wake</h3>
+				<p>Say "Okay Nabu" or tap Reachy Mini's head to activate. Multiple wake options for convenience.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">🏠</span>
+				<h3>Smart Home Control</h3>
+				<p>Home Assistant processes your voice commands and controls your smart home devices automatically.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">👀</span>
+				<h3>Face Tracking</h3>
+				<p>YOLO-based face detection enables Reachy Mini to look at you during conversations.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">😊</span>
+				<h3>Expressive Motion</h3>
+				<p>Automatic emotional feedback with head movements and antenna animations while listening and responding.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">📹</span>
+				<h3>Camera Streaming</h3>
+				<p>MJPEG video stream available in Home Assistant as a Generic Camera for real-time monitoring.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">🔊</span>
+				<h3>Sendspin Audio</h3>
+				<p>Multi-room audio support via Sendspin protocol. Sync playback with other speakers in your home.</p>
+			</div>
+		</div>
+	</section>
+
+	<section id="install" class="section story">
+		<div class="story-grid">
+			<div class="story-card">
+				<p class="eyebrow">Installation</p>
+				<h3>Up and running in minutes</h3>
+				<ul class="story-list">
+					<li><span>1️⃣</span> Open Reachy Mini Dashboard → Applications</li>
+					<li><span>2️⃣</span> Check "Show community apps" checkbox</li>
+					<li><span>3️⃣</span> Find "Reachy Mini for Home Assistant" and click Install</li>
+					<li><span>4️⃣</span> Home Assistant auto-discovers via mDNS</li>
+				</ul>
+			</div>
+			<div class="story-card secondary">
+				<p class="eyebrow">Usage</p>
+				<h3>Start talking to your smart home</h3>
+				<p class="story-text">
+					Once installed, Home Assistant will automatically discover your Reachy Mini. Say "Okay Nabu" or tap the robot's head, then speak your command like "turn on the lights" or "what's the temperature?"
+				</p>
+				<div class="chips">
+					<span class="chip">ESPHome protocol</span>
+					<span class="chip">Auto discovery</span>
+					<span class="chip">30+ entities</span>
+					<span class="chip">Continuous conversation</span>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section id="changelog" class="section">
+		<div class="section-header">
+			<p class="eyebrow">What's new</p>
+			<h2>Changelog</h2>
+		</div>
+		<div class="changelog-grid">
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.13</div>
+				<span class="date">2026-01-10</span>
+				<ul>
+					<li>New: JSON-driven animation system for conversation states</li>
+					<li>New: AnimationPlayer class inspired by SimpleDances project</li>
+					<li>Refactor: Replace SpeechSwayGenerator and BreathingAnimation with unified animation system</li>
+				</ul>
+			</div>
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.12</div>
+				<span class="date">2026-01-10</span>
+				<ul>
+					<li>Remove: Deleted broken hey_reachy wake word model</li>
+					<li>Revert: Default wake word back to "Okay Nabu"</li>
+				</ul>
+			</div>
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.11</div>
+				<span class="date">2026-01-10</span>
+				<ul>
+					<li>Fix: Reset feature extractors when switching wake words</li>
+					<li>Fix: Add refractory period after wake word switch</li>
+				</ul>
+			</div>
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.10</div>
+				<span class="date">2026-01-10</span>
+				<ul>
+					<li>Fix: Wake word models now have 'id' attribute set correctly</li>
+					<li>Fix: Wake word switching from Home Assistant now works</li>
+				</ul>
+			</div>
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.8</div>
+				<span class="date">2026-01-09</span>
+				<ul>
+					<li>Fix: Tap detection waits for emotion playback to complete</li>
+					<li>New: DOA turn-to-sound at wakeup</li>
+				</ul>
+			</div>
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.0</div>
+				<span class="date">2026-01-07</span>
+				<ul>
+					<li>Face tracking with adaptive frequency</li>
+					<li>Sendspin multi-room audio integration</li>
+					<li>Optimized shutdown mechanism</li>
+				</ul>
+			</div>
+		</div>
+		<div class="changelog-more">
+			<details>
+				<summary>View older versions</summary>
+				<div class="changelog-grid older">
+					<div class="changelog-card">
+						<div class="version-badge">v0.4.0</div>
+						<span class="date">2026-01-07</span>
+						<ul>
+							<li>Daemon stability fixes</li>
+							<li>Face tracking enabled by default</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.3.0</div>
+						<span class="date">2026-01-06</span>
+						<ul>
+							<li>Tap sensitivity slider entity</li>
+							<li>Music Assistant compatibility</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.2.0</div>
+						<span class="date">2026-01-05</span>
+						<ul>
+							<li>Automatic facial expressions</li>
+							<li>Emotion playback integration</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.1.0</div>
+						<span class="date">2026-01-04</span>
+						<ul>
+							<li>Initial release</li>
+							<li>Voice assistant functionality</li>
+						</ul>
+					</div>
+				</div>
+			</details>
+		</div>
+	</section>
+
+	<section class="section links">
+		<div class="section-header">
+			<p class="eyebrow">Resources</p>
+			<h2>Links</h2>
+		</div>
+		<div class="links-grid">
+			<a href="https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice/tree/main" target="_blank" class="link-card">
+				<span class="icon">📦</span>
+				<h3>Source Code</h3>
+				<p>View on HuggingFace</p>
+			</a>
+			<a href="https://github.com/OHF-Voice/linux-voice-assistant" target="_blank" class="link-card">
+				<span class="icon">🔧</span>
+				<h3>Original Project</h3>
+				<p>OHF-Voice/linux-voice-assistant</p>
+			</a>
+			<a href="https://www.pollen-robotics.com/" target="_blank" class="link-card">
+				<span class="icon">🤖</span>
+				<h3>Pollen Robotics</h3>
+				<p>Visit Website</p>
+			</a>
+		</div>
+	</section>
+
+	<footer class="footer">
 		<p>
-			🤖 Reachy Mini HA Voice •
-			<a href="https://github.com/pollen-robotics" target="_blank">Pollen Robotics</a> •
-			<a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank">Browse More Apps</a>
+			Reachy Mini for Home Assistant by <a href="https://github.com/djhui5710" target="_blank" rel="noopener">Desmond Dong</a>.
+			Explore more apps on <a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank" rel="noopener">Hugging Face Spaces</a>.
 		</p>
-	</div>
+	</footer>
+
 </body>
 
 </html>

@@ -5,24 +5,15 @@ This module provides a centralized control system for robot movements,
 inspired by the reachy_mini_conversation_app architecture.
 
 Key features:
-- Single 20Hz control loop (balanced between responsiveness and stability)
+- Single 10Hz control loop (balanced between responsiveness and stability)
 - Command queue pattern (thread-safe external API)
 - Error throttling (prevents log explosion)
-- Speech-driven head sway (based on conversation_app's SwayRollRT)
-- Breathing animation during idle (based on conversation_app's BreathingMove)
+- JSON-driven animation system (conversation state animations)
 - Graceful shutdown
 - Pose change detection (skip sending if no significant change)
 - Robust connection recovery (faster reconnection attempts)
 - Proper pose composition using SDK's compose_world_offset (same as conversation_app)
 - Antenna freeze during listening mode with smooth blend back
-
-SDK Analysis Notes:
-- get_current_head_pose() and get_current_joint_positions() are non-blocking
-  (they return cached Zenoh data from subscriptions)
-- set_target() is the only method that sends Zenoh messages
-- get_status() may trigger I/O, so it's cached in reachy_controller.py
-
-Reference: reachy_mini_conversation_app/src/reachy_mini_conversation_app/moves.py
 """
 
 import logging
@@ -51,54 +42,28 @@ except ImportError:
     SDK_UTILS_AVAILABLE = False
     logger.warning("SDK utils not available, using fallback pose composition")
 
+# Import animation player
+from .animation_player import AnimationPlayer
+
 
 # =============================================================================
-# Constants (borrowed from conversation_app)
+# Constants
 # =============================================================================
 
 # Control loop frequency - CRITICAL for daemon stability
-# The daemon's internal control loop runs at 50Hz.
-# We use 10Hz for control loop - sufficient for smooth motion.
-# Each set_target() call sends 3 Zenoh messages (head, antennas, body_yaw).
-# With pose change detection, actual message rate is much lower in IDLE state
-# because we only send when pose actually changes.
 CONTROL_LOOP_FREQUENCY_HZ = 10  # 10Hz control loop
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
-# Speech sway parameters (from conversation_app SwayRollRT)
-# Rotation amplitudes
-SWAY_A_PITCH_DEG = 4.5   # Pitch amplitude (degrees)
-SWAY_A_YAW_DEG = 7.5     # Yaw amplitude
-SWAY_A_ROLL_DEG = 2.25   # Roll amplitude
-# Rotation frequencies
-SWAY_F_PITCH = 2.2       # Pitch frequency Hz
-SWAY_F_YAW = 0.6         # Yaw frequency
-SWAY_F_ROLL = 1.3        # Roll frequency
-# Translation amplitudes (mm -> m)
-SWAY_A_X_MM = 4.5        # X amplitude (mm)
-SWAY_A_Y_MM = 3.75       # Y amplitude (mm)
-SWAY_A_Z_MM = 2.25       # Z amplitude (mm)
-# Translation frequencies
-SWAY_F_X = 0.35          # X frequency Hz
-SWAY_F_Y = 0.45          # Y frequency Hz
-SWAY_F_Z = 0.25          # Z frequency Hz
-# Master scale
-SWAY_MASTER = 1.5        # Overall sway intensity multiplier
-
-# Breathing parameters - DISABLED for IDLE state stability
-# IDLE state should be completely still like just powered on
-# Breathing animation was causing continuous pose changes and daemon crashes
-BREATHING_Z_AMPLITUDE = 0.0  # Disabled - no breathing in IDLE
-BREATHING_FREQUENCY = 0.08
-ANTENNA_SWAY_AMPLITUDE_DEG = 0.0  # Disabled - no antenna sway in IDLE
-ANTENNA_FREQUENCY = 0.15
-
-# VAD parameters for speech detection
-VAD_DB_ON = -35   # Start detection threshold
-VAD_DB_OFF = -45  # Stop detection threshold
-
 # Antenna freeze parameters (listening mode)
 ANTENNA_BLEND_DURATION = 0.5  # Seconds to blend back from frozen state
+
+# State to animation mapping
+STATE_ANIMATION_MAP = {
+    "idle": "idle",
+    "listening": "listening",
+    "thinking": "thinking",
+    "speaking": "speaking",
+}
 
 
 class RobotState(Enum):
@@ -115,18 +80,15 @@ class MovementState:
     # Current robot state
     robot_state: RobotState = RobotState.IDLE
 
-    # Speech sway offsets (radians for rotation, meters for translation)
-    speech_pitch: float = 0.0
-    speech_yaw: float = 0.0
-    speech_roll: float = 0.0
-    speech_x: float = 0.0
-    speech_y: float = 0.0
-    speech_z: float = 0.0
-
-    # Breathing offsets
-    breathing_z: float = 0.0
-    breathing_antenna_left: float = 0.0
-    breathing_antenna_right: float = 0.0
+    # Animation offsets (from AnimationPlayer)
+    anim_pitch: float = 0.0
+    anim_yaw: float = 0.0
+    anim_roll: float = 0.0
+    anim_x: float = 0.0
+    anim_y: float = 0.0
+    anim_z: float = 0.0
+    anim_antenna_left: float = 0.0
+    anim_antenna_right: float = 0.0
 
     # Target pose (from actions)
     target_pitch: float = 0.0
@@ -142,20 +104,6 @@ class MovementState:
     # Timing
     last_activity_time: float = 0.0
     idle_start_time: float = 0.0
-
-    # Speech sway state
-    sway_time: float = 0.0
-    sway_envelope: float = 0.0  # 0-1, smoothed VAD
-    sway_phase_pitch: float = 0.0
-    sway_phase_yaw: float = 0.0
-    sway_phase_roll: float = 0.0
-    sway_phase_x: float = 0.0
-    sway_phase_y: float = 0.0
-    sway_phase_z: float = 0.0
-
-    # Breathing state
-    breathing_time: float = 0.0
-    breathing_active: bool = False
 
     # Antenna freeze state (listening mode)
     antenna_frozen: bool = False
@@ -177,142 +125,6 @@ class PendingAction:
     target_z: float = 0.0
     duration: float = 0.5
     callback: Optional[Callable] = None
-
-
-class SpeechSwayGenerator:
-    """
-    Generates speech-driven head sway based on audio loudness.
-
-    Uses multiple sine wave oscillators at different frequencies
-    to create natural-looking "Lissajous" motion.
-    Includes both rotation (pitch/yaw/roll) and translation (x/y/z).
-    """
-
-    def __init__(self, seed: int = 7):
-        # Random initial phases (avoid mechanical feel)
-        rng = np.random.default_rng(seed)
-        self.phase_pitch = float(rng.random() * 2 * math.pi)
-        self.phase_yaw = float(rng.random() * 2 * math.pi)
-        self.phase_roll = float(rng.random() * 2 * math.pi)
-        self.phase_x = float(rng.random() * 2 * math.pi)
-        self.phase_y = float(rng.random() * 2 * math.pi)
-        self.phase_z = float(rng.random() * 2 * math.pi)
-
-        # State
-        self.t = 0.0
-        self.vad_on = False
-        self.envelope = 0.0  # Smoothed VAD [0, 1]
-        self.last_db = -100.0
-
-    def reset(self):
-        """Reset state."""
-        self.t = 0.0
-        self.vad_on = False
-        self.envelope = 0.0
-        self.last_db = -100.0
-
-    def update(self, dt: float, loudness_db: float) -> Tuple[float, float, float, float, float, float]:
-        """
-        Update sway based on audio loudness.
-
-        Args:
-            dt: Time delta in seconds
-            loudness_db: Audio loudness in dBFS
-
-        Returns:
-            Tuple of (pitch_rad, yaw_rad, roll_rad, x_m, y_m, z_m) offsets
-        """
-        self.t += dt
-        self.last_db = loudness_db
-
-        # VAD detection with hysteresis
-        if loudness_db >= VAD_DB_ON:
-            self.vad_on = True
-        elif loudness_db <= VAD_DB_OFF:
-            self.vad_on = False
-
-        # Smooth envelope
-        target = 1.0 if self.vad_on else 0.0
-        self.envelope += 0.1 * (target - self.envelope)
-        self.envelope = max(0.0, min(1.0, self.envelope))
-
-        # Loudness mapping: -50dB -> 0, -20dB -> 1
-        loud = max(0.0, min(1.0, (loudness_db + 50) / 30))
-
-        # Apply master scale
-        env = self.envelope * SWAY_MASTER
-
-        # Generate rotation sway
-        pitch = (math.radians(SWAY_A_PITCH_DEG) * loud * env *
-                math.sin(2 * math.pi * SWAY_F_PITCH * self.t + self.phase_pitch))
-        yaw = (math.radians(SWAY_A_YAW_DEG) * loud * env *
-              math.sin(2 * math.pi * SWAY_F_YAW * self.t + self.phase_yaw))
-        roll = (math.radians(SWAY_A_ROLL_DEG) * loud * env *
-               math.sin(2 * math.pi * SWAY_F_ROLL * self.t + self.phase_roll))
-
-        # Generate translation sway (mm -> m)
-        x = (SWAY_A_X_MM / 1000.0 * loud * env *
-             math.sin(2 * math.pi * SWAY_F_X * self.t + self.phase_x))
-        y = (SWAY_A_Y_MM / 1000.0 * loud * env *
-             math.sin(2 * math.pi * SWAY_F_Y * self.t + self.phase_y))
-        z = (SWAY_A_Z_MM / 1000.0 * loud * env *
-             math.sin(2 * math.pi * SWAY_F_Z * self.t + self.phase_z))
-
-        return pitch, yaw, roll, x, y, z
-
-
-class BreathingAnimation:
-    """
-    Generates idle breathing animation.
-
-    Creates subtle Z-axis movement and antenna sway to make
-    the robot appear more alive when idle.
-    """
-
-    def __init__(self):
-        self.t = 0.0
-        self.active = False
-        self.blend = 0.0  # Blend factor for smooth transitions
-
-    def reset(self):
-        """Reset animation."""
-        self.t = 0.0
-        self.blend = 0.0
-
-    def set_active(self, active: bool):
-        """Set whether breathing is active."""
-        self.active = active
-
-    def update(self, dt: float) -> Tuple[float, float, float]:
-        """
-        Update breathing animation.
-
-        Args:
-            dt: Time delta in seconds
-
-        Returns:
-            Tuple of (z_offset_m, antenna_left_rad, antenna_right_rad)
-        """
-        self.t += dt
-
-        # Smooth blend in/out
-        target_blend = 1.0 if self.active else 0.0
-        blend_speed = 0.5  # Blend over ~2 seconds
-        self.blend += blend_speed * dt * (target_blend - self.blend)
-        self.blend = max(0.0, min(1.0, self.blend))
-
-        if self.blend < 0.001:
-            return 0.0, 0.0, 0.0
-
-        # Z breathing
-        z_offset = (BREATHING_Z_AMPLITUDE * self.blend *
-                   math.sin(2 * math.pi * BREATHING_FREQUENCY * self.t))
-
-        # Antenna sway (opposite directions for natural look)
-        antenna_angle = (math.radians(ANTENNA_SWAY_AMPLITUDE_DEG) * self.blend *
-                        math.sin(2 * math.pi * ANTENNA_FREQUENCY * self.t))
-
-        return z_offset, antenna_angle, -antenna_angle
 
 
 class MovementManager:
@@ -338,15 +150,8 @@ class MovementManager:
         self.state.last_activity_time = self._now()
         self.state.idle_start_time = self._now()
 
-        # Initialize random phases for sway
-        rng = np.random.default_rng(42)
-        self.state.sway_phase_pitch = float(rng.random() * 2 * math.pi)
-        self.state.sway_phase_yaw = float(rng.random() * 2 * math.pi)
-        self.state.sway_phase_roll = float(rng.random() * 2 * math.pi)
-
-        # Sub-modules
-        self._speech_sway = SpeechSwayGenerator()
-        self._breathing = BreathingAnimation()
+        # Animation player (JSON-driven animations)
+        self._animation_player = AnimationPlayer()
 
         # Thread control
         self._stop_event = threading.Event()
@@ -360,25 +165,18 @@ class MovementManager:
         # Connection health tracking
         self._connection_lost = False
         self._last_successful_command = self._now()
-        self._connection_timeout = 3.0  # 3 seconds without success = connection lost
-        self._reconnect_attempt_interval = 2.0  # Try reconnecting every 2 seconds (faster recovery)
+        self._connection_timeout = 3.0
+        self._reconnect_attempt_interval = 2.0
         self._last_reconnect_attempt = 0.0
         self._consecutive_errors = 0
-        self._max_consecutive_errors = 5  # Reset connection state after 5 consecutive errors
+        self._max_consecutive_errors = 5
 
         # Pending action
         self._pending_action: Optional[PendingAction] = None
         self._action_start_time: float = 0.0
         self._action_start_pose: Dict[str, float] = {}
 
-        # Audio loudness (updated externally)
-        self._audio_loudness_db: float = -100.0
-        self._audio_lock = threading.Lock()
-
         # Pose change detection threshold
-        # Increased to 0.005 for daemon stability during idle breathing
-        # 0.005 rad ≈ 0.29 degrees - still smooth enough for natural motion
-        # With 10Hz loop and slower breathing, actual message rate is ~5-10 msg/s
         self._last_sent_pose: Optional[Dict[str, float]] = None
         self._pose_change_threshold = 0.005
         
@@ -391,9 +189,9 @@ class MovementManager:
         
         # Face tracking smoothing (exponential moving average)
         self._smoothed_face_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self._face_smoothing_factor = 0.3  # Higher = faster response, lower = smoother
+        self._face_smoothing_factor = 0.3
 
-        logger.info("MovementManager initialized")
+        logger.info("MovementManager initialized with AnimationPlayer")
 
     # =========================================================================
     # Thread-safe public API (called from any thread)
@@ -441,11 +239,6 @@ class MovementManager:
     def shake(self, amplitude_deg: float = 20, duration: float = 0.5) -> None:
         """Thread-safe: Perform a head shake gesture."""
         self._command_queue.put(("shake", (amplitude_deg, duration)))
-
-    def update_audio_loudness(self, loudness_db: float) -> None:
-        """Thread-safe: Update audio loudness for speech sway."""
-        with self._audio_lock:
-            self._audio_loudness_db = loudness_db
 
     def reset_to_neutral(self, duration: float = 0.5) -> None:
         """Thread-safe: Reset to neutral position."""
@@ -535,19 +328,15 @@ class MovementManager:
             self.state.robot_state = payload
             self.state.last_activity_time = self._now()
 
+            # Update animation based on state
+            animation_name = STATE_ANIMATION_MAP.get(payload.value, "idle")
+            self._animation_player.set_animation(animation_name)
+
             # State transition logic
-            # IDLE state: completely still, no animations (like just powered on)
             if payload == RobotState.IDLE and old_state != RobotState.IDLE:
                 self.state.idle_start_time = self._now()
-                self._breathing.set_active(False)  # No breathing in IDLE - stay still
-                self._speech_sway.reset()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
-            elif payload != RobotState.IDLE:
-                self._breathing.set_active(False)
-
-            if payload == RobotState.SPEAKING:
-                self._speech_sway.reset()
 
             # Freeze antennas when entering listening mode
             if payload == RobotState.LISTENING:
@@ -556,7 +345,8 @@ class MovementManager:
                 # Start unfreezing when leaving listening mode
                 self._start_antenna_unfreeze()
 
-            logger.debug("State changed: %s -> %s", old_state.value, payload.value)
+            logger.debug("State changed: %s -> %s, animation: %s", 
+                        old_state.value, payload.value, animation_name)
 
         elif cmd == "action":
             self._start_action(payload)
@@ -667,45 +457,24 @@ class MovementManager:
                     logger.error("Action callback error: %s", e)
             self._pending_action = None
 
-    def _update_speech_sway(self, dt: float) -> None:
-        """Update speech-driven head sway."""
-        if self.state.robot_state != RobotState.SPEAKING:
-            # Decay sway when not speaking
-            self.state.speech_pitch *= 0.9
-            self.state.speech_yaw *= 0.9
-            self.state.speech_roll *= 0.9
-            self.state.speech_x *= 0.9
-            self.state.speech_y *= 0.9
-            self.state.speech_z *= 0.9
-            return
+    def _update_animation(self, dt: float) -> None:
+        """Update animation offsets from AnimationPlayer."""
+        offsets = self._animation_player.get_offsets(dt)
 
-        # Get current audio loudness
-        with self._audio_lock:
-            loudness_db = self._audio_loudness_db
-
-        # Update sway generator
-        pitch, yaw, roll, x, y, z = self._speech_sway.update(dt, loudness_db)
-
-        self.state.speech_pitch = pitch
-        self.state.speech_yaw = yaw
-        self.state.speech_roll = roll
-        self.state.speech_x = x
-        self.state.speech_y = y
-        self.state.speech_z = z
-
-    def _update_breathing(self, dt: float) -> None:
-        """Update breathing animation."""
-        z_offset, antenna_left, antenna_right = self._breathing.update(dt)
-
-        self.state.breathing_z = z_offset
-        self.state.breathing_antenna_left = antenna_left
-        self.state.breathing_antenna_right = antenna_right
+        self.state.anim_pitch = offsets["pitch"]
+        self.state.anim_yaw = offsets["yaw"]
+        self.state.anim_roll = offsets["roll"]
+        self.state.anim_x = offsets["x"]
+        self.state.anim_y = offsets["y"]
+        self.state.anim_z = offsets["z"]
+        self.state.anim_antenna_left = offsets["antenna_left"]
+        self.state.anim_antenna_right = offsets["antenna_right"]
 
     def _freeze_antennas(self) -> None:
         """Freeze antennas at current position (for listening mode)."""
         # Capture current antenna positions
-        current_left = self.state.target_antenna_left + self.state.breathing_antenna_left
-        current_right = self.state.target_antenna_right + self.state.breathing_antenna_right
+        current_left = self.state.target_antenna_left + self.state.anim_antenna_left
+        current_right = self.state.target_antenna_right + self.state.anim_antenna_right
 
         self.state.antenna_frozen = True
         self.state.frozen_antenna_left = current_left
@@ -792,16 +561,16 @@ class MovementManager:
             primary_head[1, 3] = self.state.target_y
             primary_head[2, 3] = self.state.target_z
 
-        # Build secondary pose from speech sway + face tracking + breathing
+        # Build secondary pose from animation + face tracking
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
 
-        secondary_x = self.state.speech_x + face_offsets[0]
-        secondary_y = self.state.speech_y + face_offsets[1]
-        secondary_z = self.state.speech_z + face_offsets[2] + self.state.breathing_z
-        secondary_roll = self.state.speech_roll + face_offsets[3]
-        secondary_pitch = self.state.speech_pitch + face_offsets[4]
-        secondary_yaw = self.state.speech_yaw + face_offsets[5]
+        secondary_x = self.state.anim_x + face_offsets[0]
+        secondary_y = self.state.anim_y + face_offsets[1]
+        secondary_z = self.state.anim_z + face_offsets[2]
+        secondary_roll = self.state.anim_roll + face_offsets[3]
+        secondary_pitch = self.state.anim_pitch + face_offsets[4]
+        secondary_yaw = self.state.anim_yaw + face_offsets[5]
 
         if SDK_UTILS_AVAILABLE:
             secondary_head = create_head_pose(
@@ -831,8 +600,8 @@ class MovementManager:
             final_head[:3, 3] = primary_head[:3, 3] + secondary_head[:3, 3]
 
         # Antenna pose with freeze blending
-        target_antenna_left = self.state.target_antenna_left + self.state.breathing_antenna_left
-        target_antenna_right = self.state.target_antenna_right + self.state.breathing_antenna_right
+        target_antenna_left = self.state.target_antenna_left + self.state.anim_antenna_left
+        target_antenna_right = self.state.target_antenna_right + self.state.anim_antenna_right
 
         # Apply antenna freeze blending (listening mode)
         blend = self.state.antenna_blend
@@ -955,7 +724,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main 5Hz control loop."""
+        """Main 10Hz control loop."""
         logger.info("Movement manager control loop started (%.0f Hz)", CONTROL_LOOP_FREQUENCY_HZ)
 
         last_time = self._now()
@@ -972,22 +741,19 @@ class MovementManager:
                 # 2. Update action interpolation
                 self._update_action(dt)
 
-                # 3. Update speech sway
-                self._update_speech_sway(dt)
+                # 3. Update animation offsets (JSON-driven)
+                self._update_animation(dt)
 
-                # 4. Update breathing animation
-                self._update_breathing(dt)
-
-                # 5. Update antenna blend (listening mode freeze/unfreeze)
+                # 4. Update antenna blend (listening mode freeze/unfreeze)
                 self._update_antenna_blend(dt)
                 
-                # 6. Update face tracking offsets from camera server
+                # 5. Update face tracking offsets from camera server
                 self._update_face_tracking()
 
-                # 7. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
+                # 6. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
                 head_pose, antennas, body_yaw = self._compose_final_pose()
 
-                # 8. Send to robot (single control point!)
+                # 7. Send to robot (single control point!)
                 self._issue_control_command(head_pose, antennas, body_yaw)
 
             except Exception as e:
