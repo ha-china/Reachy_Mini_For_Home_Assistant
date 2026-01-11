@@ -11,7 +11,7 @@ Key features:
 - Reachy Mini motion control integration
 """
 
-__version__ = "0.5.17"
+__version__ = "0.6.0"
 __author__ = "Desmond Dong"
 
 # Don't import main module here to avoid runpy warning
