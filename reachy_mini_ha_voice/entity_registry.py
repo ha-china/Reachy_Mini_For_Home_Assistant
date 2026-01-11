@@ -13,7 +13,6 @@ from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonE
 if TYPE_CHECKING:
     from .reachy_controller import ReachyController
     from .camera_server import MJPEGCameraServer
-    from .tap_detector import TapDetector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,8 +83,10 @@ ENTITY_KEYS: Dict[str, int] = {
     "noise_suppression": 1202,
     "echo_cancellation_converged": 1203,
     # Phase 13: Sendspin - auto-enabled via mDNS, no user entities needed
-    # Phase 20: Tap detection
-    "tap_sensitivity": 1400,
+    # Phase 20: Tap detection (disabled - too many false triggers)
+    # "tap_sensitivity": 1400,
+    # Phase 21: Continuous conversation
+    "continuous_conversation": 1500,
 }
 
 
@@ -107,7 +108,6 @@ class EntityRegistry:
         reachy_controller: "ReachyController",
         camera_server: Optional["MJPEGCameraServer"] = None,
         play_emotion_callback: Optional[Callable[[str], None]] = None,
-        tap_detector: Optional["TapDetector"] = None,
     ):
         """Initialize the entity registry.
 
@@ -116,13 +116,11 @@ class EntityRegistry:
             reachy_controller: The ReachyController instance
             camera_server: Optional camera server for camera entity
             play_emotion_callback: Optional callback for playing emotions
-            tap_detector: Optional tap detector for sensitivity control
         """
         self.server = server
         self.reachy_controller = reachy_controller
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
-        self.tap_detector = tap_detector
 
         # Emotion state
         self._current_emotion = "None"
@@ -210,7 +208,8 @@ class EntityRegistry:
         self._setup_phase12_entities(entities)
         # Phase 13 (Sendspin) - auto-enabled via mDNS discovery, no user entities
         # Phase 14 (head_joints, passive_joints) removed - not needed
-        self._setup_phase20_entities(entities)
+        # Phase 20 (Tap detection) disabled - too many false triggers
+        self._setup_phase21_entities(entities)
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -850,45 +849,36 @@ class EntityRegistry:
             "noise_suppression, echo_cancellation_converged"
         )
 
-    def _setup_phase20_entities(self, entities: List) -> None:
-        """Setup Phase 20 entities: Tap detection settings (Wireless only)."""
-        from .tap_detector import TAP_THRESHOLD_G_MIN, TAP_THRESHOLD_G_MAX, TAP_THRESHOLD_G_DEFAULT
+    def _setup_phase21_entities(self, entities: List) -> None:
+        """Setup Phase 21 entities: Continuous conversation mode."""
 
-        def get_tap_sensitivity() -> float:
-            """Get current tap sensitivity threshold in g."""
-            if self.tap_detector:
-                return self.tap_detector.threshold_g
-            return TAP_THRESHOLD_G_DEFAULT
-
-        def set_tap_sensitivity(value: float) -> None:
-            """Set tap sensitivity threshold in g and save to preferences."""
-            if self.tap_detector:
-                self.tap_detector.threshold_g = value
-                _LOGGER.info("Tap sensitivity set to %.2fg", value)
-            # Save to preferences for persistence across restarts
-            # Access state through server.state
+        def get_continuous_conversation() -> bool:
+            """Get current continuous conversation mode state."""
             if hasattr(self.server, 'state') and self.server.state:
-                self.server.state.preferences.tap_sensitivity = value
-                self.server.state.save_preferences()
-                _LOGGER.debug("Tap sensitivity saved to preferences")
+                prefs = self.server.state.preferences
+                return getattr(prefs, 'continuous_conversation', False)
+            return False
 
-        entities.append(NumberEntity(
+        def set_continuous_conversation(enabled: bool) -> None:
+            """Set continuous conversation mode and save to preferences."""
+            if hasattr(self.server, 'state') and self.server.state:
+                self.server.state.preferences.continuous_conversation = enabled
+                self.server.state.save_preferences()
+                _LOGGER.info("Continuous conversation mode %s", "enabled" if enabled else "disabled")
+
+        entities.append(SwitchEntity(
             server=self.server,
-            key=get_entity_key("tap_sensitivity"),
-            name="Tap Sensitivity",
-            object_id="tap_sensitivity",
-            min_value=TAP_THRESHOLD_G_MIN,
-            max_value=TAP_THRESHOLD_G_MAX,
-            step=0.1,
-            icon="mdi:gesture-tap",
-            unit_of_measurement="g",
-            mode=2,  # Slider mode
+            key=get_entity_key("continuous_conversation"),
+            name="Continuous Conversation",
+            object_id="continuous_conversation",
+            icon="mdi:message-reply-text",
+            device_class="switch",
             entity_category=1,  # config
-            value_getter=get_tap_sensitivity,
-            value_setter=set_tap_sensitivity,
+            value_getter=get_continuous_conversation,
+            value_setter=set_continuous_conversation,
         ))
 
-        _LOGGER.debug("Phase 20 entities registered: tap_sensitivity")
+        _LOGGER.debug("Phase 21 entities registered: continuous_conversation")
 
     def find_entity_references(self, entities: List) -> None:
         """Find and store references to special entities from existing list.

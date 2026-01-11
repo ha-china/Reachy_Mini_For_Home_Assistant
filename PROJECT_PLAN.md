@@ -95,10 +95,9 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── TAP DETECTION ─────────────────────────────┐  │
-│  │  IMU Accelerometer (Wireless version only, 20Hz polling)              │  │
-│  │  • Tap-to-wake: Enter continuous conversation mode                    │  │
-│  │  • Second tap: Exit continuous conversation mode                      │  │
-│  │  • Threshold: 0.5g (configurable, persisted)                          │  │
+│  │  IMU Accelerometer (Wireless version only) - DISABLED                 │  │
+│  │  • Tap-to-wake: REMOVED (too many false triggers)                     │  │
+│  │  • Continuous conversation now controlled via Home Assistant switch   │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
@@ -126,7 +125,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 - [x] ESPHome protocol server implementation
 - [x] mDNS service discovery (auto-discovered by Home Assistant)
 - [x] Local wake word detection (microWakeWord)
-- [x] Tap-to-wake (IMU acceleration detection, wireless version only)
+- [x] Continuous conversation mode (controlled via Home Assistant switch)
 - [x] Audio stream transmission to Home Assistant
 - [x] TTS audio playback
 - [x] Stop word detection
@@ -678,40 +677,17 @@ def _reachy_on_idle(self):
 
 | Detection Event | Response Action | Status |
 |-----------------|-----------------|--------|
-| Tap-to-wake | Enter continuous conversation mode | ✅ Implemented |
-| Second tap | Exit continuous conversation mode | ✅ Implemented |
+| Continuous conversation | Controlled via Home Assistant switch | ✅ Implemented |
 
-**Tap-to-wake vs Voice Wake**:
-
-| Wake Method | Conversation Mode | Description |
-|-------------|-------------------|-------------|
-| Voice wake (Okay Nabu) | Single conversation | Need to say wake word for each conversation |
-| Tap-to-wake | Continuous conversation | Auto-continue listening after TTS ends, tap again to exit |
+**Tap-to-wake REMOVED** (v0.5.16):
+- Too many false triggers from robot movement and vibrations
+- Continuous conversation mode now controlled via "Continuous Conversation" switch in Home Assistant
+- Users can enable/disable continuous conversation from HA dashboard
 
 **Technical Implementation**:
-- `tap_detector.py` - IMU acceleration spike detection
-- `satellite.py:_tap_conversation_mode` - Continuous conversation mode flag
-- Threshold: 2.0g (configurable)
-- Cooldown: 1.0s (prevent repeated triggers)
-- Wireless version only
-
-```python
-# satellite.py - Continuous conversation mode
-def wakeup_from_tap(self):
-    if self._tap_conversation_mode:
-        # Second tap - Exit continuous conversation
-        self._tap_conversation_mode = False
-        self._reachy_on_idle()
-    else:
-        # First tap - Enter continuous conversation
-        self._tap_conversation_mode = True
-        self.send_messages([VoiceAssistantRequest(start=True)])
-
-def _tts_finished(self):
-    if self._tap_conversation_mode:
-        # Continuous conversation mode: Auto-continue listening
-        self.send_messages([VoiceAssistantRequest(start=True)])
-```
+- `models.py` - `Preferences.continuous_conversation` field
+- `entity_registry.py` - `continuous_conversation` Switch entity (Phase 21)
+- `satellite.py` - `_handle_run_end()` checks `preferences.continuous_conversation`
 
 **Not Implemented**:
 

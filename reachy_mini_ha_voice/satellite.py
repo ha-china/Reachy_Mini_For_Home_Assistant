@@ -77,8 +77,9 @@ class VoiceSatelliteProtocol(APIServer):
         self._timer_finished = False
         self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
 
-        # Tap-to-talk continuous conversation mode
-        self._tap_conversation_mode = False  # When True, auto-continue after TTS
+        # Tap-to-talk continuous conversation mode (REMOVED - too many false triggers)
+        # Continuous conversation is now controlled via Home Assistant switch
+        # self._tap_conversation_mode = False
 
         # Conversation tracking for continuous conversation
         self._conversation_id: Optional[str] = None
@@ -95,14 +96,12 @@ class VoiceSatelliteProtocol(APIServer):
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
 
-        # Initialize entity registry (tap_detector from state if available)
-        tap_detector = getattr(state, 'tap_detector', None)
+        # Initialize entity registry
         self._entity_registry = EntityRegistry(
             server=self,
             reachy_controller=self.reachy_controller,
             camera_server=camera_server,
             play_emotion_callback=self._play_emotion,
-            tap_detector=tap_detector,
         )
 
         # Only setup entities once (check if already initialized)
@@ -361,7 +360,6 @@ class VoiceSatelliteProtocol(APIServer):
     def _clear_conversation(self) -> None:
         """Clear conversation state when exiting conversation mode."""
         self._conversation_id = None
-        self._tap_conversation_mode = False
         self._continue_conversation = False
         self._pipeline_active = False
 
@@ -381,14 +379,6 @@ class VoiceSatelliteProtocol(APIServer):
         # Mark pipeline as active IMMEDIATELY to prevent duplicate wakeups
         # This is set before sending request to HA, as there's network delay
         self._pipeline_active = True
-
-        # Disable tap detection IMMEDIATELY to prevent false triggers during conversation
-        tap_detector = getattr(self.state, 'tap_detector', None)
-        if tap_detector:
-            tap_detector.set_enabled(False)
-            _LOGGER.info("Tap detection disabled at wakeup")
-        else:
-            _LOGGER.warning("tap_detector not found in state")
 
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
@@ -413,66 +403,20 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.tts_player.play(self.state.wakeup_sound)
 
     def wakeup_from_tap(self) -> None:
-        """Trigger wake-up from tap detection (no wake word).
+        """Trigger wake-up from tap detection.
 
-        First tap: Enter continuous conversation mode
-        Second tap (while in conversation): Exit continuous conversation mode
+        NOTE: This method is DISABLED. Tap-to-wake caused too many false triggers.
+        Continuous conversation is now controlled via Home Assistant switch.
         """
-        # If already in tap conversation mode, exit it
-        if self._tap_conversation_mode:
-            _LOGGER.info("Tap detected - exiting continuous conversation mode")
-            self._clear_conversation()
-            self._is_streaming_audio = False
-            # Send stop request to Home Assistant
-            self.send_messages([VoiceAssistantRequest(start=False)])
-            # Stop any ongoing TTS
-            self.state.tts_player.stop()
-            self.unduck()
-            self._reachy_on_idle()
-            return
-
-        # Prevent starting new conversation if pipeline is already active
-        if self._pipeline_active:
-            _LOGGER.warning("Pipeline already active, ignoring tap")
-            return
-
-        if self._timer_finished:
-            # Stop timer instead
-            self._timer_finished = False
-            self.state.tts_player.stop()
-            _LOGGER.debug("Stopping timer finished sound")
-            return
-
-        _LOGGER.info("Tap detected - entering continuous conversation mode")
-        self._tap_conversation_mode = True
-        self._pipeline_active = True
-
-        # Disable tap detection IMMEDIATELY - it will be re-enabled when conversation ends
-        # Note: This tap callback won't be called again until re-enabled
-        tap_detector = getattr(self.state, 'tap_detector', None)
-        if tap_detector:
-            tap_detector.set_enabled(False)
-            _LOGGER.info("Tap detection disabled at tap wakeup")
-        else:
-            _LOGGER.warning("tap_detector not found in state")
-
-        # Get or create conversation_id for context tracking
-        conv_id = self._get_or_create_conversation_id()
-
-        self.send_messages(
-            [VoiceAssistantRequest(
-                start=True,
-                wake_word_phrase="tap",
-                conversation_id=conv_id,
-            )]
-        )
-        self.duck()
-        self._is_streaming_audio = True
-        self.state.tts_player.play(self.state.wakeup_sound)
+        _LOGGER.warning("wakeup_from_tap() called but tap wake is disabled")
+        return
 
     def is_tap_conversation_active(self) -> bool:
-        """Check if tap-triggered continuous conversation is active."""
-        return self._tap_conversation_mode
+        """Check if tap-triggered continuous conversation is active.
+
+        NOTE: Tap wake is DISABLED. This always returns False.
+        """
+        return False
 
     def is_pipeline_active(self) -> bool:
         """Check if voice pipeline is currently active (listening/thinking/speaking)."""
@@ -537,12 +481,13 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Check if should continue conversation BEFORE clearing pipeline state
         # 1. HA requested continue (continue_conversation=1 in INTENT_END)
-        # 2. Tap conversation mode is active (user tapped to start continuous mode)
-        should_continue = self._continue_conversation or self._tap_conversation_mode
+        # 2. Continuous conversation mode is enabled in preferences
+        continuous_mode = self.state.preferences.continuous_conversation
+        should_continue = self._continue_conversation or continuous_mode
 
         if should_continue:
-            _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)",
-                         self._tap_conversation_mode, self._continue_conversation)
+            _LOGGER.info("Continuing conversation (continuous_mode=%s, ha_continue=%s)",
+                         continuous_mode, self._continue_conversation)
 
             # Keep pipeline active - no gap for wake word detection
             # _pipeline_active stays True
@@ -558,10 +503,6 @@ class VoiceSatelliteProtocol(APIServer):
                 conversation_id=conv_id,
             )])
             self._is_streaming_audio = True
-
-            if self._tap_conversation_mode:
-                # Provide motion feedback for continuous conversation mode
-                self._tap_continue_feedback()
 
             # Stay in listening mode, don't go to idle
             self._reachy_on_listening()
@@ -763,12 +704,6 @@ class VoiceSatelliteProtocol(APIServer):
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
 
-        # Disable tap detection during conversation to prevent false triggers from robot movement
-        tap_detector = getattr(self.state, 'tap_detector', None)
-        if tap_detector:
-            tap_detector.set_enabled(False)
-            _LOGGER.debug("Tap detection disabled during conversation")
-
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -827,12 +762,6 @@ class VoiceSatelliteProtocol(APIServer):
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
 
-        # Re-enable tap detection when conversation ends
-        tap_detector = getattr(self.state, 'tap_detector', None)
-        if tap_detector:
-            tap_detector.set_enabled(True)
-            _LOGGER.debug("Tap detection re-enabled after conversation")
-
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -854,23 +783,6 @@ class VoiceSatelliteProtocol(APIServer):
             except Exception as e:
                 _LOGGER.debug("Failed to set conversation mode: %s", e)
 
-    def _tap_continue_feedback(self) -> None:
-        """Provide feedback when continuing conversation in tap mode.
-
-        Triggers a nod to indicate ready for next input.
-        Sound is NOT played here to avoid blocking audio streaming.
-        """
-        try:
-            # NOTE: Do NOT play sound here - it blocks audio streaming
-            # The wakeup sound is already played by the main wakeup flow
-
-            # Trigger a small nod to indicate ready for input
-            if self.state.motion_enabled and self.state.motion:
-                self.state.motion.on_continue_listening()
-                _LOGGER.debug("Tap continue feedback: continue listening pose")
-        except Exception as e:
-            _LOGGER.error("Tap continue feedback error: %s", e)
-
     def _reachy_on_timer_finished(self) -> None:
         """Called when a timer finishes."""
         if not self.state.motion_enabled or not self.state.reachy_mini:
@@ -890,14 +802,6 @@ class VoiceSatelliteProtocol(APIServer):
         """
         try:
             import requests
-            import threading
-
-            # Temporarily disable tap detection during emotion playback
-            # to prevent false triggers from robot movement
-            tap_detector = getattr(self.state, 'tap_detector', None)
-            if tap_detector:
-                tap_detector.set_enabled(False)
-                _LOGGER.debug("Tap detection disabled during emotion playback")
 
             # Get WLAN IP from daemon status
             wlan_ip = "localhost"
@@ -919,75 +823,8 @@ class VoiceSatelliteProtocol(APIServer):
                 result = response.json()
                 move_uuid = result.get('uuid')
                 _LOGGER.info(f"Playing emotion: {emotion_name} (uuid={move_uuid})")
-
-                # Wait for move completion in background thread
-                if tap_detector and move_uuid:
-                    def wait_for_completion():
-                        self._wait_for_move_completion(wlan_ip, move_uuid, tap_detector)
-                    threading.Thread(target=wait_for_completion, daemon=True).start()
-                elif tap_detector:
-                    # Fallback: re-enable after 5 seconds if no UUID (only if pipeline not active)
-                    def reenable_tap_fallback():
-                        time.sleep(5.0)
-                        if tap_detector and not self._pipeline_active:
-                            tap_detector.set_enabled(True)
-                            _LOGGER.debug("Tap detection re-enabled (fallback timeout)")
-                        elif self._pipeline_active:
-                            _LOGGER.debug("Pipeline active, tap detection stays disabled (fallback)")
-                    threading.Thread(target=reenable_tap_fallback, daemon=True).start()
             else:
                 _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
-                # Re-enable tap detection on failure (only if pipeline not active)
-                if tap_detector and not self._pipeline_active:
-                    tap_detector.set_enabled(True)
 
         except Exception as e:
             _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
-            # Re-enable tap detection on error (only if pipeline not active)
-            tap_detector = getattr(self.state, 'tap_detector', None)
-            if tap_detector and not self._pipeline_active:
-                tap_detector.set_enabled(True)
-
-    def _wait_for_move_completion(self, wlan_ip: str, move_uuid: str, tap_detector) -> None:
-        """Wait for a move to complete by polling the daemon API.
-
-        Args:
-            wlan_ip: IP address of the daemon
-            move_uuid: UUID of the move to wait for
-            tap_detector: TapDetector instance to re-enable after completion
-        """
-        import requests
-
-        MAX_WAIT_SECONDS = 30.0  # Maximum wait time to prevent infinite loops
-        POLL_INTERVAL = 0.3  # Poll every 300ms
-
-        start_time = time.time()
-        running_url = f"http://{wlan_ip}:8000/api/move/running"
-
-        try:
-            while time.time() - start_time < MAX_WAIT_SECONDS:
-                try:
-                    response = requests.get(running_url, timeout=2)
-                    if response.status_code == 200:
-                        running_moves = response.json()
-                        # Check if our move is still in the running list
-                        running_uuids = [m.get('uuid') for m in running_moves]
-                        if move_uuid not in running_uuids:
-                            _LOGGER.debug(f"Move {move_uuid} completed")
-                            break
-                    else:
-                        _LOGGER.debug(f"Failed to get running moves: HTTP {response.status_code}")
-                except requests.RequestException as e:
-                    _LOGGER.debug(f"Error polling move status: {e}")
-
-                time.sleep(POLL_INTERVAL)
-            else:
-                _LOGGER.warning(f"Move {move_uuid} did not complete within {MAX_WAIT_SECONDS}s")
-        finally:
-            # Only re-enable tap detection if pipeline is NOT active
-            # This prevents re-enabling during conversation when emotion was triggered
-            if tap_detector and not self._pipeline_active:
-                tap_detector.set_enabled(True)
-                _LOGGER.debug("Tap detection re-enabled after move completion")
-            elif self._pipeline_active:
-                _LOGGER.debug("Pipeline active, tap detection stays disabled after move")

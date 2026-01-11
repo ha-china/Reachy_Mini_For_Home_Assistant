@@ -26,7 +26,6 @@ from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
 from .motion import ReachyMiniMotion
 from .camera_server import MJPEGCameraServer
-from .tap_detector import TapDetector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,8 +75,6 @@ class VoiceAssistantService:
         self._state: Optional[ServerState] = None
         self._motion = ReachyMiniMotion(reachy_mini)
         self._camera_server: Optional[MJPEGCameraServer] = None
-        self._tap_detector: Optional[TapDetector] = None
-        self._last_tap_wakeup: float = 0.0  # For refractory period
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -170,22 +167,6 @@ class VoiceAssistantService:
         # Start motion controller (5Hz control loop)
         if self._motion is not None:
             self._motion.start()
-
-        # Start tap detector for "tap to wake" (Wireless version only)
-        if self.reachy_mini is not None:
-            from .tap_detector import TAP_THRESHOLD_G_DEFAULT
-            # Use saved preference or default
-            tap_threshold = preferences.tap_sensitivity if preferences.tap_sensitivity > 0 else TAP_THRESHOLD_G_DEFAULT
-            self._tap_detector = TapDetector(
-                reachy_mini=self.reachy_mini,
-                on_tap_callback=self._on_tap_detected,
-                threshold_g=tap_threshold,
-                cooldown_seconds=1.0,
-            )
-            _LOGGER.info("Tap detector started with threshold: %.1fg", tap_threshold)
-            self._tap_detector.start()
-            # Store tap_detector in state for entity registry access
-            self._state.tap_detector = self._tap_detector
 
         # Start audio processing thread (non-daemon for proper cleanup)
         self._running = True
@@ -407,12 +388,7 @@ class VoiceAssistantService:
             await self._camera_server.stop()
             self._camera_server = None
 
-        # 8. Stop tap detector
-        if self._tap_detector:
-            self._tap_detector.stop()
-            self._tap_detector = None
-
-        # 9. Shutdown motion executor
+        # 8. Shutdown motion executor
         if self._motion:
             self._motion.shutdown()
 
@@ -816,44 +792,3 @@ class VoiceAssistantService:
         if stopped and (self._state.stop_word.id in self._state.active_wake_words):
             _LOGGER.info("Stop word detected")
             self._state.satellite.stop()
-
-    def _on_tap_detected(self) -> None:
-        """Callback when tap is detected on the robot.
-
-        First tap: Enter continuous conversation mode
-        Second tap: Exit continuous conversation mode
-
-        NOTE: This is called from the tap_detector background thread.
-        We need to be careful about thread safety.
-        """
-        if self._state is None or self._state.satellite is None:
-            return
-
-        # Check if we're already in conversation mode (second tap to exit)
-        is_in_conversation = self._state.satellite.is_tap_conversation_active()
-
-        # Only apply refractory period for ENTERING conversation, not exiting
-        # This allows quick exit from conversation mode
-        if not is_in_conversation:
-            # Check refractory period only when entering conversation
-            now = time.monotonic()
-            if now - self._last_tap_wakeup < self._state.refractory_seconds:
-                _LOGGER.debug("Tap ignored (refractory period)")
-                return
-            self._last_tap_wakeup = now
-
-        try:
-            # Trigger tap handling in satellite (handles mode toggle)
-            # This sends messages to Home Assistant
-            self._state.satellite.wakeup_from_tap()
-
-            # Trigger motion feedback (non-blocking)
-            if self._motion is not None:
-                if is_in_conversation:
-                    # Was in conversation, now exiting - return to idle
-                    self._motion.on_idle()
-                else:
-                    # Starting conversation
-                    self._motion.on_wakeup()
-        except Exception as e:
-            _LOGGER.error("Error in tap detection callback: %s", e)

@@ -53,6 +53,8 @@ class Preferences:
     agc_enabled: Optional[bool] = None  # None = use hardware default
     agc_max_gain: Optional[float] = None  # None = use hardware default
     noise_suppression: Optional[float] = None  # None = use hardware default
+    # Continuous conversation mode (controlled from Home Assistant)
+    continuous_conversation: bool = False
 
 
 @dataclass
@@ -78,7 +80,6 @@ class ServerState:
     reachy_mini: Optional[object] = None
     motion_enabled: bool = True
     motion: Optional[object] = None  # ReachyMiniMotion instance
-    tap_detector: Optional[object] = None  # TapDetector instance (Wireless only)
 
     media_player_entity: "Optional[MediaPlayerEntity]" = None
     satellite: "Optional[VoiceSatelliteProtocol]" = None

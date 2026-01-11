@@ -33,8 +33,8 @@
 				</div>
 				<div class="hero-badges">
 					<span>Wake word detection</span>
-					<span>Tap-to-wake</span>
 					<span>Face tracking</span>
+					<span>Continuous conversation</span>
 					<span>30+ HA entities</span>
 				</div>
 			</div>
@@ -58,8 +58,8 @@
 		<div class="feature-grid">
 			<div class="feature-card">
 				<span class="icon">🎤</span>
-				<h3>Voice & Tap Wake</h3>
-				<p>Say "Okay Nabu" or tap Reachy Mini's head to activate. Multiple wake options for convenience.</p>
+				<h3>Voice Wake</h3>
+				<p>Say "Okay Nabu" to activate. Enable continuous conversation mode for hands-free multi-turn dialogs.</p>
 			</div>
 			<div class="feature-card">
 				<span class="icon">🏠</span>
@@ -105,7 +105,7 @@
 				<p class="eyebrow">Usage</p>
 				<h3>Start talking to your smart home</h3>
 				<p class="story-text">
-					Once installed, Home Assistant will automatically discover your Reachy Mini. Say "Okay Nabu" or tap the robot's head, then speak your command like "turn on the lights" or "what's the temperature?"
+					Once installed, Home Assistant will automatically discover your Reachy Mini. Say "Okay Nabu", then speak your command like "turn on the lights" or "what's the temperature?" Enable "Continuous Conversation" switch for multi-turn dialogs.
 				</p>
 				<div class="chips">
 					<span class="chip">ESPHome protocol</span>
@@ -123,6 +123,15 @@
 			<h2>Changelog</h2>
 		</div>
 		<div class="changelog-grid">
+			<div class="changelog-card">
+				<div class="version-badge">v0.5.16</div>
+				<span class="date">2026-01-11</span>
+				<ul>
+					<li>Remove: Tap-to-wake feature (too many false triggers)</li>
+					<li>New: Continuous Conversation switch in Home Assistant</li>
+					<li>Refactor: Simplified satellite.py and voice_assistant.py</li>
+				</ul>
+			</div>
 			<div class="changelog-card">
 				<div class="version-badge">v0.5.15</div>
 				<span class="date">2026-01-11</span>
