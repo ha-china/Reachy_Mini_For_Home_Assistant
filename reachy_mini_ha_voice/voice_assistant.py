@@ -727,7 +727,8 @@ class VoiceAssistantService:
 
         # Skip wake word processing entirely if pipeline is active
         # This prevents model state accumulation during conversation
-        if self._state.satellite.is_pipeline_active():
+        pipeline_active = self._state.satellite.is_pipeline_active()
+        if pipeline_active:
             return
 
         # Process wake word features
