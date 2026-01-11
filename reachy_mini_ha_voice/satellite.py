@@ -5,7 +5,6 @@ import logging
 import math
 import posixpath
 import shutil
-import threading
 import time
 from collections.abc import Iterable
 from typing import Dict, Optional, Set, Union, TYPE_CHECKING
@@ -51,7 +50,6 @@ from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
 from .api_server import APIServer
-from .audio_analyzer import SpeechSwayPlayer
 from .entity import MediaPlayerEntity
 from .entity_registry import EntityRegistry, get_entity_key
 from .models import AvailableWakeWord, ServerState, WakeWordType
@@ -88,19 +86,12 @@ class VoiceSatelliteProtocol(APIServer):
         self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
         self._last_conversation_time = 0.0
 
-        # Speech sway player for audio-driven head motion
-        self._speech_sway_player: Optional[SpeechSwayPlayer] = None
-
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
         # Connect MovementManager to ReachyController for pose control from HA
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
-            # Initialize speech sway player with MovementManager callback
-            self._speech_sway_player = SpeechSwayPlayer(
-                set_offsets_callback=self._set_speech_sway_offsets
-            )
 
         # Initialize entity registry
         self._entity_registry = EntityRegistry(
@@ -148,14 +139,8 @@ class VoiceSatelliteProtocol(APIServer):
             # Reachy Mini: Start listening animation
             self._reachy_on_listening()
 
-            # Pre-analyze TTS audio for speech sway (if URL available)
-            if self._tts_url and self._speech_sway_player:
-                # Run in background thread to avoid blocking
-                threading.Thread(
-                    target=self._speech_sway_player.prepare,
-                    args=(self._tts_url,),
-                    daemon=True
-                ).start()
+            # Note: TTS URL requires HA authentication, cannot pre-download
+            # Speaking animation uses JSON-defined multi-frequency sway instead
 
         elif event_type in (
             VoiceAssistantEventType.VOICE_ASSISTANT_STT_VAD_END,
@@ -175,30 +160,18 @@ class VoiceSatelliteProtocol(APIServer):
                 self._continue_conversation = True
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
-            # Reachy Mini: Start speaking animation with audio-driven sway
+            # Reachy Mini: Start speaking animation (JSON-defined multi-frequency sway)
             _LOGGER.info("TTS_START event received, triggering speaking animation")
             self._reachy_on_speaking()
-
-            # Start audio-driven speech sway
-            if self._speech_sway_player:
-                self._speech_sway_player.start()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
             self._tts_url = data.get("url")
             self.play_tts()
 
-            # Stop speech sway
-            if self._speech_sway_player:
-                self._speech_sway_player.stop()
-
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
             # Pipeline run ended
             self._tts_played = False
             self._is_streaming_audio = False
-
-            # Ensure speech sway is stopped
-            if self._speech_sway_player:
-                self._speech_sway_player.stop()
 
             # Check if should continue conversation
             self._handle_run_end()
@@ -752,31 +725,6 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.motion.on_speaking_start()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
-
-    def _set_speech_sway_offsets(self, offsets: tuple) -> None:
-        """Apply speech sway offsets to MovementManager.
-
-        Args:
-            offsets: Tuple of (x, y, z, roll, pitch, yaw) in meters/radians
-        """
-        if self.state.motion is None or self.state.motion.movement_manager is None:
-            return
-
-        try:
-            # Set speech offsets on MovementManager
-            # These are additive offsets applied on top of the current animation
-            mm = self.state.motion.movement_manager
-            x, y, z, roll, pitch, yaw = offsets
-
-            # Update animation offsets directly
-            mm.state.anim_x = x
-            mm.state.anim_y = y
-            mm.state.anim_z = z
-            mm.state.anim_roll = roll
-            mm.state.anim_pitch = pitch
-            mm.state.anim_yaw = yaw
-        except Exception as e:
-            _LOGGER.debug("Failed to set speech sway offsets: %s", e)
 
     def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""

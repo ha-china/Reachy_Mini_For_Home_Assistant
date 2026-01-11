@@ -211,15 +211,3 @@ class ReachyMiniMotion:
         if happy:
             self._movement_manager.set_state(RobotState.SPEAKING)
         _LOGGER.debug("Reachy Mini: Antenna wiggle (%s)", "happy" if happy else "sad")
-
-    def update_audio_loudness(self, loudness_db: float):
-        """Update audio loudness for speech-driven sway.
-
-        Call this periodically during TTS playback to enable
-        natural head movements synchronized with speech.
-
-        Args:
-            loudness_db: Audio loudness in dBFS (typically -60 to 0)
-        """
-        if self._movement_manager is not None:
-            self._movement_manager.update_audio_loudness(loudness_db)
