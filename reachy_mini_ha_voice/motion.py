@@ -155,6 +155,7 @@ class ReachyMiniMotion:
         Non-blocking: command sent to MovementManager.
         """
         if self._movement_manager is None:
+            _LOGGER.warning("MovementManager not initialized, skipping speaking animation")
             return
 
         self._is_speaking = True
@@ -167,7 +168,7 @@ class ReachyMiniMotion:
             duration=0.3,
         )
         self._movement_manager.queue_action(action)
-        _LOGGER.debug("Reachy Mini: Speaking started")
+        _LOGGER.info("Reachy Mini: Speaking animation queued")
 
     def on_speaking_end(self):
         """Called when TTS ends - stop speech-reactive motion.

@@ -158,6 +158,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
             # Reachy Mini: Start speaking animation
+            _LOGGER.info("TTS_START event received, triggering speaking animation")
             self._reachy_on_speaking()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
@@ -706,12 +707,19 @@ class VoiceSatelliteProtocol(APIServer):
             except Exception as e:
                 _LOGGER.debug("Failed to pause face tracking: %s", e)
 
-        if not self.state.motion_enabled or not self.state.reachy_mini:
+        if not self.state.motion_enabled:
+            _LOGGER.warning("Motion disabled, skipping speaking animation")
             return
+        if not self.state.reachy_mini:
+            _LOGGER.warning("No reachy_mini instance, skipping speaking animation")
+            return
+        if not self.state.motion:
+            _LOGGER.warning("No motion controller, skipping speaking animation")
+            return
+
         try:
-            _LOGGER.debug("Reachy Mini: Speaking animation")
-            if self.state.motion:
-                self.state.motion.on_speaking_start()
+            _LOGGER.info("Reachy Mini: Starting speaking animation")
+            self.state.motion.on_speaking_start()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
