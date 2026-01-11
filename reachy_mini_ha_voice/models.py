@@ -85,7 +85,6 @@ class ServerState:
     satellite: "Optional[VoiceSatelliteProtocol]" = None
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
-    wake_word_refractory_until: float = 0.0  # Timestamp until which wake word detection is suppressed
 
     def save_preferences(self) -> None:
         """Save preferences as JSON."""

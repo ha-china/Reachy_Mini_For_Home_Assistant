@@ -718,18 +718,15 @@ class VoiceAssistantService:
     def _process_audio_chunk(self, ctx: AudioProcessingContext, audio_chunk: bytes) -> None:
         """Process an audio chunk for wake word detection.
 
+        Following reference project pattern: always process wake words.
+        Refractory period prevents duplicate triggers.
+
         Args:
             ctx: Audio processing context
             audio_chunk: PCM audio bytes
         """
         # Stream audio to Home Assistant
         self._state.satellite.handle_audio(audio_chunk)
-
-        # Skip wake word processing entirely if pipeline is active
-        # This prevents model state accumulation during conversation
-        pipeline_active = self._state.satellite.is_pipeline_active()
-        if pipeline_active:
-            return
 
         # Process wake word features
         self._process_features(ctx, audio_chunk)
@@ -750,14 +747,14 @@ class VoiceAssistantService:
             ctx.oww_inputs.extend(ctx.oww_features.process_streaming(audio_chunk))
 
     def _detect_wake_words(self, ctx: AudioProcessingContext) -> None:
-        """Detect wake words in the processed audio features."""
+        """Detect wake words in the processed audio features.
+
+        Following reference project pattern: only use refractory_seconds.
+        """
         from pymicro_wakeword import MicroWakeWord
         from pyopen_wakeword import OpenWakeWord
 
-        # Check global refractory period (set after conversation ends)
         now = time.monotonic()
-        if now < self._state.wake_word_refractory_until:
-            return
 
         for wake_word in ctx.wake_words:
             activated = False
@@ -773,6 +770,7 @@ class VoiceAssistantService:
                             activated = True
 
             if activated:
+                # Check refractory period
                 if (ctx.last_active is None) or ((now - ctx.last_active) > self._state.refractory_seconds):
                     _LOGGER.info("Wake word detected: %s", wake_word.id)
                     self._state.satellite.wakeup(wake_word)

@@ -86,9 +86,6 @@ class VoiceSatelliteProtocol(APIServer):
         self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
         self._last_conversation_time = 0.0
 
-        # Pipeline state tracking - prevent multiple concurrent pipelines
-        self._pipeline_active = False
-
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
@@ -136,13 +133,6 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
-            # Check if pipeline is already active (shouldn't happen, but be safe)
-            if self._pipeline_active:
-                _LOGGER.warning("RUN_START received but pipeline already active, stopping previous")
-                self.state.tts_player.stop()
-
-            # Mark pipeline as active
-            self._pipeline_active = True
             self._tts_url = data.get("url")
             self._tts_played = False
             self._continue_conversation = False
@@ -179,8 +169,7 @@ class VoiceSatelliteProtocol(APIServer):
             self._tts_played = False
             self._is_streaming_audio = False
 
-            # Check if should continue conversation (after RUN_END is safe)
-            # Note: _pipeline_active is managed inside _handle_run_end
+            # Check if should continue conversation
             self._handle_run_end()
 
     def handle_timer_event(
@@ -361,14 +350,13 @@ class VoiceSatelliteProtocol(APIServer):
         """Clear conversation state when exiting conversation mode."""
         self._conversation_id = None
         self._continue_conversation = False
-        self._pipeline_active = False
 
     def wakeup(self, wake_word: Union[MicroWakeWord, OpenWakeWord]) -> None:
-        # Prevent starting new conversation if pipeline is already active
-        if self._pipeline_active:
-            _LOGGER.warning("Pipeline already active, ignoring wake word")
-            return
+        """Handle wake word detection - start voice pipeline.
 
+        Following reference project pattern: no pipeline state check here.
+        Refractory period in audio processing prevents duplicate triggers.
+        """
         if self._timer_finished:
             # Stop timer instead
             self._timer_finished = False
@@ -376,16 +364,10 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
             return
 
-        # Mark pipeline as active IMMEDIATELY to prevent duplicate wakeups
-        # This is set before sending request to HA, as there's network delay
-        self._pipeline_active = True
-
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
         # Turn toward sound source using DOA (Direction of Arrival)
-        # Only read DOA once at wakeup to avoid daemon pressure
-        # Face tracking will take over after initial turn
         self._turn_to_sound_source()
 
         # Get or create conversation_id for context tracking
@@ -417,10 +399,6 @@ class VoiceSatelliteProtocol(APIServer):
         NOTE: Tap wake is DISABLED. This always returns False.
         """
         return False
-
-    def is_pipeline_active(self) -> bool:
-        """Check if voice pipeline is currently active (listening/thinking/speaking)."""
-        return self._pipeline_active
 
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
@@ -462,24 +440,12 @@ class VoiceSatelliteProtocol(APIServer):
     def _tts_finished(self) -> None:
         """Called when TTS audio playback finishes.
 
-        Note: This is called from the audio player callback, NOT from HA events.
-        We should NOT start a new conversation here - wait for RUN_END event.
+        Following reference project pattern: handle continue conversation here.
         """
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.send_messages([VoiceAssistantAnnounceFinished()])
-        _LOGGER.debug("TTS playback finished, waiting for RUN_END event")
 
-    def _handle_run_end(self) -> None:
-        """Handle pipeline RUN_END event - safe point to continue conversation.
-
-        This is called after HA has fully completed the pipeline run.
-        """
-        # If pipeline wasn't active, this might be a duplicate RUN_END - ignore
-        if not self._pipeline_active:
-            _LOGGER.debug("RUN_END received but pipeline wasn't active, ignoring")
-            return
-
-        # Check if should continue conversation BEFORE clearing pipeline state
+        # Check if should continue conversation
         # 1. Our switch is ON: Always continue (unconditional)
         # 2. Our switch is OFF: Follow HA's continue_conversation request
         continuous_mode = self.state.preferences.continuous_conversation
@@ -489,11 +455,7 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.info("Continuing conversation (our_switch=%s, ha_request=%s)",
                          continuous_mode, self._continue_conversation)
 
-            # Keep pipeline active - no gap for wake word detection
-            # _pipeline_active stays True
-
             # Play prompt sound to indicate ready for next input
-            # Use wakeup sound as the prompt (short beep)
             self.state.tts_player.play(self.state.wakeup_sound)
 
             # Use same conversation_id for context continuity
@@ -504,22 +466,25 @@ class VoiceSatelliteProtocol(APIServer):
             )])
             self._is_streaming_audio = True
 
-            # Stay in listening mode, don't go to idle
+            # Stay in listening mode
             self._reachy_on_listening()
         else:
-            # Conversation ended, clear state
-            self._pipeline_active = False
             self._clear_conversation()
             self.unduck()
-            _LOGGER.debug("Pipeline ended, conversation finished")
-
-            # Set wake word refractory period to prevent immediate re-trigger
-            # Wake word model may have accumulated state during conversation
-            self.state.wake_word_refractory_until = time.monotonic() + 1.5  # 1.5 second cooldown
-            _LOGGER.debug("Wake word refractory period set for 1.5 seconds")
+            _LOGGER.debug("Conversation finished")
 
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
+
+    def _handle_run_end(self) -> None:
+        """Handle pipeline RUN_END event.
+
+        Following reference project pattern: call _tts_finished if TTS wasn't played.
+        """
+        if not self._tts_played:
+            self._tts_finished()
+
+        self._tts_played = False
 
     def _play_timer_finished(self) -> None:
         if not self._timer_finished:
