@@ -763,6 +763,30 @@ class EntityRegistry:
         """Setup Phase 12 entities: Audio processing parameters (via local SDK)."""
         rc = self.reachy_controller
 
+        def set_agc_enabled_with_save(enabled: bool) -> None:
+            """Set AGC enabled and save to preferences."""
+            rc.set_agc_enabled(enabled)
+            if hasattr(self.server, 'state') and self.server.state:
+                self.server.state.preferences.agc_enabled = enabled
+                self.server.state.save_preferences()
+                _LOGGER.debug("AGC enabled saved to preferences: %s", enabled)
+
+        def set_agc_max_gain_with_save(gain: float) -> None:
+            """Set AGC max gain and save to preferences."""
+            rc.set_agc_max_gain(gain)
+            if hasattr(self.server, 'state') and self.server.state:
+                self.server.state.preferences.agc_max_gain = gain
+                self.server.state.save_preferences()
+                _LOGGER.debug("AGC max gain saved to preferences: %.1f dB", gain)
+
+        def set_noise_suppression_with_save(level: float) -> None:
+            """Set noise suppression and save to preferences."""
+            rc.set_noise_suppression(level)
+            if hasattr(self.server, 'state') and self.server.state:
+                self.server.state.preferences.noise_suppression = level
+                self.server.state.save_preferences()
+                _LOGGER.debug("Noise suppression saved to preferences: %.1f%%", level)
+
         entities.append(SwitchEntity(
             server=self.server,
             key=get_entity_key("agc_enabled"),
@@ -772,7 +796,7 @@ class EntityRegistry:
             device_class="switch",
             entity_category=1,  # config
             value_getter=rc.get_agc_enabled,
-            value_setter=rc.set_agc_enabled,
+            value_setter=set_agc_enabled_with_save,
         ))
 
         entities.append(NumberEntity(
@@ -788,7 +812,7 @@ class EntityRegistry:
             mode=2,
             entity_category=1,  # config
             value_getter=rc.get_agc_max_gain,
-            value_setter=rc.set_agc_max_gain,
+            value_setter=set_agc_max_gain_with_save,
         ))
 
         entities.append(NumberEntity(
@@ -804,7 +828,7 @@ class EntityRegistry:
             mode=2,
             entity_category=1,  # config
             value_getter=rc.get_noise_suppression,
-            value_setter=rc.set_noise_suppression,
+            value_setter=set_noise_suppression_with_save,
         ))
 
         entities.append(BinarySensorEntity(

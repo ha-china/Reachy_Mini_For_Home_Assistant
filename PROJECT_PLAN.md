@@ -1150,6 +1150,50 @@ def _optimize_microphone_settings(self) -> None:
 
 **Fix**: Prioritize 16kHz in Sendspin supported formats list to avoid unnecessary resampling
 
+---
+
+## 🔧 v0.5.15 Updates (2026-01-11)
+
+### Feature 1: Audio Settings Persistence
+
+**Problem**: AGC Enabled, AGC Max Gain, Noise Suppression settings lost after restart.
+
+**Solution**: 
+- `models.py`: Added `agc_enabled`, `agc_max_gain`, `noise_suppression` fields to `Preferences` dataclass (Optional, None = use default)
+- `entity_registry.py`: Entity setters now save to `preferences.json`
+- `voice_assistant.py`: `_optimize_microphone_settings()` now restores saved values from preferences on startup
+
+**Behavior**:
+- First startup: Use optimized defaults (AGC=ON, MaxGain=30dB, NoiseSuppression=15%)
+- After user changes via Home Assistant: Values persisted and restored on restart
+
+### Feature 2: Sendspin Discovery Refactoring
+
+**Problem**: Sendspin mDNS discovery code was in `audio_player.py`, mixing concerns.
+
+**Solution**:
+- `zeroconf.py`: Added `SendspinDiscovery` class for mDNS service discovery
+- `audio_player.py`: Simplified to use `SendspinDiscovery` via callback pattern
+- Better separation of concerns: zeroconf.py handles all mDNS, audio_player.py handles audio
+
+### Fix 1: Tap Detection During Emotion Playback
+
+**Problem**: Tap detection was re-enabled after emotion playback completes, even during active conversation.
+
+**Root Cause**: `_play_emotion()` and `_wait_for_move_completion()` always re-enabled tap detection without checking pipeline state.
+
+**Fix**:
+- `satellite.py`: Check `_pipeline_active` before re-enabling tap detection
+- Only re-enable tap detection if conversation has ended (pipeline not active)
+
+**Related Files**:
+- `models.py` - Preferences fields
+- `entity_registry.py` - Entity setters with persistence
+- `voice_assistant.py` - Settings restoration on startup
+- `zeroconf.py` - SendspinDiscovery class
+- `audio_player.py` - Simplified Sendspin integration
+- `satellite.py` - Tap detection fix
+
 
 ---
 

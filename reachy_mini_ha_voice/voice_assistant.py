@@ -236,6 +236,9 @@ class VoiceAssistantService:
         This method configures the XMOS XVF3800 audio processor for optimal
         voice command recognition at distances up to 2-3 meters.
         
+        If user has previously set values via Home Assistant, those values are
+        restored from preferences. Otherwise, default optimized values are used.
+        
         Key optimizations:
         1. Enable AGC with higher max gain for distant speech
         2. Reduce noise suppression to preserve quiet speech
@@ -260,20 +263,28 @@ class VoiceAssistantService:
                 _LOGGER.debug("ReSpeaker device not found")
                 return
             
-            # ========== 1. AGC (Automatic Gain Control) Settings ==========
-            # Enable AGC for automatic volume normalization
-            try:
-                respeaker.write("PP_AGCONOFF", [1])
-                _LOGGER.info("AGC enabled (PP_AGCONOFF=1)")
-            except Exception as e:
-                _LOGGER.debug("Could not enable AGC: %s", e)
+            # Get saved preferences (if any)
+            prefs = self._state.preferences if self._state else None
             
-            # Increase AGC max gain for better distant speech pickup
-            # Default is ~15dB, increase to 30dB for voice commands at distance
-            # Range: 0-40 dB (float)
+            # ========== 1. AGC (Automatic Gain Control) Settings ==========
+            # Use saved value if available, otherwise use default (enabled)
+            agc_enabled = prefs.agc_enabled if (prefs and prefs.agc_enabled is not None) else True
             try:
-                respeaker.write("PP_AGCMAXGAIN", [30.0])
-                _LOGGER.info("AGC max gain increased (PP_AGCMAXGAIN=30.0dB)")
+                respeaker.write("PP_AGCONOFF", [1 if agc_enabled else 0])
+                _LOGGER.info("AGC %s (PP_AGCONOFF=%d)%s", 
+                            "enabled" if agc_enabled else "disabled",
+                            1 if agc_enabled else 0,
+                            " [from preferences]" if (prefs and prefs.agc_enabled is not None) else " [default]")
+            except Exception as e:
+                _LOGGER.debug("Could not set AGC: %s", e)
+            
+            # Use saved value if available, otherwise use default (30dB)
+            agc_max_gain = prefs.agc_max_gain if (prefs and prefs.agc_max_gain is not None) else 30.0
+            try:
+                respeaker.write("PP_AGCMAXGAIN", [agc_max_gain])
+                _LOGGER.info("AGC max gain set (PP_AGCMAXGAIN=%.1fdB)%s",
+                            agc_max_gain,
+                            " [from preferences]" if (prefs and prefs.agc_max_gain is not None) else " [default]")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_AGCMAXGAIN: %s", e)
             
@@ -282,7 +293,7 @@ class VoiceAssistantService:
             # Default is around -25dB, set to -18dB for stronger output
             try:
                 respeaker.write("PP_AGCDESIREDLEVEL", [-18.0])
-                _LOGGER.info("AGC desired level set (PP_AGCDESIREDLEVEL=-18.0dB)")
+                _LOGGER.debug("AGC desired level set (PP_AGCDESIREDLEVEL=-18.0dB)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_AGCDESIREDLEVEL: %s", e)
             
@@ -305,22 +316,26 @@ class VoiceAssistantService:
                 _LOGGER.debug("Could not set AUDIO_MGR_MIC_GAIN: %s", e)
             
             # ========== 3. Noise Suppression Settings ==========
-            # Reduce noise suppression to preserve quiet speech
+            # Use saved value if available, otherwise use default (15%)
             # PP_MIN_NS: minimum noise suppression threshold
             # Higher values = less aggressive suppression = better voice pickup
             # PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% max suppression
             # UI shows "noise suppression strength" so 15% = PP_MIN_NS of 0.85
+            noise_suppression = prefs.noise_suppression if (prefs and prefs.noise_suppression is not None) else 15.0
+            pp_min_ns = 1.0 - (noise_suppression / 100.0)  # Convert percentage to PP_MIN_NS value
             try:
-                respeaker.write("PP_MIN_NS", [0.85])  # 15% noise suppression strength
-                _LOGGER.info("Noise suppression set to 15%% strength (PP_MIN_NS=0.85)")
+                respeaker.write("PP_MIN_NS", [pp_min_ns])
+                _LOGGER.info("Noise suppression set to %.0f%% strength (PP_MIN_NS=%.2f)%s",
+                            noise_suppression, pp_min_ns,
+                            " [from preferences]" if (prefs and prefs.noise_suppression is not None) else " [default]")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
             
             # PP_MIN_NN: minimum noise floor estimation
             # Higher values = less aggressive noise floor tracking
             try:
-                respeaker.write("PP_MIN_NN", [0.85])  # Match PP_MIN_NS
-                _LOGGER.info("Noise floor threshold set (PP_MIN_NN=0.85)")
+                respeaker.write("PP_MIN_NN", [pp_min_ns])  # Match PP_MIN_NS
+                _LOGGER.debug("Noise floor threshold set (PP_MIN_NN=%.2f)", pp_min_ns)
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NN: %s", e)
             
@@ -339,7 +354,8 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.debug("Could not set AEC_HPFONOFF: %s", e)
             
-            _LOGGER.info("Microphone settings optimized for voice recognition (AGC=ON, MaxGain=30dB, MicGain=2.0x)")
+            _LOGGER.info("Microphone settings initialized (AGC=%s, MaxGain=%.0fdB, NoiseSuppression=%.0f%%)",
+                        "ON" if agc_enabled else "OFF", agc_max_gain, noise_suppression)
             
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)

@@ -918,24 +918,26 @@ class VoiceSatelliteProtocol(APIServer):
                         self._wait_for_move_completion(wlan_ip, move_uuid, tap_detector)
                     threading.Thread(target=wait_for_completion, daemon=True).start()
                 elif tap_detector:
-                    # Fallback: re-enable after 5 seconds if no UUID
+                    # Fallback: re-enable after 5 seconds if no UUID (only if pipeline not active)
                     def reenable_tap_fallback():
                         time.sleep(5.0)
-                        if tap_detector:
+                        if tap_detector and not self._pipeline_active:
                             tap_detector.set_enabled(True)
                             _LOGGER.debug("Tap detection re-enabled (fallback timeout)")
+                        elif self._pipeline_active:
+                            _LOGGER.debug("Pipeline active, tap detection stays disabled (fallback)")
                     threading.Thread(target=reenable_tap_fallback, daemon=True).start()
             else:
                 _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
-                # Re-enable tap detection on failure
-                if tap_detector:
+                # Re-enable tap detection on failure (only if pipeline not active)
+                if tap_detector and not self._pipeline_active:
                     tap_detector.set_enabled(True)
 
         except Exception as e:
             _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
-            # Re-enable tap detection on error
+            # Re-enable tap detection on error (only if pipeline not active)
             tap_detector = getattr(self.state, 'tap_detector', None)
-            if tap_detector:
+            if tap_detector and not self._pipeline_active:
                 tap_detector.set_enabled(True)
 
     def _wait_for_move_completion(self, wlan_ip: str, move_uuid: str, tap_detector) -> None:
@@ -974,7 +976,10 @@ class VoiceSatelliteProtocol(APIServer):
             else:
                 _LOGGER.warning(f"Move {move_uuid} did not complete within {MAX_WAIT_SECONDS}s")
         finally:
-            # Always re-enable tap detection
-            if tap_detector:
+            # Only re-enable tap detection if pipeline is NOT active
+            # This prevents re-enabling during conversation when emotion was triggered
+            if tap_detector and not self._pipeline_active:
                 tap_detector.set_enabled(True)
                 _LOGGER.debug("Tap detection re-enabled after move completion")
+            elif self._pipeline_active:
+                _LOGGER.debug("Pipeline active, tap detection stays disabled after move")

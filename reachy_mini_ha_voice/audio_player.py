@@ -31,19 +31,6 @@ except ImportError:
     SENDSPIN_AVAILABLE = False
     _LOGGER.debug("aiosendspin not installed, Sendspin support disabled")
 
-# Check if zeroconf is available for mDNS discovery
-try:
-    from zeroconf.asyncio import AsyncServiceBrowser, AsyncZeroconf
-    ZEROCONF_AVAILABLE = True
-except ImportError:
-    ZEROCONF_AVAILABLE = False
-    _LOGGER.debug("zeroconf not installed, Sendspin auto-discovery disabled")
-
-
-# Sendspin mDNS service type
-SENDSPIN_SERVICE_TYPE = "_sendspin-server._tcp.local."
-SENDSPIN_DEFAULT_PATH = "/sendspin"
-
 
 def _get_stable_client_id() -> str:
     """Generate a stable client ID based on machine identity.
@@ -93,10 +80,7 @@ class AudioPlayer:
         self._sendspin_client: Optional["SendspinClient"] = None
         self._sendspin_enabled = False
         self._sendspin_url: Optional[str] = None
-        self._sendspin_loop: Optional[asyncio.AbstractEventLoop] = None
-        self._sendspin_discovery_task: Optional[asyncio.Task] = None
-        self._sendspin_zeroconf: Optional["AsyncZeroconf"] = None
-        self._sendspin_browser: Optional["AsyncServiceBrowser"] = None
+        self._sendspin_discovery: Optional["SendspinDiscovery"] = None
         self._sendspin_unsubscribers: List[Callable] = []
         
         # Audio buffer for Sendspin playback
@@ -113,7 +97,7 @@ class AudioPlayer:
     @property
     def sendspin_available(self) -> bool:
         """Check if Sendspin library is available."""
-        return SENDSPIN_AVAILABLE and ZEROCONF_AVAILABLE
+        return SENDSPIN_AVAILABLE
 
     @property
     def sendspin_enabled(self) -> bool:
@@ -157,53 +141,24 @@ class AudioPlayer:
             _LOGGER.debug("aiosendspin not installed, skipping Sendspin discovery")
             return
         
-        if not ZEROCONF_AVAILABLE:
-            _LOGGER.debug("zeroconf not installed, skipping Sendspin discovery")
-            return
-        
-        if self._sendspin_discovery_task is not None:
+        if self._sendspin_discovery is not None and self._sendspin_discovery.is_running:
             _LOGGER.debug("Sendspin discovery already running")
             return
         
+        # Import here to avoid circular imports
+        from .zeroconf import SendspinDiscovery
+        
         _LOGGER.info("Starting Sendspin server discovery...")
-        self._sendspin_loop = asyncio.get_running_loop()
-        self._sendspin_discovery_task = asyncio.create_task(self._discover_and_connect())
+        self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found)
+        await self._sendspin_discovery.start()
 
-    async def _discover_and_connect(self) -> None:
-        """Background task to discover and connect to Sendspin servers."""
-        try:
-            self._sendspin_zeroconf = AsyncZeroconf()
-            await self._sendspin_zeroconf.__aenter__()
-            
-            # Create a listener for Sendspin services
-            listener = _SendspinServiceListener(self)
-            self._sendspin_browser = AsyncServiceBrowser(
-                self._sendspin_zeroconf.zeroconf,
-                SENDSPIN_SERVICE_TYPE,
-                listener,
-            )
-            
-            _LOGGER.info("Sendspin discovery started, waiting for servers...")
-            
-            # Keep running until stopped
-            while True:
-                await asyncio.sleep(60)  # Check periodically
-                
-        except asyncio.CancelledError:
-            _LOGGER.debug("Sendspin discovery cancelled")
-        except Exception as e:
-            _LOGGER.error("Sendspin discovery error: %s", e)
-        finally:
-            await self._cleanup_discovery()
-
-    async def _cleanup_discovery(self) -> None:
-        """Clean up discovery resources."""
-        if self._sendspin_browser:
-            await self._sendspin_browser.async_cancel()
-            self._sendspin_browser = None
-        if self._sendspin_zeroconf:
-            await self._sendspin_zeroconf.__aexit__(None, None, None)
-            self._sendspin_zeroconf = None
+    async def _on_sendspin_server_found(self, server_url: str) -> None:
+        """Callback when a Sendspin server is discovered via mDNS.
+        
+        Args:
+            server_url: WebSocket URL of the discovered server.
+        """
+        await self._connect_to_server(server_url)
 
     async def _connect_to_server(self, server_url: str) -> bool:
         """Connect to a discovered Sendspin server as PLAYER.
@@ -408,18 +363,13 @@ class AudioPlayer:
 
     async def stop_sendspin(self) -> None:
         """Stop Sendspin discovery and disconnect from server."""
-        # Cancel discovery task
-        if self._sendspin_discovery_task is not None:
-            self._sendspin_discovery_task.cancel()
-            try:
-                await self._sendspin_discovery_task
-            except asyncio.CancelledError:
-                pass
-            self._sendspin_discovery_task = None
+        # Stop discovery
+        if self._sendspin_discovery is not None:
+            await self._sendspin_discovery.stop()
+            self._sendspin_discovery = None
         
         # Disconnect from server
         await self._disconnect_sendspin()
-        self._sendspin_loop = None
         
         _LOGGER.info("Sendspin stopped")
 
@@ -587,68 +537,3 @@ class AudioPlayer:
         self._unduck_volume = volume / 100.0
         self._duck_volume = self._unduck_volume / 2
         self._current_volume = self._unduck_volume
-
-
-# ========== Sendspin mDNS Service Listener ==========
-
-class _SendspinServiceListener:
-    """Listener for Sendspin server mDNS advertisements."""
-
-    def __init__(self, audio_player: AudioPlayer) -> None:
-        self._audio_player = audio_player
-        self._loop = audio_player._sendspin_loop
-
-    def _build_url(self, host: str, port: int, properties: dict) -> str:
-        """Build WebSocket URL from service info."""
-        path_raw = properties.get(b"path")
-        path = path_raw.decode("utf-8", "ignore") if isinstance(path_raw, bytes) else SENDSPIN_DEFAULT_PATH
-        if not path:
-            path = SENDSPIN_DEFAULT_PATH
-        if not path.startswith("/"):
-            path = "/" + path
-        host_fmt = f"[{host}]" if ":" in host else host
-        return f"ws://{host_fmt}:{port}{path}"
-
-    def add_service(self, zeroconf, service_type: str, name: str) -> None:
-        """Called when a Sendspin server is discovered."""
-        if self._loop is None:
-            return
-        asyncio.run_coroutine_threadsafe(
-            self._process_service(zeroconf, service_type, name),
-            self._loop,
-        )
-
-    def update_service(self, zeroconf, service_type: str, name: str) -> None:
-        """Called when a Sendspin server is updated."""
-        self.add_service(zeroconf, service_type, name)
-
-    def remove_service(self, zeroconf, service_type: str, name: str) -> None:
-        """Called when a Sendspin server goes offline."""
-        _LOGGER.info("Sendspin server removed: %s", name)
-
-    async def _process_service(self, zeroconf, service_type: str, name: str) -> None:
-        """Process discovered service and connect."""
-        try:
-            from zeroconf.asyncio import AsyncZeroconf
-            
-            # Get service info
-            azc = AsyncZeroconf(zc=zeroconf)
-            info = await azc.async_get_service_info(service_type, name)
-            
-            if info is None or info.port is None:
-                return
-            
-            addresses = info.parsed_addresses()
-            if not addresses:
-                return
-            
-            host = addresses[0]
-            url = self._build_url(host, info.port, info.properties)
-            
-            _LOGGER.info("Discovered Sendspin server: %s at %s", name, url)
-            
-            # Auto-connect to the server
-            await self._audio_player._connect_to_server(url)
-            
-        except Exception as e:
-            _LOGGER.warning("Error processing Sendspin service %s: %s", name, e)
