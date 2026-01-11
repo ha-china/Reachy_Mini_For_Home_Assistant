@@ -480,14 +480,13 @@ class VoiceSatelliteProtocol(APIServer):
             return
 
         # Check if should continue conversation BEFORE clearing pipeline state
-        # 1. HA requested continue (continue_conversation=1 in INTENT_END)
-        # 2. Continuous conversation mode is enabled in preferences
+        # Only continue if OUR continuous_conversation switch is enabled
+        # HA's continue_conversation request is ignored unless our switch is on
         continuous_mode = self.state.preferences.continuous_conversation
-        should_continue = self._continue_conversation or continuous_mode
+        should_continue = continuous_mode  # Only use our switch, ignore HA's request
 
         if should_continue:
-            _LOGGER.info("Continuing conversation (continuous_mode=%s, ha_continue=%s)",
-                         continuous_mode, self._continue_conversation)
+            _LOGGER.info("Continuing conversation (continuous_mode=%s)", continuous_mode)
 
             # Keep pipeline active - no gap for wake word detection
             # _pipeline_active stays True
