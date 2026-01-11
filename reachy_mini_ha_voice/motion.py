@@ -139,11 +139,11 @@ class ReachyMiniMotion:
 
         self._movement_manager.set_state(RobotState.THINKING)
 
-        # Look up slightly (thinking gesture)
+        # Slight head tilt (thinking gesture) - avoid looking up too much
         action = PendingAction(
             name="thinking",
-            target_pitch=math.radians(-10),  # Look up
-            target_yaw=math.radians(5),      # Slight turn
+            target_pitch=math.radians(-3),   # Very slight look up (was -10, too much)
+            target_roll=math.radians(5),     # Slight head tilt for "thinking" look
             duration=0.4,
         )
         self._movement_manager.queue_action(action)
