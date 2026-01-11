@@ -1,0 +1,5 @@
+{
+  "type": "openWakeWord",
+  "wake_word": "Hey Reeche",
+  "model": "hey_ree_che.tflite"
+}
