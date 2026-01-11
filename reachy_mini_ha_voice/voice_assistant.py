@@ -47,6 +47,10 @@ class AudioProcessingContext:
     last_active: Optional[float] = None
 
 
+# Audio chunk size for consistent streaming (matches reference project)
+AUDIO_BLOCK_SIZE = 1024  # samples at 16kHz = 64ms
+
+
 class VoiceAssistantService:
     """Voice assistant service that runs ESPHome protocol server."""
 
@@ -75,6 +79,9 @@ class VoiceAssistantService:
         self._state: Optional[ServerState] = None
         self._motion = ReachyMiniMotion(reachy_mini)
         self._camera_server: Optional[MJPEGCameraServer] = None
+
+        # Audio buffer for fixed-size chunk output
+        self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -668,44 +675,42 @@ class VoiceAssistantService:
             _LOGGER.info("Active wake words updated: %s (features reset)", list(self._state.active_wake_words))
 
     def _get_reachy_audio_chunk(self) -> Optional[bytes]:
-        """Get audio chunk from Reachy Mini's microphone.
+        """Get fixed-size audio chunk from Reachy Mini's microphone.
+
+        Returns exactly AUDIO_BLOCK_SIZE samples each time, buffering
+        internally to ensure consistent chunk sizes for streaming.
 
         Returns:
-            PCM audio bytes, or None if no valid audio available.
+            PCM audio bytes of fixed size, or None if not enough data.
         """
+        # Get new audio data from SDK
         audio_data = self.reachy_mini.media.get_audio_sample()
 
-        # Validate audio data
-        if audio_data is None:
-            return None
-        if not isinstance(audio_data, np.ndarray):
-            return None
-        if audio_data.size == 0:
-            return None
+        # Append new data to buffer if valid
+        if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
+            try:
+                if audio_data.dtype.kind not in ('S', 'U', 'O', 'V', 'b'):
+                    if audio_data.dtype != np.float32:
+                        audio_data = np.asarray(audio_data, dtype=np.float32)
 
-        # Validate and convert dtype
-        try:
-            if audio_data.dtype.kind in ('S', 'U', 'O', 'V', 'b'):
-                return None
-            if audio_data.dtype != np.float32:
-                audio_data = np.asarray(audio_data, dtype=np.float32)
-        except (TypeError, ValueError):
-            return None
+                    # Convert stereo to mono
+                    if audio_data.ndim == 2 and audio_data.shape[1] == 2:
+                        audio_data = audio_data.mean(axis=1)
+                    elif audio_data.ndim == 2:
+                        audio_data = audio_data[:, 0].copy()
 
-        # Convert stereo to mono
-        try:
-            if audio_data.ndim == 2 and audio_data.shape[1] == 2:
-                audio_chunk_array = audio_data.mean(axis=1)
-            elif audio_data.ndim == 2:
-                audio_chunk_array = audio_data[:, 0].copy()
-            elif audio_data.ndim == 1:
-                audio_chunk_array = audio_data
-            else:
-                return None
-        except Exception:
-            return None
+                    if audio_data.ndim == 1:
+                        self._audio_buffer = np.concatenate([self._audio_buffer, audio_data])
+            except (TypeError, ValueError):
+                pass
 
-        return self._convert_to_pcm(audio_chunk_array)
+        # Return fixed-size chunk if we have enough data
+        if len(self._audio_buffer) >= AUDIO_BLOCK_SIZE:
+            chunk = self._audio_buffer[:AUDIO_BLOCK_SIZE]
+            self._audio_buffer = self._audio_buffer[AUDIO_BLOCK_SIZE:]
+            return self._convert_to_pcm(chunk)
+
+        return None
 
     def _convert_to_pcm(self, audio_chunk_array: np.ndarray) -> bytes:
         """Convert float32 audio array to 16-bit PCM bytes."""
