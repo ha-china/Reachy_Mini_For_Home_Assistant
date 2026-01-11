@@ -7,7 +7,7 @@ for the Reachy Mini voice assistant.
 import logging
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
-from .entity import BinarySensorEntity, CameraEntity, MediaPlayerEntity, NumberEntity, TextSensorEntity
+from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
 
 if TYPE_CHECKING:
@@ -594,7 +594,10 @@ class EntityRegistry:
             value_getter=rc.get_error_message,
         ))
 
-        _LOGGER.debug("Phase 6 entities registered: control_loop_frequency, sdk_version, robot_name, wireless_version, simulation_mode, wlan_ip, error_message")
+        _LOGGER.debug(
+            "Phase 6 entities registered: control_loop_frequency, sdk_version, "
+            "robot_name, wireless_version, simulation_mode, wlan_ip, error_message"
+        )
 
     def _setup_phase7_entities(self, entities: List) -> None:
         """Setup Phase 7 entities: IMU sensors (wireless only)."""
@@ -842,7 +845,10 @@ class EntityRegistry:
             value_getter=rc.get_echo_cancellation_converged,
         ))
 
-        _LOGGER.debug("Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged")
+        _LOGGER.debug(
+            "Phase 12 entities registered: agc_enabled, agc_max_gain, "
+            "noise_suppression, echo_cancellation_converged"
+        )
 
     def _setup_phase20_entities(self, entities: List) -> None:
         """Setup Phase 20 entities: Tap detection settings (Wireless only)."""

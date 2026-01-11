@@ -8,15 +8,16 @@ Sendspin is automatically enabled by default - no user configuration needed.
 The system uses mDNS to discover Sendspin servers on the local network.
 """
 
-import asyncio
 import hashlib
 import logging
 import socket
-import tempfile
 import threading
 import time
 from collections.abc import Callable
-from typing import List, Optional, Union
+from typing import List, Optional, TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from .zeroconf import SendspinDiscovery
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ except ImportError:
 
 def _get_stable_client_id() -> str:
     """Generate a stable client ID based on machine identity.
-    
+
     Uses hostname and MAC address to create a consistent ID across restarts.
     """
     try:
@@ -48,19 +49,19 @@ def _get_stable_client_id() -> str:
 
 class AudioPlayer:
     """Audio player using Reachy Mini's media system with automatic Sendspin support.
-    
+
     Supports audio playback modes:
     1. Reachy Mini's built-in media system (default)
     2. Sendspin synchronized multi-room playback (as PLAYER - receives audio)
     3. Sounddevice fallback (when Reachy Mini not available)
-    
+
     When connected to Sendspin as a PLAYER, Reachy Mini receives audio streams
     from Home Assistant or other controllers for synchronized playback.
     """
 
     def __init__(self, reachy_mini=None) -> None:
         """Initialize audio player.
-        
+
         Args:
             reachy_mini: Reachy Mini SDK instance.
         """
@@ -73,7 +74,7 @@ class AudioPlayer:
         self._unduck_volume: float = 1.0
         self._current_volume: float = 1.0
         self._stop_flag = threading.Event()
-        
+
         # Sendspin support (auto-enabled via mDNS discovery)
         # Uses stable client_id so HA recognizes the same device after restart
         self._sendspin_client_id = _get_stable_client_id()
@@ -82,7 +83,7 @@ class AudioPlayer:
         self._sendspin_url: Optional[str] = None
         self._sendspin_discovery: Optional["SendspinDiscovery"] = None
         self._sendspin_unsubscribers: List[Callable] = []
-        
+
         # Audio buffer for Sendspin playback
         self._sendspin_audio_format: Optional["PCMFormat"] = None
         self._sendspin_playback_started = False
@@ -111,7 +112,7 @@ class AudioPlayer:
 
     def pause_sendspin(self) -> None:
         """Pause Sendspin audio playback.
-        
+
         Called when voice assistant is activated to prevent audio conflicts.
         Incoming Sendspin audio chunks will be dropped until resumed.
         """
@@ -122,7 +123,7 @@ class AudioPlayer:
 
     def resume_sendspin(self) -> None:
         """Resume Sendspin audio playback.
-        
+
         Called when voice assistant returns to idle state.
         """
         if not self._sendspin_paused:
@@ -133,28 +134,28 @@ class AudioPlayer:
 
     async def start_sendspin_discovery(self) -> None:
         """Start mDNS discovery for Sendspin servers.
-        
+
         This runs in the background and automatically connects when a server is found.
         Called automatically during voice assistant startup.
         """
         if not SENDSPIN_AVAILABLE:
             _LOGGER.debug("aiosendspin not installed, skipping Sendspin discovery")
             return
-        
+
         if self._sendspin_discovery is not None and self._sendspin_discovery.is_running:
             _LOGGER.debug("Sendspin discovery already running")
             return
-        
+
         # Import here to avoid circular imports
         from .zeroconf import SendspinDiscovery
-        
+
         _LOGGER.info("Starting Sendspin server discovery...")
         self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found)
         await self._sendspin_discovery.start()
 
     async def _on_sendspin_server_found(self, server_url: str) -> None:
         """Callback when a Sendspin server is discovered via mDNS.
-        
+
         Args:
             server_url: WebSocket URL of the discovered server.
         """
@@ -162,20 +163,20 @@ class AudioPlayer:
 
     async def _connect_to_server(self, server_url: str) -> bool:
         """Connect to a discovered Sendspin server as PLAYER.
-        
+
         Args:
             server_url: WebSocket URL of the Sendspin server.
-            
+
         Returns:
             True if connected successfully.
         """
         if not SENDSPIN_AVAILABLE:
             return False
-        
+
         # Already connected to this server
         if self._sendspin_enabled and self._sendspin_url == server_url:
             return True
-        
+
         # Disconnect from previous server if any
         if self._sendspin_client is not None:
             await self._disconnect_sendspin()
@@ -211,16 +212,16 @@ class AudioPlayer:
                 buffer_capacity=32_000_000,
                 supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
             )
-            
+
             self._sendspin_client = SendspinClient(
                 client_id=self._sendspin_client_id,
                 client_name="Reachy Mini",
                 roles=[Roles.PLAYER],  # PLAYER role to receive audio
                 player_support=player_support,
             )
-            
+
             await self._sendspin_client.connect(server_url)
-            
+
             # Register audio listeners
             self._sendspin_unsubscribers = [
                 self._sendspin_client.add_audio_chunk_listener(self._on_sendspin_audio_chunk),
@@ -228,14 +229,14 @@ class AudioPlayer:
                 self._sendspin_client.add_stream_end_listener(self._on_sendspin_stream_end),
                 self._sendspin_client.add_stream_clear_listener(self._on_sendspin_stream_clear),
             ]
-            
+
             self._sendspin_url = server_url
             self._sendspin_enabled = True
-            
-            _LOGGER.info("Sendspin connected as PLAYER: %s (client_id=%s)", 
-                        server_url, self._sendspin_client_id)
+
+            _LOGGER.info("Sendspin connected as PLAYER: %s (client_id=%s)",
+                         server_url, self._sendspin_client_id)
             return True
-            
+
         except Exception as e:
             _LOGGER.warning("Failed to connect to Sendspin server %s: %s", server_url, e)
             self._sendspin_client = None
@@ -244,25 +245,25 @@ class AudioPlayer:
 
     def _on_sendspin_audio_chunk(self, server_timestamp_us: int, audio_data: bytes, fmt: "PCMFormat") -> None:
         """Handle incoming audio chunks from Sendspin server.
-        
+
         Plays the audio through Reachy Mini's speaker using push_audio_sample().
         Resamples audio if needed (Reachy Mini uses 16kHz).
-        
+
         Note: Audio is dropped when Sendspin is paused (e.g., during voice assistant interaction).
         """
         if self.reachy_mini is None:
             return
-        
+
         # Drop audio when paused (voice assistant is active)
         if self._sendspin_paused:
             return
-        
+
         try:
             # Store format for potential use
             self._sendspin_audio_format = fmt
-            
+
             import numpy as np
-            
+
             # Convert bytes to numpy array based on format
             if fmt.bit_depth == 16:
                 dtype = np.int16
@@ -273,12 +274,12 @@ class AudioPlayer:
             else:
                 dtype = np.int16
                 max_val = 32768.0
-            
+
             audio_array = np.frombuffer(audio_data, dtype=dtype)
-            
+
             # Convert to float32 for playback (SDK expects float32)
             audio_float = audio_array.astype(np.float32) / max_val
-            
+
             # Reshape for channels if needed
             if fmt.channels > 1:
                 # Reshape to (samples, channels)
@@ -286,7 +287,7 @@ class AudioPlayer:
             else:
                 # Mono: reshape to (samples, 1)
                 audio_float = audio_float.reshape(-1, 1)
-            
+
             # Resample if needed (ReSpeaker hardware only supports 16kHz)
             target_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
             if fmt.sample_rate != target_sample_rate and target_sample_rate > 0:
@@ -297,13 +298,13 @@ class AudioPlayer:
                     audio_float = scipy.signal.resample(audio_float, new_length, axis=0)
                     # Log resampling only once per stream
                     if not hasattr(self, '_logged_resample') or not self._logged_resample:
-                        _LOGGER.debug("Resampling Sendspin audio: %d Hz -> %d Hz", 
-                                     fmt.sample_rate, target_sample_rate)
+                        _LOGGER.debug("Resampling Sendspin audio: %d Hz -> %d Hz",
+                                      fmt.sample_rate, target_sample_rate)
                         self._logged_resample = True
-            
+
             # Apply volume
             audio_float = audio_float * self._current_volume
-            
+
             # Ensure media playback is started
             if not self._sendspin_playback_started:
                 try:
@@ -312,10 +313,10 @@ class AudioPlayer:
                     _LOGGER.info("Started media playback for Sendspin audio (target: %d Hz)", target_sample_rate)
                 except Exception as e:
                     _LOGGER.warning("Failed to start media playback: %s", e)
-            
+
             # Play through Reachy Mini's media system using push_audio_sample
             self.reachy_mini.media.push_audio_sample(audio_float)
-            
+
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)
 
@@ -349,14 +350,14 @@ class AudioPlayer:
             except Exception:
                 pass
         self._sendspin_unsubscribers.clear()
-        
+
         if self._sendspin_client is not None:
             try:
                 await self._sendspin_client.disconnect()
             except Exception as e:
                 _LOGGER.debug("Error disconnecting from Sendspin: %s", e)
             self._sendspin_client = None
-        
+
         self._sendspin_enabled = False
         self._sendspin_url = None
         self._sendspin_audio_format = None
@@ -367,12 +368,11 @@ class AudioPlayer:
         if self._sendspin_discovery is not None:
             await self._sendspin_discovery.stop()
             self._sendspin_discovery = None
-        
+
         # Disconnect from server
         await self._disconnect_sendspin()
-        
-        _LOGGER.info("Sendspin stopped")
 
+        _LOGGER.info("Sendspin stopped")
 
     # ========== Core Playback Methods ==========
 
@@ -383,7 +383,7 @@ class AudioPlayer:
         stop_first: bool = True,
     ) -> None:
         """Play audio from URL(s).
-        
+
         Args:
             url: Single URL or list of URLs to play.
             done_callback: Called when playback finishes.
@@ -495,7 +495,7 @@ class AudioPlayer:
 
     def pause(self) -> None:
         """Pause playback.
-        
+
         Stops current audio output but preserves playlist for resume.
         """
         self._stop_flag.set()

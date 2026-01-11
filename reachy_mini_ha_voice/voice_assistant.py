@@ -159,7 +159,7 @@ class VoiceAssistantService:
                         _LOGGER.debug("Reachy Mini playback already active")
 
                     _LOGGER.info("Reachy Mini media system initialized")
-                    
+
                     # Optimize microphone settings for voice recognition
                     self._optimize_microphone_settings()
                 else:
@@ -206,7 +206,7 @@ class VoiceAssistantService:
                 enable_face_tracking=True,
             )
             await self._camera_server.start()
-            
+
             # Connect camera server to motion controller for face tracking
             if self._motion is not None:
                 self._motion.set_camera_server(self._camera_server)
@@ -232,62 +232,62 @@ class VoiceAssistantService:
 
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
-        
+
         This method configures the XMOS XVF3800 audio processor for optimal
         voice command recognition at distances up to 2-3 meters.
-        
+
         If user has previously set values via Home Assistant, those values are
         restored from preferences. Otherwise, default optimized values are used.
-        
+
         Key optimizations:
         1. Enable AGC with higher max gain for distant speech
         2. Reduce noise suppression to preserve quiet speech
         3. Increase base microphone gain
         4. Optimize AGC response times for voice commands
-        
+
         Reference: reachy_mini/src/reachy_mini/media/audio_control_utils.py
-        XMOS docs: https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/AA_control_command_appendix.html
+        XMOS docs: https://www.xmos.com/documentation/XM-014888-PC/
         """
         if self.reachy_mini is None:
             return
-        
+
         try:
             # Access ReSpeaker through the media audio system
             audio = self.reachy_mini.media.audio
             if audio is None or not hasattr(audio, '_respeaker'):
                 _LOGGER.debug("ReSpeaker not available for optimization")
                 return
-            
+
             respeaker = audio._respeaker
             if respeaker is None:
                 _LOGGER.debug("ReSpeaker device not found")
                 return
-            
+
             # Get saved preferences (if any)
             prefs = self._state.preferences if self._state else None
-            
+
             # ========== 1. AGC (Automatic Gain Control) Settings ==========
             # Use saved value if available, otherwise use default (enabled)
             agc_enabled = prefs.agc_enabled if (prefs and prefs.agc_enabled is not None) else True
             try:
                 respeaker.write("PP_AGCONOFF", [1 if agc_enabled else 0])
-                _LOGGER.info("AGC %s (PP_AGCONOFF=%d)%s", 
-                            "enabled" if agc_enabled else "disabled",
-                            1 if agc_enabled else 0,
-                            " [from preferences]" if (prefs and prefs.agc_enabled is not None) else " [default]")
+                _LOGGER.info("AGC %s (PP_AGCONOFF=%d)%s",
+                             "enabled" if agc_enabled else "disabled",
+                             1 if agc_enabled else 0,
+                             " [from preferences]" if (prefs and prefs.agc_enabled is not None) else " [default]")
             except Exception as e:
                 _LOGGER.debug("Could not set AGC: %s", e)
-            
+
             # Use saved value if available, otherwise use default (30dB)
             agc_max_gain = prefs.agc_max_gain if (prefs and prefs.agc_max_gain is not None) else 30.0
             try:
                 respeaker.write("PP_AGCMAXGAIN", [agc_max_gain])
                 _LOGGER.info("AGC max gain set (PP_AGCMAXGAIN=%.1fdB)%s",
-                            agc_max_gain,
-                            " [from preferences]" if (prefs and prefs.agc_max_gain is not None) else " [default]")
+                             agc_max_gain,
+                             " [from preferences]" if (prefs and prefs.agc_max_gain is not None) else " [default]")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_AGCMAXGAIN: %s", e)
-            
+
             # Set AGC desired output level (target level after gain)
             # More negative = quieter output, less negative = louder
             # Default is around -25dB, set to -18dB for stronger output
@@ -296,7 +296,7 @@ class VoiceAssistantService:
                 _LOGGER.debug("AGC desired level set (PP_AGCDESIREDLEVEL=-18.0dB)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_AGCDESIREDLEVEL: %s", e)
-            
+
             # Optimize AGC time constants for voice commands
             # Faster attack time helps capture sudden speech onset
             try:
@@ -304,7 +304,7 @@ class VoiceAssistantService:
                 _LOGGER.debug("AGC time constant set (PP_AGCTIME=0.5s)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_AGCTIME: %s", e)
-            
+
             # ========== 2. Base Microphone Gain ==========
             # Increase base microphone gain for better sensitivity
             # Default is 1.0, increase to 2.0 for distant speech
@@ -314,7 +314,7 @@ class VoiceAssistantService:
                 _LOGGER.info("Microphone gain increased (AUDIO_MGR_MIC_GAIN=2.0)")
             except Exception as e:
                 _LOGGER.debug("Could not set AUDIO_MGR_MIC_GAIN: %s", e)
-            
+
             # ========== 3. Noise Suppression Settings ==========
             # Use saved value if available, otherwise use default (15%)
             # PP_MIN_NS: minimum noise suppression threshold
@@ -326,11 +326,11 @@ class VoiceAssistantService:
             try:
                 respeaker.write("PP_MIN_NS", [pp_min_ns])
                 _LOGGER.info("Noise suppression set to %.0f%% strength (PP_MIN_NS=%.2f)%s",
-                            noise_suppression, pp_min_ns,
-                            " [from preferences]" if (prefs and prefs.noise_suppression is not None) else " [default]")
+                             noise_suppression, pp_min_ns,
+                             " [from preferences]" if (prefs and prefs.noise_suppression is not None) else " [default]")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
-            
+
             # PP_MIN_NN: minimum noise floor estimation
             # Higher values = less aggressive noise floor tracking
             try:
@@ -338,7 +338,7 @@ class VoiceAssistantService:
                 _LOGGER.debug("Noise floor threshold set (PP_MIN_NN=%.2f)", pp_min_ns)
             except Exception as e:
                 _LOGGER.debug("Could not set PP_MIN_NN: %s", e)
-            
+
             # ========== 4. Echo Cancellation Settings ==========
             # Ensure echo cancellation is enabled (important for TTS playback)
             try:
@@ -346,17 +346,17 @@ class VoiceAssistantService:
                 _LOGGER.debug("Echo cancellation enabled (PP_ECHOONOFF=1)")
             except Exception as e:
                 _LOGGER.debug("Could not set PP_ECHOONOFF: %s", e)
-            
+
             # ========== 5. High-pass filter (remove low frequency noise) ==========
             try:
                 respeaker.write("AEC_HPFONOFF", [1])
                 _LOGGER.debug("High-pass filter enabled (AEC_HPFONOFF=1)")
             except Exception as e:
                 _LOGGER.debug("Could not set AEC_HPFONOFF: %s", e)
-            
+
             _LOGGER.info("Microphone settings initialized (AGC=%s, MaxGain=%.0fdB, NoiseSuppression=%.0f%%)",
-                        "ON" if agc_enabled else "OFF", agc_max_gain, noise_suppression)
-            
+                         "ON" if agc_enabled else "OFF", agc_max_gain, noise_suppression)
+
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)
 
@@ -664,7 +664,7 @@ class VoiceAssistantService:
         if (not ctx.wake_words) or (self._state.wake_words_changed and self._state.wake_words):
             self._state.wake_words_changed = False
             ctx.wake_words.clear()
-            
+
             # Reset feature extractors to clear any residual audio data
             # This prevents false triggers when switching wake words
             ctx.micro_features = MicroWakeWordFeatures()
@@ -672,10 +672,10 @@ class VoiceAssistantService:
             if ctx.oww_features is not None:
                 ctx.oww_features = OpenWakeWordFeatures.from_builtin()
             ctx.oww_inputs.clear()
-            
+
             # Also reset the refractory period to prevent immediate trigger
             ctx.last_active = time.monotonic()
-            
+
             # state.wake_words is Dict[str, MicroWakeWord/OpenWakeWord]
             # We need to filter by active_wake_words (which contains the IDs/keys)
             for ww_id, ww_model in self._state.wake_words.items():
@@ -777,6 +777,11 @@ class VoiceAssistantService:
         from pymicro_wakeword import MicroWakeWord
         from pyopen_wakeword import OpenWakeWord
 
+        # Check global refractory period (set after conversation ends)
+        now = time.monotonic()
+        if now < self._state.wake_word_refractory_until:
+            return
+
         for wake_word in ctx.wake_words:
             activated = False
 
@@ -791,7 +796,6 @@ class VoiceAssistantService:
                             activated = True
 
             if activated:
-                now = time.monotonic()
                 if (ctx.last_active is None) or ((now - ctx.last_active) > self._state.refractory_seconds):
                     _LOGGER.info("Wake word detected: %s", wake_word.id)
                     self._state.satellite.wakeup(wake_word)
@@ -815,19 +819,19 @@ class VoiceAssistantService:
 
     def _on_tap_detected(self) -> None:
         """Callback when tap is detected on the robot.
-        
+
         First tap: Enter continuous conversation mode
         Second tap: Exit continuous conversation mode
-        
+
         NOTE: This is called from the tap_detector background thread.
         We need to be careful about thread safety.
         """
         if self._state is None or self._state.satellite is None:
             return
-        
+
         # Check if we're already in conversation mode (second tap to exit)
         is_in_conversation = self._state.satellite.is_tap_conversation_active()
-        
+
         # Only apply refractory period for ENTERING conversation, not exiting
         # This allows quick exit from conversation mode
         if not is_in_conversation:
@@ -837,12 +841,12 @@ class VoiceAssistantService:
                 _LOGGER.debug("Tap ignored (refractory period)")
                 return
             self._last_tap_wakeup = now
-        
+
         try:
             # Trigger tap handling in satellite (handles mode toggle)
             # This sends messages to Home Assistant
             self._state.satellite.wakeup_from_tap()
-            
+
             # Trigger motion feedback (non-blocking)
             if self._motion is not None:
                 if is_in_conversation:

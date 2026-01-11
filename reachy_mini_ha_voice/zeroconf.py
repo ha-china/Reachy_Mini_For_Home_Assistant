@@ -3,12 +3,9 @@
 import asyncio
 import logging
 import socket
-from typing import Any, Callable, Coroutine, Optional, TYPE_CHECKING
+from typing import Any, Callable, Coroutine, Optional
 
 from .util import get_mac
-
-if TYPE_CHECKING:
-    from zeroconf.asyncio import AsyncServiceBrowser
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,14 +79,14 @@ class HomeAssistantZeroconf:
 
 class SendspinDiscovery:
     """mDNS discovery for Sendspin servers.
-    
+
     Discovers Sendspin servers on the local network and notifies via callback
     when a server is found.
     """
 
     def __init__(self, on_server_found: Callable[[str], "Coroutine[Any, Any, None]"]) -> None:
         """Initialize Sendspin discovery.
-        
+
         Args:
             on_server_found: Async callback called with server URL when discovered.
         """
@@ -110,7 +107,7 @@ class SendspinDiscovery:
         if self._running:
             _LOGGER.debug("Sendspin discovery already running")
             return
-        
+
         _LOGGER.info("Starting Sendspin server discovery...")
         self._loop = asyncio.get_running_loop()
         self._running = True
@@ -121,20 +118,20 @@ class SendspinDiscovery:
         try:
             self._zeroconf = AsyncZeroconf()
             await self._zeroconf.__aenter__()
-            
+
             listener = _SendspinServiceListener(self)
             self._browser = AsyncServiceBrowser(
                 self._zeroconf.zeroconf,
                 SENDSPIN_SERVICE_TYPE,
                 listener,
             )
-            
+
             _LOGGER.info("Sendspin discovery started, waiting for servers...")
-            
+
             # Keep running until stopped
             while self._running:
                 await asyncio.sleep(60)
-                
+
         except asyncio.CancelledError:
             _LOGGER.debug("Sendspin discovery cancelled")
         except Exception as e:
@@ -162,7 +159,7 @@ class SendspinDiscovery:
             except asyncio.CancelledError:
                 pass
             self._discovery_task = None
-        
+
         await self._cleanup()
         self._loop = None
         _LOGGER.info("Sendspin discovery stopped")
@@ -214,21 +211,21 @@ class _SendspinServiceListener:
         try:
             azc = AsyncZeroconf(zc=zeroconf)
             info = await azc.async_get_service_info(service_type, name)
-            
+
             if info is None or info.port is None:
                 return
-            
+
             addresses = info.parsed_addresses()
             if not addresses:
                 return
-            
+
             host = addresses[0]
             url = self._build_url(host, info.port, info.properties)
-            
+
             _LOGGER.info("Discovered Sendspin server: %s at %s", name, url)
-            
+
             # Notify via callback
             await self._discovery._handle_service_found(url)
-            
+
         except Exception as e:
             _LOGGER.warning("Error processing Sendspin service %s: %s", name, e)

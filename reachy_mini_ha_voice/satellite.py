@@ -76,21 +76,21 @@ class VoiceSatelliteProtocol(APIServer):
         self._continue_conversation = False
         self._timer_finished = False
         self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
-        
+
         # Tap-to-talk continuous conversation mode
         self._tap_conversation_mode = False  # When True, auto-continue after TTS
-        
+
         # Conversation tracking for continuous conversation
         self._conversation_id: Optional[str] = None
         self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
         self._last_conversation_time = 0.0
-        
+
         # Pipeline state tracking - prevent multiple concurrent pipelines
         self._pipeline_active = False
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
-        
+
         # Connect MovementManager to ReachyController for pose control from HA
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
@@ -141,7 +141,7 @@ class VoiceSatelliteProtocol(APIServer):
             if self._pipeline_active:
                 _LOGGER.warning("RUN_START received but pipeline already active, stopping previous")
                 self.state.tts_player.stop()
-            
+
             # Mark pipeline as active
             self._pipeline_active = True
             self._tts_url = data.get("url")
@@ -179,7 +179,7 @@ class VoiceSatelliteProtocol(APIServer):
             # Pipeline run ended
             self._tts_played = False
             self._is_streaming_audio = False
-            
+
             # Check if should continue conversation (after RUN_END is safe)
             # Note: _pipeline_active is managed inside _handle_run_end
             self._handle_run_end()
@@ -344,17 +344,17 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _get_or_create_conversation_id(self) -> str:
         """Get existing conversation_id or create a new one.
-        
+
         Reuses conversation_id if within timeout period, otherwise creates new one.
         """
         now = time.time()
-        if (self._conversation_id is None or 
-            now - self._last_conversation_time > self._conversation_timeout):
+        if (self._conversation_id is None or
+                now - self._last_conversation_time > self._conversation_timeout):
             # Create new conversation_id
             import uuid
             self._conversation_id = str(uuid.uuid4())
             _LOGGER.debug("Created new conversation_id: %s", self._conversation_id)
-        
+
         self._last_conversation_time = now
         return self._conversation_id
 
@@ -370,7 +370,7 @@ class VoiceSatelliteProtocol(APIServer):
         if self._pipeline_active:
             _LOGGER.warning("Pipeline already active, ignoring wake word")
             return
-            
+
         if self._timer_finished:
             # Stop timer instead
             self._timer_finished = False
@@ -381,7 +381,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Mark pipeline as active IMMEDIATELY to prevent duplicate wakeups
         # This is set before sending request to HA, as there's network delay
         self._pipeline_active = True
-        
+
         # Disable tap detection IMMEDIATELY to prevent false triggers during conversation
         tap_detector = getattr(self.state, 'tap_detector', None)
         if tap_detector:
@@ -400,10 +400,10 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Get or create conversation_id for context tracking
         conv_id = self._get_or_create_conversation_id()
-        
+
         self.send_messages(
             [VoiceAssistantRequest(
-                start=True, 
+                start=True,
                 wake_word_phrase=wake_word_phrase,
                 conversation_id=conv_id,
             )]
@@ -414,7 +414,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def wakeup_from_tap(self) -> None:
         """Trigger wake-up from tap detection (no wake word).
-        
+
         First tap: Enter continuous conversation mode
         Second tap (while in conversation): Exit continuous conversation mode
         """
@@ -430,12 +430,12 @@ class VoiceSatelliteProtocol(APIServer):
             self.unduck()
             self._reachy_on_idle()
             return
-        
+
         # Prevent starting new conversation if pipeline is already active
         if self._pipeline_active:
             _LOGGER.warning("Pipeline already active, ignoring tap")
             return
-        
+
         if self._timer_finished:
             # Stop timer instead
             self._timer_finished = False
@@ -446,7 +446,7 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Tap detected - entering continuous conversation mode")
         self._tap_conversation_mode = True
         self._pipeline_active = True
-        
+
         # Disable tap detection IMMEDIATELY - it will be re-enabled when conversation ends
         # Note: This tap callback won't be called again until re-enabled
         tap_detector = getattr(self.state, 'tap_detector', None)
@@ -458,10 +458,10 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Get or create conversation_id for context tracking
         conv_id = self._get_or_create_conversation_id()
-        
+
         self.send_messages(
             [VoiceAssistantRequest(
-                start=True, 
+                start=True,
                 wake_word_phrase="tap",
                 conversation_id=conv_id,
             )]
@@ -517,7 +517,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _tts_finished(self) -> None:
         """Called when TTS audio playback finishes.
-        
+
         Note: This is called from the audio player callback, NOT from HA events.
         We should NOT start a new conversation here - wait for RUN_END event.
         """
@@ -527,30 +527,30 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _handle_run_end(self) -> None:
         """Handle pipeline RUN_END event - safe point to continue conversation.
-        
+
         This is called after HA has fully completed the pipeline run.
         """
         # If pipeline wasn't active, this might be a duplicate RUN_END - ignore
         if not self._pipeline_active:
             _LOGGER.debug("RUN_END received but pipeline wasn't active, ignoring")
             return
-        
+
         # Check if should continue conversation BEFORE clearing pipeline state
         # 1. HA requested continue (continue_conversation=1 in INTENT_END)
         # 2. Tap conversation mode is active (user tapped to start continuous mode)
         should_continue = self._continue_conversation or self._tap_conversation_mode
 
         if should_continue:
-            _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)", 
-                        self._tap_conversation_mode, self._continue_conversation)
-            
+            _LOGGER.info("Continuing conversation (tap_mode=%s, ha_continue=%s)",
+                         self._tap_conversation_mode, self._continue_conversation)
+
             # Keep pipeline active - no gap for wake word detection
             # _pipeline_active stays True
-            
+
             # Play prompt sound to indicate ready for next input
             # Use wakeup sound as the prompt (short beep)
             self.state.tts_player.play(self.state.wakeup_sound)
-            
+
             # Use same conversation_id for context continuity
             conv_id = self._get_or_create_conversation_id()
             self.send_messages([VoiceAssistantRequest(
@@ -558,11 +558,11 @@ class VoiceSatelliteProtocol(APIServer):
                 conversation_id=conv_id,
             )])
             self._is_streaming_audio = True
-            
+
             if self._tap_conversation_mode:
                 # Provide motion feedback for continuous conversation mode
                 self._tap_continue_feedback()
-            
+
             # Stay in listening mode, don't go to idle
             self._reachy_on_listening()
         else:
@@ -571,6 +571,12 @@ class VoiceSatelliteProtocol(APIServer):
             self._clear_conversation()
             self.unduck()
             _LOGGER.debug("Pipeline ended, conversation finished")
+
+            # Set wake word refractory period to prevent immediate re-trigger
+            # Wake word model may have accumulated state during conversation
+            self.state.wake_word_refractory_until = time.monotonic() + 1.5  # 1.5 second cooldown
+            _LOGGER.debug("Wake word refractory period set for 1.5 seconds")
+
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
 
@@ -669,77 +675,77 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _turn_to_sound_source(self) -> None:
         """Turn robot head toward sound source using DOA at wakeup.
-        
+
         This is called once at wakeup to orient the robot toward the speaker.
         Face tracking will take over after the initial turn.
-        
+
         DOA angle convention (from SDK):
         - 0 radians = left (Y+ direction in head frame)
         - π/2 radians = front (X+ direction in head frame)
         - π radians = right (Y- direction in head frame)
-        
+
         The SDK uses: p_head = [sin(doa), cos(doa), 0]
         So we need to convert this to yaw angle.
-        
+
         Note: We don't check speech_detected because by the time wake word
         detection completes, the user may have stopped speaking.
         """
         if not self.state.motion_enabled or not self.state.reachy_mini:
             _LOGGER.info("DOA turn-to-sound: motion disabled or no robot")
             return
-        
+
         try:
             # Get DOA from reachy_controller (only read once)
             doa = self.reachy_controller.get_doa_angle()
             if doa is None:
                 _LOGGER.info("DOA not available, skipping turn-to-sound")
                 return
-            
+
             angle_rad, speech_detected = doa
-            _LOGGER.info("DOA raw: angle=%.3f rad (%.1f°), speech=%s", 
+            _LOGGER.info("DOA raw: angle=%.3f rad (%.1f°), speech=%s",
                          angle_rad, math.degrees(angle_rad), speech_detected)
-            
+
             # Convert DOA to direction vector in head frame
             # SDK convention: p_head = [sin(doa), cos(doa), 0]
             # where X+ is front, Y+ is left
             dir_x = math.sin(angle_rad)  # Front component
             dir_y = math.cos(angle_rad)  # Left component
-            
+
             # Calculate yaw angle from direction vector
             # yaw = atan2(y, x), but we want: positive yaw = turn right
             # In robot frame: Y+ is left, so yaw = -atan2(dir_y, dir_x)
             # But since dir_x = sin(doa), dir_y = cos(doa):
             # yaw = -atan2(cos(doa), sin(doa)) = -(π/2 - doa) = doa - π/2
-            # 
+            #
             # CORRECTION: The above was inverted. Testing shows:
             # - Sound on left → robot turns right (wrong)
             # - Sound on right → robot turns left (wrong)
             # So we need to negate the yaw: yaw = π/2 - doa
             yaw_rad = math.pi / 2 - angle_rad
             yaw_deg = math.degrees(yaw_rad)
-            
-            _LOGGER.info("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", 
+
+            _LOGGER.info("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°",
                          dir_x, dir_y, yaw_deg)
-            
+
             # Only turn if angle is significant (> 10°) to avoid noise
             DOA_THRESHOLD_DEG = 10.0
             if abs(yaw_deg) < DOA_THRESHOLD_DEG:
-                _LOGGER.info("DOA angle %.1f° below threshold (%.1f°), skipping turn", 
-                            yaw_deg, DOA_THRESHOLD_DEG)
+                _LOGGER.info("DOA angle %.1f° below threshold (%.1f°), skipping turn",
+                             yaw_deg, DOA_THRESHOLD_DEG)
                 return
-            
+
             # Apply 80% of DOA angle as conservative strategy
             # This accounts for potential DOA inaccuracy
             DOA_SCALE = 0.8
             target_yaw_deg = yaw_deg * DOA_SCALE
-            
-            _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°", 
-                        yaw_deg, target_yaw_deg)
-            
+
+            _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°",
+                         yaw_deg, target_yaw_deg)
+
             # Use MovementManager to turn (non-blocking)
             if self.state.motion and self.state.motion.movement_manager:
                 self.state.motion.movement_manager.turn_to_angle(
-                    target_yaw_deg, 
+                    target_yaw_deg,
                     duration=0.5  # Quick turn
                 )
         except Exception as e:
@@ -749,20 +755,20 @@ class VoiceSatelliteProtocol(APIServer):
         """Called when listening for speech (HA state: Listening)."""
         # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
-        
+
         # Resume face tracking (may have been paused during speaking)
         if self.camera_server is not None:
             try:
                 self.camera_server.set_face_tracking_enabled(True)
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
-        
+
         # Disable tap detection during conversation to prevent false triggers from robot movement
         tap_detector = getattr(self.state, 'tap_detector', None)
         if tap_detector:
             tap_detector.set_enabled(False)
             _LOGGER.debug("Tap detection disabled during conversation")
-        
+
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -780,7 +786,7 @@ class VoiceSatelliteProtocol(APIServer):
                 self.camera_server.set_face_tracking_enabled(True)
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
-        
+
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -799,7 +805,7 @@ class VoiceSatelliteProtocol(APIServer):
                 _LOGGER.debug("Face tracking paused during speaking")
             except Exception as e:
                 _LOGGER.debug("Failed to pause face tracking: %s", e)
-        
+
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -813,20 +819,20 @@ class VoiceSatelliteProtocol(APIServer):
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
-        
+
         # Resume face tracking (may have been paused during speaking)
         if self.camera_server is not None:
             try:
                 self.camera_server.set_face_tracking_enabled(True)
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
-        
+
         # Re-enable tap detection when conversation ends
         tap_detector = getattr(self.state, 'tap_detector', None)
         if tap_detector:
             tap_detector.set_enabled(True)
             _LOGGER.debug("Tap detection re-enabled after conversation")
-        
+
         if not self.state.motion_enabled or not self.state.reachy_mini:
             return
         try:
@@ -835,10 +841,10 @@ class VoiceSatelliteProtocol(APIServer):
                 self.state.motion.on_idle()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
-    
+
     def _set_conversation_mode(self, in_conversation: bool) -> None:
         """Set conversation mode for adaptive face tracking.
-        
+
         When in conversation, face tracking runs at high frequency.
         When idle, face tracking uses adaptive rate to save CPU.
         """
@@ -850,14 +856,14 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _tap_continue_feedback(self) -> None:
         """Provide feedback when continuing conversation in tap mode.
-        
+
         Triggers a nod to indicate ready for next input.
         Sound is NOT played here to avoid blocking audio streaming.
         """
         try:
             # NOTE: Do NOT play sound here - it blocks audio streaming
             # The wakeup sound is already played by the main wakeup flow
-            
+
             # Trigger a small nod to indicate ready for input
             if self.state.motion_enabled and self.state.motion:
                 self.state.motion.on_continue_listening()
@@ -904,14 +910,16 @@ class VoiceSatelliteProtocol(APIServer):
 
             # Call the emotion playback API
             # Dataset: pollen-robotics/reachy-mini-emotions-library
-            url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion_name}"
+            base_url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset"
+            dataset = "pollen-robotics/reachy-mini-emotions-library"
+            url = f"{base_url}/{dataset}/{emotion_name}"
 
             response = requests.post(url, timeout=5)
             if response.status_code == 200:
                 result = response.json()
                 move_uuid = result.get('uuid')
                 _LOGGER.info(f"Playing emotion: {emotion_name} (uuid={move_uuid})")
-                
+
                 # Wait for move completion in background thread
                 if tap_detector and move_uuid:
                     def wait_for_completion():
@@ -942,20 +950,20 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _wait_for_move_completion(self, wlan_ip: str, move_uuid: str, tap_detector) -> None:
         """Wait for a move to complete by polling the daemon API.
-        
+
         Args:
             wlan_ip: IP address of the daemon
             move_uuid: UUID of the move to wait for
             tap_detector: TapDetector instance to re-enable after completion
         """
         import requests
-        
+
         MAX_WAIT_SECONDS = 30.0  # Maximum wait time to prevent infinite loops
         POLL_INTERVAL = 0.3  # Poll every 300ms
-        
+
         start_time = time.time()
         running_url = f"http://{wlan_ip}:8000/api/move/running"
-        
+
         try:
             while time.time() - start_time < MAX_WAIT_SECONDS:
                 try:
@@ -971,7 +979,7 @@ class VoiceSatelliteProtocol(APIServer):
                         _LOGGER.debug(f"Failed to get running moves: HTTP {response.status_code}")
                 except requests.RequestException as e:
                     _LOGGER.debug(f"Error polling move status: {e}")
-                
+
                 time.sleep(POLL_INTERVAL)
             else:
                 _LOGGER.warning(f"Move {move_uuid} did not complete within {MAX_WAIT_SECONDS}s")
