@@ -809,7 +809,7 @@ class VoiceSatelliteProtocol(APIServer):
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
-    def _reachy_on_listening(self) -> None:
+    def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
