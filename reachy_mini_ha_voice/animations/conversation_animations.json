@@ -26,14 +26,22 @@
       "frequency_hz": 0.5
     },
     "speaking": {
-      "description": "Speaking animation - lively head movements simulating human speech",
-      "pitch_amplitude_rad": 0.12,
-      "yaw_amplitude_rad": 0.10,
-      "roll_amplitude_rad": 0.05,
-      "z_amplitude_m": 0.008,
+      "description": "Speaking animation - multi-frequency natural head sway (inspired by reachy_mini_conversation_app)",
+      "pitch_amplitude_rad": 0.08,
+      "pitch_frequency_hz": 2.2,
+      "yaw_amplitude_rad": 0.13,
+      "yaw_frequency_hz": 0.6,
+      "roll_amplitude_rad": 0.04,
+      "roll_frequency_hz": 1.3,
+      "x_amplitude_m": 0.0045,
+      "x_frequency_hz": 0.35,
+      "y_amplitude_m": 0.00375,
+      "y_frequency_hz": 0.45,
+      "z_amplitude_m": 0.00225,
+      "z_frequency_hz": 0.25,
       "antenna_amplitude_rad": 0.5,
       "antenna_move_name": "wiggle",
-      "frequency_hz": 2.0
+      "frequency_hz": 1.0
     },
     "happy": {
       "description": "Happy/positive response",
