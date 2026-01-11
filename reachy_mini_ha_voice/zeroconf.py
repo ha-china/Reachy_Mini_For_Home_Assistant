@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import socket
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Coroutine, Optional, TYPE_CHECKING
 
 from .util import get_mac
 
@@ -87,7 +87,7 @@ class SendspinDiscovery:
     when a server is found.
     """
 
-    def __init__(self, on_server_found: Callable[[str], asyncio.coroutine]) -> None:
+    def __init__(self, on_server_found: Callable[[str], "Coroutine[Any, Any, None]"]) -> None:
         """Initialize Sendspin discovery.
         
         Args:
