@@ -5,10 +5,9 @@ MovementManager for unified 5Hz control with face tracking.
 """
 
 import logging
-import math
 from typing import Optional
 
-from .movement_manager import MovementManager, RobotState, PendingAction
+from .movement_manager import MovementManager, RobotState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ class ReachyMiniMotion:
         self._movement_manager: Optional[MovementManager] = None
         self._camera_server = None  # Reference to camera server for face tracking control
         self._is_speaking = False
-        
+
         _LOGGER.debug("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
 
         # Initialize movement manager if robot is available
@@ -49,7 +48,7 @@ class ReachyMiniMotion:
 
     def set_camera_server(self, camera_server):
         """Set the camera server for face tracking.
-        
+
         Args:
             camera_server: MJPEGCameraServer instance with face tracking enabled
         """
@@ -111,48 +110,32 @@ class ReachyMiniMotion:
 
     def on_continue_listening(self):
         """Called when continuing to listen in tap conversation mode.
-        
-        Performs a small nod to indicate ready for next input.
+
         Non-blocking: command sent to MovementManager.
         """
         if self._movement_manager is None:
             return
 
         self._movement_manager.set_state(RobotState.LISTENING)
-        
-        # Small nod to indicate ready
-        action = PendingAction(
-            name="continue_nod",
-            target_pitch=math.radians(8),  # Small nod down
-            duration=0.25,
-        )
-        self._movement_manager.queue_action(action)
-        _LOGGER.debug("Reachy Mini: Continue listening (nod)")
+        _LOGGER.debug("Reachy Mini: Continue listening")
 
     def on_thinking(self):
         """Called when processing speech - thinking pose.
 
         Non-blocking: command sent to MovementManager.
+        Animation offsets are defined in conversation_animations.json.
         """
         if self._movement_manager is None:
             return
 
         self._movement_manager.set_state(RobotState.THINKING)
-
-        # Slight head tilt (thinking gesture) - avoid looking up too much
-        action = PendingAction(
-            name="thinking",
-            target_pitch=math.radians(-3),   # Very slight look up (was -10, too much)
-            target_roll=math.radians(5),     # Slight head tilt for "thinking" look
-            duration=0.4,
-        )
-        self._movement_manager.queue_action(action)
         _LOGGER.debug("Reachy Mini: Thinking pose")
 
     def on_speaking_start(self):
         """Called when TTS starts - start speech-reactive motion.
 
         Non-blocking: command sent to MovementManager.
+        Animation is defined in conversation_animations.json.
         """
         if self._movement_manager is None:
             _LOGGER.warning("MovementManager not initialized, skipping speaking animation")
@@ -160,15 +143,7 @@ class ReachyMiniMotion:
 
         self._is_speaking = True
         self._movement_manager.set_state(RobotState.SPEAKING)
-
-        # Gentle nod to indicate speaking
-        action = PendingAction(
-            name="speaking_start",
-            target_pitch=math.radians(5),  # Slight nod down
-            duration=0.3,
-        )
-        self._movement_manager.queue_action(action)
-        _LOGGER.info("Reachy Mini: Speaking animation queued")
+        _LOGGER.info("Reachy Mini: Speaking animation started")
 
     def on_speaking_end(self):
         """Called when TTS ends - stop speech-reactive motion.
@@ -226,25 +201,15 @@ class ReachyMiniMotion:
     def wiggle_antennas(self, happy: bool = True):
         """Wiggle antennas to show emotion.
 
-        Non-blocking: command sent to MovementManager.
+        Non-blocking: antenna movement is handled by animation system.
         """
         if self._movement_manager is None:
             return
 
-        # Queue antenna wiggle action
+        # Antenna movement is handled by animation system
+        # Set appropriate animation state
         if happy:
-            action = PendingAction(
-                name="antenna_happy",
-                duration=0.2,
-            )
-            # Note: antenna control is handled in MovementManager state
-        else:
-            action = PendingAction(
-                name="antenna_sad",
-                duration=0.2,
-            )
-
-        self._movement_manager.queue_action(action)
+            self._movement_manager.set_state(RobotState.SPEAKING)
         _LOGGER.debug("Reachy Mini: Antenna wiggle (%s)", "happy" if happy else "sad")
 
     def update_audio_loudness(self, loudness_db: float):

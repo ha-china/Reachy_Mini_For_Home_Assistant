@@ -7,27 +7,27 @@
       "frequency_hz": 0.0
     },
     "listening": {
-      "description": "Attentive pose while listening to user",
-      "pitch_amplitude_rad": 0.05,
-      "pitch_offset_rad": -0.03,
+      "description": "Attentive pose while listening to user - slight forward lean",
+      "pitch_offset_rad": -0.05,
+      "pitch_amplitude_rad": 0.03,
       "z_amplitude_m": 0.003,
       "antenna_amplitude_rad": 0.2,
       "antenna_move_name": "both",
       "frequency_hz": 0.6
     },
     "thinking": {
-      "description": "Processing/thinking animation - gentle head movement",
+      "description": "Processing/thinking animation - head tilted with gentle sway",
+      "roll_offset_rad": 0.08,
       "pitch_amplitude_rad": 0.03,
       "yaw_amplitude_rad": 0.05,
-      "roll_amplitude_rad": 0.06,
-      "roll_offset_rad": 0.05,
+      "roll_amplitude_rad": 0.04,
       "z_amplitude_m": 0.003,
       "antenna_amplitude_rad": 0.25,
       "antenna_move_name": "wiggle",
       "frequency_hz": 0.4
     },
     "speaking": {
-      "description": "Speaking animation - multi-frequency natural head sway (inspired by reachy_mini_conversation_app)",
+      "description": "Speaking animation - multi-frequency natural head sway",
       "pitch_amplitude_rad": 0.08,
       "pitch_frequency_hz": 2.2,
       "yaw_amplitude_rad": 0.13,
@@ -54,10 +54,10 @@
     },
     "sad": {
       "description": "Sad/negative response - head droops",
-      "pitch_amplitude_rad": 0.04,
       "pitch_offset_rad": 0.1,
-      "z_amplitude_m": 0.002,
+      "pitch_amplitude_rad": 0.04,
       "z_offset_m": -0.01,
+      "z_amplitude_m": 0.002,
       "antenna_amplitude_rad": 0.1,
       "antenna_move_name": "both",
       "frequency_hz": 0.3

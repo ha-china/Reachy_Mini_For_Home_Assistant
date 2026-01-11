@@ -85,19 +85,22 @@ class AnimationPlayer:
         self._phase_x: float = 0.0
         self._phase_y: float = 0.0
         self._phase_z: float = 0.0
-        self._load_animations()
+        self._load_config()
 
-    def _load_animations(self) -> None:
-        """Load animations from JSON file."""
+    def _load_config(self) -> None:
+        """Load animations and actions from JSON file."""
         if not _ANIMATIONS_FILE.exists():
             _LOGGER.warning("Animations file not found: %s", _ANIMATIONS_FILE)
             return
         try:
             with open(_ANIMATIONS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+
             settings = data.get("settings", {})
             self._amplitude_scale = settings.get("amplitude_scale", 1.0)
             self._transition_duration = settings.get("transition_duration_s", 0.3)
+
+            # Load animations
             animations = data.get("animations", {})
             for name, params in animations.items():
                 self._animations[name] = AnimationParams(
@@ -126,6 +129,7 @@ class AnimationPlayer:
                     z_frequency_hz=params.get("z_frequency_hz", 0.0),
                     phase_offset=params.get("phase_offset", 0.0),
                 )
+
             _LOGGER.info("Loaded %d animations", len(self._animations))
         except Exception as e:
             _LOGGER.error("Failed to load animations: %s", e)
