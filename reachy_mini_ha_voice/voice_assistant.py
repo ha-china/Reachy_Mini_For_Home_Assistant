@@ -551,7 +551,9 @@ class VoiceAssistantService:
         stop_config = _WAKEWORDS_DIR / "stop.json"
         if stop_config.exists():
             try:
-                return MicroWakeWord.from_config(stop_config)
+                model = MicroWakeWord.from_config(stop_config)
+                setattr(model, 'id', 'stop')
+                return model
             except Exception as e:
                 _LOGGER.warning("Failed to load stop model: %s", e)
 
@@ -559,7 +561,9 @@ class VoiceAssistantService:
         _LOGGER.warning("Stop model not available, using fallback")
         okay_nabu_config = _WAKEWORDS_DIR / "okay_nabu.json"
         if okay_nabu_config.exists():
-            return MicroWakeWord.from_config(okay_nabu_config)
+            model = MicroWakeWord.from_config(okay_nabu_config)
+            setattr(model, 'id', 'stop')
+            return model
 
         return None
 
