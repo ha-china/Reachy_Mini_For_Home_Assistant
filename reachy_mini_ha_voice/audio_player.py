@@ -75,6 +75,9 @@ class AudioPlayer:
         self._current_volume: float = 1.0
         self._stop_flag = threading.Event()
 
+        # Speech sway callback for audio-driven head motion
+        self._sway_callback: Optional[Callable[[dict], None]] = None
+
         # Sendspin support (auto-enabled via mDNS discovery)
         # Uses stable client_id so HA recognizes the same device after restart
         self._sendspin_client_id = _get_stable_client_id()
@@ -88,6 +91,15 @@ class AudioPlayer:
         self._sendspin_audio_format: Optional["PCMFormat"] = None
         self._sendspin_playback_started = False
         self._sendspin_paused = False  # Pause Sendspin when voice assistant is active
+
+    def set_sway_callback(self, callback: Optional[Callable[[dict], None]]) -> None:
+        """Set callback for speech-driven sway animation.
+
+        Args:
+            callback: Function called with sway dict containing
+                      pitch_rad, yaw_rad, roll_rad, x_m, y_m, z_m
+        """
+        self._sway_callback = callback
 
     def set_reachy_mini(self, reachy_mini) -> None:
         """Set the Reachy Mini instance."""
@@ -416,7 +428,7 @@ class AudioPlayer:
         thread.start()
 
     def _play_file(self, file_path: str) -> None:
-        """Play an audio file."""
+        """Play an audio file with optional speech-driven sway animation."""
         try:
             # Handle URLs - download first
             if file_path.startswith(("http://", "https://")):
@@ -430,25 +442,52 @@ class AudioPlayer:
             if self._stop_flag.is_set():
                 return
 
-            duration = None
-
             # Play locally using Reachy Mini's media system
             if self.reachy_mini is not None:
                 try:
-                    self.reachy_mini.media.play_sound(file_path)
-
-                    # Calculate duration
+                    # Read audio data for duration calculation and sway analysis
                     import soundfile as sf
                     data, sample_rate = sf.read(file_path)
                     duration = len(data) / sample_rate
 
-                    # Wait for playback to complete
+                    # Pre-analyze audio for speech sway if callback is set
+                    sway_frames = []
+                    if self._sway_callback is not None:
+                        from .speech_sway import SpeechSwayRT
+                        sway = SpeechSwayRT()
+                        sway_frames = sway.feed(data, sample_rate)
+                        _LOGGER.debug("Generated %d sway frames for %.2fs audio",
+                                      len(sway_frames), duration)
+
+                    # Start playback
+                    self.reachy_mini.media.play_sound(file_path)
+
+                    # Playback loop with sway animation
                     start_time = time.time()
+                    frame_duration = 0.05  # 50ms per sway frame (HOP_MS)
+                    frame_idx = 0
+
                     while time.time() - start_time < duration:
                         if self._stop_flag.is_set():
                             self.reachy_mini.media.stop_playing()
                             break
-                        time.sleep(0.1)
+
+                        # Apply sway frame if available
+                        if self._sway_callback and frame_idx < len(sway_frames):
+                            elapsed = time.time() - start_time
+                            target_frame = int(elapsed / frame_duration)
+                            while frame_idx <= target_frame and frame_idx < len(sway_frames):
+                                self._sway_callback(sway_frames[frame_idx])
+                                frame_idx += 1
+
+                        time.sleep(0.02)  # 20ms sleep for responsive sway
+
+                    # Reset sway to zero when done
+                    if self._sway_callback:
+                        self._sway_callback({
+                            "pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0,
+                            "x_m": 0.0, "y_m": 0.0, "z_m": 0.0,
+                        })
 
                 except Exception as e:
                     _LOGGER.warning("Reachy Mini audio failed, falling back: %s", e)

@@ -93,6 +93,22 @@ class VoiceSatelliteProtocol(APIServer):
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
 
+            # Setup speech sway callback for audio-driven head motion
+            def sway_callback(sway: dict) -> None:
+                mm = state.motion.movement_manager
+                if mm is not None:
+                    mm.set_speech_sway(
+                        sway.get("x_m", 0.0),
+                        sway.get("y_m", 0.0),
+                        sway.get("z_m", 0.0),
+                        sway.get("roll_rad", 0.0),
+                        sway.get("pitch_rad", 0.0),
+                        sway.get("yaw_rad", 0.0),
+                    )
+
+            state.tts_player.set_sway_callback(sway_callback)
+            _LOGGER.info("Speech sway callback configured for TTS player")
+
         # Initialize entity registry
         self._entity_registry = EntityRegistry(
             server=self,

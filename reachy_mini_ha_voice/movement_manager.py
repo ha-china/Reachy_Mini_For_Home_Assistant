@@ -90,6 +90,14 @@ class MovementState:
     anim_antenna_left: float = 0.0
     anim_antenna_right: float = 0.0
 
+    # Speech sway offsets (from audio analysis)
+    sway_pitch: float = 0.0
+    sway_yaw: float = 0.0
+    sway_roll: float = 0.0
+    sway_x: float = 0.0
+    sway_y: float = 0.0
+    sway_z: float = 0.0
+
     # Target pose (from actions)
     target_pitch: float = 0.0
     target_yaw: float = 0.0
@@ -240,6 +248,21 @@ class MovementManager:
         """Thread-safe: Perform a head shake gesture."""
         self._command_queue.put(("shake", (amplitude_deg, duration)))
 
+    def set_speech_sway(
+        self, x: float, y: float, z: float,
+        roll: float, pitch: float, yaw: float
+    ) -> None:
+        """Thread-safe: Set speech-driven sway offsets.
+
+        These offsets are applied on top of the current animation
+        to create audio-synchronized head motion during TTS playback.
+
+        Args:
+            x, y, z: Position offsets in meters
+            roll, pitch, yaw: Orientation offsets in radians
+        """
+        self._command_queue.put(("speech_sway", (x, y, z, roll, pitch, yaw)))
+
     def reset_to_neutral(self, duration: float = 0.5) -> None:
         """Thread-safe: Reset to neutral position."""
         action = PendingAction(
@@ -380,6 +403,16 @@ class MovementManager:
             if payload.get("antenna_right") is not None:
                 self.state.target_antenna_right = payload["antenna_right"]
             logger.debug("External pose update: %s", payload)
+
+        elif cmd == "speech_sway":
+            # Update speech-driven sway offsets
+            x, y, z, roll, pitch, yaw = payload
+            self.state.sway_x = x
+            self.state.sway_y = y
+            self.state.sway_z = z
+            self.state.sway_roll = roll
+            self.state.sway_pitch = pitch
+            self.state.sway_yaw = yaw
 
     def _start_action(self, action: PendingAction) -> None:
         """Start a new motion action."""
@@ -561,16 +594,16 @@ class MovementManager:
             primary_head[1, 3] = self.state.target_y
             primary_head[2, 3] = self.state.target_z
 
-        # Build secondary pose from animation + face tracking
+        # Build secondary pose from animation + face tracking + speech sway
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
 
-        secondary_x = self.state.anim_x + face_offsets[0]
-        secondary_y = self.state.anim_y + face_offsets[1]
-        secondary_z = self.state.anim_z + face_offsets[2]
-        secondary_roll = self.state.anim_roll + face_offsets[3]
-        secondary_pitch = self.state.anim_pitch + face_offsets[4]
-        secondary_yaw = self.state.anim_yaw + face_offsets[5]
+        secondary_x = self.state.anim_x + self.state.sway_x + face_offsets[0]
+        secondary_y = self.state.anim_y + self.state.sway_y + face_offsets[1]
+        secondary_z = self.state.anim_z + self.state.sway_z + face_offsets[2]
+        secondary_roll = self.state.anim_roll + self.state.sway_roll + face_offsets[3]
+        secondary_pitch = self.state.anim_pitch + self.state.sway_pitch + face_offsets[4]
+        secondary_yaw = self.state.anim_yaw + self.state.sway_yaw + face_offsets[5]
 
         if SDK_UTILS_AVAILABLE:
             secondary_head = create_head_pose(
