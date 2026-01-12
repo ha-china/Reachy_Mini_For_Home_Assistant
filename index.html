@@ -124,6 +124,16 @@
 		</div>
 		<div class="changelog-grid">
 			<div class="changelog-card">
+				<div class="version-badge">v0.6.1</div>
+				<span class="date">2026-01-12</span>
+				<ul>
+					<li>Fix: Prioritize MicroWakeWord over OpenWakeWord for same-name wake words</li>
+					<li>Fix: OpenWakeWord wake words now visible in Home Assistant selection</li>
+					<li>Fix: Stop word detection now works correctly</li>
+					<li>Fix: STT/LLM response time improved with fixed audio chunk size</li>
+				</ul>
+			</div>
+			<div class="changelog-card">
 				<div class="version-badge">v0.6.0</div>
 				<span class="date">2026-01-11</span>
 				<ul>
@@ -169,52 +179,52 @@
 					<li>Refactor: Replace SpeechSwayGenerator and BreathingAnimation with unified animation system</li>
 				</ul>
 			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.12</div>
-				<span class="date">2026-01-10</span>
-				<ul>
-					<li>Remove: Deleted broken hey_reachy wake word model</li>
-					<li>Revert: Default wake word back to "Okay Nabu"</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.11</div>
-				<span class="date">2026-01-10</span>
-				<ul>
-					<li>Fix: Reset feature extractors when switching wake words</li>
-					<li>Fix: Add refractory period after wake word switch</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.10</div>
-				<span class="date">2026-01-10</span>
-				<ul>
-					<li>Fix: Wake word models now have 'id' attribute set correctly</li>
-					<li>Fix: Wake word switching from Home Assistant now works</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.8</div>
-				<span class="date">2026-01-09</span>
-				<ul>
-					<li>Fix: Tap detection waits for emotion playback to complete</li>
-					<li>New: DOA turn-to-sound at wakeup</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.0</div>
-				<span class="date">2026-01-07</span>
-				<ul>
-					<li>Face tracking with adaptive frequency</li>
-					<li>Sendspin multi-room audio integration</li>
-					<li>Optimized shutdown mechanism</li>
-				</ul>
-			</div>
 		</div>
 		<div class="changelog-more">
 			<details>
 				<summary>View older versions</summary>
 				<div class="changelog-grid older">
+					<div class="changelog-card">
+						<div class="version-badge">v0.5.12</div>
+						<span class="date">2026-01-10</span>
+						<ul>
+							<li>Remove: Deleted broken hey_reachy wake word model</li>
+							<li>Revert: Default wake word back to "Okay Nabu"</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.5.11</div>
+						<span class="date">2026-01-10</span>
+						<ul>
+							<li>Fix: Reset feature extractors when switching wake words</li>
+							<li>Fix: Add refractory period after wake word switch</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.5.10</div>
+						<span class="date">2026-01-10</span>
+						<ul>
+							<li>Fix: Wake word models now have 'id' attribute set correctly</li>
+							<li>Fix: Wake word switching from Home Assistant now works</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.5.8</div>
+						<span class="date">2026-01-09</span>
+						<ul>
+							<li>Fix: Tap detection waits for emotion playback to complete</li>
+							<li>New: DOA turn-to-sound at wakeup</li>
+						</ul>
+					</div>
+					<div class="changelog-card">
+						<div class="version-badge">v0.5.0</div>
+						<span class="date">2026-01-07</span>
+						<ul>
+							<li>Face tracking with adaptive frequency</li>
+							<li>Sendspin multi-room audio integration</li>
+							<li>Optimized shutdown mechanism</li>
+						</ul>
+					</div>
 					<div class="changelog-card">
 						<div class="version-badge">v0.4.0</div>
 						<span class="date">2026-01-07</span>
