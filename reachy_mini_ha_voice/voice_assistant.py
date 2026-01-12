@@ -452,7 +452,11 @@ class VoiceAssistantService:
         """Load available wake word configurations."""
         available_wake_words: Dict[str, AvailableWakeWord] = {}
 
-        wake_word_dirs = [_WAKEWORDS_DIR, _LOCAL_DIR / "external_wake_words"]
+        wake_word_dirs = [
+            _WAKEWORDS_DIR,
+            _WAKEWORDS_DIR / "openWakeWord",
+            _LOCAL_DIR / "external_wake_words"
+        ]
 
         for wake_word_dir in wake_word_dirs:
             if not wake_word_dir.exists():
