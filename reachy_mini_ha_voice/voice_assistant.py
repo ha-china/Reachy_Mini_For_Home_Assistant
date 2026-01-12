@@ -452,10 +452,12 @@ class VoiceAssistantService:
         """Load available wake word configurations."""
         available_wake_words: Dict[str, AvailableWakeWord] = {}
 
+        # Load order: OpenWakeWord first, then MicroWakeWord, then external
+        # Later entries override earlier ones, so MicroWakeWord takes priority
         wake_word_dirs = [
-            _WAKEWORDS_DIR,
-            _WAKEWORDS_DIR / "openWakeWord",
-            _LOCAL_DIR / "external_wake_words"
+            _WAKEWORDS_DIR / "openWakeWord",  # OpenWakeWord (lowest priority)
+            _LOCAL_DIR / "external_wake_words",  # External wake words
+            _WAKEWORDS_DIR,  # MicroWakeWord (highest priority)
         ]
 
         for wake_word_dir in wake_word_dirs:
