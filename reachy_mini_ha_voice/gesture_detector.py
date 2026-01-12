@@ -59,7 +59,7 @@ _NAME_TO_GESTURE = {
 
 
 class GestureDetector:
-    def __init__(self, confidence_threshold: float = 0.5, detection_threshold: float = 0.5):
+    def __init__(self, confidence_threshold: float = 0.3, detection_threshold: float = 0.3):
         self._confidence_threshold = confidence_threshold
         self._detection_threshold = detection_threshold
         models_dir = Path(__file__).parent / "models"
@@ -115,6 +115,17 @@ class GestureDetector:
         outs = self._detector.run(self._det_outputs, {self._det_input: inp})
         boxes = outs[0]
         scores = outs[2]
+        
+        # Debug: log raw model output periodically
+        if not hasattr(self, '_det_log_count'):
+            self._det_log_count = 0
+        self._det_log_count += 1
+        if self._det_log_count % 100 == 1:
+            logger.info("Hand detector: boxes.shape=%s, scores.shape=%s, max_score=%.3f",
+                       boxes.shape, scores.shape, float(np.max(scores)) if len(scores) > 0 else 0)
+            if len(boxes) > 0:
+                logger.info("  First box raw: %s", boxes[0])
+        
         if len(boxes) == 0:
             return None
         best_i, best_c = -1, self._detection_threshold
@@ -124,6 +135,7 @@ class GestureDetector:
         if best_i < 0:
             return None
         b = boxes[best_i]
+        # Model outputs normalized coordinates (0-1), scale to original frame size
         x1, y1 = int(b[0] * w), int(b[1] * h)
         x2, y2 = int(b[2] * w), int(b[3] * h)
         x1, y1 = max(0, x1), max(0, y1)
