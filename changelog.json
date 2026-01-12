@@ -33,7 +33,7 @@
     "date": "2026-01-11",
     "changes": [
       "New: Audio settings persistence (AGC, Noise Suppression, Tap Sensitivity)",
-      "Refactor: Move Sendspin mDNS discovery to zeroconf.py for better code organization",
+      "Refactor: Move Sendspin mDNS discovery to zeroconf.py",
       "Fix: Tap detection not re-enabled during emotion playback in conversation"
     ]
   },
@@ -41,7 +41,7 @@
     "version": "0.5.14",
     "date": "2026-01-11",
     "changes": [
-      "Fix: Skip ALL wake word processing when pipeline is active (prevents false triggers)",
+      "Fix: Skip ALL wake word processing when pipeline is active",
       "Fix: Eliminate race condition in pipeline state during continuous conversation",
       "Improve: Control loop increased to 100Hz (daemon updated)"
     ]
@@ -80,52 +80,280 @@
     ]
   },
   {
+    "version": "0.5.9",
+    "date": "2026-01-10",
+    "changes": [
+      "New: Default wake word changed to hey_reachy",
+      "Fix: Wake word switching bug"
+    ]
+  },
+  {
     "version": "0.5.8",
     "date": "2026-01-09",
     "changes": [
       "Fix: Tap detection waits for emotion playback to complete",
-      "New: DOA turn-to-sound at wakeup"
+      "Fix: Poll daemon API for move completion"
+    ]
+  },
+  {
+    "version": "0.5.7",
+    "date": "2026-01-09",
+    "changes": [
+      "New: DOA turn-to-sound at wakeup",
+      "Fix: Show raw DOA angle in Home Assistant (0-180)",
+      "Fix: Invert DOA yaw direction"
+    ]
+  },
+  {
+    "version": "0.5.6",
+    "date": "2026-01-08",
+    "changes": [
+      "Fix: Better pipeline state tracking to prevent duplicate audio"
+    ]
+  },
+  {
+    "version": "0.5.5",
+    "date": "2026-01-08",
+    "changes": [
+      "Fix: Prevent concurrent pipelines",
+      "New: Add prompt sound for continuous conversation"
+    ]
+  },
+  {
+    "version": "0.5.4",
+    "date": "2026-01-08",
+    "changes": [
+      "Fix: Wait for RUN_END before starting new conversation"
+    ]
+  },
+  {
+    "version": "0.5.3",
+    "date": "2026-01-08",
+    "changes": [
+      "Fix: Improve continuous conversation with conversation_id tracking"
+    ]
+  },
+  {
+    "version": "0.5.2",
+    "date": "2026-01-08",
+    "changes": [
+      "Fix: Enable HA control of robot pose",
+      "Fix: Continuous conversation improvements"
+    ]
+  },
+  {
+    "version": "0.5.1",
+    "date": "2026-01-08",
+    "changes": [
+      "Fix: Sendspin connects to music_player instead of tts_player",
+      "Fix: Persist tap_sensitivity settings",
+      "Fix: Pause Sendspin during voice assistant wakeup",
+      "Fix: Sendspin prioritize 16kHz sample rate"
     ]
   },
   {
     "version": "0.5.0",
     "date": "2026-01-07",
     "changes": [
-      "Face tracking with adaptive frequency",
-      "Sendspin multi-room audio integration",
-      "Optimized shutdown mechanism"
+      "New: Face tracking with adaptive frequency",
+      "New: Sendspin multi-room audio integration",
+      "Optimize: Shutdown mechanism improvements"
     ]
   },
   {
     "version": "0.4.0",
     "date": "2026-01-07",
     "changes": [
-      "Daemon stability fixes",
-      "Face tracking enabled by default"
+      "Fix: Daemon stability fixes",
+      "New: Face tracking enabled by default",
+      "Optimize: Microphone settings for better sensitivity"
     ]
   },
   {
     "version": "0.3.0",
     "date": "2026-01-06",
     "changes": [
-      "Tap sensitivity slider entity",
-      "Music Assistant compatibility"
+      "New: Tap sensitivity slider entity",
+      "Fix: Music Assistant compatibility",
+      "Optimize: Face tracking and tap detection"
+    ]
+  },
+  {
+    "version": "0.2.21",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: Daemon crash - reduce control loop to 2Hz",
+      "Fix: Pause control loop during audio playback"
+    ]
+  },
+  {
+    "version": "0.2.20",
+    "date": "2026-01-06",
+    "changes": [
+      "Revert: Audio/satellite/voice_assistant to v0.2.9 working state"
+    ]
+  },
+  {
+    "version": "0.2.19",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: Force localhost connection mode to prevent WebRTC errors"
+    ]
+  },
+  {
+    "version": "0.2.18",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: Audio playback - restore wakeup sound",
+      "Fix: Use push_audio_sample for TTS"
+    ]
+  },
+  {
+    "version": "0.2.17",
+    "date": "2026-01-06",
+    "changes": [
+      "Remove: head_joints/passive_joints entities",
+      "Move: error_message to diagnostic category"
+    ]
+  },
+  {
+    "version": "0.2.16",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: TTS playback - pause recording during playback"
+    ]
+  },
+  {
+    "version": "0.2.15",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: Use play_sound() instead of push_audio_sample() for TTS"
+    ]
+  },
+  {
+    "version": "0.2.14",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: Pause audio recording during TTS playback"
+    ]
+  },
+  {
+    "version": "0.2.13",
+    "date": "2026-01-06",
+    "changes": [
+      "Fix: Don't manually start/stop media - let SDK/daemon manage it"
+    ]
+  },
+  {
+    "version": "0.2.12",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Disable breathing animation to prevent serial port overflow"
+    ]
+  },
+  {
+    "version": "0.2.11",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Disable wakeup sound to prevent daemon crash",
+      "Add: Debug logging for troubleshooting"
+    ]
+  },
+  {
+    "version": "0.2.10",
+    "date": "2026-01-05",
+    "changes": [
+      "Add: Debug logging for motion init",
+      "Fix: Audio fallback samplerate"
+    ]
+  },
+  {
+    "version": "0.2.9",
+    "date": "2026-01-05",
+    "changes": [
+      "Remove: DOA/speech detection - replaced by face tracking"
+    ]
+  },
+  {
+    "version": "0.2.8",
+    "date": "2026-01-05",
+    "changes": [
+      "New: Replace DOA with YOLO face tracking"
+    ]
+  },
+  {
+    "version": "0.2.7",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Add DOA caching to prevent ReSpeaker query overload"
+    ]
+  },
+  {
+    "version": "0.2.6",
+    "date": "2026-01-05",
+    "changes": [
+      "New: Thread-safe ReSpeaker USB access to prevent daemon deadlock"
+    ]
+  },
+  {
+    "version": "0.2.4",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Microphone volume control via daemon HTTP API"
+    ]
+  },
+  {
+    "version": "0.2.3",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Daemon crash caused by conflicting pose commands",
+      "Disable: Pose setter methods in ReachyController"
+    ]
+  },
+  {
+    "version": "0.2.2",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Second conversation motion failure",
+      "Reduce: Control loop from 20Hz to 10Hz",
+      "Improve: Connection recovery (faster reconnect)"
+    ]
+  },
+  {
+    "version": "0.2.1",
+    "date": "2026-01-05",
+    "changes": [
+      "Fix: Daemon crash issue",
+      "Optimize: Code structure"
     ]
   },
   {
     "version": "0.2.0",
     "date": "2026-01-05",
     "changes": [
-      "Automatic facial expressions",
-      "Emotion playback integration"
+      "New: Automatic facial expressions during conversation",
+      "New: Emotion playback integration",
+      "Refactor: Integrate emotion playback into MovementManager"
+    ]
+  },
+  {
+    "version": "0.1.5",
+    "date": "2026-01-04",
+    "changes": [
+      "Optimize: Code splitting and organization",
+      "Fix: Program crash issues"
     ]
   },
   {
     "version": "0.1.0",
-    "date": "2026-01-04",
+    "date": "2026-01-01",
     "changes": [
       "Initial release",
-      "Voice assistant functionality"
+      "ESPHome protocol server implementation",
+      "mDNS auto-discovery for Home Assistant",
+      "Local wake word detection (microWakeWord)",
+      "Voice assistant pipeline integration",
+      "Basic motion feedback (nod, shake)"
     ]
   }
 ]
