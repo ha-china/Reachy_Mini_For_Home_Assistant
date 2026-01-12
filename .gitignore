@@ -68,6 +68,7 @@ models/
 !reachy_mini_ha_voice/wakewords/*.tflite
 !reachy_mini_ha_voice/wakewords/**/*.tflite
 *.onnx
+!reachy_mini_ha_voice/models/*.onnx
 
 # SDK Reference (local development only)
 reference/
