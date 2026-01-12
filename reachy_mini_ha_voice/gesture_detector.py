@@ -165,12 +165,13 @@ class GestureDetector:
             if det is None:
                 return Gesture.NONE, 0.0
             x1, y1, x2, y2, det_c = det
+            logger.info("Hand detected: box=(%d,%d,%d,%d) conf=%.2f", x1, y1, x2, y2, det_c)
             crop = self._get_square_crop(frame, (x1, y1, x2, y2))
             if crop.size == 0:
                 return Gesture.NONE, 0.0
             gest, cls_c = self._classify(crop)
             if gest != Gesture.NONE:
-                logger.debug("Gesture: %s (det=%.2f cls=%.2f)", gest.value, det_c, cls_c)
+                logger.info("Gesture: %s (det=%.2f cls=%.2f)", gest.value, det_c, cls_c)
             return gest, det_c * cls_c
         except Exception as e:
             logger.warning("Gesture error: %s", e)
