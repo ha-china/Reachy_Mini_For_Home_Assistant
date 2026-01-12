@@ -524,6 +524,13 @@ class MJPEGCameraServer:
         if self._gesture_detector is None:
             return
         
+        # Log periodically to confirm detection is running
+        if not hasattr(self, '_gesture_call_count'):
+            self._gesture_call_count = 0
+        self._gesture_call_count += 1
+        if self._gesture_call_count % 50 == 1:  # Every 50 calls (~10 seconds at 5fps)
+            _LOGGER.info("Gesture detection running (call #%d)", self._gesture_call_count)
+        
         try:
             # Detect gesture
             detected_gesture, confidence = self._gesture_detector.detect(frame)
