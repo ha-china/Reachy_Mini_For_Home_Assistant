@@ -119,8 +119,10 @@ class MJPEGCameraServer:
         # =====================================================================
         # High frequency when: face detected, in conversation, or recently active
         # Low frequency when: idle and no face for extended period
+        # Ultra-low when: idle for very long time (just MJPEG stream, minimal AI)
         self._fps_high = fps  # Normal tracking rate (15fps)
-        self._fps_low = 3     # Low power rate (3fps) - just checking if someone appears
+        self._fps_low = 2     # Low power rate (2fps) - periodic face check
+        self._fps_idle = 0.5  # Ultra-low power (0.5fps) - minimal CPU usage
         self._current_fps = fps
         
         # Conversation state (set by voice assistant)
@@ -129,9 +131,12 @@ class MJPEGCameraServer:
         
         # Adaptive tracking timing
         self._no_face_duration = 0.0  # How long since last face detection
-        self._low_power_threshold = 10.0  # Switch to low power after 10s without face
-        self._face_check_interval_low = 1.0 / self._fps_low  # ~333ms between checks
+        self._low_power_threshold = 5.0   # Switch to low power after 5s without face
+        self._idle_threshold = 30.0       # Switch to idle mode after 30s without face
         self._last_face_check_time = 0.0
+        
+        # Skip AI inference in idle mode (only stream MJPEG)
+        self._ai_enabled = True
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -212,8 +217,8 @@ class MJPEGCameraServer:
         
         Resource optimization:
         - High frequency (15fps) when face detected or in conversation
-        - Low frequency (3fps) when idle and no face for extended period
-        - YOLO inference only runs when needed, not every frame
+        - Low frequency (2fps) when idle and no face for short period
+        - Ultra-low (0.5fps) when idle for extended period - minimal AI inference
         """
         _LOGGER.info("Starting camera capture thread (face_tracking=%s)", self._face_tracking_enabled)
 
@@ -224,7 +229,12 @@ class MJPEGCameraServer:
         while self._running:
             try:
                 current_time = time.time()
-                frame = self._get_camera_frame()
+                
+                # Determine if we should run AI inference this frame
+                should_run_ai = self._should_run_ai_inference(current_time)
+                
+                # Only get frame if needed (AI inference or MJPEG streaming)
+                frame = self._get_camera_frame() if should_run_ai or self._has_stream_clients() else None
 
                 if frame is not None:
                     frame_count += 1
@@ -238,45 +248,51 @@ class MJPEGCameraServer:
                             self._last_frame = jpeg_data.tobytes()
                             self._last_frame_time = time.time()
                     
-                    # Adaptive face tracking: decide whether to run YOLO this frame
-                    should_track = self._should_run_face_tracking(current_time)
-                    
-                    if should_track and self._face_tracking_enabled and self._head_tracker is not None:
-                        face_detect_count += 1
-                        face_detected = self._process_face_tracking(frame, current_time)
-                        
-                        # Update adaptive timing based on detection result
-                        if face_detected:
-                            self._no_face_duration = 0.0
-                            self._current_fps = self._fps_high
-                        else:
-                            # Accumulate no-face duration
-                            if self._last_face_detected_time is not None:
-                                self._no_face_duration = current_time - self._last_face_detected_time
+                    # Only run AI inference when enabled
+                    if should_run_ai:
+                        # Face tracking
+                        if self._face_tracking_enabled and self._head_tracker is not None:
+                            face_detect_count += 1
+                            face_detected = self._process_face_tracking(frame, current_time)
                             
-                            # Switch to low power mode if no face for extended period
-                            if self._no_face_duration > self._low_power_threshold:
-                                self._current_fps = self._fps_low
+                            # Update adaptive timing based on detection result
+                            if face_detected:
+                                self._no_face_duration = 0.0
+                                self._current_fps = self._fps_high
+                                self._ai_enabled = True
+                            else:
+                                # Accumulate no-face duration
+                                if self._last_face_detected_time is not None:
+                                    self._no_face_duration = current_time - self._last_face_detected_time
+                                else:
+                                    self._no_face_duration += 1.0 / self._current_fps
+                                
+                                # Adaptive power mode
+                                if self._no_face_duration > self._idle_threshold:
+                                    self._current_fps = self._fps_idle
+                                elif self._no_face_duration > self._low_power_threshold:
+                                    self._current_fps = self._fps_low
+                            
+                            self._last_face_check_time = current_time
                         
-                        self._last_face_check_time = current_time
+                        # Handle smooth interpolation when face lost
+                        self._process_face_lost_interpolation(current_time)
+                        
+                        # Gesture detection (only when face detected recently)
+                        if (self._gesture_detection_enabled and 
+                            self._gesture_detector is not None and
+                            self._no_face_duration < 5.0):  # Only detect gestures when someone is present
+                            self._gesture_frame_counter += 1
+                            if self._gesture_frame_counter >= self._gesture_detection_interval:
+                                self._gesture_frame_counter = 0
+                                self._process_gesture_detection(frame)
                     
-                    # Handle smooth interpolation when face lost
-                    self._process_face_lost_interpolation(current_time)
-                    
-                    # Gesture detection (run less frequently than face tracking)
-                    self._gesture_frame_counter += 1
-                    if (self._gesture_detection_enabled and 
-                        self._gesture_detector is not None and
-                        self._gesture_frame_counter >= self._gesture_detection_interval):
-                        self._gesture_frame_counter = 0
-                        self._process_gesture_detection(frame)
-                    
-                    # Log stats every 10 seconds
-                    if current_time - last_log_time >= 10.0:
+                    # Log stats every 30 seconds
+                    if current_time - last_log_time >= 30.0:
                         fps = frame_count / (current_time - last_log_time)
                         detect_fps = face_detect_count / (current_time - last_log_time)
-                        mode = "HIGH" if self._current_fps == self._fps_high else "LOW"
-                        _LOGGER.debug("Camera: %.1f fps, face_detect: %.1f fps (%s mode), no_face: %.1fs",
+                        mode = "HIGH" if self._current_fps == self._fps_high else ("LOW" if self._current_fps == self._fps_low else "IDLE")
+                        _LOGGER.debug("Camera: %.1f fps, AI: %.1f fps (%s), no_face: %.0fs",
                                      fps, detect_fps, mode, self._no_face_duration)
                         frame_count = 0
                         face_detect_count = 0
@@ -288,30 +304,36 @@ class MJPEGCameraServer:
 
             except Exception as e:
                 _LOGGER.error("Error capturing frame: %s", e)
-                time.sleep(0.5)
+                time.sleep(1.0)
 
         _LOGGER.info("Camera capture thread stopped")
     
-    def _should_run_face_tracking(self, current_time: float) -> bool:
-        """Determine if face tracking should run this frame.
+    def _should_run_ai_inference(self, current_time: float) -> bool:
+        """Determine if AI inference (face/gesture detection) should run.
         
         Returns True if:
-        - In conversation mode (always track)
-        - Face was recently detected (high frequency tracking)
-        - In low power mode and enough time has passed since last check
+        - In conversation mode (always run)
+        - Face was recently detected
+        - Periodic check in low power mode
         """
-        # Always track during conversation
+        # Always run during conversation
         with self._conversation_lock:
             if self._in_conversation:
                 return True
         
-        # High frequency mode: track every frame
+        # High frequency mode: run every frame
         if self._current_fps == self._fps_high:
             return True
         
-        # Low power mode: only check periodically
-        time_since_last_check = current_time - self._last_face_check_time
-        return time_since_last_check >= self._face_check_interval_low
+        # Low/idle power mode: run periodically
+        time_since_last = current_time - self._last_face_check_time
+        return time_since_last >= (1.0 / self._current_fps)
+    
+    def _has_stream_clients(self) -> bool:
+        """Check if there are active MJPEG stream clients."""
+        # For now, always return True to keep stream available
+        # Could be optimized to track actual client connections
+        return True
     
     def _process_face_tracking(self, frame: np.ndarray, current_time: float) -> bool:
         """Process face tracking on a frame.
@@ -512,6 +534,8 @@ class MJPEGCameraServer:
         if in_conversation:
             # Immediately switch to high frequency mode
             self._current_fps = self._fps_high
+            self._ai_enabled = True
+            self._no_face_duration = 0.0  # Reset no-face timer
             _LOGGER.debug("Face tracking: conversation mode ON (high frequency)")
         else:
             _LOGGER.debug("Face tracking: conversation mode OFF (adaptive)")
