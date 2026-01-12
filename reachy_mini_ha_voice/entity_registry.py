@@ -87,6 +87,9 @@ ENTITY_KEYS: Dict[str, int] = {
     # "tap_sensitivity": 1400,
     # Phase 21: Continuous conversation
     "continuous_conversation": 1500,
+    # Phase 22: Gesture detection
+    "gesture_detected": 1600,
+    "gesture_confidence": 1601,
 }
 
 
@@ -121,6 +124,10 @@ class EntityRegistry:
         self.reachy_controller = reachy_controller
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
+        
+        # Gesture detection state
+        self._current_gesture = "none"
+        self._gesture_confidence = 0.0
 
         # Emotion state
         self._current_emotion = "None"
@@ -210,6 +217,7 @@ class EntityRegistry:
         # Phase 14 (head_joints, passive_joints) removed - not needed
         # Phase 20 (Tap detection) disabled - too many false triggers
         self._setup_phase21_entities(entities)
+        self._setup_phase22_entities(entities)
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -879,6 +887,44 @@ class EntityRegistry:
         ))
 
         _LOGGER.debug("Phase 21 entities registered: continuous_conversation")
+
+    def _setup_phase22_entities(self, entities: List) -> None:
+        """Setup Phase 22 entities: Gesture detection."""
+
+        def get_gesture() -> str:
+            """Get current detected gesture."""
+            if self.camera_server:
+                return self.camera_server.get_current_gesture()
+            return "none"
+
+        def get_gesture_confidence() -> float:
+            """Get gesture detection confidence."""
+            if self.camera_server:
+                return self.camera_server.get_gesture_confidence()
+            return 0.0
+
+        entities.append(TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("gesture_detected"),
+            name="Gesture Detected",
+            object_id="gesture_detected",
+            icon="mdi:hand-wave",
+            value_getter=get_gesture,
+        ))
+
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("gesture_confidence"),
+            name="Gesture Confidence",
+            object_id="gesture_confidence",
+            icon="mdi:percent",
+            unit_of_measurement="%",
+            accuracy_decimals=1,
+            state_class="measurement",
+            value_getter=get_gesture_confidence,
+        ))
+
+        _LOGGER.debug("Phase 22 entities registered: gesture_detected, gesture_confidence")
 
     def find_entity_references(self, entities: List) -> None:
         """Find and store references to special entities from existing list.

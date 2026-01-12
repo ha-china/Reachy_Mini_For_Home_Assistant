@@ -94,6 +94,15 @@ class MJPEGCameraServer:
         self._face_tracking_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
         
+        # Gesture detection state
+        self._gesture_detector = None
+        self._gesture_detection_enabled = True
+        self._current_gesture = "none"
+        self._gesture_confidence = 0.0
+        self._gesture_lock = threading.Lock()
+        self._gesture_frame_counter = 0
+        self._gesture_detection_interval = 3  # Run gesture detection every N frames
+        
         # Face tracking timing (smooth interpolation when face lost)
         self._last_face_detected_time: Optional[float] = None
         self._interpolation_start_time: Optional[float] = None
@@ -145,6 +154,23 @@ class MJPEGCameraServer:
                 self._head_tracker = None
         else:
             _LOGGER.info("Face tracking disabled by configuration")
+        
+        # Initialize gesture detector
+        if self._gesture_detection_enabled:
+            try:
+                from .gesture_detector import GestureDetector
+                self._gesture_detector = GestureDetector()
+                if self._gesture_detector.is_available:
+                    _LOGGER.info("Gesture detection enabled (18 HaGRID classes)")
+                else:
+                    _LOGGER.warning("Gesture detection not available")
+                    self._gesture_detector = None
+            except ImportError as e:
+                _LOGGER.warning("Failed to import gesture detector: %s", e)
+                self._gesture_detector = None
+            except Exception as e:
+                _LOGGER.warning("Failed to initialize gesture detector: %s", e)
+                self._gesture_detector = None
 
         # Start frame capture thread
         self._capture_thread = threading.Thread(
@@ -235,6 +261,14 @@ class MJPEGCameraServer:
                     
                     # Handle smooth interpolation when face lost
                     self._process_face_lost_interpolation(current_time)
+                    
+                    # Gesture detection (run less frequently than face tracking)
+                    self._gesture_frame_counter += 1
+                    if (self._gesture_detection_enabled and 
+                        self._gesture_detector is not None and
+                        self._gesture_frame_counter >= self._gesture_detection_interval):
+                        self._gesture_frame_counter = 0
+                        self._process_gesture_detection(frame)
                     
                     # Log stats every 10 seconds
                     if current_time - last_log_time >= 10.0:
@@ -480,6 +514,59 @@ class MJPEGCameraServer:
             _LOGGER.debug("Face tracking: conversation mode ON (high frequency)")
         else:
             _LOGGER.debug("Face tracking: conversation mode OFF (adaptive)")
+    
+    # =========================================================================
+    # Gesture detection
+    # =========================================================================
+    
+    def _process_gesture_detection(self, frame: np.ndarray) -> None:
+        """Process gesture detection on a frame."""
+        if self._gesture_detector is None:
+            return
+        
+        try:
+            # Use process_frame to handle hold detection and callbacks
+            triggered = self._gesture_detector.process_frame(frame)
+            
+            # Update current gesture state
+            with self._gesture_lock:
+                gesture = self._gesture_detector.current_gesture
+                self._current_gesture = gesture.value
+                
+                # Get confidence from last detection
+                detected_gesture, confidence = self._gesture_detector.detect(frame)
+                if detected_gesture.value != "no_gesture":
+                    self._gesture_confidence = confidence
+                    
+        except Exception as e:
+            _LOGGER.debug("Gesture detection error: %s", e)
+    
+    def get_current_gesture(self) -> str:
+        """Get current detected gesture name (thread-safe).
+        
+        Returns:
+            Gesture name string (e.g., "like", "peace", "none")
+        """
+        with self._gesture_lock:
+            return self._current_gesture
+    
+    def get_gesture_confidence(self) -> float:
+        """Get current gesture detection confidence (thread-safe).
+        
+        Returns:
+            Confidence value (0.0 to 1.0), multiplied by 100 for percentage display
+        """
+        with self._gesture_lock:
+            return self._gesture_confidence * 100.0  # Return as percentage
+    
+    def set_gesture_detection_enabled(self, enabled: bool) -> None:
+        """Enable or disable gesture detection."""
+        self._gesture_detection_enabled = enabled
+        if not enabled:
+            with self._gesture_lock:
+                self._current_gesture = "none"
+                self._gesture_confidence = 0.0
+        _LOGGER.info("Gesture detection %s", "enabled" if enabled else "disabled")
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""

@@ -40,6 +40,9 @@ dependencies = [
     
     # Sendspin synchronized audio (optional, for multi-room playback)
     "aiosendspin>=2.0.1",
+    
+    # Gesture detection (ONNX runtime for HaGRID models)
+    "onnxruntime>=1.18.0",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
@@ -54,4 +57,4 @@ include-package-data = true
 where = ["."]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.flac", "*.md", "*.tflite"]
+"*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx"]

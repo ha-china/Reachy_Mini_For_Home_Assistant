@@ -1,252 +1,370 @@
-"""Gesture detection using MediaPipe Hands.
+"""Gesture detection using HaGRID ONNX models.
 
-Detects 11 hand gestures for robot interaction:
-- thumbs_up, thumbs_down, open_palm, fist, peace, pointing_up
-- ok, rock, call, three, four
+Uses models from ai-forever/dynamic_gestures:
+- hand_detector.onnx (~1.2MB): Detects hand bounding boxes
+- crops_classifier.onnx (~0.4MB): Classifies hand gestures (18 HaGRID classes)
 
-Auto-installs mediapipe on first run (ARM64: 0.10.18 with --no-deps).
+Total size: ~1.6MB - optimized for Raspberry Pi CM4.
 """
 
 from __future__ import annotations
 import logging
-import subprocess
-import sys
-from enum import Enum
-from typing import Optional, Tuple, Callable
 import time
+from enum import Enum
+from pathlib import Path
+from typing import Optional, Callable, Dict, Tuple, List
 
+import cv2
 import numpy as np
 from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_mediapipe_installed() -> bool:
-    """Ensure mediapipe is installed. Auto-install on ARM64 if missing."""
-    try:
-        import mediapipe
-        return True
-    except ImportError:
-        pass
-    
-    # Auto-install mediapipe 0.10.18 for ARM64 (deps already in pyproject.toml)
-    logger.info("Installing MediaPipe for ARM64...")
-    try:
-        subprocess.check_call([
-            sys.executable, '-m', 'pip', 'install', '-q',
-            'mediapipe==0.10.18', '--no-deps'
-        ], timeout=120)
-        logger.info("MediaPipe installed")
-        return True
-    except Exception as e:
-        logger.warning("MediaPipe install failed: %s", e)
-        return False
-
-
-# Try to load mediapipe
-_mp_hands = None
-_mediapipe_available = False
-
-if _ensure_mediapipe_installed():
-    try:
-        import mediapipe as mp
-        _mp_hands = mp.solutions.hands
-        _mediapipe_available = True
-        logger.info("MediaPipe Hands loaded")
-    except Exception as e:
-        logger.warning("MediaPipe load failed: %s", e)
-
-
 class Gesture(Enum):
-    """Recognized gestures."""
-    NONE = "none"
-    THUMBS_UP = "thumbs_up"
-    THUMBS_DOWN = "thumbs_down"
-    OPEN_PALM = "open_palm"
-    FIST = "fist"
-    PEACE = "peace"
-    POINTING_UP = "pointing_up"
-    OK = "ok"
-    ROCK = "rock"
+    """HaGRID gesture classes."""
+    NONE = "no_gesture"
     CALL = "call"
-    THREE = "three"
+    DISLIKE = "dislike"
+    FIST = "fist"
     FOUR = "four"
+    LIKE = "like"
+    MUTE = "mute"
+    OK = "ok"
+    ONE = "one"
+    PALM = "palm"
+    PEACE = "peace"
+    PEACE_INVERTED = "peace_inverted"
+    ROCK = "rock"
+    STOP = "stop"
+    STOP_INVERTED = "stop_inverted"
+    THREE = "three"
+    THREE2 = "three2"
+    TWO_UP = "two_up"
+    TWO_UP_INVERTED = "two_up_inverted"
+
+
+# HaGRID class names in order (from crops_classifier output)
+_HAGRID_CLASSES = [
+    "call", "dislike", "fist", "four", "like", "mute", "ok", "one",
+    "palm", "peace", "peace_inverted", "rock", "stop", "stop_inverted",
+    "three", "three2", "two_up", "two_up_inverted"
+]
+
+_NAME_TO_GESTURE = {name: Gesture(name) for name in _HAGRID_CLASSES}
 
 
 class GestureDetector:
-    """Gesture detector using MediaPipe Hands."""
+    """Gesture detector using HaGRID ONNX models.
+    
+    Two-stage pipeline:
+    1. hand_detector.onnx - finds hand bounding box
+    2. crops_classifier.onnx - classifies gesture from cropped hand
+    
+    Optimized for Raspberry Pi CM4 (~1.6MB total).
+    """
 
     def __init__(
         self,
-        min_detection_confidence: float = 0.7,
-        min_tracking_confidence: float = 0.5,
-        max_num_hands: int = 1,
+        confidence_threshold: float = 0.6,
+        detection_threshold: float = 0.5,
     ) -> None:
-        self._hands = None
-        self._available = False
+        """Initialize gesture detector.
+
+        Args:
+            confidence_threshold: Min confidence for gesture classification
+            detection_threshold: Min confidence for hand detection
+        """
+        self._confidence_threshold = confidence_threshold
+        self._detection_threshold = detection_threshold
         
-        self._callbacks: dict[Gesture, Optional[Callable[[], None]]] = {
+        # Model paths
+        models_dir = Path(__file__).parent / "models"
+        self._detector_path = models_dir / "hand_detector.onnx"
+        self._classifier_path = models_dir / "crops_classifier.onnx"
+        
+        self._detector = None
+        self._classifier = None
+        self._available = False
+        self._model_load_error: Optional[str] = None
+        
+        # Callbacks
+        self._callbacks: Dict[Gesture, Optional[Callable[[], None]]] = {
             g: None for g in Gesture if g != Gesture.NONE
         }
         
+        # State tracking
         self._last_gesture = Gesture.NONE
         self._current_gesture = Gesture.NONE
         self._gesture_start_time: Optional[float] = None
-        self._gesture_hold_threshold = 0.5
-        self._gesture_cooldown = 1.5
+        self._gesture_hold_threshold = 0.5  # seconds to hold
+        self._gesture_cooldown = 1.5  # seconds between triggers
         self._last_trigger_time: float = 0
         self._gesture_clear_delay = 2.0
         self._last_gesture_time: float = 0
         
-        if _mediapipe_available and _mp_hands is not None:
-            try:
-                self._hands = _mp_hands.Hands(
-                    static_image_mode=False,
-                    max_num_hands=max_num_hands,
-                    min_detection_confidence=min_detection_confidence,
-                    min_tracking_confidence=min_tracking_confidence,
-                )
-                self._available = True
-                logger.info("Gesture detection enabled")
-            except Exception as e:
-                logger.warning("Gesture detection init failed: %s", e)
+        # Load models
+        self._load_models()
+
+    def _load_models(self) -> None:
+        """Load ONNX models."""
+        try:
+            import onnxruntime as ort
+        except ImportError:
+            self._model_load_error = "onnxruntime not installed"
+            logger.warning("Gesture detection disabled - pip install onnxruntime")
+            return
+        
+        if not self._detector_path.exists():
+            self._model_load_error = f"Model not found: {self._detector_path}"
+            logger.warning("Gesture detection disabled - %s", self._model_load_error)
+            return
+        if not self._classifier_path.exists():
+            self._model_load_error = f"Model not found: {self._classifier_path}"
+            logger.warning("Gesture detection disabled - %s", self._model_load_error)
+            return
+        
+        try:
+            providers = ['CPUExecutionProvider']
+            logger.info("Loading gesture models...")
+            self._detector = ort.InferenceSession(
+                str(self._detector_path), providers=providers
+            )
+            self._classifier = ort.InferenceSession(
+                str(self._classifier_path), providers=providers
+            )
+            self._available = True
+            logger.info("Gesture detection ready (18 HaGRID classes)")
+        except Exception as e:
+            self._model_load_error = str(e)
+            logger.error("Failed to load gesture models: %s", e)
 
     @property
     def is_available(self) -> bool:
+        """Check if gesture detector is ready."""
         return self._available
 
     @property
     def current_gesture(self) -> Gesture:
+        """Get current detected gesture."""
         return self._current_gesture
+
+    def set_callback(self, gesture: Gesture, callback: Optional[Callable[[], None]]) -> None:
+        """Set callback for a specific gesture."""
+        if gesture != Gesture.NONE:
+            self._callbacks[gesture] = callback
 
     def set_callbacks(
         self,
-        on_thumbs_up: Optional[Callable[[], None]] = None,
-        on_thumbs_down: Optional[Callable[[], None]] = None,
-        on_open_palm: Optional[Callable[[], None]] = None,
-        on_fist: Optional[Callable[[], None]] = None,
+        on_like: Optional[Callable[[], None]] = None,
+        on_dislike: Optional[Callable[[], None]] = None,
+        on_stop: Optional[Callable[[], None]] = None,
         on_peace: Optional[Callable[[], None]] = None,
         on_ok: Optional[Callable[[], None]] = None,
-        on_pointing_up: Optional[Callable[[], None]] = None,
-        on_rock: Optional[Callable[[], None]] = None,
         on_call: Optional[Callable[[], None]] = None,
-        on_three: Optional[Callable[[], None]] = None,
-        on_four: Optional[Callable[[], None]] = None,
+        on_fist: Optional[Callable[[], None]] = None,
+        on_rock: Optional[Callable[[], None]] = None,
+        on_one: Optional[Callable[[], None]] = None,
+        on_palm: Optional[Callable[[], None]] = None,
+        on_mute: Optional[Callable[[], None]] = None,
     ) -> None:
-        self._callbacks[Gesture.THUMBS_UP] = on_thumbs_up
-        self._callbacks[Gesture.THUMBS_DOWN] = on_thumbs_down
-        self._callbacks[Gesture.OPEN_PALM] = on_open_palm
-        self._callbacks[Gesture.FIST] = on_fist
+        """Set callbacks for common gestures."""
+        self._callbacks[Gesture.LIKE] = on_like
+        self._callbacks[Gesture.DISLIKE] = on_dislike
+        self._callbacks[Gesture.STOP] = on_stop
         self._callbacks[Gesture.PEACE] = on_peace
         self._callbacks[Gesture.OK] = on_ok
-        self._callbacks[Gesture.POINTING_UP] = on_pointing_up
-        self._callbacks[Gesture.ROCK] = on_rock
         self._callbacks[Gesture.CALL] = on_call
-        self._callbacks[Gesture.THREE] = on_three
-        self._callbacks[Gesture.FOUR] = on_four
+        self._callbacks[Gesture.FIST] = on_fist
+        self._callbacks[Gesture.ROCK] = on_rock
+        self._callbacks[Gesture.ONE] = on_one
+        self._callbacks[Gesture.PALM] = on_palm
+        self._callbacks[Gesture.MUTE] = on_mute
 
-    def _lm(self, landmarks, idx: int) -> Tuple[float, float, float]:
-        lm = landmarks.landmark[idx]
-        return lm.x, lm.y, lm.z
 
-    def _dist(self, p1: Tuple[float, ...], p2: Tuple[float, ...]) -> float:
-        return sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5
+    def _preprocess_detector(self, frame: NDArray[np.uint8]) -> NDArray[np.float32]:
+        """Preprocess frame for hand detector."""
+        # Resize to model input size (assuming 320x320)
+        img = cv2.resize(frame, (320, 320))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255.0
+        img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+        img = np.expand_dims(img, axis=0)  # Add batch dim
+        return img
 
-    def _is_extended(self, landmarks, tip: int, pip: int) -> bool:
-        return self._lm(landmarks, tip)[1] < self._lm(landmarks, pip)[1]
+    def _preprocess_classifier(self, crop: NDArray[np.uint8]) -> NDArray[np.float32]:
+        """Preprocess cropped hand for classifier."""
+        # Resize to classifier input size (assuming 224x224)
+        img = cv2.resize(crop, (224, 224))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255.0
+        # Normalize with ImageNet mean/std
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        img = (img - mean) / std
+        img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+        img = np.expand_dims(img, axis=0)  # Add batch dim
+        return img
 
-    def _classify_gesture(self, landmarks) -> Gesture:
-        thumb_tip = self._lm(landmarks, 4)
-        thumb_mcp = self._lm(landmarks, 2)
-        index_tip = self._lm(landmarks, 8)
-        index_mcp = self._lm(landmarks, 5)
+    def _detect_hand(self, frame: NDArray[np.uint8]) -> Optional[Tuple[int, int, int, int]]:
+        """Detect hand bounding box in frame.
         
-        index_ext = self._is_extended(landmarks, 8, 6)
-        middle_ext = self._is_extended(landmarks, 12, 10)
-        ring_ext = self._is_extended(landmarks, 16, 14)
-        pinky_ext = self._is_extended(landmarks, 20, 18)
+        Returns:
+            (x1, y1, x2, y2) or None if no hand detected
+        """
+        if self._detector is None:
+            return None
         
-        thumb_extended = abs(thumb_tip[0] - index_mcp[0]) > 0.1
-        thumb_up = thumb_tip[1] < thumb_mcp[1] - 0.08
-        thumb_down = thumb_tip[1] > thumb_mcp[1] + 0.08
+        h, w = frame.shape[:2]
+        input_tensor = self._preprocess_detector(frame)
         
-        ext_count = sum([index_ext, middle_ext, ring_ext, pinky_ext])
-        all_curled = ext_count == 0
+        # Run detector
+        input_name = self._detector.get_inputs()[0].name
+        outputs = self._detector.run(None, {input_name: input_tensor})
         
-        thumb_index_dist = self._dist(thumb_tip, index_tip)
+        # Parse output (format depends on model, adjust as needed)
+        # Assuming output is [batch, num_detections, 5] where 5 = [x1, y1, x2, y2, conf]
+        detections = outputs[0]
         
-        if thumb_up and thumb_extended and all_curled:
-            return Gesture.THUMBS_UP
-        if thumb_down and thumb_extended and all_curled:
-            return Gesture.THUMBS_DOWN
-        if all_curled and not thumb_extended:
-            return Gesture.FIST
-        if thumb_index_dist < 0.05 and middle_ext and ring_ext and pinky_ext:
-            return Gesture.OK
-        if index_ext and pinky_ext and not middle_ext and not ring_ext:
-            return Gesture.ROCK
-        if thumb_extended and pinky_ext and not index_ext and not middle_ext and not ring_ext:
-            return Gesture.CALL
-        if index_ext and not middle_ext and not ring_ext and not pinky_ext:
-            return Gesture.POINTING_UP
-        if index_ext and middle_ext and not ring_ext and not pinky_ext:
-            return Gesture.PEACE
-        if index_ext and middle_ext and ring_ext and not pinky_ext:
-            return Gesture.THREE
-        if index_ext and middle_ext and ring_ext and pinky_ext and not thumb_extended:
-            return Gesture.FOUR
-        if ext_count >= 4 and thumb_extended:
-            return Gesture.OPEN_PALM
+        if len(detections.shape) == 3:
+            detections = detections[0]  # Remove batch dim
         
-        return Gesture.NONE
+        # Find best detection above threshold
+        best_box = None
+        best_conf = self._detection_threshold
+        
+        for det in detections:
+            if len(det) >= 5:
+                conf = det[4]
+                if conf > best_conf:
+                    best_conf = conf
+                    # Scale coordinates to original frame size
+                    x1 = int(det[0] * w / 320)
+                    y1 = int(det[1] * h / 320)
+                    x2 = int(det[2] * w / 320)
+                    y2 = int(det[3] * h / 320)
+                    # Clamp to frame bounds
+                    x1 = max(0, min(w, x1))
+                    y1 = max(0, min(h, y1))
+                    x2 = max(0, min(w, x2))
+                    y2 = max(0, min(h, y2))
+                    if x2 > x1 and y2 > y1:
+                        best_box = (x1, y1, x2, y2)
+        
+        return best_box
 
-    def detect(self, frame: NDArray[np.uint8]) -> Gesture:
-        if not self._available:
-            return Gesture.NONE
+    def _classify_gesture(self, crop: NDArray[np.uint8]) -> Tuple[Gesture, float]:
+        """Classify gesture from cropped hand image.
+        
+        Returns:
+            (gesture, confidence)
+        """
+        if self._classifier is None:
+            return Gesture.NONE, 0.0
+        
+        input_tensor = self._preprocess_classifier(crop)
+        
+        # Run classifier
+        input_name = self._classifier.get_inputs()[0].name
+        outputs = self._classifier.run(None, {input_name: input_tensor})
+        
+        # Get probabilities (softmax)
+        logits = outputs[0][0]
+        probs = np.exp(logits) / np.sum(np.exp(logits))
+        
+        # Get top prediction
+        idx = np.argmax(probs)
+        conf = probs[idx]
+        
+        if idx < len(_HAGRID_CLASSES) and conf >= self._confidence_threshold:
+            gesture_name = _HAGRID_CLASSES[idx]
+            return _NAME_TO_GESTURE.get(gesture_name, Gesture.NONE), float(conf)
+        
+        return Gesture.NONE, float(conf)
+
+
+    def detect(self, frame: NDArray[np.uint8]) -> Tuple[Gesture, float]:
+        """Detect gesture in frame.
+
+        Args:
+            frame: Input image (BGR format from OpenCV)
+
+        Returns:
+            Tuple of (gesture, confidence)
+        """
+        if not self.is_available:
+            return Gesture.NONE, 0.0
+
         try:
-            import cv2
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self._hands.process(rgb)
-            if not results.multi_hand_landmarks:
-                return Gesture.NONE
-            return self._classify_gesture(results.multi_hand_landmarks[0])
+            # Step 1: Detect hand
+            box = self._detect_hand(frame)
+            if box is None:
+                return Gesture.NONE, 0.0
+            
+            # Step 2: Crop hand region
+            x1, y1, x2, y2 = box
+            crop = frame[y1:y2, x1:x2]
+            
+            if crop.size == 0:
+                return Gesture.NONE, 0.0
+            
+            # Step 3: Classify gesture
+            return self._classify_gesture(crop)
+            
         except Exception as e:
             logger.debug("Gesture detection error: %s", e)
-            return Gesture.NONE
+            return Gesture.NONE, 0.0
 
     def process_frame(self, frame: NDArray[np.uint8]) -> Optional[Gesture]:
-        gesture = self.detect(frame)
+        """Process frame and trigger callbacks if gesture held.
+
+        Args:
+            frame: Input image (BGR format)
+
+        Returns:
+            Triggered gesture or None
+        """
+        gesture, confidence = self.detect(frame)
         now = time.time()
         
+        # Update current gesture for display
         if gesture != Gesture.NONE:
             self._current_gesture = gesture
             self._last_gesture_time = now
         elif now - self._last_gesture_time > self._gesture_clear_delay:
             self._current_gesture = Gesture.NONE
         
+        # Check cooldown
         if now - self._last_trigger_time < self._gesture_cooldown:
             return None
         
+        # Track gesture hold time
         if gesture != self._last_gesture:
             self._last_gesture = gesture
             self._gesture_start_time = now if gesture != Gesture.NONE else None
             return None
         
+        # Check if gesture held long enough
         if gesture != Gesture.NONE and self._gesture_start_time:
             if now - self._gesture_start_time >= self._gesture_hold_threshold:
                 self._last_trigger_time = now
                 self._gesture_start_time = None
+                
+                # Trigger callback
                 callback = self._callbacks.get(gesture)
                 if callback:
-                    logger.info("Gesture: %s", gesture.value)
+                    logger.info("Gesture triggered: %s (%.1f%%)", 
+                               gesture.value, confidence * 100)
                     try:
                         callback()
                     except Exception as e:
                         logger.error("Gesture callback error: %s", e)
                     return gesture
+        
         return None
 
     def close(self) -> None:
-        if self._hands:
-            self._hands.close()
-            self._hands = None
+        """Release resources."""
+        self._detector = None
+        self._classifier = None
+        self._available = False
