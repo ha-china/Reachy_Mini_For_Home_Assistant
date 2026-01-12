@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.7.3",
+    "date": "2026-01-12",
+    "changes": [
+      "Fix: Revert to reference project pattern - use refractory period instead of state flags",
+      "Fix: Remove broken _in_pipeline and _tts_playing state management",
+      "Fix: Restore correct RUN_END event handling from linux-voice-assistant"
+    ]
+  },
+  {
     "version": "0.7.2",
     "date": "2026-01-12",
     "changes": [

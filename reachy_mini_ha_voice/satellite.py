@@ -69,19 +69,12 @@ class VoiceSatelliteProtocol(APIServer):
         self.camera_server = camera_server
 
         # Initialize streaming state early (before entity setup)
-        # This is needed because audio processing thread checks this attribute
         self._is_streaming_audio = False
-        self._in_pipeline = False  # True when voice pipeline is active (listening/processing/speaking)
-        self._tts_playing = False  # True when TTS audio is actively playing
         self._tts_url: Optional[str] = None
         self._tts_played = False
         self._continue_conversation = False
         self._timer_finished = False
         self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
-
-        # Tap-to-talk continuous conversation mode (REMOVED - too many false triggers)
-        # Continuous conversation is now controlled via Home Assistant switch
-        # self._tap_conversation_mode = False
 
         # Conversation tracking for continuous conversation
         self._conversation_id: Optional[str] = None
@@ -184,8 +177,6 @@ class VoiceSatelliteProtocol(APIServer):
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
             # Reachy Mini: Start speaking animation (JSON-defined multi-frequency sway)
             _LOGGER.debug("TTS_START event received, triggering speaking animation")
-            # Mark TTS as playing - this prevents wake word detection during TTS
-            self._tts_playing = True
             self._reachy_on_speaking()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
@@ -196,8 +187,11 @@ class VoiceSatelliteProtocol(APIServer):
             # Pipeline run ended
             self._is_streaming_audio = False
 
-            # Check if should continue conversation
-            self._handle_run_end()
+            # Following reference project pattern
+            if not self._tts_played:
+                self._tts_finished()
+
+            self._tts_played = False
 
     def handle_timer_event(
         self,
@@ -234,9 +228,6 @@ class VoiceSatelliteProtocol(APIServer):
 
             self.state.active_wake_words.add(self.state.stop_word.id)
             self._continue_conversation = msg.start_conversation
-            # Mark as playing to prevent wake word detection during announcement
-            self._tts_playing = True
-            self._in_pipeline = True
             self.duck()
 
             yield from self.state.media_player_entity.play(
@@ -382,10 +373,7 @@ class VoiceSatelliteProtocol(APIServer):
         self._continue_conversation = False
 
     def wakeup(self, wake_word: Union[MicroWakeWord, OpenWakeWord]) -> None:
-        """Handle wake word detection - start voice pipeline.
-
-        Only called when in idle state (checked by voice_assistant.py).
-        """
+        """Handle wake word detection - start voice pipeline."""
         if self._timer_finished:
             # Stop timer instead
             self._timer_finished = False
@@ -393,9 +381,6 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
             return
 
-        # Mark pipeline as active
-        self._in_pipeline = True
-        
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
@@ -436,26 +421,19 @@ class VoiceSatelliteProtocol(APIServer):
         """Stop current TTS playback (e.g., user said stop word)."""
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.state.tts_player.stop()
-        # Reset TTS playing flag
-        self._tts_playing = False
 
         if self._timer_finished:
             self._timer_finished = False
             _LOGGER.debug("Stopping timer finished sound")
         else:
             _LOGGER.debug("TTS response stopped manually")
-
-        # Send announce finished to HA
-        self.send_messages([VoiceAssistantAnnounceFinished()])
-        # Note: RUN_END event will handle the rest
+            self._tts_finished()
 
     def play_tts(self) -> None:
         if (not self._tts_url) or self._tts_played:
             return
 
         self._tts_played = True
-        # Mark TTS as playing to prevent wake word detection
-        self._tts_playing = True
         _LOGGER.debug("Playing TTS response: %s", self._tts_url)
 
         self.state.active_wake_words.add(self.state.stop_word.id)
@@ -478,9 +456,6 @@ class VoiceSatelliteProtocol(APIServer):
 
         Following reference project pattern: handle continue conversation here.
         """
-        # Mark TTS as finished
-        self._tts_playing = False
-        
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
@@ -493,9 +468,6 @@ class VoiceSatelliteProtocol(APIServer):
         if should_continue:
             _LOGGER.debug("Continuing conversation (our_switch=%s, ha_request=%s)",
                          continuous_mode, self._continue_conversation)
-
-            # Keep pipeline active during continuous conversation
-            self._in_pipeline = True
 
             # Play prompt sound to indicate ready for next input
             self.state.tts_player.play(self.state.wakeup_sound)
@@ -514,22 +486,9 @@ class VoiceSatelliteProtocol(APIServer):
             self._clear_conversation()
             self.unduck()
             _LOGGER.debug("Conversation finished")
-            
-            # Mark pipeline as inactive - ready for new wake word
-            self._in_pipeline = False
 
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
-
-    def _handle_run_end(self) -> None:
-        """Handle pipeline RUN_END event.
-
-        Following reference project pattern: call _tts_finished if TTS wasn't played.
-        """
-        if not self._tts_played:
-            self._tts_finished()
-
-        self._tts_played = False
 
     def _play_timer_finished(self) -> None:
         if not self._timer_finished:
@@ -548,8 +507,6 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Disconnected from Home Assistant")
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
-        self._in_pipeline = False
-        self._tts_playing = False
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
