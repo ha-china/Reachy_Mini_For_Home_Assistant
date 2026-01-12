@@ -482,6 +482,9 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Continuing conversation (our_switch=%s, ha_request=%s)",
                          continuous_mode, self._continue_conversation)
 
+            # Keep pipeline active during continuous conversation
+            self._in_pipeline = True
+
             # Play prompt sound to indicate ready for next input
             self.state.tts_player.play(self.state.wakeup_sound)
 

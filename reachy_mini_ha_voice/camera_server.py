@@ -512,6 +512,8 @@ class MJPEGCameraServer:
     
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
+        if self._face_tracking_enabled == enabled:
+            return  # No change, skip logging
         self._face_tracking_enabled = enabled
         if not enabled:
             # Start interpolation back to neutral
