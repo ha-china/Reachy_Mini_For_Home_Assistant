@@ -391,8 +391,19 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
     - [x] `gesture_detected` - Detected gesture name (Text Sensor)
     - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
     - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
-    - [x] 18 supported gestures: call, dislike, fist, four, like, mute, ok, one, palm, peace, peace_inverted, rock, stop, stop_inverted, three, three2, two_up, two_up_inverted
     - [x] Real-time state push to Home Assistant
+    - [x] 18 supported gestures:
+      | Gesture | Emoji | Gesture | Emoji |
+      |---------|-------|---------|-------|
+      | call | 🤙 | like | 👍 |
+      | dislike | 👎 | mute | 🤫 |
+      | fist | ✊ | ok | 👌 |
+      | four | 🖐️ | one | ☝️ |
+      | palm | ✋ | peace | ✌️ |
+      | peace_inverted | 🔻✌️ | rock | 🤘 |
+      | stop | 🛑 | stop_inverted | 🔻🛑 |
+      | three | 3️⃣ | three2 | 🤟 |
+      | two_up | ✌️☝️ | two_up_inverted | 🔻✌️☝️ |
 
 ---
 
