@@ -538,7 +538,7 @@ class MJPEGCameraServer:
                     self._gesture_confidence = confidence
                     if old_gesture != detected_gesture.value:
                         state_changed = True
-                        _LOGGER.info("Gesture detected: %s (%.1f%%)", 
+                        _LOGGER.debug("Gesture: %s (%.0f%%)", 
                                      detected_gesture.value, confidence * 100)
                 else:
                     if self._current_gesture != "none":
@@ -550,8 +550,8 @@ class MJPEGCameraServer:
             if state_changed and self._gesture_state_callback:
                 try:
                     self._gesture_state_callback()
-                except Exception as e:
-                    _LOGGER.debug("Gesture callback error: %s", e)
+                except Exception:
+                    pass  # Ignore callback errors
                     
         except Exception as e:
             _LOGGER.warning("Gesture detection error: %s", e)

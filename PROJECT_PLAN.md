@@ -387,11 +387,18 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
     - [x] AudioPlayer integrates aiosendspin library
     - [x] TTS audio sent to both local speaker and Sendspin server
 
+14. **Phase 22 - Gesture Detection** ✅ **Completed**
+    - [x] `gesture_detected` - Detected gesture name (Text Sensor)
+    - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
+    - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
+    - [x] 18 supported gestures: call, dislike, fist, four, like, mute, ok, one, palm, peace, peace_inverted, rock, stop, stop_inverted, three, three2, two_up, two_up_inverted
+    - [x] Real-time state push to Home Assistant
+
 ---
 
-## 🎉 Phase 1-13 Entities Completed!
+## 🎉 Phase 1-13 + Phase 22 Entities Completed!
 
-**Total Completed: 43 entities**
+**Total Completed: 45 entities**
 - Phase 1: 4 entities (Basic status and volume)
 - Phase 2: 4 entities (Motor control)
 - Phase 3: 9 entities (Pose control)
@@ -405,6 +412,7 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 - Phase 11: 0 entities (LED control - Disabled)
 - Phase 12: 4 entities (Audio processing parameters)
 - Phase 13: 3 entities (Sendspin audio output)
+- Phase 22: 2 entities (Gesture detection)
 
 
 ---

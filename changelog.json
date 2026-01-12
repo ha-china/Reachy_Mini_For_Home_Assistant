@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.6.2",
+    "date": "2026-01-12",
+    "changes": [
+      "New: Gesture detection using HaGRID ONNX models (18 gesture classes)",
+      "New: gesture_detected and gesture_confidence entities in Home Assistant",
+      "Fix: Gesture state now properly pushed to Home Assistant in real-time"
+    ]
+  },
+  {
     "version": "0.6.1",
     "date": "2026-01-12",
     "changes": [
