@@ -541,10 +541,12 @@ automation:
 | Model download retry | 3 retries, 5 second interval | `head_tracker.py` | ✅ Implemented |
 | Conversation mode integration | Auto-switch tracking frequency on voice assistant state change | `satellite.py` | ✅ Implemented |
 
-**Resource Optimization (v0.5.1)**:
+**Resource Optimization (v0.5.1, updated v0.6.2)**:
 - During conversation (listening/thinking/speaking): High-frequency tracking 15fps
 - Idle with face detected: High-frequency tracking 15fps
-- Idle without face for 10s: Low-power mode 3fps (only detect if someone appears)
+- Idle without face for 5s: Low-power mode 2fps
+- Idle without face for 30s: Ultra-low power mode 0.5fps (every 2 seconds)
+- Gesture detection only runs when face detected recently (within 5s)
 - Immediately restore high-frequency tracking when face detected
 
 **Code Locations**:
@@ -561,18 +563,20 @@ automation:
 class MJPEGCameraServer:
     def __init__(self):
         self._fps_high = 15  # During conversation/face detected
-        self._fps_low = 3    # Idle without face
-        self._low_power_threshold = 10.0  # 10s without face switches to low power
+        self._fps_low = 2    # Idle without face (5-30s)
+        self._fps_idle = 0.5 # Ultra-low power (>30s without face)
+        self._low_power_threshold = 5.0   # 5s without face switches to low power
+        self._idle_threshold = 30.0       # 30s without face switches to idle mode
     
-    def _should_run_face_tracking(self, current_time):
+    def _should_run_ai_inference(self, current_time):
         # Conversation mode: Always high-frequency tracking
         if self._in_conversation:
             return True
         # High-frequency mode: Track every frame
         if self._current_fps == self._fps_high:
             return True
-        # Low-power mode: Periodic detection
-        return time.since_last_check >= 1/self._fps_low
+        # Low/idle power mode: Periodic detection
+        return time.since_last_check >= 1/self._current_fps
 
 # satellite.py - Voice assistant state integration
 def _reachy_on_listening(self):
