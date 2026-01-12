@@ -194,7 +194,6 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
             # Pipeline run ended
-            self._tts_played = False
             self._is_streaming_audio = False
 
             # Check if should continue conversation

@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.4",
+    "date": "2026-01-12",
+    "changes": [
+      "Fix: Remove premature _tts_played reset in RUN_END event",
+      "Fix: Ensure _in_pipeline stays True until TTS playback completes"
+    ]
+  },
+  {
     "version": "0.6.3",
     "date": "2026-01-12",
     "changes": [

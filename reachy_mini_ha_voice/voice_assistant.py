@@ -775,7 +775,10 @@ class VoiceAssistantService:
         # - _in_pipeline: True during listening/processing/speaking phases
         # - _tts_playing: True specifically when TTS audio is being played
         satellite = self._state.satellite
-        if satellite and (satellite._in_pipeline or satellite._tts_playing):
+        if satellite is None:
+            return
+        
+        if satellite._in_pipeline or satellite._tts_playing:
             return
 
         for wake_word in ctx.wake_words:
