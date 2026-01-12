@@ -525,18 +525,20 @@ class MJPEGCameraServer:
             return
         
         try:
-            # Use process_frame to handle hold detection and callbacks
-            triggered = self._gesture_detector.process_frame(frame)
+            # Detect gesture
+            detected_gesture, confidence = self._gesture_detector.detect(frame)
             
             # Update current gesture state
             with self._gesture_lock:
-                gesture = self._gesture_detector.current_gesture
-                self._current_gesture = gesture.value
-                
-                # Get confidence from last detection
-                detected_gesture, confidence = self._gesture_detector.detect(frame)
                 if detected_gesture.value != "no_gesture":
+                    self._current_gesture = detected_gesture.value
                     self._gesture_confidence = confidence
+                    _LOGGER.debug("Gesture detected: %s (%.1f%%)", 
+                                 detected_gesture.value, confidence * 100)
+                else:
+                    # Clear gesture after a delay (handled by gesture_detector)
+                    self._current_gesture = "none"
+                    self._gesture_confidence = 0.0
                     
         except Exception as e:
             _LOGGER.debug("Gesture detection error: %s", e)
