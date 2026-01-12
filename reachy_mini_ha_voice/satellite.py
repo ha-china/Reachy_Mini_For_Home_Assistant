@@ -118,6 +118,10 @@ class VoiceSatelliteProtocol(APIServer):
             play_emotion_callback=self._play_emotion,
         )
 
+        # Connect gesture state callback
+        if camera_server:
+            camera_server.set_gesture_state_callback(self._entity_registry.update_gesture_state)
+
         # Only setup entities once (check if already initialized)
         # This prevents duplicate entity registration on reconnection
         if not getattr(self.state, '_entities_initialized', False):

@@ -102,6 +102,7 @@ class MJPEGCameraServer:
         self._gesture_lock = threading.Lock()
         self._gesture_frame_counter = 0
         self._gesture_detection_interval = 3  # Run gesture detection every N frames
+        self._gesture_state_callback = None  # Callback to notify entity registry
         
         # Face tracking timing (smooth interpolation when face lost)
         self._last_face_detected_time: Optional[float] = None
@@ -524,30 +525,33 @@ class MJPEGCameraServer:
         if self._gesture_detector is None:
             return
         
-        # Log periodically to confirm detection is running
-        if not hasattr(self, '_gesture_call_count'):
-            self._gesture_call_count = 0
-        self._gesture_call_count += 1
-        if self._gesture_call_count % 50 == 1:  # Every 50 calls (~10 seconds at 5fps)
-            _LOGGER.info("Gesture detection running (call #%d)", self._gesture_call_count)
-        
         try:
             # Detect gesture
             detected_gesture, confidence = self._gesture_detector.detect(frame)
             
             # Update current gesture state
+            state_changed = False
             with self._gesture_lock:
+                old_gesture = self._current_gesture
                 if detected_gesture.value != "no_gesture":
                     self._current_gesture = detected_gesture.value
                     self._gesture_confidence = confidence
-                    _LOGGER.info("Gesture detected: %s (%.1f%%)", 
-                                 detected_gesture.value, confidence * 100)
+                    if old_gesture != detected_gesture.value:
+                        state_changed = True
+                        _LOGGER.info("Gesture detected: %s (%.1f%%)", 
+                                     detected_gesture.value, confidence * 100)
                 else:
-                    # Only clear if previously had a gesture
                     if self._current_gesture != "none":
-                        _LOGGER.debug("Gesture cleared (was: %s)", self._current_gesture)
+                        state_changed = True
                     self._current_gesture = "none"
                     self._gesture_confidence = 0.0
+            
+            # Notify entity registry to push update to Home Assistant
+            if state_changed and self._gesture_state_callback:
+                try:
+                    self._gesture_state_callback()
+                except Exception as e:
+                    _LOGGER.debug("Gesture callback error: %s", e)
                     
         except Exception as e:
             _LOGGER.warning("Gesture detection error: %s", e)
@@ -578,6 +582,10 @@ class MJPEGCameraServer:
                 self._current_gesture = "none"
                 self._gesture_confidence = 0.0
         _LOGGER.info("Gesture detection %s", "enabled" if enabled else "disabled")
+
+    def set_gesture_state_callback(self, callback) -> None:
+        """Set callback to notify when gesture state changes."""
+        self._gesture_state_callback = callback
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""

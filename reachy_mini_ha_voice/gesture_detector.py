@@ -115,17 +115,6 @@ class GestureDetector:
         outs = self._detector.run(self._det_outputs, {self._det_input: inp})
         boxes = outs[0]
         scores = outs[2]
-        
-        # Debug: log raw model output periodically
-        if not hasattr(self, '_det_log_count'):
-            self._det_log_count = 0
-        self._det_log_count += 1
-        if self._det_log_count % 100 == 1:
-            logger.info("Hand detector: boxes.shape=%s, scores.shape=%s, max_score=%.3f",
-                       boxes.shape, scores.shape, float(np.max(scores)) if len(scores) > 0 else 0)
-            if len(boxes) > 0:
-                logger.info("  First box raw: %s", boxes[0])
-        
         if len(boxes) == 0:
             return None
         best_i, best_c = -1, self._detection_threshold

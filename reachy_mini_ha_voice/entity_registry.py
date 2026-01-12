@@ -903,16 +903,18 @@ class EntityRegistry:
                 return self.camera_server.get_gesture_confidence()
             return 0.0
 
-        entities.append(TextSensorEntity(
+        gesture_entity = TextSensorEntity(
             server=self.server,
             key=get_entity_key("gesture_detected"),
             name="Gesture Detected",
             object_id="gesture_detected",
             icon="mdi:hand-wave",
             value_getter=get_gesture,
-        ))
+        )
+        entities.append(gesture_entity)
+        self._gesture_entity = gesture_entity
 
-        entities.append(SensorEntity(
+        confidence_entity = SensorEntity(
             server=self.server,
             key=get_entity_key("gesture_confidence"),
             name="Gesture Confidence",
@@ -922,9 +924,18 @@ class EntityRegistry:
             accuracy_decimals=1,
             state_class="measurement",
             value_getter=get_gesture_confidence,
-        ))
+        )
+        entities.append(confidence_entity)
+        self._gesture_confidence_entity = confidence_entity
 
         _LOGGER.debug("Phase 22 entities registered: gesture_detected, gesture_confidence")
+
+    def update_gesture_state(self) -> None:
+        """Push gesture state update to Home Assistant."""
+        if hasattr(self, '_gesture_entity') and self._gesture_entity:
+            self._gesture_entity.update_state()
+        if hasattr(self, '_gesture_confidence_entity') and self._gesture_confidence_entity:
+            self._gesture_confidence_entity.update_state()
 
     def find_entity_references(self, entities: List) -> None:
         """Find and store references to special entities from existing list.
