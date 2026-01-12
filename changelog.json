@@ -1,0 +1,131 @@
+[
+  {
+    "version": "0.6.1",
+    "date": "2026-01-12",
+    "changes": [
+      "Fix: Prioritize MicroWakeWord over OpenWakeWord for same-name wake words",
+      "Fix: OpenWakeWord wake words now visible in Home Assistant selection",
+      "Fix: Stop word detection now works correctly",
+      "Fix: STT/LLM response time improved with fixed audio chunk size"
+    ]
+  },
+  {
+    "version": "0.6.0",
+    "date": "2026-01-11",
+    "changes": [
+      "New: Real-time audio-driven speech animation (SwayRollRT algorithm)",
+      "New: JSON-driven animation system - all animations configurable",
+      "Refactor: Remove hardcoded actions, use animation offsets only",
+      "Fix: TTS audio analysis now works with local playback"
+    ]
+  },
+  {
+    "version": "0.5.16",
+    "date": "2026-01-11",
+    "changes": [
+      "Remove: Tap-to-wake feature (too many false triggers)",
+      "New: Continuous Conversation switch in Home Assistant",
+      "Refactor: Simplified satellite.py and voice_assistant.py"
+    ]
+  },
+  {
+    "version": "0.5.15",
+    "date": "2026-01-11",
+    "changes": [
+      "New: Audio settings persistence (AGC, Noise Suppression, Tap Sensitivity)",
+      "Refactor: Move Sendspin mDNS discovery to zeroconf.py for better code organization",
+      "Fix: Tap detection not re-enabled during emotion playback in conversation"
+    ]
+  },
+  {
+    "version": "0.5.14",
+    "date": "2026-01-11",
+    "changes": [
+      "Fix: Skip ALL wake word processing when pipeline is active (prevents false triggers)",
+      "Fix: Eliminate race condition in pipeline state during continuous conversation",
+      "Improve: Control loop increased to 100Hz (daemon updated)"
+    ]
+  },
+  {
+    "version": "0.5.13",
+    "date": "2026-01-10",
+    "changes": [
+      "New: JSON-driven animation system for conversation states",
+      "New: AnimationPlayer class inspired by SimpleDances project",
+      "Refactor: Replace SpeechSwayGenerator and BreathingAnimation with unified animation system"
+    ]
+  },
+  {
+    "version": "0.5.12",
+    "date": "2026-01-10",
+    "changes": [
+      "Remove: Deleted broken hey_reachy wake word model",
+      "Revert: Default wake word back to \"Okay Nabu\""
+    ]
+  },
+  {
+    "version": "0.5.11",
+    "date": "2026-01-10",
+    "changes": [
+      "Fix: Reset feature extractors when switching wake words",
+      "Fix: Add refractory period after wake word switch"
+    ]
+  },
+  {
+    "version": "0.5.10",
+    "date": "2026-01-10",
+    "changes": [
+      "Fix: Wake word models now have 'id' attribute set correctly",
+      "Fix: Wake word switching from Home Assistant now works"
+    ]
+  },
+  {
+    "version": "0.5.8",
+    "date": "2026-01-09",
+    "changes": [
+      "Fix: Tap detection waits for emotion playback to complete",
+      "New: DOA turn-to-sound at wakeup"
+    ]
+  },
+  {
+    "version": "0.5.0",
+    "date": "2026-01-07",
+    "changes": [
+      "Face tracking with adaptive frequency",
+      "Sendspin multi-room audio integration",
+      "Optimized shutdown mechanism"
+    ]
+  },
+  {
+    "version": "0.4.0",
+    "date": "2026-01-07",
+    "changes": [
+      "Daemon stability fixes",
+      "Face tracking enabled by default"
+    ]
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-01-06",
+    "changes": [
+      "Tap sensitivity slider entity",
+      "Music Assistant compatibility"
+    ]
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-01-05",
+    "changes": [
+      "Automatic facial expressions",
+      "Emotion playback integration"
+    ]
+  },
+  {
+    "version": "0.1.0",
+    "date": "2026-01-04",
+    "changes": [
+      "Initial release",
+      "Voice assistant functionality"
+    ]
+  }
+]

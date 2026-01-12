@@ -122,145 +122,51 @@
 			<p class="eyebrow">What's new</p>
 			<h2>Changelog</h2>
 		</div>
-		<div class="changelog-grid">
-			<div class="changelog-card">
-				<div class="version-badge">v0.6.1</div>
-				<span class="date">2026-01-12</span>
-				<ul>
-					<li>Fix: Prioritize MicroWakeWord over OpenWakeWord for same-name wake words</li>
-					<li>Fix: OpenWakeWord wake words now visible in Home Assistant selection</li>
-					<li>Fix: Stop word detection now works correctly</li>
-					<li>Fix: STT/LLM response time improved with fixed audio chunk size</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.6.0</div>
-				<span class="date">2026-01-11</span>
-				<ul>
-					<li>New: Real-time audio-driven speech animation (SwayRollRT algorithm)</li>
-					<li>New: JSON-driven animation system - all animations configurable</li>
-					<li>Refactor: Remove hardcoded actions, use animation offsets only</li>
-					<li>Fix: TTS audio analysis now works with local playback</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.16</div>
-				<span class="date">2026-01-11</span>
-				<ul>
-					<li>Remove: Tap-to-wake feature (too many false triggers)</li>
-					<li>New: Continuous Conversation switch in Home Assistant</li>
-					<li>Refactor: Simplified satellite.py and voice_assistant.py</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.15</div>
-				<span class="date">2026-01-11</span>
-				<ul>
-					<li>New: Audio settings persistence (AGC, Noise Suppression, Tap Sensitivity)</li>
-					<li>Refactor: Move Sendspin mDNS discovery to zeroconf.py for better code organization</li>
-					<li>Fix: Tap detection not re-enabled during emotion playback in conversation</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.14</div>
-				<span class="date">2026-01-11</span>
-				<ul>
-					<li>Fix: Skip ALL wake word processing when pipeline is active (prevents false triggers)</li>
-					<li>Fix: Eliminate race condition in pipeline state during continuous conversation</li>
-					<li>Improve: Control loop increased to 100Hz (daemon updated)</li>
-				</ul>
-			</div>
-			<div class="changelog-card">
-				<div class="version-badge">v0.5.13</div>
-				<span class="date">2026-01-10</span>
-				<ul>
-					<li>New: JSON-driven animation system for conversation states</li>
-					<li>New: AnimationPlayer class inspired by SimpleDances project</li>
-					<li>Refactor: Replace SpeechSwayGenerator and BreathingAnimation with unified animation system</li>
-				</ul>
-			</div>
+		<div id="changelog-grid" class="changelog-grid">
+			<!-- Loaded dynamically from changelog.json -->
 		</div>
 		<div class="changelog-more">
-			<details>
+			<details id="changelog-details">
 				<summary>View older versions</summary>
-				<div class="changelog-grid older">
-					<div class="changelog-card">
-						<div class="version-badge">v0.5.12</div>
-						<span class="date">2026-01-10</span>
-						<ul>
-							<li>Remove: Deleted broken hey_reachy wake word model</li>
-							<li>Revert: Default wake word back to "Okay Nabu"</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.5.11</div>
-						<span class="date">2026-01-10</span>
-						<ul>
-							<li>Fix: Reset feature extractors when switching wake words</li>
-							<li>Fix: Add refractory period after wake word switch</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.5.10</div>
-						<span class="date">2026-01-10</span>
-						<ul>
-							<li>Fix: Wake word models now have 'id' attribute set correctly</li>
-							<li>Fix: Wake word switching from Home Assistant now works</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.5.8</div>
-						<span class="date">2026-01-09</span>
-						<ul>
-							<li>Fix: Tap detection waits for emotion playback to complete</li>
-							<li>New: DOA turn-to-sound at wakeup</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.5.0</div>
-						<span class="date">2026-01-07</span>
-						<ul>
-							<li>Face tracking with adaptive frequency</li>
-							<li>Sendspin multi-room audio integration</li>
-							<li>Optimized shutdown mechanism</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.4.0</div>
-						<span class="date">2026-01-07</span>
-						<ul>
-							<li>Daemon stability fixes</li>
-							<li>Face tracking enabled by default</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.3.0</div>
-						<span class="date">2026-01-06</span>
-						<ul>
-							<li>Tap sensitivity slider entity</li>
-							<li>Music Assistant compatibility</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.2.0</div>
-						<span class="date">2026-01-05</span>
-						<ul>
-							<li>Automatic facial expressions</li>
-							<li>Emotion playback integration</li>
-						</ul>
-					</div>
-					<div class="changelog-card">
-						<div class="version-badge">v0.1.0</div>
-						<span class="date">2026-01-04</span>
-						<ul>
-							<li>Initial release</li>
-							<li>Voice assistant functionality</li>
-						</ul>
-					</div>
+				<div id="changelog-older" class="changelog-grid older">
+					<!-- Loaded dynamically from changelog.json -->
 				</div>
 			</details>
 		</div>
 	</section>
+
+	<script>
+		const VISIBLE_COUNT = 6;
+		
+		fetch('changelog.json')
+			.then(res => res.json())
+			.then(data => {
+				const mainGrid = document.getElementById('changelog-grid');
+				const olderGrid = document.getElementById('changelog-older');
+				
+				data.forEach((item, index) => {
+					const card = document.createElement('div');
+					card.className = 'changelog-card';
+					card.innerHTML = `
+						<div class="version-badge">v${item.version}</div>
+						<span class="date">${item.date}</span>
+						<ul>${item.changes.map(c => `<li>${c}</li>`).join('')}</ul>
+					`;
+					
+					if (index < VISIBLE_COUNT) {
+						mainGrid.appendChild(card);
+					} else {
+						olderGrid.appendChild(card);
+					}
+				});
+				
+				// Hide details if no older versions
+				if (data.length <= VISIBLE_COUNT) {
+					document.getElementById('changelog-details').style.display = 'none';
+				}
+			})
+			.catch(err => console.error('Failed to load changelog:', err));
+	</script>
 
 	<section class="section links">
 		<div class="section-header">
