@@ -533,15 +533,17 @@ class MJPEGCameraServer:
                 if detected_gesture.value != "no_gesture":
                     self._current_gesture = detected_gesture.value
                     self._gesture_confidence = confidence
-                    _LOGGER.debug("Gesture detected: %s (%.1f%%)", 
+                    _LOGGER.info("Gesture detected: %s (%.1f%%)", 
                                  detected_gesture.value, confidence * 100)
                 else:
-                    # Clear gesture after a delay (handled by gesture_detector)
+                    # Only clear if previously had a gesture
+                    if self._current_gesture != "none":
+                        _LOGGER.debug("Gesture cleared (was: %s)", self._current_gesture)
                     self._current_gesture = "none"
                     self._gesture_confidence = 0.0
                     
         except Exception as e:
-            _LOGGER.debug("Gesture detection error: %s", e)
+            _LOGGER.warning("Gesture detection error: %s", e)
     
     def get_current_gesture(self) -> str:
         """Get current detected gesture name (thread-safe).

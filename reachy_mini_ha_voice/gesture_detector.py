@@ -222,6 +222,12 @@ class GestureDetector:
         input_name = self._detector.get_inputs()[0].name
         outputs = self._detector.run(None, {input_name: input_tensor})
         
+        # Debug: log output shape (only once)
+        if not hasattr(self, '_logged_detector_shape'):
+            logger.info("Hand detector output: %d tensors, shapes=%s", 
+                       len(outputs), [o.shape for o in outputs])
+            self._logged_detector_shape = True
+        
         # Parse output (format depends on model, adjust as needed)
         # Assuming output is [batch, num_detections, 5] where 5 = [x1, y1, x2, y2, conf]
         detections = outputs[0]
