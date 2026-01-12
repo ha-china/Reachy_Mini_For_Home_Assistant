@@ -1,51 +1,47 @@
 <!doctype html>
-<html>
-
+<html lang="en">
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Reachy Mini for Home Assistant</title>
+	<meta name="description" content="Voice assistant integration for Reachy Mini robot with Home Assistant. Control your smart home with voice commands and expressive robot movements.">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
 	<header class="hero">
 		<div class="topline">
 			<div class="brand">
 				<span class="logo">🤖</span>
-				<span class="brand-name">Reachy Mini</span>
+				<span class="brand-name">Reachy Mini × Home Assistant</span>
 			</div>
-			<div class="pill">Voice assistant · Smart home · Expressive motion</div>
+			<div class="pill">Voice · Gestures · Smart Home</div>
 		</div>
 		<div class="hero-grid">
 			<div class="hero-copy">
-				<p class="eyebrow">Home Assistant Integration</p>
-				<h1>Your robot, your smart home.</h1>
+				<p class="eyebrow">ESPHome Integration</p>
+				<h1>Your robot meets your smart home.</h1>
 				<p class="lede">
-					Control your Home Assistant with voice using Reachy Mini robot. Speak naturally, watch it respond with expressive movements, and manage your entire smart home hands-free.
+					Transform Reachy Mini into a voice-controlled smart home hub. Natural conversations, expressive movements, gesture recognition — all seamlessly connected to Home Assistant.
 				</p>
 				<div class="hero-actions">
-					<a class="btn primary" href="#features">Explore features</a>
-					<a class="btn ghost" href="#install">Get started</a>
+					<a class="btn primary" href="#features">Explore Features</a>
+					<a class="btn ghost" href="#install">Quick Start</a>
 				</div>
 				<div class="hero-badges">
-					<span>Wake word detection</span>
-					<span>Face tracking</span>
-					<span>Multi-room audio</span>
-					<span>45+ HA entities</span>
-					<span>Zero configuration</span>
-					<span>Gesture Detection</span>
-
-
+					<span>🎤 Wake Word</span>
+					<span>👀 Face Tracking</span>
+					<span>🤚 18 Gestures</span>
+					<span>🔊 Multi-room Audio</span>
+					<span>⚡ Zero Config</span>
 				</div>
 			</div>
 			<div class="hero-visual">
 				<div class="glass-card">
-					<div class="hero-emoji">🤖⚡🏠</div>
-					<p class="caption">Reachy Mini listens, responds, and controls your smart home through Home Assistant.</p>
+					<div class="hero-emoji">🤖💬🏠</div>
+					<p class="caption">"Hey Reachy, turn on the living room lights"</p>
 				</div>
 			</div>
 		</div>
@@ -53,47 +49,50 @@
 
 	<section id="features" class="section features">
 		<div class="section-header">
-			<p class="eyebrow">What's inside</p>
-			<h2>Complete voice assistant for your robot</h2>
-			<p class="intro">
-				Seamlessly integrates Reachy Mini with Home Assistant via ESPHome protocol.
-			</p>
+			<p class="eyebrow">Capabilities</p>
+			<h2>Everything you need for smart home control</h2>
+			<p class="intro">45+ Home Assistant entities. ESPHome protocol. Auto-discovery via mDNS.</p>
 		</div>
 		<div class="feature-grid">
 			<div class="feature-card">
 				<span class="icon">🎤</span>
 				<h3>Voice Wake</h3>
-				<p>Say "Okay Nabu" or "Hey Reachy" to activate. Supports both MicroWakeWord and OpenWakeWord models.</p>
+				<p>Local wake word detection with MicroWakeWord and OpenWakeWord. Say "Okay Nabu" or "Hey Jarvis" to activate.</p>
 			</div>
 			<div class="feature-card">
 				<span class="icon">🏠</span>
 				<h3>Smart Home Control</h3>
-				<p>Home Assistant processes your voice commands and controls your smart home devices automatically.</p>
+				<p>Full Home Assistant integration. Control lights, switches, climate, media — anything in your smart home.</p>
 			</div>
 			<div class="feature-card">
 				<span class="icon">👀</span>
 				<h3>Face Tracking</h3>
-				<p>YOLO-based face detection enables Reachy Mini to look at you during conversations.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">😊</span>
-				<h3>Expressive Motion</h3>
-				<p>Real-time audio-driven animations with natural head sway and antenna movements during conversations.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">📹</span>
-				<h3>Camera Streaming</h3>
-				<p>MJPEG video stream available in Home Assistant as a Generic Camera for real-time monitoring.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">🔊</span>
-				<h3>Sendspin Audio</h3>
-				<p>Multi-room audio support via Sendspin protocol. Sync playback with other speakers in your home.</p>
+				<p>YOLO-based face detection. Reachy looks at you during conversations with adaptive frame rate optimization.</p>
 			</div>
 			<div class="feature-card">
 				<span class="icon">🤚</span>
 				<h3>Gesture Detection</h3>
-				<p>HaGRID-based hand gesture recognition with 18 gestures like thumbs up, peace sign, and more.</p>
+				<p>HaGRID ONNX models recognize 18 hand gestures: 👍👎✌️🤘👌✊🤙🤫 and more.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">😊</span>
+				<h3>Expressive Motion</h3>
+				<p>Real-time audio-driven animations. Natural head sway and antenna movements during conversations.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">📹</span>
+				<h3>Camera Stream</h3>
+				<p>MJPEG video stream as ESPHome Camera entity. Real-time monitoring in Home Assistant dashboard.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">🔊</span>
+				<h3>Multi-room Audio</h3>
+				<p>Sendspin protocol support. Sync audio playback with other speakers throughout your home.</p>
+			</div>
+			<div class="feature-card">
+				<span class="icon">⚡</span>
+				<h3>Zero Configuration</h3>
+				<p>Install and go. mDNS auto-discovery means Home Assistant finds your robot automatically.</p>
 			</div>
 		</div>
 	</section>
@@ -102,25 +101,25 @@
 		<div class="story-grid">
 			<div class="story-card">
 				<p class="eyebrow">Installation</p>
-				<h3>Up and running in minutes</h3>
+				<h3>Up and running in 2 minutes</h3>
 				<ul class="story-list">
 					<li><span>1️⃣</span> Open Reachy Mini Dashboard → Applications</li>
-					<li><span>2️⃣</span> Check "Show community apps" checkbox</li>
-					<li><span>3️⃣</span> Find "Reachy Mini for Home Assistant" and click Install</li>
-					<li><span>4️⃣</span> Home Assistant auto-discovers via mDNS</li>
+					<li><span>2️⃣</span> Enable "Show community apps"</li>
+					<li><span>3️⃣</span> Install "Reachy Mini for Home Assistant"</li>
+					<li><span>4️⃣</span> Home Assistant discovers automatically</li>
 				</ul>
 			</div>
 			<div class="story-card secondary">
-				<p class="eyebrow">Usage</p>
-				<h3>Start talking to your smart home</h3>
+				<p class="eyebrow">How it works</p>
+				<h3>Seamless integration</h3>
 				<p class="story-text">
-					Once installed, Home Assistant will automatically discover your Reachy Mini. Say your wake word, then speak commands like "turn on the lights" or "what's the temperature?" The robot responds with natural head movements and looks at you during conversations.
+					The app runs an ESPHome-compatible server on port 6053. Home Assistant discovers it via mDNS and adds all 45+ entities automatically. Voice commands are processed by your Home Assistant instance — STT, intent recognition, and TTS all happen there.
 				</p>
 				<div class="chips">
-					<span class="chip">ESPHome protocol</span>
-					<span class="chip">Auto discovery</span>
-					<span class="chip">45+ entities</span>
-					<span class="chip">Zero configuration</span>
+					<span class="chip">ESPHome Protocol</span>
+					<span class="chip">mDNS Discovery</span>
+					<span class="chip">45+ Entities</span>
+					<span class="chip">Local Processing</span>
 				</div>
 			</div>
 		</div>
@@ -128,31 +127,25 @@
 
 	<section id="changelog" class="section">
 		<div class="section-header">
-			<p class="eyebrow">What's new</p>
+			<p class="eyebrow">Updates</p>
 			<h2>Changelog</h2>
 		</div>
-		<div id="changelog-grid" class="changelog-grid">
-			<!-- Loaded dynamically from changelog.json -->
-		</div>
+		<div id="changelog-grid" class="changelog-grid"></div>
 		<div class="changelog-more">
 			<details id="changelog-details">
 				<summary>View older versions</summary>
-				<div id="changelog-older" class="changelog-grid older">
-					<!-- Loaded dynamically from changelog.json -->
-				</div>
+				<div id="changelog-older" class="changelog-grid older"></div>
 			</details>
 		</div>
 	</section>
 
 	<script>
 		const VISIBLE_COUNT = 6;
-		
 		fetch('changelog.json')
 			.then(res => res.json())
 			.then(data => {
 				const mainGrid = document.getElementById('changelog-grid');
 				const olderGrid = document.getElementById('changelog-older');
-				
 				data.forEach((item, index) => {
 					const card = document.createElement('div');
 					card.className = 'changelog-card';
@@ -161,15 +154,8 @@
 						<span class="date">${item.date}</span>
 						<ul>${item.changes.map(c => `<li>${c}</li>`).join('')}</ul>
 					`;
-					
-					if (index < VISIBLE_COUNT) {
-						mainGrid.appendChild(card);
-					} else {
-						olderGrid.appendChild(card);
-					}
+					(index < VISIBLE_COUNT ? mainGrid : olderGrid).appendChild(card);
 				});
-				
-				// Hide details if no older versions
 				if (data.length <= VISIBLE_COUNT) {
 					document.getElementById('changelog-details').style.display = 'none';
 				}
@@ -186,28 +172,24 @@
 			<a href="https://huggingface.co/spaces/djhui5710/reachy_mini_ha_voice/tree/main" target="_blank" class="link-card">
 				<span class="icon">📦</span>
 				<h3>Source Code</h3>
-				<p>View on HuggingFace</p>
+				<p>HuggingFace Spaces</p>
 			</a>
 			<a href="https://github.com/OHF-Voice/linux-voice-assistant" target="_blank" class="link-card">
 				<span class="icon">🔧</span>
-				<h3>Original Project</h3>
-				<p>OHF-Voice/linux-voice-assistant</p>
+				<h3>Based On</h3>
+				<p>linux-voice-assistant</p>
 			</a>
 			<a href="https://www.pollen-robotics.com/" target="_blank" class="link-card">
 				<span class="icon">🤖</span>
 				<h3>Pollen Robotics</h3>
-				<p>Visit Website</p>
+				<p>Reachy Mini Creator</p>
 			</a>
 		</div>
 	</section>
 
 	<footer class="footer">
-		<p>
-			Reachy Mini for Home Assistant by <a href="https://github.com/Desmond-Dong" target="_blank" rel="noopener">Desmond</a>.
-			Explore more apps on <a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank" rel="noopener">Hugging Face Spaces</a>.
-		</p>
+		<p>Built by <a href="https://github.com/Desmond-Dong" target="_blank">Desmond</a> · 
+		<a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank">More Reachy Mini Apps</a></p>
 	</footer>
-
 </body>
-
 </html>
