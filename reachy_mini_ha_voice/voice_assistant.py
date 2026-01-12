@@ -764,12 +764,16 @@ class VoiceAssistantService:
     def _detect_wake_words(self, ctx: AudioProcessingContext) -> None:
         """Detect wake words in the processed audio features.
 
-        Following reference project pattern: only use refractory_seconds.
+        Only detect wake words when in idle state (not in pipeline).
+        This prevents duplicate triggers during continuous conversation.
         """
         from pymicro_wakeword import MicroWakeWord
         from pyopen_wakeword import OpenWakeWord
 
-        now = time.monotonic()
+        # Skip wake word detection if pipeline is active (listening/processing/speaking)
+        # This is the key fix: use state instead of refractory time
+        if self._state.satellite and self._state.satellite._in_pipeline:
+            return
 
         for wake_word in ctx.wake_words:
             activated = False
@@ -785,13 +789,11 @@ class VoiceAssistantService:
                             activated = True
 
             if activated:
-                # Check refractory period
-                if (ctx.last_active is None) or ((now - ctx.last_active) > self._state.refractory_seconds):
-                    _LOGGER.info("Wake word detected: %s", wake_word.id)
-                    self._state.satellite.wakeup(wake_word)
-                    # Face tracking will handle looking at user automatically
-                    self._motion.on_wakeup()
-                    ctx.last_active = now
+                _LOGGER.info("Wake word detected: %s", wake_word.id)
+                self._state.satellite.wakeup(wake_word)
+                # Face tracking will handle looking at user automatically
+                self._motion.on_wakeup()
+                # No need for refractory period - state check handles it
 
     def _detect_stop_word(self, ctx: AudioProcessingContext) -> None:
         """Detect stop word in the processed audio features."""

@@ -133,6 +133,20 @@ class GestureDetector:
             self._classifier = ort.InferenceSession(
                 str(self._classifier_path), providers=providers
             )
+            
+            # Log model input/output info
+            det_inputs = self._detector.get_inputs()
+            det_outputs = self._detector.get_outputs()
+            logger.info("Hand detector - inputs: %s, outputs: %s",
+                       [(i.name, i.shape) for i in det_inputs],
+                       [(o.name, o.shape) for o in det_outputs])
+            
+            cls_inputs = self._classifier.get_inputs()
+            cls_outputs = self._classifier.get_outputs()
+            logger.info("Classifier - inputs: %s, outputs: %s",
+                       [(i.name, i.shape) for i in cls_inputs],
+                       [(o.name, o.shape) for o in cls_outputs])
+            
             self._available = True
             logger.info("Gesture detection ready (18 HaGRID classes)")
         except Exception as e:

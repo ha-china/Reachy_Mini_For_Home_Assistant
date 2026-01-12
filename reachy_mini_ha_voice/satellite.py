@@ -71,6 +71,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize streaming state early (before entity setup)
         # This is needed because audio processing thread checks this attribute
         self._is_streaming_audio = False
+        self._in_pipeline = False  # True when voice pipeline is active (listening/processing/speaking)
         self._tts_url: Optional[str] = None
         self._tts_played = False
         self._continue_conversation = False
@@ -374,8 +375,7 @@ class VoiceSatelliteProtocol(APIServer):
     def wakeup(self, wake_word: Union[MicroWakeWord, OpenWakeWord]) -> None:
         """Handle wake word detection - start voice pipeline.
 
-        Following reference project pattern: no pipeline state check here.
-        Refractory period in audio processing prevents duplicate triggers.
+        Only called when in idle state (checked by voice_assistant.py).
         """
         if self._timer_finished:
             # Stop timer instead
@@ -384,6 +384,9 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
             return
 
+        # Mark pipeline as active
+        self._in_pipeline = True
+        
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
@@ -492,6 +495,9 @@ class VoiceSatelliteProtocol(APIServer):
             self._clear_conversation()
             self.unduck()
             _LOGGER.debug("Conversation finished")
+            
+            # Mark pipeline as inactive - ready for new wake word
+            self._in_pipeline = False
 
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
@@ -523,6 +529,7 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Disconnected from Home Assistant")
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
+        self._in_pipeline = False
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
