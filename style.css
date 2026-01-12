@@ -169,12 +169,20 @@ a:hover { color: var(--ha-blue-light); }
 }
 
 .hero-badges span {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  background: linear-gradient(135deg, rgba(3, 169, 244, 0.2) 0%, rgba(0, 188, 212, 0.15) 100%);
+  border: 1px solid rgba(3, 169, 244, 0.4);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--ha-blue-light);
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.hero-badges span:hover {
+  background: linear-gradient(135deg, rgba(3, 169, 244, 0.3) 0%, rgba(0, 188, 212, 0.25) 100%);
+  border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
 .hero-visual {
