@@ -146,7 +146,7 @@ class VoiceSatelliteProtocol(APIServer):
     def handle_voice_event(
         self, event_type: VoiceAssistantEventType, data: Dict[str, str]
     ) -> None:
-        _LOGGER.info("Voice event: type=%s, data=%s", event_type.name, data)
+        _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
             self._tts_url = data.get("url")
@@ -177,7 +177,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
             # Reachy Mini: Start speaking animation (JSON-defined multi-frequency sway)
-            _LOGGER.info("TTS_START event received, triggering speaking animation")
+            _LOGGER.debug("TTS_START event received, triggering speaking animation")
             self._reachy_on_speaking()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
@@ -472,7 +472,7 @@ class VoiceSatelliteProtocol(APIServer):
         should_continue = continuous_mode or self._continue_conversation
 
         if should_continue:
-            _LOGGER.info("Continuing conversation (our_switch=%s, ha_request=%s)",
+            _LOGGER.debug("Continuing conversation (our_switch=%s, ha_request=%s)",
                          continuous_mode, self._continue_conversation)
 
             # Play prompt sound to indicate ready for next input
@@ -628,7 +628,7 @@ class VoiceSatelliteProtocol(APIServer):
                 return
 
             angle_rad, speech_detected = doa
-            _LOGGER.info("DOA raw: angle=%.3f rad (%.1f°), speech=%s",
+            _LOGGER.debug("DOA raw: angle=%.3f rad (%.1f°), speech=%s",
                          angle_rad, math.degrees(angle_rad), speech_detected)
 
             # Convert DOA to direction vector in head frame
@@ -638,25 +638,19 @@ class VoiceSatelliteProtocol(APIServer):
             dir_y = math.cos(angle_rad)  # Left component
 
             # Calculate yaw angle from direction vector
-            # yaw = atan2(y, x), but we want: positive yaw = turn right
-            # In robot frame: Y+ is left, so yaw = -atan2(dir_y, dir_x)
-            # But since dir_x = sin(doa), dir_y = cos(doa):
-            # yaw = -atan2(cos(doa), sin(doa)) = -(π/2 - doa) = doa - π/2
-            #
-            # CORRECTION: The above was inverted. Testing shows:
-            # - Sound on left → robot turns right (wrong)
-            # - Sound on right → robot turns left (wrong)
-            # So we need to negate the yaw: yaw = π/2 - doa
-            yaw_rad = math.pi / 2 - angle_rad
+            # DOA convention: 0 = left, π/2 = front, π = right
+            # Robot yaw: positive = turn left, negative = turn right
+            # yaw = doa - π/2 maps: left(0) → -90°, front(π/2) → 0°, right(π) → +90°
+            yaw_rad = angle_rad - math.pi / 2
             yaw_deg = math.degrees(yaw_rad)
 
-            _LOGGER.info("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°",
+            _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°",
                          dir_x, dir_y, yaw_deg)
 
             # Only turn if angle is significant (> 10°) to avoid noise
             DOA_THRESHOLD_DEG = 10.0
             if abs(yaw_deg) < DOA_THRESHOLD_DEG:
-                _LOGGER.info("DOA angle %.1f° below threshold (%.1f°), skipping turn",
+                _LOGGER.debug("DOA angle %.1f° below threshold (%.1f°), skipping turn",
                              yaw_deg, DOA_THRESHOLD_DEG)
                 return
 
@@ -737,7 +731,7 @@ class VoiceSatelliteProtocol(APIServer):
             return
 
         try:
-            _LOGGER.info("Reachy Mini: Starting speaking animation")
+            _LOGGER.debug("Reachy Mini: Starting speaking animation")
             self.state.motion.on_speaking_start()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
