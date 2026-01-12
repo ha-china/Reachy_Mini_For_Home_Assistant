@@ -764,15 +764,18 @@ class VoiceAssistantService:
     def _detect_wake_words(self, ctx: AudioProcessingContext) -> None:
         """Detect wake words in the processed audio features.
 
-        Only detect wake words when in idle state (not in pipeline).
-        This prevents duplicate triggers during continuous conversation.
+        Only detect wake words when in idle state (not in pipeline or TTS playing).
+        This prevents duplicate triggers during continuous conversation and TTS playback.
         """
         from pymicro_wakeword import MicroWakeWord
         from pyopen_wakeword import OpenWakeWord
 
-        # Skip wake word detection if pipeline is active (listening/processing/speaking)
-        # This is the key fix: use state instead of refractory time
-        if self._state.satellite and self._state.satellite._in_pipeline:
+        # Skip wake word detection if pipeline is active or TTS is playing
+        # Check both flags to handle all cases:
+        # - _in_pipeline: True during listening/processing/speaking phases
+        # - _tts_playing: True specifically when TTS audio is being played
+        satellite = self._state.satellite
+        if satellite and (satellite._in_pipeline or satellite._tts_playing):
             return
 
         for wake_word in ctx.wake_words:

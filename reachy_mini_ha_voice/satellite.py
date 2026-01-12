@@ -72,6 +72,7 @@ class VoiceSatelliteProtocol(APIServer):
         # This is needed because audio processing thread checks this attribute
         self._is_streaming_audio = False
         self._in_pipeline = False  # True when voice pipeline is active (listening/processing/speaking)
+        self._tts_playing = False  # True when TTS audio is actively playing
         self._tts_url: Optional[str] = None
         self._tts_played = False
         self._continue_conversation = False
@@ -183,6 +184,8 @@ class VoiceSatelliteProtocol(APIServer):
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
             # Reachy Mini: Start speaking animation (JSON-defined multi-frequency sway)
             _LOGGER.debug("TTS_START event received, triggering speaking animation")
+            # Mark TTS as playing - this prevents wake word detection during TTS
+            self._tts_playing = True
             self._reachy_on_speaking()
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
@@ -232,6 +235,9 @@ class VoiceSatelliteProtocol(APIServer):
 
             self.state.active_wake_words.add(self.state.stop_word.id)
             self._continue_conversation = msg.start_conversation
+            # Mark as playing to prevent wake word detection during announcement
+            self._tts_playing = True
+            self._in_pipeline = True
             self.duck()
 
             yield from self.state.media_player_entity.play(
@@ -431,6 +437,8 @@ class VoiceSatelliteProtocol(APIServer):
         """Stop current TTS playback (e.g., user said stop word)."""
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.state.tts_player.stop()
+        # Reset TTS playing flag
+        self._tts_playing = False
 
         if self._timer_finished:
             self._timer_finished = False
@@ -447,6 +455,8 @@ class VoiceSatelliteProtocol(APIServer):
             return
 
         self._tts_played = True
+        # Mark TTS as playing to prevent wake word detection
+        self._tts_playing = True
         _LOGGER.debug("Playing TTS response: %s", self._tts_url)
 
         self.state.active_wake_words.add(self.state.stop_word.id)
@@ -469,6 +479,9 @@ class VoiceSatelliteProtocol(APIServer):
 
         Following reference project pattern: handle continue conversation here.
         """
+        # Mark TTS as finished
+        self._tts_playing = False
+        
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
@@ -537,6 +550,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
         self._in_pipeline = False
+        self._tts_playing = False
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False

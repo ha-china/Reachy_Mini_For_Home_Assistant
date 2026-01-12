@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.3",
+    "date": "2026-01-12",
+    "changes": [
+      "Fix: Prevent wake word detection during TTS playback",
+      "Fix: Add _tts_playing flag to track TTS audio state precisely"
+    ]
+  },
+  {
     "version": "0.6.2",
     "date": "2026-01-12",
     "changes": [
