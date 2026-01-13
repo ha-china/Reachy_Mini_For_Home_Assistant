@@ -69,14 +69,14 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │  │ • MJPEG stream server    │    │ • AdamCodd/YOLOv11n-face         │ │  │
 │  │  │ • ESPHome Camera entity  │    │ • Adaptive frame rate:           │ │  │
 │  │  └──────────────────────────┘    │   - 15fps: conversation/face     │ │  │
-│  │                                  │   - 3fps: idle (power saving)    │ │  │
+│  │                                  │   - 2fps: idle (power saving)    │ │  │
 │  │                                  │ • look_at_image() pose calc      │ │  │
 │  │                                  │ • Smooth return after face lost  │ │  │
 │  │                                  └──────────────────────────────────┘ │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── MOTION CONTROL ────────────────────────────┐  │
-│  │  MovementManager (10Hz Control Loop)                                  │  │
+│  │  MovementManager (100Hz Control Loop)                                 │  │
 │  │  ┌────────────────────────────────────────────────────────────────┐   │  │
 │  │  │ Motion Layers (Priority: Move > Action > SpeechSway > Breath)  │   │  │
 │  │  │ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────────┐  │   │  │
@@ -137,7 +137,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 - [x] Antenna animation control
 - [x] Voice state feedback actions
 - [x] YOLO face tracking (replaces DOA sound source localization)
-- [x] 5Hz unified motion control loop
+- [x] 100Hz unified motion control loop
 
 ### Application Architecture
 - [x] Compliant with Reachy Mini App architecture
@@ -533,7 +533,7 @@ automation:
 |---------|-------------|------------------------|--------|
 | DOA turn-to-sound | Turn toward speaker at wakeup | `satellite.py:_turn_to_sound_source()` | ✅ Implemented |
 | YOLO face detection | Uses `AdamCodd/YOLOv11n-face-detection` model | `head_tracker.py` | ✅ Implemented |
-| Adaptive frame rate tracking | 15fps during conversation, 3fps when idle without face | `camera_server.py` | ✅ Implemented |
+| Adaptive frame rate tracking | 15fps during conversation, 2fps when idle without face | `camera_server.py` | ✅ Implemented |
 | look_at_image() | Calculate target pose from face position | `camera_server.py` | ✅ Implemented |
 | Smooth return to neutral | Smooth return within 1 second after face lost | `camera_server.py` | ✅ Implemented |
 | face_tracking_offsets | As secondary pose overlay to motion control | `movement_manager.py` | ✅ Implemented |
@@ -909,6 +909,8 @@ def _get_cached_head_pose(self):
 ---
 
 ## 🔧 Daemon Crash Deep Fix (2026-01-07)
+
+> **Update (2026-01-12)**: After daemon updates and further testing, control loop frequency has been restored to 100Hz (same as `reachy_mini_conversation_app`). The pose change threshold (0.005) and state cache TTL (2s) optimizations remain in place to reduce unnecessary Zenoh messages.
 
 ### Problem Description
 During long-term operation, `reachy_mini daemon` still crashes, previous fix not thorough enough.
