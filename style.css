@@ -62,8 +62,8 @@ a:hover { color: var(--ha-blue-light); }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 1200px;
-  margin: 0 auto 60px;
+  max-width: 1400px;
+  margin: 0 auto 40px;
   position: relative;
   z-index: 1;
 }
@@ -90,9 +90,9 @@ a:hover { color: var(--ha-blue-light); }
 
 .hero-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
-  max-width: 1200px;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 48px;
+  max-width: 1400px;
   margin: 0 auto;
   align-items: center;
   position: relative;
@@ -194,11 +194,10 @@ a:hover { color: var(--ha-blue-light); }
 .video-container {
   position: relative;
   width: 100%;
-  max-width: 800px;
   aspect-ratio: 16 / 9;
   border-radius: var(--card-radius);
   overflow: hidden;
-  box-shadow: 0 12px 40px rgba(3, 169, 244, 0.2);
+  box-shadow: 0 16px 50px rgba(3, 169, 244, 0.25);
   border: 1px solid var(--border-color);
 }
 
