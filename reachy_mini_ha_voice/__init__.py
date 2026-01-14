@@ -1,14 +1,16 @@
 """
 Reachy Mini for Home Assistant
 
-A voice assistant application that runs on Reachy Mini robot and integrates
-with Home Assistant via the ESPHome protocol.
+A deep integration app combining Reachy Mini robot with Home Assistant,
+enabling voice control, smart home automation, and expressive robot interactions.
 
 Key features:
 - Local wake word detection (microWakeWord/openWakeWord)
-- ESPHome protocol for Home Assistant integration
-- STT/TTS handled by Home Assistant (not locally)
-- Reachy Mini motion control integration
+- ESPHome protocol for seamless Home Assistant communication
+- STT/TTS powered by Home Assistant voice pipeline
+- Reachy Mini motion control with expressive animations
+- Camera streaming and gesture detection
+- Smart home entity control through natural voice commands
 """
 
 __version__ = "0.7.3"

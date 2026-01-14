@@ -83,8 +83,6 @@ ENTITY_KEYS: Dict[str, int] = {
     "noise_suppression": 1202,
     "echo_cancellation_converged": 1203,
     # Phase 13: Sendspin - auto-enabled via mDNS, no user entities needed
-    # Phase 20: Tap detection (disabled - too many false triggers)
-    # "tap_sensitivity": 1400,
     # Phase 21: Continuous conversation
     "continuous_conversation": 1500,
     # Phase 22: Gesture detection

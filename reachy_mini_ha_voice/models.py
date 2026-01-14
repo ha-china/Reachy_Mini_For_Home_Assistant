@@ -48,7 +48,6 @@ class AvailableWakeWord:
 @dataclass
 class Preferences:
     active_wake_words: List[str] = field(default_factory=list)
-    tap_sensitivity: float = 0.5  # Tap detection threshold in g (0.5 = most sensitive)
     # Audio processing settings (persisted from Home Assistant)
     agc_enabled: Optional[bool] = None  # None = use hardware default
     agc_max_gain: Optional[float] = None  # None = use hardware default

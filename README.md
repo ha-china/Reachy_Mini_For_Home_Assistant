@@ -5,12 +5,12 @@ colorFrom: blue
 colorTo: purple
 sdk: static
 pinned: false
-short_description: Home Assistant integration for Reachy Mini robot
+short_description: Deep integration of Reachy Mini robot with Home Assistant
 tags:
   - reachy_mini
   - reachy_mini_python_app
   - reachy_mini_ha_voice
-  - reachy_mini_home_assistant_voice
+  - reachy_mini_home_assistant
   - home_assistant
   - homeassistant
 ---

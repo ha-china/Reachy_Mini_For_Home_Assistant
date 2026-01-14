@@ -401,22 +401,6 @@ class VoiceSatelliteProtocol(APIServer):
         self._is_streaming_audio = True
         self.state.tts_player.play(self.state.wakeup_sound)
 
-    def wakeup_from_tap(self) -> None:
-        """Trigger wake-up from tap detection.
-
-        NOTE: This method is DISABLED. Tap-to-wake caused too many false triggers.
-        Continuous conversation is now controlled via Home Assistant switch.
-        """
-        _LOGGER.warning("wakeup_from_tap() called but tap wake is disabled")
-        return
-
-    def is_tap_conversation_active(self) -> bool:
-        """Check if tap-triggered continuous conversation is active.
-
-        NOTE: Tap wake is DISABLED. This always returns False.
-        """
-        return False
-
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
         self.state.active_wake_words.discard(self.state.stop_word.id)

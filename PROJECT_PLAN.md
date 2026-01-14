@@ -165,7 +165,6 @@ reachy_mini_ha_voice/
 │   ├── entity_extensions.py    # Extended entity types
 │   ├── entity_registry.py      # Entity registry
 │   ├── reachy_controller.py    # Reachy Mini controller wrapper
-│   ├── tap_detector.py         # IMU tap detection
 │   ├── gesture_detector.py     # Gesture detection
 │   ├── api_server.py           # API server
 │   ├── zeroconf.py             # mDNS discovery
@@ -958,13 +957,7 @@ self._pose_change_threshold = 0.005
 fps: int = 10
 ```
 
-#### 4. Reduce IMU polling frequency (tap_detector.py)
-```python
-# Reduced from 50Hz to 20Hz
-TAP_DETECTION_RATE_HZ = 20
-```
-
-#### 5. Increase state cache TTL (reachy_controller.py)
+#### 4. Increase state cache TTL (reachy_controller.py)
 ```python
 # Increased from 1 second to 2 seconds
 self._cache_ttl = 2.0
@@ -978,7 +971,6 @@ self._cache_ttl = 2.0
 | Max Zenoh messages | 60 msg/s | 30 msg/s | ↓ 50% |
 | Actual messages (with change detection) | ~40 msg/s | ~15 msg/s | ↓ 62% |
 | Face tracking frequency | 15 Hz | 10 Hz | ↓ 33% |
-| IMU polling frequency | 50 Hz | 20 Hz | ↓ 60% |
 | State cache TTL | 1 second | 2 seconds | ↑ 100% |
 | Expected stability | Crash within hours | Stable operation | Major improvement |
 
@@ -989,7 +981,6 @@ Reference `reachy_mini_conversation_app` uses 100Hz control loop, but it's an of
 ### Related Files
 - `movement_manager.py` - Control loop frequency and pose threshold
 - `camera_server.py` - Face tracking frequency
-- `tap_detector.py` - IMU polling frequency
 - `reachy_controller.py` - State cache TTL
 
 
