@@ -7,7 +7,7 @@ name = "reachy_mini_ha_voice"
 version = "0.7.3"
 description = "Home Assistant Voice Assistant for Reachy Mini"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK (provides audio via media system)
