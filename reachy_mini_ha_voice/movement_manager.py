@@ -5,7 +5,7 @@ This module provides a centralized control system for robot movements,
 inspired by the reachy_mini_conversation_app architecture.
 
 Key features:
-- Single 10Hz control loop (balanced between responsiveness and stability)
+- Single 100Hz control loop (same as reachy_mini_conversation_app)
 - Command queue pattern (thread-safe external API)
 - Error throttling (prevents log explosion)
 - JSON-driven animation system (conversation state animations)
@@ -18,6 +18,7 @@ Key features:
 
 import logging
 import math
+import random
 import threading
 import time
 from dataclasses import dataclass, field
@@ -57,12 +58,21 @@ TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 # Antenna freeze parameters (listening mode)
 ANTENNA_BLEND_DURATION = 0.5  # Seconds to blend back from frozen state
 
+# Idle look-around behavior parameters
+IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0   # Minimum seconds between look-arounds
+IDLE_LOOK_AROUND_MAX_INTERVAL = 20.0  # Maximum seconds between look-arounds
+IDLE_LOOK_AROUND_YAW_RANGE = 25.0     # Maximum yaw angle in degrees
+IDLE_LOOK_AROUND_PITCH_RANGE = 10.0   # Maximum pitch angle in degrees
+IDLE_LOOK_AROUND_DURATION = 1.2       # Duration of look-around action in seconds
+IDLE_INACTIVITY_THRESHOLD = 5.0       # Seconds of inactivity before look-around starts
+
 # State to animation mapping
+# Note: SPEAKING uses idle animation as base, with speech_sway offsets layered on top
 STATE_ANIMATION_MAP = {
     "idle": "idle",
     "listening": "listening",
     "thinking": "thinking",
-    "speaking": "speaking",
+    "speaking": "idle",  # Base animation only; actual motion from speech_sway
 }
 
 
@@ -120,6 +130,10 @@ class MovementState:
     antenna_blend: float = 1.0  # 0=frozen, 1=normal
     antenna_blend_start_time: float = 0.0
 
+    # Idle look-around behavior
+    next_look_around_time: float = 0.0
+    look_around_in_progress: bool = False
+
 
 @dataclass
 class PendingAction:
@@ -137,13 +151,10 @@ class PendingAction:
 
 class MovementManager:
     """
-    Unified movement manager with 10Hz control loop.
+    Unified movement manager with 100Hz control loop.
 
     All external interactions go through the command queue,
     ensuring thread safety and preventing race conditions.
-    
-    Note: Frequency reduced from 100Hz to 10Hz to prevent daemon crashes
-    caused by excessive Zenoh message traffic.
     """
 
     def __init__(self, reachy_mini: Optional["ReachyMini"] = None):
@@ -279,7 +290,7 @@ class MovementManager:
 
     def set_camera_server(self, camera_server) -> None:
         """Set the camera server for face tracking offsets.
-        
+
         Args:
             camera_server: MJPEGCameraServer instance with face tracking
         """
@@ -488,6 +499,9 @@ class MovementManager:
                     self._pending_action.callback()
                 except Exception as e:
                     logger.error("Action callback error: %s", e)
+            # Reset look-around state if this was a look-around action
+            if self._pending_action.name == "look_around":
+                self.state.look_around_in_progress = False
             self._pending_action = None
 
     def _update_animation(self, dt: float) -> None:
@@ -563,6 +577,75 @@ class MovementManager:
             except Exception as e:
                 logger.debug("Error getting face tracking offsets: %s", e)
 
+    def _update_idle_look_around(self) -> None:
+        """Trigger random look-around behavior when idle for a while.
+
+        This adds life-like behavior to the robot by occasionally looking around
+        when not engaged in conversation. Similar to conversation_app's idle behaviors.
+        """
+        # Only trigger when in IDLE state
+        if self.state.robot_state != RobotState.IDLE:
+            # Reset timing when not idle
+            self.state.next_look_around_time = 0.0
+            self.state.look_around_in_progress = False
+            return
+
+        # Check if we have an action in progress
+        if self._pending_action is not None:
+            return
+
+        now = self._now()
+        idle_duration = now - self.state.idle_start_time
+
+        # Only start look-around after sufficient inactivity
+        if idle_duration < IDLE_INACTIVITY_THRESHOLD:
+            return
+
+        # Schedule next look-around if not scheduled
+        if self.state.next_look_around_time == 0.0:
+            interval = random.uniform(
+                IDLE_LOOK_AROUND_MIN_INTERVAL,
+                IDLE_LOOK_AROUND_MAX_INTERVAL
+            )
+            self.state.next_look_around_time = now + interval
+            logger.debug("Scheduled next look-around in %.1fs", interval)
+            return
+
+        # Check if it's time for look-around
+        if now >= self.state.next_look_around_time and not self.state.look_around_in_progress:
+            # Generate random look direction
+            target_yaw = random.uniform(
+                -IDLE_LOOK_AROUND_YAW_RANGE,
+                IDLE_LOOK_AROUND_YAW_RANGE
+            )
+            target_pitch = random.uniform(
+                -IDLE_LOOK_AROUND_PITCH_RANGE,
+                IDLE_LOOK_AROUND_PITCH_RANGE
+            )
+
+            # Create look-around action
+            action = PendingAction(
+                name="look_around",
+                target_yaw=math.radians(target_yaw),
+                target_pitch=math.radians(target_pitch),
+                duration=IDLE_LOOK_AROUND_DURATION,
+            )
+
+            # Start the action
+            self._start_action(action)
+            self.state.look_around_in_progress = True
+
+            # Schedule return to center and next look-around
+            interval = random.uniform(
+                IDLE_LOOK_AROUND_MIN_INTERVAL,
+                IDLE_LOOK_AROUND_MAX_INTERVAL
+            )
+            self.state.next_look_around_time = now + IDLE_LOOK_AROUND_DURATION * 2 + interval
+
+            logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°",
+                        target_yaw, target_pitch)
+
+
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
         
@@ -633,8 +716,10 @@ class MovementManager:
             final_head[:3, 3] = primary_head[:3, 3] + secondary_head[:3, 3]
 
         # Antenna pose with freeze blending
-        target_antenna_left = self.state.target_antenna_left + self.state.anim_antenna_left
-        target_antenna_right = self.state.target_antenna_right + self.state.anim_antenna_right
+        target_antenna_left = (self.state.target_antenna_left +
+                               self.state.anim_antenna_left)
+        target_antenna_right = (self.state.target_antenna_right +
+                                self.state.anim_antenna_right)
 
         # Apply antenna freeze blending (listening mode)
         blend = self.state.antenna_blend
@@ -757,7 +842,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main 10Hz control loop."""
+        """Main 100Hz control loop."""
         logger.info("Movement manager control loop started (%.0f Hz)", CONTROL_LOOP_FREQUENCY_HZ)
 
         last_time = self._now()
@@ -779,14 +864,17 @@ class MovementManager:
 
                 # 4. Update antenna blend (listening mode freeze/unfreeze)
                 self._update_antenna_blend(dt)
-                
+
                 # 5. Update face tracking offsets from camera server
                 self._update_face_tracking()
 
-                # 6. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
+                # 6. Update idle look-around behavior
+                self._update_idle_look_around()
+
+                # 7. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
                 head_pose, antennas, body_yaw = self._compose_final_pose()
 
-                # 7. Send to robot (single control point!)
+                # 8. Send to robot (single control point!)
                 self._issue_control_command(head_pose, antennas, body_yaw)
 
             except Exception as e:

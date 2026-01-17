@@ -1,10 +1,12 @@
 {
   "animations": {
     "idle": {
-      "description": "No movement when idle - robot stays at neutral position",
-      "z_amplitude_m": 0.0,
-      "antenna_amplitude_rad": 0.0,
-      "frequency_hz": 0.0
+      "description": "Breathing animation when idle - gentle z-axis movement and antenna sway (same as conversation_app BreathingMove)",
+      "z_amplitude_m": 0.005,
+      "z_frequency_hz": 0.1,
+      "antenna_amplitude_rad": 0.262,
+      "antenna_move_name": "wiggle",
+      "frequency_hz": 0.5
     },
     "listening": {
       "description": "Attentive pose while listening to user - slight forward lean",
@@ -25,63 +27,149 @@
       "antenna_amplitude_rad": 0.25,
       "antenna_move_name": "wiggle",
       "frequency_hz": 0.4
-    },
-    "speaking": {
-      "description": "Speaking animation - multi-frequency natural head sway",
-      "pitch_amplitude_rad": 0.08,
-      "pitch_frequency_hz": 2.2,
-      "yaw_amplitude_rad": 0.13,
-      "yaw_frequency_hz": 0.6,
-      "roll_amplitude_rad": 0.04,
-      "roll_frequency_hz": 1.3,
-      "x_amplitude_m": 0.0045,
-      "x_frequency_hz": 0.35,
-      "y_amplitude_m": 0.00375,
-      "y_frequency_hz": 0.45,
-      "z_amplitude_m": 0.00225,
-      "z_frequency_hz": 0.25,
-      "antenna_amplitude_rad": 0.5,
-      "antenna_move_name": "wiggle",
-      "frequency_hz": 1.0
-    },
+    }
+  },
+  "emotions": {
     "happy": {
-      "description": "Happy/positive response",
-      "pitch_amplitude_rad": 0.08,
-      "z_amplitude_m": 0.01,
-      "antenna_amplitude_rad": 0.5,
-      "antenna_move_name": "both",
-      "frequency_hz": 1.2
+      "description": "Happy/joyful expression - bouncy head movement with excited antennas",
+      "duration": 2.0,
+      "pitch_amplitude": 0.15,
+      "z_amplitude": 0.015,
+      "antenna_left": 0.5,
+      "antenna_right": 0.5,
+      "frequency": 1.5
     },
     "sad": {
-      "description": "Sad/negative response - head droops",
-      "pitch_offset_rad": 0.1,
-      "pitch_amplitude_rad": 0.04,
-      "z_offset_m": -0.01,
-      "z_amplitude_m": 0.002,
-      "antenna_amplitude_rad": 0.1,
-      "antenna_move_name": "both",
-      "frequency_hz": 0.3
+      "description": "Sad/disappointed expression - drooping head and antennas",
+      "duration": 2.5,
+      "pitch": 0.15,
+      "z": -0.01,
+      "pitch_amplitude": 0.05,
+      "antenna_left": -0.2,
+      "antenna_right": -0.2,
+      "frequency": 0.3
+    },
+    "surprised": {
+      "description": "Surprised/shocked expression - head pulls back with alert antennas",
+      "duration": 1.5,
+      "pitch": -0.1,
+      "z": 0.01,
+      "antenna_left": 0.7,
+      "antenna_right": 0.7,
+      "frequency": 2.0
     },
     "confused": {
-      "description": "Confused/error state - head tilts",
-      "roll_amplitude_rad": 0.1,
-      "yaw_amplitude_rad": 0.12,
-      "pitch_amplitude_rad": 0.05,
-      "antenna_amplitude_rad": 0.4,
-      "antenna_move_name": "wiggle",
-      "frequency_hz": 0.7
+      "description": "Confused/puzzled expression - head tilts with asymmetric antennas",
+      "duration": 2.0,
+      "roll": 0.12,
+      "yaw_amplitude": 0.15,
+      "antenna_left": 0.3,
+      "antenna_right": -0.3,
+      "frequency": 0.8
+    },
+    "excited": {
+      "description": "Excited/enthusiastic expression - energetic multi-axis movement",
+      "duration": 2.0,
+      "pitch_amplitude": 0.12,
+      "yaw_amplitude": 0.1,
+      "z_amplitude": 0.02,
+      "antenna_left": 0.6,
+      "antenna_right": 0.6,
+      "frequency": 2.0
+    },
+    "thinking_emotion": {
+      "description": "Thinking/pondering expression - slight tilt with slow movement",
+      "duration": 2.0,
+      "roll": 0.08,
+      "pitch": -0.05,
+      "yaw_amplitude": 0.08,
+      "antenna_left": 0.4,
+      "antenna_right": -0.2,
+      "frequency": 0.4
+    },
+    "nod": {
+      "description": "Nodding gesture - quick up-down head movement",
+      "duration": 0.8,
+      "pitch_amplitude": 0.2,
+      "frequency": 2.5
+    },
+    "shake": {
+      "description": "Shaking gesture - quick left-right head movement",
+      "duration": 0.8,
+      "yaw_amplitude": 0.25,
+      "frequency": 3.0
+    },
+    "curious": {
+      "description": "Curious/interested expression - head tilts forward with alert antennas",
+      "duration": 1.5,
+      "pitch": -0.08,
+      "roll": 0.1,
+      "antenna_left": 0.5,
+      "antenna_right": 0.3,
+      "frequency": 0.6
+    },
+    "sleepy": {
+      "description": "Sleepy/tired expression - slow drooping movement",
+      "duration": 3.0,
+      "pitch": 0.12,
+      "z": -0.015,
+      "pitch_amplitude": 0.03,
+      "antenna_left": -0.4,
+      "antenna_right": -0.4,
+      "frequency": 0.15
+    },
+    "angry": {
+      "description": "Angry/frustrated expression - intense forward lean with tense antennas",
+      "duration": 1.5,
+      "pitch": -0.12,
+      "roll_amplitude": 0.08,
+      "antenna_left": 0.8,
+      "antenna_right": 0.8,
+      "frequency": 1.8
+    },
+    "shy": {
+      "description": "Shy/embarrassed expression - head turns away slightly",
+      "duration": 2.0,
+      "yaw": 0.15,
+      "pitch": 0.08,
+      "roll": 0.05,
+      "antenna_left": -0.1,
+      "antenna_right": -0.1,
+      "frequency": 0.3
+    },
+    "love": {
+      "description": "Loving/affectionate expression - gentle swaying with happy antennas",
+      "duration": 2.5,
+      "yaw_amplitude": 0.08,
+      "pitch_amplitude": 0.06,
+      "z_amplitude": 0.008,
+      "antenna_left": 0.4,
+      "antenna_right": 0.4,
+      "frequency": 0.8
+    },
+    "bored": {
+      "description": "Bored/uninterested expression - slow side-to-side with droopy antennas",
+      "duration": 3.0,
+      "yaw_amplitude": 0.1,
+      "pitch": 0.05,
+      "antenna_left": -0.15,
+      "antenna_right": -0.15,
+      "frequency": 0.2
     },
     "alert": {
-      "description": "Alert/timer finished - quick movements",
-      "pitch_amplitude_rad": 0.1,
-      "z_amplitude_m": 0.012,
-      "antenna_amplitude_rad": 0.6,
-      "antenna_move_name": "both",
-      "frequency_hz": 1.5
+      "description": "Alert/attentive expression - quick upward movement with perky antennas",
+      "duration": 1.0,
+      "pitch": -0.15,
+      "z": 0.015,
+      "antenna_left": 0.7,
+      "antenna_right": 0.7,
+      "frequency": 2.5
     }
   },
   "settings": {
     "amplitude_scale": 1.0,
-    "transition_duration_s": 0.3
+    "transition_duration_s": 0.3,
+    "default_emotion_duration": 2.0,
+    "default_emotion_frequency": 1.0
   }
 }

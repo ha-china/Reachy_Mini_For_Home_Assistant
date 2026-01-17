@@ -142,6 +142,11 @@ class VoiceSatelliteProtocol(APIServer):
             for entity in self.state.entities:
                 entity.server = self
 
+        # Load emotion keywords from JSON file for auto-triggering
+        self._emotion_keywords: Dict[str, str] = {}
+        self._emotion_detection_enabled = True
+        self._load_emotion_keywords()
+
     def handle_voice_event(
         self, event_type: VoiceAssistantEventType, data: Dict[str, str]
     ) -> None:
@@ -178,6 +183,12 @@ class VoiceSatelliteProtocol(APIServer):
             # Reachy Mini: Start speaking animation (JSON-defined multi-frequency sway)
             _LOGGER.debug("TTS_START event received, triggering speaking animation")
             self._reachy_on_speaking()
+
+            # Auto-trigger emotion based on response text
+            # TTS_START may contain the text to be spoken
+            tts_text = data.get("tts_output") or data.get("text") or ""
+            if tts_text:
+                self._detect_and_play_emotion(tts_text)
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
             self._tts_url = data.get("url")
@@ -747,6 +758,66 @@ class VoiceSatelliteProtocol(APIServer):
                 self.state.motion.on_timer_finished()
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
+
+    def _load_emotion_keywords(self) -> None:
+        """Load emotion keywords from JSON configuration file.
+
+        The file is located at animations/emotion_keywords.json and contains
+        keyword-to-emotion mappings for automatic emotion detection.
+        """
+        import json
+        from pathlib import Path
+
+        keywords_file = Path(__file__).parent / "animations" / "emotion_keywords.json"
+
+        if not keywords_file.exists():
+            _LOGGER.warning("Emotion keywords file not found: %s", keywords_file)
+            return
+
+        try:
+            with open(keywords_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            self._emotion_keywords = data.get("keywords", {})
+            settings = data.get("settings", {})
+            self._emotion_detection_enabled = settings.get("enabled", True)
+
+            _LOGGER.info(
+                "Loaded %d emotion keywords (enabled=%s)",
+                len(self._emotion_keywords),
+                self._emotion_detection_enabled
+            )
+        except Exception as e:
+            _LOGGER.error("Failed to load emotion keywords: %s", e)
+
+    def _detect_and_play_emotion(self, text: str) -> None:
+        """Detect emotion from text and trigger corresponding robot animation.
+
+        This provides automatic emotion expression based on the LLM response content.
+        Keywords are matched case-insensitively against the text.
+
+        Args:
+            text: The text to analyze for emotional content
+        """
+        if not text or not self._emotion_detection_enabled:
+            return
+
+        if not self._emotion_keywords:
+            return
+
+        text_lower = text.lower()
+
+        # Check each keyword pattern
+        for keyword, emotion_name in self._emotion_keywords.items():
+            if keyword.lower() in text_lower:
+                _LOGGER.info(
+                    "Auto-detected emotion '%s' from keyword '%s' in response",
+                    emotion_name, keyword
+                )
+                self._play_emotion(emotion_name)
+                return  # Only trigger one emotion per response
+
+        _LOGGER.debug("No emotion keywords detected in response text")
 
     def _play_emotion(self, emotion_name: str) -> None:
         """Play an emotion/expression from the emotions library.

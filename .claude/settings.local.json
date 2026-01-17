@@ -3,24 +3,51 @@
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
-      "SlashCommand(/zcf:git-commit)",
+      "Bash",
+      "BashOutput",
       "Edit",
+      "Glob",
+      "Grep",
+      "KillShell",
+      "NotebookEdit",
+      "Read",
+      "SlashCommand",
+      "Task",
+      "TodoWrite",
+      "WebFetch",
+      "WebSearch",
+      "Write",
+      "mcp__ide",
+      "mcp__exa",
+      "mcp__context7",
+      "mcp__mcp-deepwiki",
+      "mcp__Playwright",
+      "mcp__spec-workflow",
+      "mcp__open-websearch",
+      "mcp__serena",
+      "All",
+      "Bash(copy:*)",
+      "mcp__zread__search_doc",
+      "mcp__zread__read_file",
       "Bash(cd:*)",
-      "SlashCommand(/zcf:git-commit --emoji)",
-      "SlashCommand(/zcf:git-commit:*)",
-      "Bash(git:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "mcp__acp__Bash"
     ],
     "deny": [],
     "ask": []
   },
+  "model": "opus",
   "hooks": {},
-  "alwaysThinkingEnabled": true,
-  "outputStyle": "default",
   "statusLine": {
     "type": "command",
     "command": "%USERPROFILE%\\.claude\\ccline\\ccline.exe",
     "padding": 0
   },
-  "model": "opus"
+  "enabledPlugins": {
+    "glm-plan-usage@zai-coding-plugins": true,
+    "glm-plan-bug@zai-coding-plugins": true
+  },
+  "outputStyle": "Explanatory",
+  "alwaysThinkingEnabled": true
 }

@@ -850,10 +850,11 @@ During long-term operation, `reachy_mini daemon` would crash, causing robot to b
 
 ### Fix Solution
 
-#### 1. Reduce control loop frequency (movement_manager.py)
+#### 1. Control loop frequency (movement_manager.py)
 ```python
-# Reduced from 100Hz to 20Hz
-CONTROL_LOOP_FREQUENCY_HZ = 20  # 80% reduction in messages
+# Initially reduced from 100Hz to 20Hz, then later restored to 100Hz
+# See "Update (2026-01-12)" below for current status
+CONTROL_LOOP_FREQUENCY_HZ = 100  # Now restored to 100Hz
 ```
 
 #### 2. Add pose change detection (movement_manager.py)
@@ -937,11 +938,11 @@ Through deep analysis of SDK source code:
 
 ### Fix Solution
 
-#### 1. Further reduce control loop frequency (movement_manager.py)
+#### 1. Control loop frequency history (movement_manager.py)
 ```python
-# Reduced from 20Hz to 10Hz
-# 10Hz × 3 messages = 30 messages/second, safely below daemon's 50Hz capacity
-CONTROL_LOOP_FREQUENCY_HZ = 10
+# Evolution: 100Hz -> 20Hz -> 10Hz -> 100Hz (restored)
+# After daemon updates, 100Hz is now stable
+CONTROL_LOOP_FREQUENCY_HZ = 100  # Restored to 100Hz (2026-01-12)
 ```
 
 #### 2. Increase pose change threshold (movement_manager.py)
@@ -965,18 +966,20 @@ self._cache_ttl = 2.0
 
 ### Fix Results
 
-| Metric | Before (20Hz) | After (10Hz) | Improvement |
-|--------|---------------|--------------|-------------|
-| Control loop frequency | 20 Hz | 10 Hz | ↓ 50% |
-| Max Zenoh messages | 60 msg/s | 30 msg/s | ↓ 50% |
-| Actual messages (with change detection) | ~40 msg/s | ~15 msg/s | ↓ 62% |
-| Face tracking frequency | 15 Hz | 10 Hz | ↓ 33% |
-| State cache TTL | 1 second | 2 seconds | ↑ 100% |
-| Expected stability | Crash within hours | Stable operation | Major improvement |
+> **Note**: Control loop has been restored to 100Hz as of 2026-01-12. The table below shows historical values before restoration.
+
+| Metric | Before (20Hz) | After (10Hz) | Current (100Hz) |
+|--------|---------------|--------------|-----------------|
+| Control loop frequency | 20 Hz | 10 Hz | 100 Hz (restored) |
+| Max Zenoh messages | 60 msg/s | 30 msg/s | ~100 msg/s (optimized) |
+| Actual messages (with change detection) | ~40 msg/s | ~15 msg/s | ~30 msg/s |
+| Face tracking frequency | 15 Hz | 10 Hz | Adaptive (2-15 Hz) |
+| State cache TTL | 1 second | 2 seconds | 2 seconds |
+| Expected stability | Crash within hours | Stable operation | Stable (daemon updated) |
 
 ### Key Finding
 
-Reference `reachy_mini_conversation_app` uses 100Hz control loop, but it's an official app that may have special optimizations or runs on more powerful hardware. Our app needs more conservative settings.
+Reference `reachy_mini_conversation_app` uses 100Hz control loop. After daemon updates and optimizations (pose change threshold 0.005, state cache TTL 2s), our app now also runs stably at 100Hz.
 
 ### Related Files
 - `movement_manager.py` - Control loop frequency and pose threshold

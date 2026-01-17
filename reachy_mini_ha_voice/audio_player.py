@@ -21,6 +21,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Movement latency to sync head motion with audio playback
+# Audio playback has hardware buffer latency, so we delay head motion to match
+# Same as reachy_mini_conversation_app's HeadWobbler.MOVEMENT_LATENCY_S
+MOVEMENT_LATENCY_S = 0.2  # 200ms latency between audio start and head movement
+
 # Check if aiosendspin is available
 try:
     from aiosendspin.client import SendspinClient, PCMFormat
@@ -463,6 +468,8 @@ class AudioPlayer:
                     self.reachy_mini.media.play_sound(file_path)
 
                     # Playback loop with sway animation
+                    # Apply MOVEMENT_LATENCY_S delay to sync head motion with audio
+                    # (audio playback has hardware buffer latency)
                     start_time = time.time()
                     frame_duration = 0.05  # 50ms per sway frame (HOP_MS)
                     frame_idx = 0
@@ -472,10 +479,14 @@ class AudioPlayer:
                             self.reachy_mini.media.stop_playing()
                             break
 
-                        # Apply sway frame if available
+                        # Apply sway frame if available, with 200ms delay
                         if self._sway_callback and frame_idx < len(sway_frames):
                             elapsed = time.time() - start_time
-                            target_frame = int(elapsed / frame_duration)
+                            # Apply latency: head motion starts MOVEMENT_LATENCY_S after audio
+                            effective_elapsed = max(0, elapsed - MOVEMENT_LATENCY_S)
+                            target_frame = int(effective_elapsed / frame_duration)
+
+                            # Skip frames if falling behind (lag compensation)
                             while frame_idx <= target_frame and frame_idx < len(sway_frames):
                                 self._sway_callback(sway_frames[frame_idx])
                                 frame_idx += 1
