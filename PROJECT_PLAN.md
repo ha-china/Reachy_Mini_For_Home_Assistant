@@ -206,7 +206,7 @@ dependencies = [
 ## Usage Flow
 
 1. **Install App**
-   - Install `reachy-mini-ha-voice` from Reachy Mini App Store
+   - Install `reachy_mini_ha_voice` from Reachy Mini App Store
 
 2. **Start App**
    - App auto-starts ESPHome server (port 6053)
