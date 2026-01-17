@@ -440,11 +440,11 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 - ✅ Integration with HuggingFace action library (`pollen-robotics/reachy-mini-emotions-library`)
 - ✅ SpeechSway system for natural head micro-movements during conversation (non-blocking)
 - ✅ Tap detection disabled during emotion playback (polls daemon API for completion)
-- ✅ **NEW (v0.7.4)**: Comprehensive emotion keyword detection from conversation text
-- ✅ **NEW (v0.7.4)**: 280+ Chinese and English keywords mapped to 35 emotion categories
-- ✅ **NEW (v0.7.4)**: Auto-trigger expressions based on text patterns in LLM responses
+- ✅ **NEW (v0.8.0)**: Comprehensive emotion keyword detection from conversation text
+- ✅ **NEW (v0.8.0)**: 280+ Chinese and English keywords mapped to 35 emotion categories
+- ✅ **NEW (v0.8.0)**: Auto-trigger expressions based on text patterns in LLM responses
 
-**Emotion Keyword Categories (v0.7.4)**:
+**Emotion Keyword Categories (v0.8.0)**:
 
 | Expression ID | Category | Chinese Keywords | English Keywords |
 |---------------|----------|------------------|------------------|
@@ -854,7 +854,7 @@ def _reachy_on_idle(self):
 |-------|--------|------------|-------|
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
 | Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
-| Phase 14 | ✅ Complete | 90% | Emotion keyword detection with 280+ keywords, 35 categories (v0.7.4) |
+| Phase 14 | ✅ Complete | 90% | Emotion keyword detection with 280+ keywords, 35 categories (v0.8.0) |
 | Phase 15 | 🟡 Partial | 80% | 100Hz control loop + JSON animation system + pose change detection + state cache implemented |
 | Phase 16 | ✅ Complete | 100% | JSON-driven animation with antenna movements |
 | Phase 17 | ❌ Not done | 10% | Camera implemented, missing face detection |
