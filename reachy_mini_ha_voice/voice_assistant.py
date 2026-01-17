@@ -164,6 +164,14 @@ class VoiceAssistantService:
 
                     _LOGGER.info("Reachy Mini media system initialized")
 
+                    # Enable automatic body yaw to prevent head-body collision
+                    # When head turns beyond safe limits, body will follow automatically
+                    try:
+                        self.reachy_mini.set_automatic_body_yaw(True)
+                        _LOGGER.info("Automatic body yaw enabled for collision prevention")
+                    except Exception as e:
+                        _LOGGER.warning("Failed to enable automatic body yaw: %s", e)
+
                     # Optimize microphone settings for voice recognition
                     self._optimize_microphone_settings()
                 else:
