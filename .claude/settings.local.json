@@ -32,7 +32,9 @@
       "Bash(cd:*)",
       "Bash(ls:*)",
       "Bash(find:*)",
-      "mcp__acp__Bash"
+      "mcp__acp__Bash",
+      "Skill(commit-commands:commit)",
+      "Skill(commit-commands:commit:*)"
     ],
     "deny": [],
     "ask": []

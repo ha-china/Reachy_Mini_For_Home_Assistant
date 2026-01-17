@@ -429,9 +429,9 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 
 ## 🚀 Voice Assistant Enhancement Features Implementation Status
 
-### Phase 14 - Emotion Action Feedback System (Partial) 🟡
+### Phase 14 - Emotion Action Feedback System (Enhanced) ✅
 
-**Implementation Status**: Basic infrastructure ready, supports manual trigger, uses voice-driven natural micro-movements during conversation
+**Implementation Status**: Full keyword-based emotion detection implemented with 280+ Chinese/English keywords mapped to 35 emotion categories
 
 **Implemented Features**:
 - ✅ Phase 8 Emotion Selector entity (`emotion`)
@@ -440,21 +440,51 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 - ✅ Integration with HuggingFace action library (`pollen-robotics/reachy-mini-emotions-library`)
 - ✅ SpeechSway system for natural head micro-movements during conversation (non-blocking)
 - ✅ Tap detection disabled during emotion playback (polls daemon API for completion)
+- ✅ **NEW (v0.7.4)**: Comprehensive emotion keyword detection from conversation text
+- ✅ **NEW (v0.7.4)**: 280+ Chinese and English keywords mapped to 35 emotion categories
+- ✅ **NEW (v0.7.4)**: Auto-trigger expressions based on text patterns in LLM responses
+
+**Emotion Keyword Categories (v0.7.4)**:
+
+| Expression ID | Category | Chinese Keywords | English Keywords |
+|---------------|----------|------------------|------------------|
+| `cheerful1` | Happy | 太棒了、开心、高兴 | great, awesome, happy |
+| `laughing1` | Laughing | 哈哈、笑死、好笑 | haha, lol, funny |
+| `enthusiastic1` | Excited | 兴奋、激动、耶 | excited, yay, cool |
+| `amazed1` | Amazed | 神奇、厉害、牛 | amazing, incredible |
+| `surprised1` | Surprised | 哇、天啊、真的吗 | wow, omg, really |
+| `loving1` | Love | 爱、喜欢、可爱 | love, cute, adore |
+| `grateful1` | Grateful | 谢谢、感谢 | thanks, appreciate |
+| `welcoming1` | Welcome | 欢迎、你好 | hello, welcome |
+| `helpful1` | Helpful | 当然、好的、没问题 | sure, of course |
+| `curious1` | Curious | 好奇、有趣 | curious, interesting |
+| `thoughtful1` | Thinking | 嗯、让我想想 | hmm, let me think |
+| `sad1` | Sad | 难过、伤心、可惜 | sad, unfortunately |
+| `oops1` | Oops | 抱歉、糟糕、哎呀 | sorry, oops |
+| `confused1` | Confused | 困惑、搞不懂 | confused, puzzled |
+| `fear1` | Fear | 害怕、可怕 | afraid, scared |
+| `rage1` | Angry | 生气、愤怒 | angry, mad |
+| `yes1` | Yes | 是的、对、没错 | yes, correct |
+| `no1` | No | 不是、不行 | no, wrong |
+| ... | ... | ... | ... |
 
 **Design Decisions**:
 - 🎯 No auto-play of full emotion actions during conversation to avoid blocking
 - 🎯 Use voice-driven head sway (SpeechSway) for natural motion feedback
 - 🎯 Emotion actions retained as manual trigger feature via ESPHome entity
 - 🎯 Tap detection waits for actual move completion via `/api/move/running` polling
+- 🎯 **NEW**: Keyword detection is case-insensitive and configurable via JSON
 
-**Not Implemented**:
-- ❌ Auto-trigger emotion actions based on voice assistant response (decided not to implement to avoid blocking)
-- ❌ Intent recognition and emotion matching
+**Partially Implemented**:
+- 🟡 Intent recognition and emotion matching (basic keyword matching implemented)
 - ❌ Dance action library integration
 - ❌ Context awareness (e.g., weather query - sunny plays happy, rainy plays sad)
 
 **Code Locations**:
+- `animations/emotion_keywords.json` - **NEW**: Emotion keyword mapping configuration (280+ keywords)
 - `entity_registry.py:633-658` - Emotion Selector entity
+- `satellite.py:_load_emotion_keywords()` - Load emotion keywords from JSON
+- `satellite.py:_detect_and_play_emotion()` - Auto-detect emotions from text
 - `satellite.py:_play_emotion()` - Emotion playback with move UUID tracking
 - `satellite.py:_wait_for_move_completion()` - Polls daemon API for move completion
 - `motion.py:132-156` - Conversation start motion control (uses SpeechSway)
@@ -823,8 +853,8 @@ def _reachy_on_idle(self):
 | Phase | Status | Completion | Notes |
 |-------|--------|------------|-------|
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
-| Phase 13 | 🟡 Partial | 30% | API infrastructure ready, missing auto-trigger |
-| Phase 14 | ❌ Not done | 20% | Only turn toward at wakeup implemented |
+| Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
+| Phase 14 | ✅ Complete | 90% | Emotion keyword detection with 280+ keywords, 35 categories (v0.7.4) |
 | Phase 15 | 🟡 Partial | 80% | 100Hz control loop + JSON animation system + pose change detection + state cache implemented |
 | Phase 16 | ✅ Complete | 100% | JSON-driven animation with antenna movements |
 | Phase 17 | ❌ Not done | 10% | Camera implemented, missing face detection |
@@ -832,7 +862,7 @@ def _reachy_on_idle(self):
 | Phase 19 | ❌ Not done | 10% | IMU data exposed, missing trigger logic |
 | Phase 20 | ❌ Not done | 0% | Not implemented |
 
-**Overall Completion**: **Phase 1-12: 100%** | **Phase 13-20: ~35%**
+**Overall Completion**: **Phase 1-14: 95%** | **Phase 15-20: ~40%**
 
 
 ---
