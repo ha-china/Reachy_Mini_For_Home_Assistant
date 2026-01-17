@@ -58,6 +58,10 @@ TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 # Antenna freeze parameters (listening mode)
 ANTENNA_BLEND_DURATION = 0.5  # Seconds to blend back from frozen state
 
+# Animation suppression when face detected
+FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
+ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
+
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0   # Minimum seconds between look-arounds
 IDLE_LOOK_AROUND_MAX_INTERVAL = 20.0  # Maximum seconds between look-arounds
@@ -117,7 +121,6 @@ class MovementState:
     target_z: float = 0.0
     target_antenna_left: float = 0.0
     target_antenna_right: float = 0.0
-    target_body_yaw: float = 0.0
 
     # Timing
     last_activity_time: float = 0.0
@@ -133,6 +136,11 @@ class MovementState:
     # Idle look-around behavior
     next_look_around_time: float = 0.0
     look_around_in_progress: bool = False
+
+    # Face tracking animation suppression
+    face_detected: bool = False
+    face_lost_time: float = 0.0
+    animation_blend: float = 1.0  # 0=suppressed (face tracking), 1=full animation
 
 
 @dataclass
@@ -196,8 +204,10 @@ class MovementManager:
         self._action_start_pose: Dict[str, float] = {}
 
         # Pose change detection threshold
+        # Note: 0.005 rad caused antenna jitter near sine wave peaks/valleys
+        # where rate of change approaches zero. Lower threshold ensures smoother animation.
         self._last_sent_pose: Optional[Dict[str, float]] = None
-        self._pose_change_threshold = 0.005
+        self._pose_change_threshold = 0.001
         
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -314,19 +324,19 @@ class MovementManager:
         roll: Optional[float] = None,
         pitch: Optional[float] = None,
         yaw: Optional[float] = None,
-        body_yaw: Optional[float] = None,
         antenna_left: Optional[float] = None,
         antenna_right: Optional[float] = None,
     ) -> None:
         """Thread-safe: Set target pose components.
-        
+
         Only provided values will be updated. Values are in meters for position
         and radians for angles.
-        
+
+        Note: body_yaw is handled automatically by SDK (set_automatic_body_yaw=True).
+
         Args:
             x, y, z: Head position in meters
             roll, pitch, yaw: Head orientation in radians
-            body_yaw: Body yaw in radians
             antenna_left, antenna_right: Antenna angles in radians
         """
         self._command_queue.put(("set_pose", {
@@ -336,7 +346,6 @@ class MovementManager:
             "roll": roll,
             "pitch": pitch,
             "yaw": yaw,
-            "body_yaw": body_yaw,
             "antenna_left": antenna_left,
             "antenna_right": antenna_right,
         }))
@@ -407,8 +416,7 @@ class MovementManager:
                 self.state.target_pitch = payload["pitch"]
             if payload.get("yaw") is not None:
                 self.state.target_yaw = payload["yaw"]
-            if payload.get("body_yaw") is not None:
-                self.state.target_body_yaw = payload["body_yaw"]
+            # Note: body_yaw is handled automatically by SDK (set_automatic_body_yaw)
             if payload.get("antenna_left") is not None:
                 self.state.target_antenna_left = payload["antenna_left"]
             if payload.get("antenna_right") is not None:
@@ -557,23 +565,65 @@ class MovementManager:
                 self.state.antenna_frozen = False
                 logger.debug("Antennas unfrozen")
 
+    def _update_animation_blend(self) -> None:
+        """Update animation blend factor when face is lost.
+
+        When face is detected, animation_blend is set to 0 immediately.
+        When face is lost, we smoothly blend animation back to 1.0.
+        """
+        if self.state.face_detected:
+            # Face is detected, keep animation suppressed
+            return
+
+        if self.state.animation_blend >= 1.0:
+            # Already fully blended, nothing to do
+            return
+
+        # Calculate blend progress since face was lost
+        elapsed = self._now() - self.state.face_lost_time
+        if elapsed > 0:
+            self.state.animation_blend = min(1.0, elapsed / ANIMATION_BLEND_DURATION)
+
+            if self.state.animation_blend >= 1.0:
+                logger.debug("Animation fully restored")
+
     def _update_face_tracking(self) -> None:
-        """Get face tracking offsets from camera server with smoothing."""
+        """Get face tracking offsets from camera server with smoothing.
+
+        Also updates face detection state for animation suppression.
+        """
         if self._camera_server is not None:
             try:
                 raw_offsets = self._camera_server.get_face_tracking_offsets()
-                
+
                 # Apply exponential moving average smoothing
                 alpha = self._face_smoothing_factor
                 for i in range(6):
                     self._smoothed_face_offsets[i] = (
-                        alpha * raw_offsets[i] + 
+                        alpha * raw_offsets[i] +
                         (1 - alpha) * self._smoothed_face_offsets[i]
                     )
-                
+
                 with self._face_tracking_lock:
                     self._face_tracking_offsets = tuple(self._smoothed_face_offsets)
-                    
+
+                # Check if face is detected (any offset is non-zero)
+                offset_magnitude = sum(abs(o) for o in self._smoothed_face_offsets)
+                face_now_detected = offset_magnitude > FACE_DETECTED_THRESHOLD
+
+                # Update face detection state
+                if face_now_detected:
+                    if not self.state.face_detected:
+                        logger.debug("Face detected - suppressing breathing animation")
+                    self.state.face_detected = True
+                    self.state.animation_blend = 0.0  # Immediately suppress animation
+                else:
+                    if self.state.face_detected:
+                        # Face just lost - start blend timer
+                        self.state.face_lost_time = self._now()
+                        logger.debug("Face lost - will restore animation after blend")
+                    self.state.face_detected = False
+
             except Exception as e:
                 logger.debug("Error getting face tracking offsets: %s", e)
 
@@ -646,11 +696,13 @@ class MovementManager:
                         target_yaw, target_pitch)
 
 
-    def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
+    def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float]]:
         """Compose final pose from all sources using SDK's compose_world_offset.
-        
+
+        Note: body_yaw is handled automatically by SDK (set_automatic_body_yaw=True).
+
         Returns:
-            Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
+            Tuple of (head_pose_4x4, (antenna_right, antenna_left))
         """
         # Build primary head pose from target state
         if SDK_UTILS_AVAILABLE:
@@ -681,12 +733,22 @@ class MovementManager:
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
 
-        secondary_x = self.state.anim_x + self.state.sway_x + face_offsets[0]
-        secondary_y = self.state.anim_y + self.state.sway_y + face_offsets[1]
-        secondary_z = self.state.anim_z + self.state.sway_z + face_offsets[2]
-        secondary_roll = self.state.anim_roll + self.state.sway_roll + face_offsets[3]
-        secondary_pitch = self.state.anim_pitch + self.state.sway_pitch + face_offsets[4]
-        secondary_yaw = self.state.anim_yaw + self.state.sway_yaw + face_offsets[5]
+        # Apply animation blend factor (0 when face detected, 1 when no face)
+        # This suppresses breathing animation during face tracking
+        anim_blend = self.state.animation_blend
+        anim_x = self.state.anim_x * anim_blend
+        anim_y = self.state.anim_y * anim_blend
+        anim_z = self.state.anim_z * anim_blend
+        anim_roll = self.state.anim_roll * anim_blend
+        anim_pitch = self.state.anim_pitch * anim_blend
+        anim_yaw = self.state.anim_yaw * anim_blend
+
+        secondary_x = anim_x + self.state.sway_x + face_offsets[0]
+        secondary_y = anim_y + self.state.sway_y + face_offsets[1]
+        secondary_z = anim_z + self.state.sway_z + face_offsets[2]
+        secondary_roll = anim_roll + self.state.sway_roll + face_offsets[3]
+        secondary_pitch = anim_pitch + self.state.sway_pitch + face_offsets[4]
+        secondary_yaw = anim_yaw + self.state.sway_yaw + face_offsets[5]
 
         if SDK_UTILS_AVAILABLE:
             secondary_head = create_head_pose(
@@ -716,10 +778,12 @@ class MovementManager:
             final_head[:3, 3] = primary_head[:3, 3] + secondary_head[:3, 3]
 
         # Antenna pose with freeze blending
-        target_antenna_left = (self.state.target_antenna_left +
-                               self.state.anim_antenna_left)
-        target_antenna_right = (self.state.target_antenna_right +
-                                self.state.anim_antenna_right)
+        # Apply animation blend to antenna as well (suppress when face detected)
+        anim_antenna_left = self.state.anim_antenna_left * anim_blend
+        anim_antenna_right = self.state.anim_antenna_right * anim_blend
+
+        target_antenna_left = self.state.target_antenna_left + anim_antenna_left
+        target_antenna_right = self.state.target_antenna_right + anim_antenna_right
 
         # Apply antenna freeze blending (listening mode)
         blend = self.state.antenna_blend
@@ -733,14 +797,21 @@ class MovementManager:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
 
-        return final_head, (antenna_right, antenna_left), self.state.target_body_yaw
+        return final_head, (antenna_right, antenna_left)
 
     # =========================================================================
     # Internal: Robot control (runs in control loop)
     # =========================================================================
 
-    def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
-        """Send control command to robot with error throttling and connection health tracking."""
+    def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float]) -> None:
+        """Send control command to robot with error throttling and connection health tracking.
+
+        Note: body_yaw is not passed - SDK handles it automatically (set_automatic_body_yaw=True).
+
+        Args:
+            head_pose: 4x4 head pose matrix
+            antennas: Tuple of (right_angle, left_angle) in radians
+        """
         if self.robot is None:
             return
 
@@ -748,7 +819,7 @@ class MovementManager:
         # Extract euler angles for comparison
         rotation = R.from_matrix(head_pose[:3, :3])
         euler = rotation.as_euler('xyz')  # [roll, pitch, yaw]
-        
+
         current_pose = {
             "x": head_pose[0, 3],
             "y": head_pose[1, 3],
@@ -758,9 +829,8 @@ class MovementManager:
             "yaw": euler[2],
             "antenna_right": antennas[0],
             "antenna_left": antennas[1],
-            "body_yaw": body_yaw,
         }
-        
+
         if self._last_sent_pose is not None:
             max_diff = max(
                 abs(current_pose[k] - self._last_sent_pose.get(k, 0.0))
@@ -784,10 +854,10 @@ class MovementManager:
         try:
             # Send to robot (single control point!)
             # head_pose is already a 4x4 matrix from _compose_final_pose
+            # Note: body_yaw is not passed - SDK handles it automatically
             self.robot.set_target(
                 head=head_pose,
                 antennas=list(antennas),
-                body_yaw=body_yaw,
             )
 
             # Command succeeded - update connection health and cache
@@ -868,14 +938,17 @@ class MovementManager:
                 # 5. Update face tracking offsets from camera server
                 self._update_face_tracking()
 
-                # 6. Update idle look-around behavior
+                # 6. Update animation blend (suppress when face detected)
+                self._update_animation_blend()
+
+                # 7. Update idle look-around behavior
                 self._update_idle_look_around()
 
-                # 7. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
-                head_pose, antennas, body_yaw = self._compose_final_pose()
+                # 8. Compose final pose (returns head_pose matrix, antennas tuple)
+                head_pose, antennas = self._compose_final_pose()
 
-                # 8. Send to robot (single control point!)
-                self._issue_control_command(head_pose, antennas, body_yaw)
+                # 9. Send to robot (body_yaw handled automatically by SDK)
+                self._issue_control_command(head_pose, antennas)
 
             except Exception as e:
                 self._log_error_throttled(f"Control loop error: {e}")

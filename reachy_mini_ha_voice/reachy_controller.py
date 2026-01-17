@@ -500,9 +500,18 @@ class ReachyController:
             return 0.0
 
     def set_body_yaw(self, yaw_deg: float) -> None:
-        """Set body yaw angle in degrees via MovementManager."""
-        if not self._set_pose_via_manager(body_yaw=math.radians(yaw_deg)):
+        """Set body yaw angle in degrees.
+
+        Note: This directly calls SDK's set_target_body_yaw since automatic body yaw
+        is enabled. Manual control will temporarily override automatic mode.
+        """
+        if self.reachy_mini is None:
             self._disabled_pose_setter('body_yaw')
+            return
+        try:
+            self.reachy_mini.set_target_body_yaw(math.radians(yaw_deg))
+        except Exception as e:
+            logger.error(f"Error setting body yaw: {e}")
 
     def get_antenna_left(self) -> float:
         """Get left antenna angle in degrees."""

@@ -6,6 +6,7 @@
       "z_frequency_hz": 0.1,
       "antenna_amplitude_rad": 0.262,
       "antenna_move_name": "wiggle",
+      "antenna_frequency_hz": 0.15,
       "frequency_hz": 0.5
     },
     "listening": {

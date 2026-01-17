@@ -48,6 +48,7 @@ class AnimationParams:
     # Antenna
     antenna_amplitude_rad: float = 0.0
     antenna_move_name: str = "both"
+    antenna_frequency_hz: float = 0.0  # If not specified, uses main frequency_hz
     # Per-axis frequencies (Hz) - if not specified, uses main frequency_hz
     frequency_hz: float = 0.5
     pitch_frequency_hz: float = 0.0
@@ -120,6 +121,7 @@ class AnimationPlayer:
                     yaw_offset_rad=params.get("yaw_offset_rad", 0.0),
                     antenna_amplitude_rad=params.get("antenna_amplitude_rad", 0.0),
                     antenna_move_name=params.get("antenna_move_name", "both"),
+                    antenna_frequency_hz=params.get("antenna_frequency_hz", 0.0),
                     frequency_hz=params.get("frequency_hz", 0.5),
                     pitch_frequency_hz=params.get("pitch_frequency_hz", 0.0),
                     yaw_frequency_hz=params.get("yaw_frequency_hz", 0.0),
@@ -243,8 +245,9 @@ class AnimationPlayer:
                  params.z_amplitude_m *
                  math.sin(2 * math.pi * z_freq * elapsed + self._phase_z))
 
-            # Antenna movement
-            antenna_phase = 2 * math.pi * base_freq * elapsed
+            # Antenna movement with its own frequency
+            antenna_freq = params.antenna_frequency_hz if params.antenna_frequency_hz > 0 else base_freq
+            antenna_phase = 2 * math.pi * antenna_freq * elapsed
             if params.antenna_move_name == "both":
                 left = right = params.antenna_amplitude_rad * math.sin(antenna_phase)
             elif params.antenna_move_name == "wiggle":
