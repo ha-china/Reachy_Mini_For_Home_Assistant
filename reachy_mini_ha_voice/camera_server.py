@@ -109,11 +109,13 @@ class MJPEGCameraServer:
         self._last_face_detected_state = False  # Track previous state for change detection
 
         # Face tracking timing (smooth interpolation when face lost)
+        # Reference project values: face_lost_delay=2.0, interpolation_duration=1.0
+        # We use similar but slightly faster for more responsive feel
         self._last_face_detected_time: Optional[float] = None
         self._interpolation_start_time: Optional[float] = None
         self._interpolation_start_pose: Optional[np.ndarray] = None
-        self._face_lost_delay = 1.0  # Reduced from 2.0s to 1.0s for faster response
-        self._interpolation_duration = 0.8  # Reduced from 1.0s to 0.8s for faster return
+        self._face_lost_delay = 2.0  # Match reference: wait 2s before interpolating back
+        self._interpolation_duration = 1.0  # Match reference: 1s to return to neutral
 
         # Offset scaling (same as conversation_app)
         self._offset_scale = 0.6

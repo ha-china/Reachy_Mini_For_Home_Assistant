@@ -212,9 +212,12 @@ class MovementManager:
         # Camera server reference for face tracking
         self._camera_server = None
 
-        # Face tracking smoothing (exponential moving average)
+        # Face tracking smoothing - DISABLED to match reference project
+        # Reference project applies face tracking offsets directly without smoothing
+        # Smoothing causes "lag" and "trailing" that looks unnatural
+        # Only smooth interpolation when face is lost (handled in camera_server.py)
         self._smoothed_face_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self._face_smoothing_factor = 0.3
+        # self._face_smoothing_factor = 0.3  # DISABLED - direct application instead
 
         # Emotion move playback state
         self._emotion_move: Optional[EmotionMove] = None
@@ -647,27 +650,24 @@ class MovementManager:
                 logger.debug("Animation fully restored")
 
     def _update_face_tracking(self) -> None:
-        """Get face tracking offsets from camera server with smoothing.
+        """Get face tracking offsets from camera server.
+
+        Reference project applies face tracking offsets directly without
+        smoothing. Smooth interpolation when face is lost is handled by
+        the camera_server.py's _process_face_lost_interpolation().
 
         Also updates face detection state for animation suppression.
         """
         if self._camera_server is not None:
             try:
+                # Get offsets directly - no EMA smoothing (matches reference project)
                 raw_offsets = self._camera_server.get_face_tracking_offsets()
 
-                # Apply exponential moving average smoothing
-                alpha = self._face_smoothing_factor
-                for i in range(6):
-                    self._smoothed_face_offsets[i] = (
-                        alpha * raw_offsets[i] +
-                        (1 - alpha) * self._smoothed_face_offsets[i]
-                    )
-
                 with self._face_tracking_lock:
-                    self._face_tracking_offsets = tuple(self._smoothed_face_offsets)
+                    self._face_tracking_offsets = raw_offsets
 
                 # Check if face is detected (any offset is non-zero)
-                offset_magnitude = sum(abs(o) for o in self._smoothed_face_offsets)
+                offset_magnitude = sum(abs(o) for o in raw_offsets)
                 face_now_detected = offset_magnitude > FACE_DETECTED_THRESHOLD
 
                 # Update face detection state
