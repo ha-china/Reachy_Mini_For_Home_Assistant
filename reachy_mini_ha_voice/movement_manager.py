@@ -30,6 +30,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from .animation_player import AnimationPlayer
+from .emotion_moves import EmotionMove, is_emotion_available
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -215,6 +216,11 @@ class MovementManager:
         self._smoothed_face_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_smoothing_factor = 0.3
 
+        # Emotion move playback state
+        self._emotion_move: Optional[EmotionMove] = None
+        self._emotion_start_time: float = 0.0
+        self._emotion_move_lock = threading.Lock()
+
         logger.info("MovementManager initialized with AnimationPlayer")
 
     # =========================================================================
@@ -246,16 +252,35 @@ class MovementManager:
     def pause_for_emotion(self) -> None:
         """Thread-safe: Pause control loop while emotion animation is playing.
 
-        This prevents MovementManager from sending commands that conflict
-        with the SDK's recorded move playback.
+        DEPRECATED: Use queue_emotion_move() instead, which integrates emotion
+        playback into the control loop without needing to pause.
         """
         self._emotion_playing_event.set()
         logger.debug("MovementManager paused for emotion animation")
 
     def resume_after_emotion(self) -> None:
-        """Thread-safe: Resume control loop after emotion animation completes."""
+        """Thread-safe: Resume control loop after emotion animation completes.
+
+        DEPRECATED: Use queue_emotion_move() instead.
+        """
         self._emotion_playing_event.clear()
         logger.debug("MovementManager resumed after emotion animation")
+
+    def queue_emotion_move(self, emotion_name: str) -> bool:
+        """Thread-safe: Queue an emotion move to be played by the control loop.
+
+        This method uses the SDK's RecordedMoves.evaluate(t) API to sample
+        emotion poses in the control loop, which avoids conflicts with
+        set_target() calls that would cause "a move is currently running" warnings.
+
+        Args:
+            emotion_name: Name of the emotion (e.g., "happy1", "sad1")
+
+        Returns:
+            True if emotion was queued successfully, False otherwise
+        """
+        self._command_queue.put(("emotion_move", emotion_name))
+        return True
 
     def queue_action(self, action: PendingAction) -> None:
         """Thread-safe: Queue a motion action."""
@@ -441,6 +466,31 @@ class MovementManager:
             self.state.sway_roll = roll
             self.state.sway_pitch = pitch
             self.state.sway_yaw = yaw
+
+        elif cmd == "emotion_move":
+            # Start playing an emotion move
+            self._start_emotion_move(payload)
+
+    def _start_emotion_move(self, emotion_name: str) -> None:
+        """Start playing an emotion move.
+
+        Creates an EmotionMove and sets it as the active emotion, which will
+        be sampled in the control loop via _update_emotion_move().
+        """
+        if not is_emotion_available():
+            logger.warning("Cannot play emotion '%s': emotion library not available",
+                           emotion_name)
+            return
+
+        try:
+            emotion_move = EmotionMove(emotion_name)
+            with self._emotion_move_lock:
+                self._emotion_move = emotion_move
+                self._emotion_start_time = self._now()
+            logger.info("Started emotion move: %s (duration=%.2fs)",
+                        emotion_name, emotion_move.duration)
+        except Exception as e:
+            logger.error("Failed to start emotion '%s': %s", emotion_name, e)
 
     def _start_action(self, action: PendingAction) -> None:
         """Start a new motion action."""
@@ -704,6 +754,53 @@ class MovementManager:
             logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°",
                          target_yaw, target_pitch)
 
+    def _update_emotion_move(self) -> Optional[Tuple[np.ndarray, Tuple[float, float], float]]:
+        """Update emotion move playback and return pose if active.
+
+        When an emotion move is playing, this method samples the pose from
+        the emotion's evaluate(t) method and returns it. The control loop
+        should use this pose directly instead of composing from other sources.
+
+        Returns:
+            Tuple of (head_pose, (antenna_right, antenna_left), body_yaw) if
+            emotion is playing, None otherwise.
+        """
+        with self._emotion_move_lock:
+            if self._emotion_move is None:
+                return None
+
+            # Calculate time since emotion started
+            elapsed = self._now() - self._emotion_start_time
+
+            # Check if emotion is complete
+            if elapsed >= self._emotion_move.duration:
+                emotion_name = self._emotion_move.emotion_name
+                self._emotion_move = None
+                logger.info("Emotion move complete: %s", emotion_name)
+                return None
+
+            # Sample pose from emotion move
+            try:
+                head_pose, antennas, body_yaw = self._emotion_move.evaluate(elapsed)
+
+                # Convert antennas to tuple (right, left) format
+                if isinstance(antennas, np.ndarray):
+                    antenna_tuple = (float(antennas[0]), float(antennas[1]))
+                else:
+                    antenna_tuple = (float(antennas[0]), float(antennas[1]))
+
+                return (head_pose, antenna_tuple, body_yaw)
+
+            except Exception as e:
+                logger.error("Error sampling emotion pose: %s", e)
+                self._emotion_move = None
+                return None
+
+    def is_emotion_playing(self) -> bool:
+        """Check if an emotion move is currently playing."""
+        with self._emotion_move_lock:
+            return self._emotion_move is not None
+
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
 
@@ -937,29 +1034,38 @@ class MovementManager:
                 # 1. Process commands from queue
                 self._poll_commands()
 
-                # 2. Update action interpolation
-                self._update_action(dt)
+                # 2. Check if emotion move is playing - takes priority over other motions
+                emotion_pose = self._update_emotion_move()
+                if emotion_pose is not None:
+                    # Emotion move is active - use its pose directly
+                    head_pose, antennas, body_yaw = emotion_pose
+                    self._issue_control_command(head_pose, antennas, body_yaw)
+                    # Skip other updates when emotion is playing
+                else:
+                    # Normal motion updates
+                    # 3. Update action interpolation
+                    self._update_action(dt)
 
-                # 3. Update animation offsets (JSON-driven)
-                self._update_animation(dt)
+                    # 4. Update animation offsets (JSON-driven)
+                    self._update_animation(dt)
 
-                # 4. Update antenna blend (listening mode freeze/unfreeze)
-                self._update_antenna_blend(dt)
+                    # 5. Update antenna blend (listening mode freeze/unfreeze)
+                    self._update_antenna_blend(dt)
 
-                # 5. Update face tracking offsets from camera server
-                self._update_face_tracking()
+                    # 6. Update face tracking offsets from camera server
+                    self._update_face_tracking()
 
-                # 6. Update animation blend (suppress when face detected)
-                self._update_animation_blend()
+                    # 7. Update animation blend (suppress when face detected)
+                    self._update_animation_blend()
 
-                # 7. Update idle look-around behavior
-                self._update_idle_look_around()
+                    # 8. Update idle look-around behavior
+                    self._update_idle_look_around()
 
-                # 8. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
-                head_pose, antennas, body_yaw = self._compose_final_pose()
+                    # 9. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
+                    head_pose, antennas, body_yaw = self._compose_final_pose()
 
-                # 9. Send to robot with body_yaw for automatic adjustment
-                self._issue_control_command(head_pose, antennas, body_yaw)
+                    # 10. Send to robot with body_yaw for automatic adjustment
+                    self._issue_control_command(head_pose, antennas, body_yaw)
 
             except Exception as e:
                 self._log_error_throttled(f"Control loop error: {e}")

@@ -824,62 +824,23 @@ class VoiceSatelliteProtocol(APIServer):
     def _play_emotion(self, emotion_name: str) -> None:
         """Play an emotion/expression from the emotions library.
 
+        Uses the MovementManager's queue_emotion_move() method which samples
+        poses via RecordedMoves.evaluate(t) in the control loop. This avoids
+        "a move is currently running" warnings from the SDK daemon.
+
         Args:
             emotion_name: Name of the emotion (e.g., "happy1", "sad1", etc.)
         """
         try:
-            import requests
-            import threading
-
-            # Get WLAN IP from daemon status
-            wlan_ip = "localhost"
-            if self.state.reachy_mini is not None:
-                try:
-                    status = self.state.reachy_mini.client.get_status(wait=False)
-                    wlan_ip = status.get('wlan_ip', 'localhost')
-                except Exception:
-                    wlan_ip = "localhost"
-
-            # Pause MovementManager to prevent command conflicts
-            movement_manager = None
+            # Use MovementManager to play emotion (non-blocking, integrated with control loop)
             if self.state.motion and self.state.motion.movement_manager:
                 movement_manager = self.state.motion.movement_manager
-                movement_manager.pause_for_emotion()
-
-            # Call the emotion playback API
-            # Dataset: pollen-robotics/reachy-mini-emotions-library
-            base_url = f"http://{wlan_ip}:8000/api/move/play/recorded-move-dataset"
-            dataset = "pollen-robotics/reachy-mini-emotions-library"
-            url = f"{base_url}/{dataset}/{emotion_name}"
-
-            response = requests.post(url, timeout=5)
-            if response.status_code == 200:
-                result = response.json()
-                move_uuid = result.get('uuid')
-                duration = result.get('duration', 2.0)
-                _LOGGER.info(f"Playing emotion: {emotion_name} (uuid={move_uuid}, duration={duration}s)")
-
-                # Schedule resume after animation completes
-                if movement_manager:
-                    def resume_after_delay():
-                        import time
-                        time.sleep(duration + 0.2)  # Add small buffer
-                        movement_manager.resume_after_emotion()
-
-                    resume_thread = threading.Thread(
-                        target=resume_after_delay,
-                        daemon=True,
-                        name="EmotionResumeTimer"
-                    )
-                    resume_thread.start()
+                if movement_manager.queue_emotion_move(emotion_name):
+                    _LOGGER.info(f"Queued emotion move: {emotion_name}")
+                else:
+                    _LOGGER.warning(f"Failed to queue emotion: {emotion_name}")
             else:
-                _LOGGER.warning(f"Failed to play emotion {emotion_name}: HTTP {response.status_code}")
-                # Resume immediately on failure
-                if movement_manager:
-                    movement_manager.resume_after_emotion()
+                _LOGGER.warning("Cannot play emotion: no movement manager available")
 
         except Exception as e:
             _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
-            # Resume on error
-            if self.state.motion and self.state.motion.movement_manager:
-                self.state.motion.movement_manager.resume_after_emotion()
