@@ -546,10 +546,11 @@ automation:
 
 **Goal**: Implement natural face tracking so robot looks at speaker during conversation.
 
-**Design Decision**: 
+**Design Decision**:
 - ✅ DOA (Direction of Arrival): Used once at wakeup to turn toward sound source
 - ✅ YOLO face detection: Takes over after initial turn for continuous tracking
-- Reason: DOA provides quick initial orientation, face tracking provides accurate continuous tracking
+- ✅ Body follows head rotation: Body yaw automatically syncs with head yaw for natural tracking
+- Reason: DOA provides quick initial orientation, face tracking provides accurate continuous tracking, body following enables natural whole-body tracking similar to human behavior
 
 **Wakeup Turn-to-Sound Flow**:
 1. Wake word detected → Read DOA angle once (avoid daemon pressure)
@@ -566,7 +567,9 @@ automation:
 | look_at_image() | Calculate target pose from face position | `camera_server.py` | ✅ Implemented |
 | Smooth return to neutral | Smooth return within 1 second after face lost | `camera_server.py` | ✅ Implemented |
 | face_tracking_offsets | As secondary pose overlay to motion control | `movement_manager.py` | ✅ Implemented |
+| Body follows head rotation | Body yaw syncs with head yaw extracted from final pose matrix | `movement_manager.py:_compose_final_pose()` | ✅ Implemented (v0.8.3) |
 | DOA entities | `doa_angle` and `speech_detected` exposed to Home Assistant | `entity_registry.py` | ✅ Implemented |
+| face_detected entity | Binary sensor for face detection state | `entity_registry.py` | ✅ Implemented |
 | Model download retry | 3 retries, 5 second interval | `head_tracker.py` | ✅ Implemented |
 | Conversation mode integration | Auto-switch tracking frequency on voice assistant state change | `satellite.py` | ✅ Implemented |
 
@@ -585,6 +588,7 @@ automation:
 - `camera_server.py:set_conversation_mode()` - Conversation mode switch API
 - `satellite.py:_set_conversation_mode()` - Voice assistant state integration
 - `movement_manager.py:set_face_tracking_offsets()` - Face tracking offset API
+- `movement_manager.py:_compose_final_pose()` - Body yaw follows head yaw (v0.8.3)
 
 **Technical Details**:
 ```python
@@ -596,7 +600,7 @@ class MJPEGCameraServer:
         self._fps_idle = 0.5 # Ultra-low power (>30s without face)
         self._low_power_threshold = 5.0   # 5s without face switches to low power
         self._idle_threshold = 30.0       # 30s without face switches to idle mode
-    
+
     def _should_run_ai_inference(self, current_time):
         # Conversation mode: Always high-frequency tracking
         if self._in_conversation:
@@ -610,10 +614,35 @@ class MJPEGCameraServer:
 # satellite.py - Voice assistant state integration
 def _reachy_on_listening(self):
     self._set_conversation_mode(True)  # Start conversation, high-frequency tracking
-    
+
 def _reachy_on_idle(self):
     self._set_conversation_mode(False)  # End conversation, adaptive tracking
+
+# movement_manager.py - Body follows head rotation (v0.8.3)
+# This enables natural body rotation when tracking faces, similar to how
+# the reference project's sweep_look tool synchronizes body_yaw with head_yaw.
+def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
+    # ... compose head pose from all motion sources ...
+
+    # Extract yaw from final head pose rotation matrix
+    # The rotation matrix uses xyz euler convention
+    final_rotation = R.from_matrix(final_head[:3, :3])
+    _, _, final_head_yaw = final_rotation.as_euler('xyz')
+
+    # Body follows head yaw directly
+    # SDK's automatic_body_yaw (inverse_kinematics_safe) only handles collision
+    # prevention by clamping relative angle to max 65°, not active following
+    body_yaw = final_head_yaw
+
+    return final_head, (antenna_right, antenna_left), body_yaw
 ```
+
+**Body Following Head Rotation (v0.8.3)**:
+- SDK's `automatic_body_yaw` is only **collision protection**, not active body following
+- The `inverse_kinematics_safe` function with `max_relative_yaw=65°` only prevents head-body collision
+- To enable natural body following, `body_yaw` must be explicitly set to match `head_yaw`
+- Body yaw is extracted from final head pose matrix using scipy's `R.from_matrix().as_euler('xyz')`
+- This matches the reference project's `sweep_look.py` behavior where `target_body_yaw = head_yaw`
 
 
 ### Phase 16 - Cartoon Style Motion Mode (Partial) 🟡
@@ -788,7 +817,7 @@ def _reachy_on_idle(self):
 #### High Priority
 - ~~**Phase 13** - Sendspin audio playback support~~ ✅ **Completed**
 - **Phase 14** - Auto emotion action feedback (needs voice assistant event association)
-- **Phase 15** - Continuous sound source tracking (only turn toward at wakeup)
+- ~~**Phase 15** - Continuous sound source tracking (only turn toward at wakeup)~~ ✅ **Completed (v0.8.3)** - Face tracking + body follows head
 
 #### Medium Priority
 - **Phase 16** - Cartoon style motion mode (needs dynamic interpolation switching)
@@ -855,14 +884,14 @@ def _reachy_on_idle(self):
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
 | Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
 | Phase 14 | ✅ Complete | 90% | Emotion keyword detection with 280+ keywords, 35 categories (v0.8.0) |
-| Phase 15 | 🟡 Partial | 80% | 100Hz control loop + JSON animation system + pose change detection + state cache implemented |
+| Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head rotation (v0.8.3) |
 | Phase 16 | ✅ Complete | 100% | JSON-driven animation with antenna movements |
 | Phase 17 | ❌ Not done | 10% | Camera implemented, missing face detection |
 | Phase 18 | 🟡 Partial | 40% | Mode switch implemented, missing teaching flow |
 | Phase 19 | ❌ Not done | 10% | IMU data exposed, missing trigger logic |
 | Phase 20 | ❌ Not done | 0% | Not implemented |
 
-**Overall Completion**: **Phase 1-14: 95%** | **Phase 15-20: ~40%**
+**Overall Completion**: **Phase 1-15: 97%** | **Phase 16-20: ~45%**
 
 
 ---
