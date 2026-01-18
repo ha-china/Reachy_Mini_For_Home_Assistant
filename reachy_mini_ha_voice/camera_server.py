@@ -103,7 +103,11 @@ class MJPEGCameraServer:
         self._gesture_frame_counter = 0
         self._gesture_detection_interval = 3  # Run gesture detection every N frames
         self._gesture_state_callback = None  # Callback to notify entity registry
-        
+
+        # Face detection state callback (similar to gesture)
+        self._face_state_callback = None  # Callback to notify entity registry
+        self._last_face_detected_state = False  # Track previous state for change detection
+
         # Face tracking timing (smooth interpolation when face lost)
         self._last_face_detected_time: Optional[float] = None
         self._interpolation_start_time: Optional[float] = None
@@ -274,7 +278,18 @@ class MJPEGCameraServer:
                                     self._current_fps = self._fps_low
                             
                             self._last_face_check_time = current_time
-                        
+
+                            # Check for face detection state change and notify callback
+                            # Use is_face_detected() which considers face_lost_delay
+                            current_face_state = self.is_face_detected()
+                            if current_face_state != self._last_face_detected_state:
+                                self._last_face_detected_state = current_face_state
+                                if self._face_state_callback:
+                                    try:
+                                        self._face_state_callback()
+                                    except Exception as e:
+                                        _LOGGER.debug("Face state callback error: %s", e)
+
                         # Handle smooth interpolation when face lost
                         self._process_face_lost_interpolation(current_time)
                         
@@ -628,6 +643,10 @@ class MJPEGCameraServer:
     def set_gesture_state_callback(self, callback) -> None:
         """Set callback to notify when gesture state changes."""
         self._gesture_state_callback = callback
+
+    def set_face_state_callback(self, callback) -> None:
+        """Set callback to notify when face detection state changes."""
+        self._face_state_callback = callback
 
     def _get_camera_frame(self) -> Optional[np.ndarray]:
         """Get a frame from Reachy Mini's camera."""
