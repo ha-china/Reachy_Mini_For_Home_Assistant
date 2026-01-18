@@ -39,6 +39,7 @@ env/
 .spec-workflow/
 .playwright-mcp/
 *~
+CLAUDE.md
 
 # Configuration
 config.json

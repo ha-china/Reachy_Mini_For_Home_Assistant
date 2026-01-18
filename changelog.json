@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.8.1",
+    "date": "2026-01-18",
+    "changes": [
+      "Fix: face_detected entity now pushes state updates to Home Assistant in real-time",
+      "Fix: Body yaw simplified to match reference project - SDK automatic_body_yaw handles collision prevention",
+      "Fix: Idle animation now starts immediately on app launch",
+      "Fix: Smooth antenna animation - removed pose change threshold for continuous motion"
+    ]
+  },
+  {
     "version": "0.8.0",
     "date": "2026-01-17",
     "changes": [
