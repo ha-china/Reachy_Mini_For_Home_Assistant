@@ -661,11 +661,15 @@ class VoiceAssistantService:
         read audio. When the robot is disconnected (e.g., sleep mode),
         the loop waits for reconnection without generating errors.
         """
+        consecutive_audio_errors = 0
+        max_consecutive_errors = 3  # Pause after 3 consecutive errors
+
         while self._running:
             try:
                 # Check if robot services are paused (sleep mode / disconnected)
                 if self._robot_services_paused.is_set():
                     # Wait for reconnection, checking periodically
+                    consecutive_audio_errors = 0  # Reset on pause
                     time.sleep(0.5)
                     continue
 
@@ -680,19 +684,38 @@ class VoiceAssistantService:
                     time.sleep(0.01)
                     continue
 
+                # Audio successfully obtained, reset error counter
+                consecutive_audio_errors = 0
                 self._process_audio_chunk(ctx, audio_chunk)
 
             except Exception as e:
-                # Check if this is a connection error
                 error_msg = str(e)
+
+                # Check for audio processing errors that indicate sleep mode
+                if "can only convert" in error_msg or "scalar" in error_msg:
+                    consecutive_audio_errors += 1
+                    if consecutive_audio_errors >= max_consecutive_errors:
+                        if not self._robot_services_paused.is_set():
+                            _LOGGER.warning(
+                                "Audio errors indicate robot may be asleep - pausing audio processing"
+                            )
+                            self._robot_services_paused.set()
+                            # Clear audio buffer
+                            self._audio_buffer = np.array([], dtype=np.float32)
+                    time.sleep(0.1)
+                    continue
+
+                # Check if this is a connection error
                 if "Lost connection" in error_msg or "ZError" in error_msg:
                     # Don't log - the state monitor will handle this
                     if not self._robot_services_paused.is_set():
                         _LOGGER.debug("Connection error detected, waiting for state monitor")
                     time.sleep(0.5)
                 else:
-                    # Log unexpected errors
-                    _LOGGER.error("Error in Reachy audio processing: %s", e)
+                    # Log unexpected errors (but limit frequency)
+                    consecutive_audio_errors += 1
+                    if consecutive_audio_errors <= 3:
+                        _LOGGER.error("Error in Reachy audio processing: %s", e)
                     time.sleep(0.1)
 
     def _audio_loop_fallback(self, ctx: AudioProcessingContext) -> None:

@@ -151,10 +151,22 @@ class RobotStateMonitor:
                 return RobotConnectionState.DISCONNECTED
 
             is_alive = getattr(client, '_is_alive', False)
-            if is_alive:
-                return RobotConnectionState.CONNECTED
-            else:
+            if not is_alive:
                 return RobotConnectionState.DISCONNECTED
+
+            # Also check if we can access the media system
+            # During sleep mode, the client may report alive but media is unavailable
+            try:
+                media = getattr(self._robot, 'media', None)
+                if media is not None:
+                    audio = getattr(media, 'audio', None)
+                    if audio is None:
+                        return RobotConnectionState.DISCONNECTED
+            except Exception:
+                # If we can't access media, consider it disconnected
+                return RobotConnectionState.DISCONNECTED
+
+            return RobotConnectionState.CONNECTED
 
         except Exception as e:
             logger.debug("Error checking robot state: %s", e)
