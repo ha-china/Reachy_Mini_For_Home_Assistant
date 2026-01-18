@@ -55,6 +55,11 @@ except ImportError:
 CONTROL_LOOP_FREQUENCY_HZ = 100  # 100Hz control loop (same as conversation_app)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
+# Body yaw safety limits (matches SDK's inverse_kinematics_safe constraints)
+# SDK limits body_yaw to ±160° and head-body relative angle to ±65°
+MAX_BODY_YAW_RAD = math.radians(160.0)
+MIN_BODY_YAW_RAD = math.radians(-160.0)
+
 # Antenna freeze parameters (listening mode)
 ANTENNA_BLEND_DURATION = 0.5  # Seconds to blend back from frozen state
 
@@ -789,7 +794,11 @@ class MovementManager:
                 else:
                     antenna_tuple = (float(antennas[0]), float(antennas[1]))
 
-                return (head_pose, antenna_tuple, body_yaw)
+                # Clamp body_yaw to safe range to prevent IK collision warnings
+                # SDK's inverse_kinematics_safe limits body_yaw to ±160°
+                clamped_body_yaw = max(MIN_BODY_YAW_RAD, min(MAX_BODY_YAW_RAD, float(body_yaw)))
+
+                return (head_pose, antenna_tuple, clamped_body_yaw)
 
             except Exception as e:
                 logger.error("Error sampling emotion pose: %s", e)
@@ -910,11 +919,9 @@ class MovementManager:
         final_rotation = R.from_matrix(final_head[:3, :3])
         _, _, final_head_yaw = final_rotation.as_euler('xyz')
 
-        # Body follows head yaw directly
-        # The SDK's automatic_body_yaw mechanism (inverse_kinematics_safe) will
-        # clamp the relative angle between head and body to max 65 degrees
-        # and limit body_yaw to ±160 degrees for collision prevention
-        body_yaw = final_head_yaw
+        # Body follows head yaw directly, clamped to safe range
+        # SDK's inverse_kinematics_safe limits body_yaw to ±160°
+        body_yaw = max(MIN_BODY_YAW_RAD, min(MAX_BODY_YAW_RAD, final_head_yaw))
 
         return final_head, (antenna_right, antenna_left), body_yaw
 
