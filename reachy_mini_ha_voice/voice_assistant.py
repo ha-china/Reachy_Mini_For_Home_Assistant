@@ -164,8 +164,8 @@ class VoiceAssistantService:
 
                     _LOGGER.info("Reachy Mini media system initialized")
 
-                    # Note: Body yaw is now explicitly calculated in movement_manager.py
-                    # based on head yaw angle, matching the reference project's approach
+                    # Body yaw now follows head yaw in movement_manager.py
+                    # This enables natural body rotation when tracking faces
 
                     # Optimize microphone settings for voice recognition
                     self._optimize_microphone_settings()

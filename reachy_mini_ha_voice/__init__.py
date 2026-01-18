@@ -13,7 +13,7 @@ Key features:
 - Smart home entity control through natural voice commands
 """
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 __author__ = "Desmond Dong"
 
 # Don't import main module here to avoid runpy warning

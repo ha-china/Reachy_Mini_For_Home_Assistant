@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.8.2",
+    "date": "2026-01-18",
+    "changes": [
+      "Fix: Body now follows head rotation during face tracking - body_yaw syncs with head_yaw",
+      "Fix: Matches reference project sweep_look behavior for natural body movement"
+    ]
+  },
+  {
     "version": "0.8.1",
     "date": "2026-01-18",
     "changes": [

@@ -693,10 +693,9 @@ class MovementManager:
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
 
-        Body yaw is passed as 0.0 and handled by SDK's automatic_body_yaw mechanism.
-        The SDK's inverse_kinematics_safe automatically adjusts body_yaw to prevent
-        head-body collision (max 65° relative angle). This matches the reference
-        project's BreathingMove which always returns body_yaw=0.0.
+        Body yaw follows head yaw to enable natural head tracking with body rotation.
+        When head turns beyond a threshold, body rotates to follow it, similar to
+        how the reference project's sweep_look tool synchronizes body_yaw with head_yaw.
 
         Returns:
             Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
@@ -768,7 +767,7 @@ class MovementManager:
             secondary_head[0, 3] = secondary_x
             secondary_head[1, 3] = secondary_y
             secondary_head[2, 3] = secondary_z
-            
+
             # Simple composition: R_final = R_secondary @ R_primary, t_final = t_primary + t_secondary
             final_head = np.eye(4)
             final_head[:3, :3] = secondary_head[:3, :3] @ primary_head[:3, :3]
@@ -794,13 +793,17 @@ class MovementManager:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
 
-        # Body yaw is handled by SDK's automatic_body_yaw mechanism (default True)
-        # SDK's inverse_kinematics_safe ensures:
-        # - max_relative_yaw = 65° (head-body relative angle limit)
-        # - max_body_yaw = 160° (body rotation limit)
-        # We pass 0.0 and let SDK automatically adjust body_yaw to prevent collision
-        # This matches the reference project's BreathingMove which returns body_yaw=0.0
-        body_yaw = 0.0
+        # Calculate body_yaw to follow head yaw
+        # Extract yaw from the final head pose rotation matrix
+        # The rotation matrix uses xyz euler convention
+        final_rotation = R.from_matrix(final_head[:3, :3])
+        _, _, final_head_yaw = final_rotation.as_euler('xyz')
+
+        # Body follows head yaw directly
+        # The SDK's automatic_body_yaw mechanism (inverse_kinematics_safe) will
+        # clamp the relative angle between head and body to max 65 degrees
+        # and limit body_yaw to ±160 degrees for collision prevention
+        body_yaw = final_head_yaw
 
         return final_head, (antenna_right, antenna_left), body_yaw
 
@@ -811,13 +814,13 @@ class MovementManager:
     def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
         """Send control command to robot with error throttling and connection health tracking.
 
-        Body yaw is passed as 0.0, and SDK's automatic_body_yaw mechanism handles
-        collision prevention automatically via inverse_kinematics_safe.
+        Body yaw follows head yaw for natural tracking. The SDK's automatic_body_yaw
+        mechanism (inverse_kinematics_safe) handles collision prevention.
 
         Args:
             head_pose: 4x4 head pose matrix
             antennas: Tuple of (right_angle, left_angle) in radians
-            body_yaw: Body yaw angle (0.0 for automatic SDK handling)
+            body_yaw: Body yaw angle (follows head yaw for natural tracking)
         """
         if self.robot is None:
             return
