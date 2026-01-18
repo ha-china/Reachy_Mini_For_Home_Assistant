@@ -88,6 +88,8 @@ ENTITY_KEYS: Dict[str, int] = {
     # Phase 22: Gesture detection
     "gesture_detected": 1600,
     "gesture_confidence": 1601,
+    # Phase 23: Face detection status
+    "face_detected": 1700,
 }
 
 
@@ -216,6 +218,7 @@ class EntityRegistry:
         # Phase 20 (Tap detection) disabled - too many false triggers
         self._setup_phase21_entities(entities)
         self._setup_phase22_entities(entities)
+        self._setup_phase23_entities(entities)
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -927,6 +930,34 @@ class EntityRegistry:
         self._gesture_confidence_entity = confidence_entity
 
         _LOGGER.debug("Phase 22 entities registered: gesture_detected, gesture_confidence")
+
+    def _setup_phase23_entities(self, entities: List) -> None:
+        """Setup Phase 23 entities: Face detection status."""
+
+        def get_face_detected() -> bool:
+            """Get current face detection state from camera server."""
+            if self.camera_server:
+                return self.camera_server.is_face_detected()
+            return False
+
+        face_detected_entity = BinarySensorEntity(
+            server=self.server,
+            key=get_entity_key("face_detected"),
+            name="Face Detected",
+            object_id="face_detected",
+            icon="mdi:face-recognition",
+            device_class="occupancy",
+            value_getter=get_face_detected,
+        )
+        entities.append(face_detected_entity)
+        self._face_detected_entity = face_detected_entity
+
+        _LOGGER.debug("Phase 23 entities registered: face_detected")
+
+    def update_face_detected_state(self) -> None:
+        """Push face_detected state update to Home Assistant."""
+        if hasattr(self, '_face_detected_entity') and self._face_detected_entity:
+            self._face_detected_entity.update_state()
 
     def update_gesture_state(self) -> None:
         """Push gesture state update to Home Assistant."""

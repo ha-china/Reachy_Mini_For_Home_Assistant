@@ -509,7 +509,23 @@ class MJPEGCameraServer:
         with self._face_tracking_lock:
             offsets = self._face_tracking_offsets
             return (offsets[0], offsets[1], offsets[2], offsets[3], offsets[4], offsets[5])
-    
+
+    def is_face_detected(self) -> bool:
+        """Check if a face is currently detected.
+
+        Returns True if face was detected recently (within face_lost_delay period).
+        This is useful for Home Assistant entities to expose face detection status.
+
+        Returns:
+            True if face is detected, False otherwise
+        """
+        if self._last_face_detected_time is None:
+            return False
+
+        # Face is considered detected if we saw it recently
+        time_since_detected = time.time() - self._last_face_detected_time
+        return time_since_detected < self._face_lost_delay
+
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
         if self._face_tracking_enabled == enabled:
