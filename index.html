@@ -18,7 +18,7 @@
 				<span class="brand-name">Reachy Mini for Home Assistant</span>
 			</div>
 			<div class="pill">Voice · Gestures · Smart Home</div>
-			<div class="version-pill">v0.8.3</div>
+			<div class="version-pill" id="version-pill">v0.8.3</div>
 		</div>
 		<div class="hero-grid">
 			<div class="hero-copy">
@@ -187,6 +187,15 @@
 		fetch('changelog.json')
 			.then(res => res.json())
 			.then(data => {
+				// Update version pill with latest version
+				if (data.length > 0) {
+					const versionPill = document.getElementById('version-pill');
+					if (versionPill) {
+						versionPill.textContent = `v${data[0].version}`;
+					}
+				}
+
+				// Populate changelog grid
 				const mainGrid = document.getElementById('changelog-grid');
 				const olderGrid = document.getElementById('changelog-older');
 				data.forEach((item, index) => {
