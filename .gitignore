@@ -40,6 +40,7 @@ env/
 .playwright-mcp/
 *~
 CLAUDE.md
+commit_msg.txt
 
 # Configuration
 config.json
