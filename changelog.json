@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.8.7",
+    "date": "2026-01-18",
+    "changes": [
+      "Fix: Clamp body_yaw to safe range to prevent IK collision warnings during emotion playback",
+      "Fix: Emotion moves and face tracking now respect SDK safety limits",
+      "Improve: Face tracking smoothness - removed EMA smoothing (matches reference project)",
+      "Improve: Face tracking timing updated to match reference (2s delay, 1s interpolation)"
+    ]
+  },
+  {
     "version": "0.8.6",
     "date": "2026-01-18",
     "changes": [
