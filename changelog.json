@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.8.4",
+    "date": "2026-01-18",
+    "changes": [
+      "Improve: Smooth idle animation with interpolation phase (matches reference BreathingMove)",
+      "Improve: Two-phase animation - interpolates to neutral before oscillation",
+      "Fix: Antenna frequency updated to 0.5Hz (was 0.15Hz) for more natural sway"
+    ]
+  },
+  {
     "version": "0.8.3",
     "date": "2026-01-18",
     "changes": [

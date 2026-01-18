@@ -68,12 +68,15 @@ class AnimationPlayer:
     - Multi-frequency oscillators for natural motion
     - Random phase offsets per animation start for variation
     - Smooth transitions between animations
+    - Interpolation phase: smooth transition from current pose to neutral before oscillation
+      (same as BreathingMove in reference project)
     """
 
     def __init__(self):
         self._animations: Dict[str, AnimationParams] = {}
         self._amplitude_scale: float = 1.0
         self._transition_duration: float = 0.3
+        self._interpolation_duration: float = 1.0  # Time to interpolate to neutral (same as BreathingMove)
         self._current_animation: Optional[str] = None
         self._target_animation: Optional[str] = None
         self._transition_start: float = 0.0
@@ -86,6 +89,19 @@ class AnimationPlayer:
         self._phase_x: float = 0.0
         self._phase_y: float = 0.0
         self._phase_z: float = 0.0
+        # Interpolation state (for smooth transition to neutral before oscillation)
+        self._in_interpolation: bool = False
+        self._interpolation_start_time: float = 0.0
+        self._interpolation_start_offsets: Dict[str, float] = {
+            "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
+            "x": 0.0, "y": 0.0, "z": 0.0,
+            "antenna_left": 0.0, "antenna_right": 0.0,
+        }
+        self._last_offsets: Dict[str, float] = {
+            "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
+            "x": 0.0, "y": 0.0, "z": 0.0,
+            "antenna_left": 0.0, "antenna_right": 0.0,
+        }
         self._load_config()
 
     def _load_config(self) -> None:
@@ -146,18 +162,29 @@ class AnimationPlayer:
         self._phase_z = random.random() * 2 * math.pi
 
     def set_animation(self, name: str) -> bool:
-        """Set the current animation with smooth transition."""
+        """Set the current animation with smooth transition.
+
+        Like BreathingMove in reference project, this starts an interpolation
+        phase that smoothly transitions from the current pose to neutral before
+        starting the oscillation animation.
+        """
         with self._lock:
             if name not in self._animations and name is not None:
                 _LOGGER.warning("Unknown animation: %s", name)
                 return False
-            if name == self._current_animation:
+            if name == self._current_animation and not self._in_interpolation:
                 return True
+
+            # Capture current offsets for interpolation start
+            self._interpolation_start_offsets = self._last_offsets.copy()
+            self._interpolation_start_time = time.perf_counter()
+            self._in_interpolation = True
+
             self._target_animation = name
             self._transition_start = time.perf_counter()
             # Randomize phases for new animation
             self._randomize_phases()
-            _LOGGER.debug("Transitioning to animation: %s", name)
+            _LOGGER.debug("Transitioning to animation: %s (interpolation phase)", name)
             return True
 
     def stop(self) -> None:
@@ -169,7 +196,10 @@ class AnimationPlayer:
     def get_offsets(self, dt: float = 0.0) -> Dict[str, float]:
         """Calculate current animation offsets.
 
-        Uses multi-frequency oscillators for natural motion.
+        Uses two-phase animation like BreathingMove in reference project:
+        1. Interpolation phase: smoothly transition from current pose to neutral
+        2. Oscillation phase: continuous sinusoidal breathing motion
+
         Each axis can have its own frequency for more organic movement.
 
         Args:
@@ -181,7 +211,7 @@ class AnimationPlayer:
         with self._lock:
             now = time.perf_counter()
 
-            # Handle transition
+            # Handle transition to new animation
             if self._target_animation != self._current_animation:
                 elapsed = now - self._transition_start
                 if elapsed >= self._transition_duration:
@@ -190,20 +220,49 @@ class AnimationPlayer:
 
             # No animation
             if self._current_animation is None:
-                return {
+                result = {
                     "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
                     "x": 0.0, "y": 0.0, "z": 0.0,
                     "antenna_left": 0.0, "antenna_right": 0.0,
                 }
+                self._last_offsets = result.copy()
+                return result
 
             params = self._animations.get(self._current_animation)
             if params is None:
-                return {
+                result = {
                     "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
                     "x": 0.0, "y": 0.0, "z": 0.0,
                     "antenna_left": 0.0, "antenna_right": 0.0,
                 }
+                self._last_offsets = result.copy()
+                return result
 
+            # Check if in interpolation phase
+            if self._in_interpolation:
+                interp_elapsed = now - self._interpolation_start_time
+                if interp_elapsed < self._interpolation_duration:
+                    # Phase 1: Linear interpolation from current pose to neutral (offset=0)
+                    # Use smooth ease-in-out for natural motion
+                    t = interp_elapsed / self._interpolation_duration
+                    # Smooth step: t * t * (3 - 2 * t)
+                    smooth_t = t * t * (3 - 2 * t)
+
+                    result = {}
+                    for key in self._interpolation_start_offsets:
+                        start_val = self._interpolation_start_offsets[key]
+                        # Interpolate toward 0 (neutral)
+                        result[key] = start_val * (1.0 - smooth_t)
+
+                    self._last_offsets = result.copy()
+                    return result
+                else:
+                    # Interpolation complete, start oscillation phase
+                    self._in_interpolation = False
+                    self._phase_start = now
+                    _LOGGER.debug("Interpolation complete, starting oscillation phase")
+
+            # Phase 2: Oscillation animation
             elapsed = now - self._phase_start
             base_freq = params.frequency_hz
 
@@ -259,7 +318,7 @@ class AnimationPlayer:
 
             # Apply scale and blend
             scale = self._amplitude_scale * blend
-            return {
+            result = {
                 "pitch": pitch * scale,
                 "yaw": yaw * scale,
                 "roll": roll * scale,
@@ -269,6 +328,8 @@ class AnimationPlayer:
                 "antenna_left": left * scale,
                 "antenna_right": right * scale,
             }
+            self._last_offsets = result.copy()
+            return result
 
     @property
     def current_animation(self) -> Optional[str]:
