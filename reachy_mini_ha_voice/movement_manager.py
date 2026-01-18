@@ -203,12 +203,6 @@ class MovementManager:
         self._action_start_time: float = 0.0
         self._action_start_pose: Dict[str, float] = {}
 
-        # Pose change detection threshold
-        # Note: 0.005 rad caused antenna jitter near sine wave peaks/valleys
-        # where rate of change approaches zero. Lower threshold ensures smoother animation.
-        self._last_sent_pose: Optional[Dict[str, float]] = None
-        self._pose_change_threshold = 0.001
-        
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         self._face_tracking_lock = threading.Lock()
@@ -696,13 +690,15 @@ class MovementManager:
                         target_yaw, target_pitch)
 
 
-    def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float]]:
+    def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
 
-        Note: body_yaw is handled automatically by SDK (set_automatic_body_yaw=True).
+        When automatic_body_yaw is enabled (via set_automatic_body_yaw(True) in voice_assistant.py),
+        the SDK's IK will automatically calculate optimal body_yaw based on the target head pose.
+        We return body_yaw=0.0 to let the SDK handle body rotation automatically.
 
         Returns:
-            Tuple of (head_pose_4x4, (antenna_right, antenna_left))
+            Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
         """
         # Build primary head pose from target state
         if SDK_UTILS_AVAILABLE:
@@ -797,50 +793,28 @@ class MovementManager:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
 
-        return final_head, (antenna_right, antenna_left)
+        # Return body_yaw=0.0 to let SDK's automatic_body_yaw handle body rotation
+        # When head yaw exceeds safe limits, SDK will automatically rotate body
+        return final_head, (antenna_right, antenna_left), 0.0
 
     # =========================================================================
     # Internal: Robot control (runs in control loop)
     # =========================================================================
 
-    def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float]) -> None:
+    def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
         """Send control command to robot with error throttling and connection health tracking.
 
         When automatic_body_yaw is enabled (set in voice_assistant.py), the SDK's IK
         automatically calculates body_yaw to prevent head-body collision. We pass the
-        current body_yaw as a starting point so IK can smoothly adjust from current position.
+        desired body_yaw (usually 0.0) so IK can adjust it as needed.
 
         Args:
             head_pose: 4x4 head pose matrix
             antennas: Tuple of (right_angle, left_angle) in radians
+            body_yaw: Desired body yaw angle in radians (usually 0.0 for auto mode)
         """
         if self.robot is None:
             return
-
-        # Check if pose changed significantly (prevent unnecessary commands)
-        # Extract euler angles for comparison
-        rotation = R.from_matrix(head_pose[:3, :3])
-        euler = rotation.as_euler('xyz')  # [roll, pitch, yaw]
-
-        current_pose = {
-            "x": head_pose[0, 3],
-            "y": head_pose[1, 3],
-            "z": head_pose[2, 3],
-            "roll": euler[0],
-            "pitch": euler[1],
-            "yaw": euler[2],
-            "antenna_right": antennas[0],
-            "antenna_left": antennas[1],
-        }
-
-        if self._last_sent_pose is not None:
-            max_diff = max(
-                abs(current_pose[k] - self._last_sent_pose.get(k, 0.0))
-                for k in current_pose.keys()
-            )
-            if max_diff < self._pose_change_threshold:
-                # No significant change, skip sending command
-                return
 
         now = self._now()
         
@@ -854,27 +828,17 @@ class MovementManager:
             logger.debug("Attempting to send command after connection loss...")
 
         try:
-            # Get current body_yaw to pass to IK as starting point
-            # This allows SDK's automatic_body_yaw to smoothly adjust from current position
-            current_body_yaw = 0.0
-            try:
-                joints = self.robot.get_current_joint_positions()
-                if joints is not None:
-                    head_joints, _ = joints
-                    current_body_yaw = head_joints[0]  # body_yaw is first joint
-            except Exception:
-                pass  # Use 0.0 as fallback
-
-            # Send to robot with current body_yaw for smooth IK calculation
+            # Pass the desired body_yaw (usually 0.0) to set_target
+            # When automatic_body_yaw is enabled, SDK's IK will adjust body_yaw
+            # automatically when head yaw exceeds safe limits
             self.robot.set_target(
                 head=head_pose,
                 antennas=list(antennas),
-                body_yaw=current_body_yaw,
+                body_yaw=body_yaw,
             )
 
-            # Command succeeded - update connection health and cache
+            # Command succeeded - update connection health
             self._last_successful_command = now
-            self._last_sent_pose = current_pose.copy()  # Cache sent pose
             self._consecutive_errors = 0  # Reset error counter
             
             if self._connection_lost:
@@ -956,11 +920,11 @@ class MovementManager:
                 # 7. Update idle look-around behavior
                 self._update_idle_look_around()
 
-                # 8. Compose final pose (returns head_pose matrix, antennas tuple)
-                head_pose, antennas = self._compose_final_pose()
+                # 8. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
+                head_pose, antennas, body_yaw = self._compose_final_pose()
 
-                # 9. Send to robot (body_yaw handled automatically by SDK)
-                self._issue_control_command(head_pose, antennas)
+                # 9. Send to robot with body_yaw for automatic adjustment
+                self._issue_control_command(head_pose, antennas, body_yaw)
 
             except Exception as e:
                 self._log_error_throttled(f"Control loop error: {e}")
@@ -984,6 +948,15 @@ class MovementManager:
             return
 
         self._stop_event.clear()
+
+        # Initialize idle animation immediately so breathing starts on launch
+        # This matches the reference project's behavior where BreathingMove
+        # starts after idle_inactivity_delay (0.3s)
+        self._animation_player.set_animation("idle")
+        self.state.robot_state = RobotState.IDLE
+        self.state.idle_start_time = self._now()
+        logger.info("Initialized with idle animation on startup")
+
         self._thread = threading.Thread(
             target=self._control_loop,
             daemon=True,
