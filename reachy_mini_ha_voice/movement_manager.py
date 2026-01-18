@@ -189,11 +189,12 @@ class MovementManager:
         self._stop_event = threading.Event()
         self._draining_event = threading.Event()  # Thread-safe graceful shutdown flag
         self._emotion_playing_event = threading.Event()  # Pause when emotion animation playing
+        self._robot_paused_event = threading.Event()  # Pause when robot disconnected/sleeping
         self._thread: Optional[threading.Thread] = None
 
         # Error throttling
         self._last_error_time = 0.0
-        self._error_interval = 1.0  # Log at most once per second
+        self._error_interval = 2.0  # Log at most once per 2 seconds in error mode
         self._suppressed_errors = 0
 
         # Connection health tracking
@@ -273,6 +274,30 @@ class MovementManager:
         """
         self._emotion_playing_event.clear()
         logger.debug("MovementManager resumed after emotion animation")
+
+    def pause_for_robot_disconnect(self) -> None:
+        """Thread-safe: Pause control loop when robot is disconnected.
+
+        Called by robot state monitor when connection is lost (e.g., sleep mode).
+        The control loop will skip sending commands while paused.
+        """
+        if not self._robot_paused_event.is_set():
+            self._robot_paused_event.set()
+            # Reset connection tracking state
+            self._connection_lost = False
+            self._consecutive_errors = 0
+            self._suppressed_errors = 0
+            logger.info("MovementManager paused - robot disconnected")
+
+    def resume_after_robot_connect(self) -> None:
+        """Thread-safe: Resume control loop when robot reconnects.
+
+        Called by robot state monitor when connection is restored.
+        """
+        if self._robot_paused_event.is_set():
+            self._robot_paused_event.clear()
+            self._last_successful_command = self._now()
+            logger.info("MovementManager resumed - robot reconnected")
 
     def queue_emotion_move(self, emotion_name: str) -> bool:
         """Thread-safe: Queue an emotion move to be played by the control loop.
@@ -1038,10 +1063,17 @@ class MovementManager:
             last_time = loop_start
 
             try:
-                # 1. Process commands from queue
+                # 1. Process commands from queue (always process to clear queue)
                 self._poll_commands()
 
-                # 2. Check if emotion move is playing - takes priority over other motions
+                # 2. Check if robot is paused (disconnected/sleeping)
+                if self._robot_paused_event.is_set():
+                    # Robot is disconnected, skip all control commands
+                    # Just wait and check again
+                    time.sleep(0.1)
+                    continue
+
+                # 3. Check if emotion move is playing - takes priority over other motions
                 emotion_pose = self._update_emotion_move()
                 if emotion_pose is not None:
                     # Emotion move is active - use its pose directly
@@ -1050,28 +1082,28 @@ class MovementManager:
                     # Skip other updates when emotion is playing
                 else:
                     # Normal motion updates
-                    # 3. Update action interpolation
+                    # 4. Update action interpolation
                     self._update_action(dt)
 
-                    # 4. Update animation offsets (JSON-driven)
+                    # 5. Update animation offsets (JSON-driven)
                     self._update_animation(dt)
 
-                    # 5. Update antenna blend (listening mode freeze/unfreeze)
+                    # 6. Update antenna blend (listening mode freeze/unfreeze)
                     self._update_antenna_blend(dt)
 
-                    # 6. Update face tracking offsets from camera server
+                    # 7. Update face tracking offsets from camera server
                     self._update_face_tracking()
 
-                    # 7. Update animation blend (suppress when face detected)
+                    # 8. Update animation blend (suppress when face detected)
                     self._update_animation_blend()
 
-                    # 8. Update idle look-around behavior
+                    # 9. Update idle look-around behavior
                     self._update_idle_look_around()
 
-                    # 9. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
+                    # 10. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
                     head_pose, antennas, body_yaw = self._compose_final_pose()
 
-                    # 10. Send to robot with body_yaw for automatic adjustment
+                    # 11. Send to robot with body_yaw for automatic adjustment
                     self._issue_control_command(head_pose, antennas, body_yaw)
 
             except Exception as e:

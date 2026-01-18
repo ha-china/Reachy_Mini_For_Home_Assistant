@@ -26,6 +26,7 @@ from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
 from .motion import ReachyMiniMotion
 from .camera_server import MJPEGCameraServer
+from .robot_state_monitor import RobotStateMonitor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,6 +84,10 @@ class VoiceAssistantService:
 
         # Audio buffer for fixed-size chunk output
         self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
+
+        # Robot state monitor - tracks connection to daemon
+        self._robot_state_monitor: Optional[RobotStateMonitor] = None
+        self._robot_services_paused = threading.Event()  # Set when services should pause
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -220,7 +225,54 @@ class VoiceAssistantService:
         # Sendspin is for music playback, so connect to music_player
         await music_player.start_sendspin_discovery()
 
+        # Start robot state monitor if robot is available
+        if self.reachy_mini is not None:
+            self._robot_state_monitor = RobotStateMonitor(self.reachy_mini)
+            self._robot_state_monitor.on_disconnected(self._on_robot_disconnected)
+            self._robot_state_monitor.on_connected(self._on_robot_connected)
+            self._robot_state_monitor.start()
+            _LOGGER.info("Robot state monitor started")
+
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
+
+    def _on_robot_disconnected(self) -> None:
+        """Called when robot connection is lost (e.g., sleep mode).
+
+        Pauses robot-dependent services to prevent error spam.
+        ESPHome server and wake word detection continue running.
+        """
+        _LOGGER.warning("Robot disconnected - pausing robot-dependent services")
+        self._robot_services_paused.set()
+
+        # Clear audio buffer to avoid processing stale data
+        self._audio_buffer = np.array([], dtype=np.float32)
+
+        # Pause movement manager
+        if self._motion is not None and self._motion._movement_manager is not None:
+            self._motion._movement_manager.pause_for_robot_disconnect()
+
+    def _on_robot_connected(self) -> None:
+        """Called when robot connection is restored.
+
+        Resumes robot-dependent services and reinitializes media.
+        """
+        _LOGGER.info("Robot reconnected - resuming robot-dependent services")
+        self._robot_services_paused.clear()
+
+        # Resume movement manager
+        if self._motion is not None and self._motion._movement_manager is not None:
+            self._motion._movement_manager.resume_after_robot_connect()
+
+        # Try to restart media recording/playback
+        if self.reachy_mini is not None:
+            try:
+                media = self.reachy_mini.media
+                if media.audio is not None:
+                    media.start_recording()
+                    media.start_playing()
+                    _LOGGER.info("Reachy Mini media system restarted")
+            except Exception as e:
+                _LOGGER.warning("Failed to restart Reachy Mini media: %s", e)
 
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
@@ -402,6 +454,11 @@ class VoiceAssistantService:
         # 8. Shutdown motion executor
         if self._motion:
             self._motion.shutdown()
+
+        # 9. Stop robot state monitor
+        if self._robot_state_monitor:
+            self._robot_state_monitor.stop()
+            self._robot_state_monitor = None
 
         _LOGGER.info("Voice assistant service stopped.")
 
@@ -598,9 +655,20 @@ class VoiceAssistantService:
             _LOGGER.exception("Error processing audio")
 
     def _audio_loop_reachy(self, ctx: AudioProcessingContext) -> None:
-        """Audio loop using Reachy Mini's microphone."""
+        """Audio loop using Reachy Mini's microphone.
+
+        This loop checks the robot connection state before attempting to
+        read audio. When the robot is disconnected (e.g., sleep mode),
+        the loop waits for reconnection without generating errors.
+        """
         while self._running:
             try:
+                # Check if robot services are paused (sleep mode / disconnected)
+                if self._robot_services_paused.is_set():
+                    # Wait for reconnection, checking periodically
+                    time.sleep(0.5)
+                    continue
+
                 if not self._wait_for_satellite():
                     continue
 
@@ -615,8 +683,17 @@ class VoiceAssistantService:
                 self._process_audio_chunk(ctx, audio_chunk)
 
             except Exception as e:
-                _LOGGER.error("Error in Reachy audio processing: %s", e)
-                time.sleep(0.1)
+                # Check if this is a connection error
+                error_msg = str(e)
+                if "Lost connection" in error_msg or "ZError" in error_msg:
+                    # Don't log - the state monitor will handle this
+                    if not self._robot_services_paused.is_set():
+                        _LOGGER.debug("Connection error detected, waiting for state monitor")
+                    time.sleep(0.5)
+                else:
+                    # Log unexpected errors
+                    _LOGGER.error("Error in Reachy audio processing: %s", e)
+                    time.sleep(0.1)
 
     def _audio_loop_fallback(self, ctx: AudioProcessingContext) -> None:
         """Audio loop using system microphone (fallback)."""

@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.9.0",
+    "date": "2026-01-18",
+    "changes": [
+      "New: Robot state monitor for proper sleep mode handling - services pause when robot disconnects and resume on reconnect",
+      "New: System diagnostics entities (CPU, memory, disk, uptime) exposed as Home Assistant diagnostic sensors",
+      "New: Phase 24 with 9 diagnostic sensors (cpu_percent, cpu_temperature, memory_percent, memory_used_gb, disk_percent, disk_free_gb, uptime_hours, process_cpu_percent, process_memory_mb)",
+      "Fix: Voice assistant and movement manager now properly pause during robot sleep mode instead of generating error spam",
+      "Improve: Graceful service lifecycle management with RobotStateMonitor callbacks"
+    ]
+  },
+  {
     "version": "0.8.7",
     "date": "2026-01-18",
     "changes": [

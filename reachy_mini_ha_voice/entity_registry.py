@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
+from .system_diagnostics import get_system_diagnostics
 
 if TYPE_CHECKING:
     from .reachy_controller import ReachyController
@@ -90,6 +91,16 @@ ENTITY_KEYS: Dict[str, int] = {
     "gesture_confidence": 1601,
     # Phase 23: Face detection status
     "face_detected": 1700,
+    # Phase 24: System diagnostics (psutil)
+    "sys_cpu_percent": 1800,
+    "sys_cpu_temperature": 1801,
+    "sys_memory_percent": 1802,
+    "sys_memory_used": 1803,
+    "sys_disk_percent": 1804,
+    "sys_disk_free": 1805,
+    "sys_uptime": 1806,
+    "sys_process_cpu": 1807,
+    "sys_process_memory": 1808,
 }
 
 
@@ -219,6 +230,7 @@ class EntityRegistry:
         self._setup_phase21_entities(entities)
         self._setup_phase22_entities(entities)
         self._setup_phase23_entities(entities)
+        self._setup_phase24_entities(entities)  # System diagnostics
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -974,3 +986,144 @@ class EntityRegistry:
         """
         # DOA entities are read-only sensors, no special references needed
         pass
+
+    def _setup_phase24_entities(self, entities: List) -> None:
+        """Setup Phase 24 entities: System diagnostics (psutil).
+
+        These sensors provide system health information for the robot's
+        computer, useful for monitoring resource usage and debugging.
+        """
+        diag = get_system_diagnostics()
+
+        # CPU Usage
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_cpu_percent"),
+            name="System CPU Usage",
+            object_id="sys_cpu_percent",
+            icon="mdi:cpu-64-bit",
+            unit_of_measurement="%",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_cpu_percent,
+        ))
+
+        # CPU Temperature (may not be available on all platforms)
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_cpu_temperature"),
+            name="System CPU Temperature",
+            object_id="sys_cpu_temperature",
+            icon="mdi:thermometer",
+            unit_of_measurement="°C",
+            accuracy_decimals=1,
+            device_class="temperature",
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_cpu_temperature,
+        ))
+
+        # Memory Usage
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_memory_percent"),
+            name="System Memory Usage",
+            object_id="sys_memory_percent",
+            icon="mdi:memory",
+            unit_of_measurement="%",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_memory_percent,
+        ))
+
+        # Memory Used (GB)
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_memory_used"),
+            name="System Memory Used",
+            object_id="sys_memory_used",
+            icon="mdi:memory",
+            unit_of_measurement="GB",
+            accuracy_decimals=2,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_memory_used_gb,
+        ))
+
+        # Disk Usage
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_disk_percent"),
+            name="System Disk Usage",
+            object_id="sys_disk_percent",
+            icon="mdi:harddisk",
+            unit_of_measurement="%",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_disk_percent,
+        ))
+
+        # Disk Free (GB)
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_disk_free"),
+            name="System Disk Free",
+            object_id="sys_disk_free",
+            icon="mdi:harddisk",
+            unit_of_measurement="GB",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_disk_free_gb,
+        ))
+
+        # System Uptime (hours)
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_uptime"),
+            name="System Uptime",
+            object_id="sys_uptime",
+            icon="mdi:clock-outline",
+            unit_of_measurement="h",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_uptime_hours,
+        ))
+
+        # Process CPU (this app)
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_process_cpu"),
+            name="App CPU Usage",
+            object_id="sys_process_cpu",
+            icon="mdi:application-cog",
+            unit_of_measurement="%",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_process_cpu_percent,
+        ))
+
+        # Process Memory (this app)
+        entities.append(SensorEntity(
+            server=self.server,
+            key=get_entity_key("sys_process_memory"),
+            name="App Memory Usage",
+            object_id="sys_process_memory",
+            icon="mdi:application-cog",
+            unit_of_measurement="MB",
+            accuracy_decimals=1,
+            state_class="measurement",
+            entity_category=2,  # diagnostic
+            value_getter=diag.get_process_memory_mb,
+        ))
+
+        _LOGGER.debug(
+            "Phase 24 entities registered: sys_cpu_percent, sys_cpu_temperature, "
+            "sys_memory_percent, sys_memory_used, sys_disk_percent, sys_disk_free, "
+            "sys_uptime, sys_process_cpu, sys_process_memory"
+        )

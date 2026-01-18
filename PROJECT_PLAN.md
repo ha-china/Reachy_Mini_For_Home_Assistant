@@ -109,7 +109,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │                                                                             │
 │  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
 │  │  Port 6053 (mDNS auto-discovery)                                      │  │
-│  │  • 43+ entities (sensors, controls, media player, camera)             │  │
+│  │  • 54 entities (sensors, controls, media player, camera)              │  │
 │  │  • Voice Assistant pipeline integration                               │  │
 │  │  • Real-time state synchronization                                    │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -435,11 +435,22 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
       | three | 3️⃣ | three2 | 🤟 |
       | two_up | ✌️☝️ | two_up_inverted | 🔻✌️☝️ |
 
+15. **Phase 24 - System Diagnostics** ✅ **Completed**
+    - [x] `cpu_percent` - CPU usage percentage (Sensor, diagnostic)
+    - [x] `cpu_temperature` - CPU temperature in Celsius (Sensor, diagnostic)
+    - [x] `memory_percent` - Memory usage percentage (Sensor, diagnostic)
+    - [x] `memory_used_gb` - Used memory in GB (Sensor, diagnostic)
+    - [x] `disk_percent` - Disk usage percentage (Sensor, diagnostic)
+    - [x] `disk_free_gb` - Free disk space in GB (Sensor, diagnostic)
+    - [x] `uptime_hours` - System uptime in hours (Sensor, diagnostic)
+    - [x] `process_cpu_percent` - This process CPU usage (Sensor, diagnostic)
+    - [x] `process_memory_mb` - This process memory in MB (Sensor, diagnostic)
+
 ---
 
-## 🎉 Phase 1-13 + Phase 22 Entities Completed!
+## 🎉 Phase 1-13 + Phase 22 + Phase 24 Entities Completed!
 
-**Total Completed: 45 entities**
+**Total Completed: 54 entities**
 - Phase 1: 4 entities (Basic status and volume)
 - Phase 2: 4 entities (Motor control)
 - Phase 3: 9 entities (Pose control)
@@ -454,6 +465,7 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 - Phase 12: 4 entities (Audio processing parameters)
 - Phase 13: 3 entities (Sendspin audio output)
 - Phase 22: 2 entities (Gesture detection)
+- Phase 24: 9 entities (System diagnostics)
 
 
 ---
@@ -826,7 +838,7 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 ### ✅ Completed Features
 
 #### Core Voice Assistant (Phase 1-12)
-- **40+ ESPHome entities** - All implemented (Phase 11 LED disabled)
+- **54 ESPHome entities** - All implemented (Phase 11 LED disabled)
 - **Basic voice interaction** - Wake word detection (microWakeWord/openWakeWord), STT/TTS integration
 - **Motion feedback** - Nod, shake, gaze and other basic actions
 - **Audio processing** - AGC, noise suppression, echo cancellation
@@ -862,6 +874,7 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 - ✅ **Phase 16**: JSON-driven animation system
 - ✅ **Phase 17**: Antenna sync animation
 - ✅ **Phase 22**: Gesture detection
+- ✅ **Phase 24**: System diagnostics (psutil-based)
 
 ### Partial 🟡
 - 🟡 **Phase 19**: Gravity compensation mode (teaching flow pending)
@@ -888,8 +901,9 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 | Phase 20 | 🟡 Partial | 30% | IMU sensors exposed, missing trigger logic |
 | Phase 21 | ❌ Not done | 0% | Home Assistant scene integration not implemented |
 | Phase 22 | ✅ Complete | 100% | Gesture detection with HaGRID ONNX models |
+| Phase 24 | ✅ Complete | 100% | System diagnostics with psutil (9 sensors) |
 
-**Overall Completion**: **Phase 1-17 + 22: ~98%** | **Phase 18-21: ~20%**
+**Overall Completion**: **Phase 1-17 + 22 + 24: ~99%** | **Phase 18-21: ~20%**
 
 
 ---
