@@ -693,10 +693,10 @@ class MovementManager:
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
 
-        Body yaw is explicitly calculated based on head yaw angle.
-        When head turns beyond a threshold (25 degrees), body follows to prevent
-        head-body collision. This matches the reference project's approach where
-        GotoQueueMove explicitly calculates target_body_yaw.
+        Body yaw is passed as 0.0 and handled by SDK's automatic_body_yaw mechanism.
+        The SDK's inverse_kinematics_safe automatically adjusts body_yaw to prevent
+        head-body collision (max 65° relative angle). This matches the reference
+        project's BreathingMove which always returns body_yaw=0.0.
 
         Returns:
             Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
@@ -794,28 +794,13 @@ class MovementManager:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
 
-        # Calculate body_yaw based on final head yaw
-        # Reference project explicitly calculates body_yaw to follow head rotation
-        # This prevents head-body collision when head turns too far
-        # Extract yaw from final head pose
-        final_rotation = R.from_matrix(final_head[:3, :3])
-        final_euler = final_rotation.as_euler('xyz')  # roll, pitch, yaw
-        head_yaw = final_euler[2]  # yaw is the third component
-
-        # Calculate body_yaw to follow head when yaw exceeds threshold
-        # Based on reference project's GotoQueueMove pattern
-        HEAD_YAW_THRESHOLD = math.radians(25)  # Body starts following after 25 degrees
-        HEAD_YAW_MAX = math.radians(50)  # Max head yaw relative to body
-
-        if abs(head_yaw) > HEAD_YAW_THRESHOLD:
-            # Body follows head yaw beyond threshold
-            # If head is at 40 degrees, body should be at (40-25) = 15 degrees
-            if head_yaw > 0:
-                body_yaw = head_yaw - HEAD_YAW_THRESHOLD
-            else:
-                body_yaw = head_yaw + HEAD_YAW_THRESHOLD
-        else:
-            body_yaw = 0.0
+        # Body yaw is handled by SDK's automatic_body_yaw mechanism (default True)
+        # SDK's inverse_kinematics_safe ensures:
+        # - max_relative_yaw = 65° (head-body relative angle limit)
+        # - max_body_yaw = 160° (body rotation limit)
+        # We pass 0.0 and let SDK automatically adjust body_yaw to prevent collision
+        # This matches the reference project's BreathingMove which returns body_yaw=0.0
+        body_yaw = 0.0
 
         return final_head, (antenna_right, antenna_left), body_yaw
 
@@ -826,14 +811,13 @@ class MovementManager:
     def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
         """Send control command to robot with error throttling and connection health tracking.
 
-        Body yaw is explicitly calculated by _compose_final_pose() based on head yaw.
-        When head turns beyond 25 degrees, body follows to prevent collision.
-        This matches the reference project's explicit body_yaw handling.
+        Body yaw is passed as 0.0, and SDK's automatic_body_yaw mechanism handles
+        collision prevention automatically via inverse_kinematics_safe.
 
         Args:
             head_pose: 4x4 head pose matrix
             antennas: Tuple of (right_angle, left_angle) in radians
-            body_yaw: Calculated body yaw angle in radians
+            body_yaw: Body yaw angle (0.0 for automatic SDK handling)
         """
         if self.robot is None:
             return

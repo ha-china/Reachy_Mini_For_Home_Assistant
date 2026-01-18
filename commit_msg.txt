@@ -1,14 +1,15 @@
-fix: explicit body_yaw calculation for collision prevention
+fix: simplify body_yaw to match reference project exactly
 
-Reference project analysis showed that set_automatic_body_yaw is NOT used.
-Instead, body_yaw is explicitly calculated based on head yaw angle.
+After thorough analysis of SDK and reference project:
+- SDK default automatic_body_yaw=True handles collision prevention
+- SDK's inverse_kinematics_safe auto-adjusts body_yaw (max 65° relative)
+- Reference project's BreathingMove always returns body_yaw=0.0
 
-Changes:
-- movement_manager.py: Calculate body_yaw in _compose_final_pose()
-  - Body follows head when head yaw exceeds 25 degrees threshold
-  - If head is at 40 degrees, body rotates to 15 degrees
-- voice_assistant.py: Remove set_automatic_body_yaw(True) call
-- Update all related comments to reflect new approach
+Changed:
+- movement_manager.py: Pass body_yaw=0.0, let SDK handle automatically
+- Removed manual body_yaw calculation that may interfere with SDK
+- Updated docstrings to explain SDK's automatic mechanism
 
-This matches the reference project's GotoQueueMove pattern where
-target_body_yaw is explicitly calculated and interpolated.
+This exactly matches how the reference project works:
+1. Pass body_yaw=0.0 to set_target()
+2. SDK's inverse_kinematics_safe auto-adjusts to prevent collision
