@@ -806,7 +806,9 @@ class MovementManager:
     def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float]) -> None:
         """Send control command to robot with error throttling and connection health tracking.
 
-        Note: body_yaw is not passed - SDK handles it automatically (set_automatic_body_yaw=True).
+        When automatic_body_yaw is enabled (set in voice_assistant.py), the SDK's IK
+        automatically calculates body_yaw to prevent head-body collision. We pass the
+        current body_yaw as a starting point so IK can smoothly adjust from current position.
 
         Args:
             head_pose: 4x4 head pose matrix
@@ -852,12 +854,22 @@ class MovementManager:
             logger.debug("Attempting to send command after connection loss...")
 
         try:
-            # Send to robot (single control point!)
-            # head_pose is already a 4x4 matrix from _compose_final_pose
-            # Note: body_yaw is not passed - SDK handles it automatically
+            # Get current body_yaw to pass to IK as starting point
+            # This allows SDK's automatic_body_yaw to smoothly adjust from current position
+            current_body_yaw = 0.0
+            try:
+                joints = self.robot.get_current_joint_positions()
+                if joints is not None:
+                    head_joints, _ = joints
+                    current_body_yaw = head_joints[0]  # body_yaw is first joint
+            except Exception:
+                pass  # Use 0.0 as fallback
+
+            # Send to robot with current body_yaw for smooth IK calculation
             self.robot.set_target(
                 head=head_pose,
                 antennas=list(antennas),
+                body_yaw=current_body_yaw,
             )
 
             # Command succeeded - update connection health and cache

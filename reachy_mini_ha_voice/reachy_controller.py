@@ -505,11 +505,11 @@ class ReachyController:
         Note: This directly calls SDK's set_target_body_yaw since automatic body yaw
         is enabled. Manual control will temporarily override automatic mode.
         """
-        if self.reachy_mini is None:
+        if self.reachy is None:
             self._disabled_pose_setter('body_yaw')
             return
         try:
-            self.reachy_mini.set_target_body_yaw(math.radians(yaw_deg))
+            self.reachy.set_target_body_yaw(math.radians(yaw_deg))
         except Exception as e:
             logger.error(f"Error setting body yaw: {e}")
 
