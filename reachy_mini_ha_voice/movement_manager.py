@@ -326,7 +326,7 @@ class MovementManager:
         Only provided values will be updated. Values are in meters for position
         and radians for angles.
 
-        Note: body_yaw is handled automatically by SDK (set_automatic_body_yaw=True).
+        Note: body_yaw is calculated automatically based on head yaw in _compose_final_pose().
 
         Args:
             x, y, z: Head position in meters
@@ -410,7 +410,7 @@ class MovementManager:
                 self.state.target_pitch = payload["pitch"]
             if payload.get("yaw") is not None:
                 self.state.target_yaw = payload["yaw"]
-            # Note: body_yaw is handled automatically by SDK (set_automatic_body_yaw)
+            # Note: body_yaw is calculated in _compose_final_pose based on head yaw
             if payload.get("antenna_left") is not None:
                 self.state.target_antenna_left = payload["antenna_left"]
             if payload.get("antenna_right") is not None:
@@ -693,9 +693,10 @@ class MovementManager:
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
 
-        When automatic_body_yaw is enabled (via set_automatic_body_yaw(True) in voice_assistant.py),
-        the SDK's IK will automatically calculate optimal body_yaw based on the target head pose.
-        We return body_yaw=0.0 to let the SDK handle body rotation automatically.
+        Body yaw is explicitly calculated based on head yaw angle.
+        When head turns beyond a threshold (25 degrees), body follows to prevent
+        head-body collision. This matches the reference project's approach where
+        GotoQueueMove explicitly calculates target_body_yaw.
 
         Returns:
             Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
@@ -793,9 +794,30 @@ class MovementManager:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
 
-        # Return body_yaw=0.0 to let SDK's automatic_body_yaw handle body rotation
-        # When head yaw exceeds safe limits, SDK will automatically rotate body
-        return final_head, (antenna_right, antenna_left), 0.0
+        # Calculate body_yaw based on final head yaw
+        # Reference project explicitly calculates body_yaw to follow head rotation
+        # This prevents head-body collision when head turns too far
+        # Extract yaw from final head pose
+        final_rotation = R.from_matrix(final_head[:3, :3])
+        final_euler = final_rotation.as_euler('xyz')  # roll, pitch, yaw
+        head_yaw = final_euler[2]  # yaw is the third component
+
+        # Calculate body_yaw to follow head when yaw exceeds threshold
+        # Based on reference project's GotoQueueMove pattern
+        HEAD_YAW_THRESHOLD = math.radians(25)  # Body starts following after 25 degrees
+        HEAD_YAW_MAX = math.radians(50)  # Max head yaw relative to body
+
+        if abs(head_yaw) > HEAD_YAW_THRESHOLD:
+            # Body follows head yaw beyond threshold
+            # If head is at 40 degrees, body should be at (40-25) = 15 degrees
+            if head_yaw > 0:
+                body_yaw = head_yaw - HEAD_YAW_THRESHOLD
+            else:
+                body_yaw = head_yaw + HEAD_YAW_THRESHOLD
+        else:
+            body_yaw = 0.0
+
+        return final_head, (antenna_right, antenna_left), body_yaw
 
     # =========================================================================
     # Internal: Robot control (runs in control loop)
@@ -804,14 +826,14 @@ class MovementManager:
     def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
         """Send control command to robot with error throttling and connection health tracking.
 
-        When automatic_body_yaw is enabled (set in voice_assistant.py), the SDK's IK
-        automatically calculates body_yaw to prevent head-body collision. We pass the
-        desired body_yaw (usually 0.0) so IK can adjust it as needed.
+        Body yaw is explicitly calculated by _compose_final_pose() based on head yaw.
+        When head turns beyond 25 degrees, body follows to prevent collision.
+        This matches the reference project's explicit body_yaw handling.
 
         Args:
             head_pose: 4x4 head pose matrix
             antennas: Tuple of (right_angle, left_angle) in radians
-            body_yaw: Desired body yaw angle in radians (usually 0.0 for auto mode)
+            body_yaw: Calculated body yaw angle in radians
         """
         if self.robot is None:
             return
@@ -828,9 +850,8 @@ class MovementManager:
             logger.debug("Attempting to send command after connection loss...")
 
         try:
-            # Pass the desired body_yaw (usually 0.0) to set_target
-            # When automatic_body_yaw is enabled, SDK's IK will adjust body_yaw
-            # automatically when head yaw exceeds safe limits
+            # Pass calculated body_yaw to set_target
+            # Body yaw is calculated in _compose_final_pose based on head yaw
             self.robot.set_target(
                 head=head_pose,
                 antennas=list(antennas),
