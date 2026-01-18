@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.8.5",
+    "date": "2026-01-18",
+    "changes": [
+      "Fix: DOA turn-to-sound direction inverted - now turns correctly toward sound source"
+    ]
+  },
+  {
     "version": "0.8.4",
     "date": "2026-01-18",
     "changes": [

@@ -619,9 +619,10 @@ class VoiceSatelliteProtocol(APIServer):
 
             # Calculate yaw angle from direction vector
             # DOA convention: 0 = left, π/2 = front, π = right
-            # Robot yaw: positive = turn left, negative = turn right
-            # yaw = doa - π/2 maps: left(0) → -90°, front(π/2) → 0°, right(π) → +90°
-            yaw_rad = angle_rad - math.pi / 2
+            # Robot yaw: positive = turn right, negative = turn left
+            # Invert the sign: left(0) → +90° (turn right toward left sound)
+            #                  right(π) → -90° (turn left toward right sound)
+            yaw_rad = -(angle_rad - math.pi / 2)
             yaw_deg = math.degrees(yaw_rad)
 
             _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°",
