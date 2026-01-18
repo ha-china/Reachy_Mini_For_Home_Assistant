@@ -92,12 +92,19 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │  └────────────────────────────────────────────────────────────────┘   │  │
 │  │                                                                       │  │
 │  │   State Machine: on_wakeup → on_listening → on_speaking → on_idle     │  │
+│  │                                                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐   │  │
+│  │  │ Body Following (v0.8.3)                                        │   │  │
+│  │  │ • Body yaw syncs with head yaw for natural tracking            │   │  │
+│  │  │ • Extracted from final head pose matrix                        │   │  │
+│  │  └────────────────────────────────────────────────────────────────┘   │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
-│  ┌─────────────────────────── TAP DETECTION ─────────────────────────────┐  │
-│  │  IMU Accelerometer (Wireless version only) - DISABLED                 │  │
-│  │  • Tap-to-wake: REMOVED (too many false triggers)                     │  │
-│  │  • Continuous conversation now controlled via Home Assistant switch   │  │
+│  ┌─────────────────────────── GESTURE DETECTION ────────────────────────┐  │
+│  │  HaGRID ONNX Models                                                  │  │
+│  │  • 18 gesture classes (call, like, dislike, fist, ok, palm, etc.)    │  │
+│  │  • Only runs when face detected (power saving)                       │  │
+│  │  • Real-time state push to Home Assistant                            │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
@@ -154,35 +161,37 @@ reachy_mini_ha_voice/
 │   ├── main.py                 # ReachyMiniApp entry
 │   ├── voice_assistant.py      # Voice assistant service
 │   ├── satellite.py            # ESPHome protocol handling
-│   ├── audio_player.py         # Audio player
+│   ├── audio_player.py         # Audio player (TTS + Sendspin)
 │   ├── camera_server.py        # MJPEG camera stream server + face tracking
 │   ├── head_tracker.py         # YOLO face detector
 │   ├── motion.py               # Motion control (high-level API)
 │   ├── movement_manager.py     # Unified movement manager (100Hz control loop)
 │   ├── animation_player.py     # JSON-driven animation system
+│   ├── speech_sway.py          # Voice-driven head micro-movements
 │   ├── models.py               # Data models
 │   ├── entity.py               # ESPHome base entity
 │   ├── entity_extensions.py    # Extended entity types
 │   ├── entity_registry.py      # Entity registry
 │   ├── reachy_controller.py    # Reachy Mini controller wrapper
-│   ├── gesture_detector.py     # Gesture detection
-│   ├── api_server.py           # API server
-│   ├── zeroconf.py             # mDNS discovery
+│   ├── gesture_detector.py     # HaGRID gesture detection
+│   ├── api_server.py           # HTTP API server
+│   ├── zeroconf.py             # mDNS discovery (ESPHome + Sendspin)
 │   └── util.py                 # Utility functions
-├── animations/                 # Animation definitions
-│   └── conversation_animations.json  # Conversation state animations
-├── wakewords/                  # Wake word models (auto-download)
-│   ├── okay_nabu.json
-│   ├── okay_nabu.tflite
-│   ├── hey_jarvis.json
-│   ├── hey_jarvis.tflite
-│   ├── stop.json
-│   └── stop.tflite
+│   └── animations/             # Animation definitions
+│       ├── conversation_animations.json  # Conversation state animations
+│       └── emotion_keywords.json         # Emotion keyword mapping (280+ keywords)
+│   └── wakewords/              # Wake word models
+│       ├── okay_nabu.json/.tflite
+│       ├── hey_jarvis.json/.tflite (openWakeWord)
+│       ├── alexa.json/.tflite
+│       ├── hey_luna.json/.tflite
+│       └── stop.json/.tflite   # Stop word detection
 ├── sounds/                     # Sound effect files (auto-download)
 │   ├── wake_word_triggered.flac
 │   └── timer_finished.flac
 ├── pyproject.toml              # Project configuration
 ├── README.md                   # Documentation
+├── changelog.json              # Version changelog
 └── PROJECT_PLAN.md             # Project plan
 ```
 
@@ -190,16 +199,38 @@ reachy_mini_ha_voice/
 
 ```toml
 dependencies = [
-    "reachy-mini",           # Reachy Mini SDK
-    "sounddevice>=0.4.6",    # Audio processing (backup)
-    "soundfile>=0.12.0",     # Audio file reading
-    "numpy>=1.24.0",         # Numerical computation
-    "pymicro-wakeword>=2.0.0,<3.0.0",  # Wake word detection
-    "pyopen-wakeword>=1.0.0,<2.0.0",   # Backup wake word
-    "aioesphomeapi>=42.0.0", # ESPHome protocol
-    "zeroconf>=0.100.0",     # mDNS discovery
-    "scipy>=1.10.0",         # Motion control
-    "pydantic>=2.0.0",       # Data validation
+    # Reachy Mini SDK (provides audio via media system)
+    "reachy-mini",
+
+    # Audio processing (fallback when not on Reachy Mini)
+    "sounddevice>=0.5.0",
+    "soundfile>=0.13.0",
+    "numpy>=2.0.0",
+
+    # Camera streaming
+    "opencv-python>=4.10.0",
+
+    # Wake word detection (local)
+    "pymicro-wakeword>=2.0.0,<3.0.0",
+    "pyopen-wakeword>=1.0.0,<2.0.0",
+
+    # ESPHome protocol (communication with Home Assistant)
+    "aioesphomeapi>=43.10.1",
+    "zeroconf>=0.140.0",
+
+    # Motion control (head movements)
+    "scipy>=1.14.0",
+
+    # Face tracking (YOLO-based head detection)
+    "ultralytics>=8.3.0",
+    "supervision>=0.25.0",
+    "huggingface_hub>=0.27.0",
+
+    # Sendspin synchronized audio (optional, for multi-room playback)
+    "aiosendspin>=2.0.1",
+
+    # Gesture detection (ONNX runtime for HaGRID models)
+    "onnxruntime>=1.18.0",
 ]
 ```
 
@@ -756,19 +787,12 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 
 **Implemented Features**:
 
-| Detection Event | Response Action | Status |
-|-----------------|-----------------|--------|
+| Feature | Description | Status |
+|---------|-------------|--------|
 | Continuous conversation | Controlled via Home Assistant switch | ✅ Implemented |
+| IMU sensor entities | Accelerometer and gyroscope exposed to HA | ✅ Implemented |
 
-**Tap-to-wake REMOVED** (v0.5.16):
-- Too many false triggers from robot movement and vibrations
-- Continuous conversation mode now controlled via "Continuous Conversation" switch in Home Assistant
-- Users can enable/disable continuous conversation from HA dashboard
-
-**Technical Implementation**:
-- `models.py` - `Preferences.continuous_conversation` field
-- `entity_registry.py` - `continuous_conversation` Switch entity (Phase 21)
-- `satellite.py` - `_handle_run_end()` checks `preferences.continuous_conversation`
+> **Note**: Tap-to-wake feature was removed in v0.5.16 due to false triggers from robot movement. Continuous conversation is now controlled via Home Assistant switch.
 
 **Not Implemented**:
 
@@ -802,78 +826,50 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 ### ✅ Completed Features
 
 #### Core Voice Assistant (Phase 1-12)
-- **45+ ESPHome entities** - All implemented
-- **Basic voice interaction** - Wake word detection, STT/TTS integration
+- **40+ ESPHome entities** - All implemented (Phase 11 LED disabled)
+- **Basic voice interaction** - Wake word detection (microWakeWord/openWakeWord), STT/TTS integration
 - **Motion feedback** - Nod, shake, gaze and other basic actions
 - **Audio processing** - AGC, noise suppression, echo cancellation
-- **Camera stream** - MJPEG live preview
+- **Camera stream** - MJPEG live preview with ESPHome Camera entity
 
-#### Partially Implemented Features (Phase 14-21)
-- **Phase 14** - Emotion action API infrastructure (manual trigger available)
+#### Extended Features (Phase 13-22)
+- **Phase 13** ✅ - Sendspin multi-room audio support
+- **Phase 14** ✅ - Emotion keyword detection (280+ keywords, 35 categories)
+- **Phase 15** ✅ - Face tracking with body following (DOA + YOLO + body_yaw sync)
+- **Phase 16** ✅ - JSON-driven animation system (100Hz control loop)
+- **Phase 17** ✅ - Antenna sync animation during speech
+- **Phase 22** ✅ - Gesture detection (HaGRID ONNX, 18 gestures)
+
+### 🟡 Partially Implemented Features
+
 - **Phase 19** - Gravity compensation mode switch (teaching flow not implemented)
+- **Phase 20** - IMU sensor entities (trigger logic not implemented)
 
 ### ❌ Not Implemented Features
 
-#### High Priority
-- ~~**Phase 13** - Sendspin audio playback support~~ ✅ **Completed**
-- **Phase 14** - Auto emotion action feedback (needs voice assistant event association)
-- ~~**Phase 15** - Continuous sound source tracking (only turn toward at wakeup)~~ ✅ **Completed (v0.8.3)** - Face tracking + body follows head
-
-#### Medium Priority
-- **Phase 16** - Cartoon style motion mode (needs dynamic interpolation switching)
-- **Phase 17** - Antenna sync animation
-- **Phase 18** - Face tracking and eye contact interaction
-
-#### Low Priority
-- **Phase 19** - Teaching mode record/playback functionality
-- **Phase 20** - IMU environment awareness response
-- **Phase 21** - Home Assistant scene integration
+- **Phase 18** - Visual gaze interaction (eye contact with multiple people)
+- **Phase 21** - Home Assistant scene integration (morning/night routines)
 
 ---
 
-## Feature Priority Summary (Updated)
+## Feature Priority Summary (Updated v0.8.3)
 
-### High Priority (Completed ✅)
-- ✅ **Phase 1-12**: Basic ESPHome entities (45+)
-- ✅ Core voice assistant functionality
-- ✅ Basic motion feedback (nod, shake, gaze)
+### Completed ✅
+- ✅ **Phase 1-12**: Core ESPHome entities and voice assistant
+- ✅ **Phase 13**: Sendspin audio playback
+- ✅ **Phase 14**: Emotion keyword detection and auto-trigger
+- ✅ **Phase 15**: Face tracking with body following
+- ✅ **Phase 16**: JSON-driven animation system
+- ✅ **Phase 17**: Antenna sync animation
+- ✅ **Phase 22**: Gesture detection
 
-### High Priority (Partial 🟡)
-- 🟡 **Phase 13**: Emotion action feedback system
-  - ✅ Emotion Selector entity and API infrastructure
-  - ❌ Auto-trigger emotion actions based on voice assistant response
-  - ❌ Intent recognition and emotion matching
-  - ❌ Dance action library integration
+### Partial 🟡
+- 🟡 **Phase 19**: Gravity compensation mode (teaching flow pending)
+- 🟡 **Phase 20**: Environment awareness (IMU entities done, triggers pending)
 
-### High Priority (Not Implemented ❌)
-- ❌ **Phase 14**: Smart sound source tracking enhancement
-  - ✅ Turn toward sound source at wakeup
-  - ❌ Continuous sound source tracking
-  - ❌ Multi-person conversation switching
-  - ❌ Sound source visualization
-
-### Medium Priority (Completed ✅)
-- ✅ **Phase 15**: Cartoon style motion mode
-  - ✅ 100Hz unified control loop architecture (restored after daemon update)
-  - ✅ JSON-driven animation system (AnimationPlayer)
-  - ✅ Conversation state animations (idle/listening/thinking/speaking)
-  - ✅ Pose change detection + state query caching (reduces daemon load)
-  - ❌ Dynamic interpolation technique switching (CARTOON etc.)
-- ✅ **Phase 16**: Antenna sync during speech
-  - ✅ JSON-driven antenna animations with different patterns (both/wiggle)
-  - ✅ State-specific antenna movements
-
-### Medium Priority (Not Implemented ❌)
-- ❌ **Phase 17**: Visual gaze interaction - Eye contact
-
-### Low Priority (Partial 🟡)
-- 🟡 **Phase 18**: Gravity compensation interactive mode
-  - ✅ Gravity compensation mode switch
-  - ❌ Teaching style interaction (record/playback functionality)
-
-### Low Priority (Not Implemented ❌)
-- ❌ **Phase 19**: Environment awareness response - IMU triggered actions
-- ❌ **Phase 20**: Home Assistant scene integration - Smart home integration
+### Not Implemented ❌
+- ❌ **Phase 18**: Visual gaze interaction
+- ❌ **Phase 21**: Home Assistant scene integration
 
 ---
 
@@ -883,15 +879,17 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 |-------|--------|------------|-------|
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
 | Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
-| Phase 14 | ✅ Complete | 90% | Emotion keyword detection with 280+ keywords, 35 categories (v0.8.0) |
-| Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head rotation (v0.8.3) |
-| Phase 16 | ✅ Complete | 100% | JSON-driven animation with antenna movements |
-| Phase 17 | ❌ Not done | 10% | Camera implemented, missing face detection |
-| Phase 18 | 🟡 Partial | 40% | Mode switch implemented, missing teaching flow |
-| Phase 19 | ❌ Not done | 10% | IMU data exposed, missing trigger logic |
-| Phase 20 | ❌ Not done | 0% | Not implemented |
+| Phase 14 | ✅ Complete | 95% | Emotion keyword detection with 280+ keywords, 35 categories |
+| Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head (v0.8.3) |
+| Phase 16 | ✅ Complete | 100% | JSON-driven animation system (100Hz control loop) |
+| Phase 17 | ✅ Complete | 100% | Antenna sync animation during speech |
+| Phase 18 | ❌ Not done | 10% | Camera implemented, missing multi-person gaze |
+| Phase 19 | 🟡 Partial | 40% | Gravity compensation mode switch, missing teaching flow |
+| Phase 20 | 🟡 Partial | 30% | IMU sensors exposed, missing trigger logic |
+| Phase 21 | ❌ Not done | 0% | Home Assistant scene integration not implemented |
+| Phase 22 | ✅ Complete | 100% | Gesture detection with HaGRID ONNX models |
 
-**Overall Completion**: **Phase 1-15: 97%** | **Phase 16-20: ~45%**
+**Overall Completion**: **Phase 1-17 + 22: ~98%** | **Phase 18-21: ~20%**
 
 
 ---
@@ -1048,111 +1046,24 @@ Reference `reachy_mini_conversation_app` uses 100Hz control loop. After daemon u
 
 ---
 
-## 🔧 Tap-to-Wake and Microphone Sensitivity Fix (2026-01-07)
+## 🔧 Microphone Sensitivity Optimization (2026-01-07)
 
-### Problem Description
-1. **Tap-to-wake blocking** - Conversation not working properly after tap wake, blocking issues
-2. **Low microphone sensitivity** - Need to be very close for voice recognition
+### Problem
+Low microphone sensitivity - Need to be very close for voice recognition.
 
-### Root Cause
-1. **Audio playback blocking** - `_tap_continue_feedback()` plays sound in continuous conversation mode, blocking audio stream processing
-2. **AGC settings not optimized** - ReSpeaker XVF3800 default settings not suitable for distant voice recognition
+### Solution
+Comprehensive ReSpeaker XVF3800 microphone optimization:
 
-### Fix Solution
-
-#### 1. Remove audio playback in continuous conversation feedback (satellite.py)
-```python
-def _tap_continue_feedback(self) -> None:
-    """Provide feedback when continuing conversation in tap mode.
-    
-    Triggers a nod to indicate ready for next input.
-    Sound is NOT played here to avoid blocking audio streaming.
-    """
-    # NOTE: Do NOT play sound here - it blocks audio streaming
-    if self.state.motion_enabled and self.state.motion:
-        self.state.motion.on_continue_listening()
-```
-
-#### 2. Add exception handling to tap callback (voice_assistant.py)
-```python
-def _on_tap_detected(self) -> None:
-    """Callback when tap is detected on the robot.
-    
-    NOTE: This is called from the tap_detector background thread.
-    """
-    try:
-        self._state.satellite.wakeup_from_tap()
-        # ... motion feedback
-    except Exception as e:
-        _LOGGER.error("Error in tap detection callback: %s", e)
-```
-
-#### 3. Comprehensive microphone optimization (voice_assistant.py) - Updated 2026-01-07
-```python
-def _optimize_microphone_settings(self) -> None:
-    """Optimize ReSpeaker XVF3800 microphone settings for voice recognition."""
-    
-    # ========== 1. AGC (Automatic Gain Control) Settings ==========
-    # Enable AGC for automatic volume normalization
-    respeaker.write("PP_AGCONOFF", [1])
-    
-    # Increase AGC max gain for better distant speech pickup (default ~15dB -> 30dB)
-    respeaker.write("PP_AGCMAXGAIN", [30.0])
-    
-    # Set AGC desired output level (default ~-25dB -> -18dB for stronger output)
-    respeaker.write("PP_AGCDESIREDLEVEL", [-18.0])
-    
-    # Optimize AGC time constant for voice commands
-    respeaker.write("PP_AGCTIME", [0.5])
-    
-    # ========== 2. Base Microphone Gain ==========
-    # Increase base microphone gain (default 1.0 -> 2.0)
-    respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])
-    
-    # ========== 3. Noise Suppression Settings ==========
-    # Reduce noise suppression to preserve quiet speech (default ~0.5 -> 0.15)
-    respeaker.write("PP_MIN_NS", [0.15])
-    respeaker.write("PP_MIN_NN", [0.15])
-    
-    # ========== 4. Echo Cancellation & High-pass Filter ==========
-    respeaker.write("PP_ECHOONOFF", [1])
-    respeaker.write("AEC_HPFONOFF", [1])
-```
-
-### Fix Results
-
-| Parameter | Before | After | Notes |
-|-----------|--------|-------|-------|
-| Tap continuous conversation | Blocking | Working | Removed blocking audio playback |
-| Microphone sensitivity | ~30cm | ~2-3m | Comprehensive AGC and gain optimization |
-| AGC switch | Off | On | Auto volume normalization |
+| Parameter | Default | Optimized | Notes |
+|-----------|---------|-----------|-------|
+| AGC | Off | On | Auto volume normalization |
 | AGC max gain | ~15dB | 30dB | Better distant speech pickup |
 | AGC target level | -25dB | -18dB | Stronger output signal |
 | Microphone gain | 1.0x | 2.0x | Base gain doubled |
 | Noise suppression | ~0.5 | 0.15 | Reduced speech mis-suppression |
-| Echo cancellation | On | On | Maintain clarity during TTS playback |
-| High-pass filter | Off | On | Remove low-frequency noise |
 
-### XVF3800 Parameter Reference
-
-| Parameter Name | Type | Range | Description |
-|----------------|------|-------|-------------|
-| `PP_AGCONOFF` | int32 | 0/1 | AGC switch |
-| `PP_AGCMAXGAIN` | float | 0-40 dB | AGC max gain |
-| `PP_AGCDESIREDLEVEL` | float | dB | AGC target output level |
-| `PP_AGCTIME` | float | seconds | AGC time constant |
-| `AUDIO_MGR_MIC_GAIN` | float | 0-4.0 | Microphone gain multiplier |
-| `PP_MIN_NS` | float | 0-1.0 | Minimum noise suppression (lower = less suppression) |
-| `PP_MIN_NN` | float | 0-1.0 | Minimum noise estimation |
-| `PP_ECHOONOFF` | int32 | 0/1 | Echo cancellation switch |
-| `AEC_HPFONOFF` | int32 | 0/1 | High-pass filter switch |
-
-### Related Files
-- `satellite.py` - Removed blocking audio playback
-- `voice_assistant.py` - Comprehensive microphone optimization
-- `reachy_controller.py` - AGC entity default value updates
-- `entity_registry.py` - AGC max gain range update (0-40dB)
-- `reachy_mini/src/reachy_mini/media/audio_control_utils.py` - SDK reference
+### Result
+Microphone sensitivity improved from ~30cm to ~2-3m effective range.
 
 ---
 
@@ -1160,49 +1071,15 @@ def _optimize_microphone_settings(self) -> None:
 
 ### Issue 1: Music Not Resuming After Voice Conversation
 
-**Problem**: Music doesn't resume after voice conversation ends.
+**Fix**: Sendspin now connects to `music_player` instead of `tts_player`
 
-**Root Cause**: Sendspin was incorrectly connected to `tts_player` instead of `music_player`.
+### Issue 2: Audio Conflict During Voice Assistant Wakeup
 
-**Fix**:
-- `voice_assistant.py`: Sendspin discovery now connects to `music_player`
-- `satellite.py`: `duck()`/`unduck()` now call `music_player.pause_sendspin()`/`resume_sendspin()`
+**Fix**: Added `pause_sendspin()` and `resume_sendspin()` methods to `audio_player.py`
 
-### Issue 2: tap_sensitivity Not Persisted
+### Issue 3: Sendspin Sample Rate Optimization
 
-**Problem**: tap_sensitivity value set in ESPHome lost after restart.
-
-**Fix**:
-- `models.py`: Added `tap_sensitivity` field to `Preferences` dataclass
-- `entity_registry.py`: Entity setter now saves to `preferences.json`
-- Load saved value on startup
-
-### Issue 3: Audio Conflict During Voice Assistant Wakeup
-
-**Problem**: Audio streaming (Sendspin or ESPHome audio) conflicts when voice assistant wakes up.
-
-**Fix**:
-- `audio_player.py`: Added `pause_sendspin()` and `resume_sendspin()` methods
-- `satellite.py`: `duck()` now pauses Sendspin, `unduck()` resumes it
-- Improved `pause()` method to actually stop audio output
-
-### Issue 4: AttributeError for _camera_server
-
-**Problem**: `_set_conversation_mode()` referenced non-existent `_camera_server` attribute.
-
-**Fix**: Changed `self._camera_server` to `self.camera_server` (removed underscore prefix)
-
-### Issue 5: tap_sensitivity Default Value Wrong
-
-**Problem**: tap_sensitivity default was still 2.0g instead of expected 0.5g.
-
-**Fix**: Use `TAP_THRESHOLD_G_DEFAULT` constant as default value
-
-### Issue 6: Sendspin Sample Rate Optimization
-
-**Problem**: ReSpeaker hardware I/O is 16kHz (hardware limitation), but Sendspin might try higher sample rates.
-
-**Fix**: Prioritize 16kHz in Sendspin supported formats list to avoid unnecessary resampling
+**Fix**: Prioritize 16kHz in Sendspin supported formats (hardware limitation)
 
 ---
 
@@ -1210,43 +1087,11 @@ def _optimize_microphone_settings(self) -> None:
 
 ### Feature 1: Audio Settings Persistence
 
-**Problem**: AGC Enabled, AGC Max Gain, Noise Suppression settings lost after restart.
-
-**Solution**: 
-- `models.py`: Added `agc_enabled`, `agc_max_gain`, `noise_suppression` fields to `Preferences` dataclass (Optional, None = use default)
-- `entity_registry.py`: Entity setters now save to `preferences.json`
-- `voice_assistant.py`: `_optimize_microphone_settings()` now restores saved values from preferences on startup
-
-**Behavior**:
-- First startup: Use optimized defaults (AGC=ON, MaxGain=30dB, NoiseSuppression=15%)
-- After user changes via Home Assistant: Values persisted and restored on restart
+AGC Enabled, AGC Max Gain, Noise Suppression settings now persist to `preferences.json`.
 
 ### Feature 2: Sendspin Discovery Refactoring
 
-**Problem**: Sendspin mDNS discovery code was in `audio_player.py`, mixing concerns.
-
-**Solution**:
-- `zeroconf.py`: Added `SendspinDiscovery` class for mDNS service discovery
-- `audio_player.py`: Simplified to use `SendspinDiscovery` via callback pattern
-- Better separation of concerns: zeroconf.py handles all mDNS, audio_player.py handles audio
-
-### Fix 1: Tap Detection During Emotion Playback
-
-**Problem**: Tap detection was re-enabled after emotion playback completes, even during active conversation.
-
-**Root Cause**: `_play_emotion()` and `_wait_for_move_completion()` always re-enabled tap detection without checking pipeline state.
-
-**Fix**:
-- `satellite.py`: Check `_pipeline_active` before re-enabling tap detection
-- Only re-enable tap detection if conversation has ended (pipeline not active)
-
-**Related Files**:
-- `models.py` - Preferences fields
-- `entity_registry.py` - Entity setters with persistence
-- `voice_assistant.py` - Settings restoration on startup
-- `zeroconf.py` - SendspinDiscovery class
-- `audio_player.py` - Simplified Sendspin integration
-- `satellite.py` - Tap detection fix
+Moved mDNS discovery to `zeroconf.py` for better separation of concerns.
 
 
 ---
