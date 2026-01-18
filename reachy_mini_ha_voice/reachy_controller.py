@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 class _ReSpeakerContext:
     """Context manager for thread-safe ReSpeaker access."""
-    
+
     def __init__(self, respeaker, lock):
         self._respeaker = respeaker
         self._lock = lock
-    
+
     def __enter__(self):
         self._lock.acquire()
         return self._respeaker
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._lock.release()
         return False
@@ -48,20 +48,20 @@ class ReachyController:
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
         self._movement_manager = None  # Set later via set_movement_manager()
-        
+
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
         # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
         self._state_cache: Dict[str, Any] = {}
         self._cache_ttl = 2.0  # 2 second cache TTL for status queries (increased from 1s)
         self._last_status_query = 0.0
-        
+
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
         self._respeaker_lock = __import__('threading').Lock()
 
     def set_movement_manager(self, movement_manager) -> None:
         """Set the MovementManager instance for pose control.
-        
+
         Args:
             movement_manager: MovementManager instance
         """
@@ -77,7 +77,7 @@ class ReachyController:
 
     def _get_cached_status(self) -> Optional[Dict]:
         """Get cached daemon status to reduce query frequency.
-        
+
         Note: get_status() may trigger I/O, so we cache it.
         Unlike get_current_head_pose() and get_current_joint_positions()
         which are non-blocking in the SDK.
@@ -85,10 +85,10 @@ class ReachyController:
         now = time.time()
         if now - self._last_status_query < self._cache_ttl:
             return self._state_cache.get('status')
-        
+
         if not self.is_available:
             return None
-        
+
         try:
             status = self.reachy.client.get_status(wait=False)
             self._state_cache['status'] = status
@@ -174,14 +174,14 @@ class ReachyController:
         """Get microphone volume (0-100) using daemon HTTP API."""
         if not self.is_available:
             return getattr(self, '_microphone_volume', 50.0)
-        
+
         try:
             # Get WLAN IP from cached daemon status
             status = self._get_cached_status()
             if status is None:
                 return getattr(self, '_microphone_volume', 50.0)
             wlan_ip = status.get('wlan_ip', 'localhost')
-            
+
             # Call the daemon API to get microphone volume
             response = requests.get(
                 f"http://{wlan_ip}:8000/api/volume/microphone/current",
@@ -193,7 +193,7 @@ class ReachyController:
                 return self._microphone_volume
         except Exception as e:
             logger.debug(f"Could not get microphone volume from API: {e}")
-        
+
         return getattr(self, '_microphone_volume', 50.0)
 
     def set_microphone_volume(self, volume: float) -> None:
@@ -217,7 +217,7 @@ class ReachyController:
                 logger.error("Cannot get daemon status for microphone volume control")
                 return
             wlan_ip = status.get('wlan_ip', 'localhost')
-            
+
             # Call the daemon API to set microphone volume
             response = requests.post(
                 f"http://{wlan_ip}:8000/api/volume/microphone/set",
@@ -339,13 +339,13 @@ class ReachyController:
 
     def _get_head_pose(self) -> Optional[np.ndarray]:
         """Get current head pose from SDK.
-        
+
         Note: SDK's get_current_head_pose() is non-blocking - it returns
         cached data from Zenoh subscriptions, so no throttling needed.
         """
         if not self.is_available:
             return None
-        
+
         try:
             return self.reachy.get_current_head_pose()
         except Exception as e:
@@ -354,13 +354,13 @@ class ReachyController:
 
     def _get_joint_positions(self) -> Optional[tuple]:
         """Get current joint positions from SDK.
-        
+
         Note: SDK's get_current_joint_positions() is non-blocking - it returns
         cached data from Zenoh subscriptions, so no throttling needed.
         """
         if not self.is_available:
             return None
-        
+
         try:
             return self.reachy.get_current_joint_positions()
         except Exception as e:
@@ -392,10 +392,10 @@ class ReachyController:
 
     def _get_head_pose_component(self, component: str) -> float:
         """Get a specific component from head pose.
-        
+
         Args:
             component: One of 'x', 'y', 'z' (mm), 'roll', 'pitch', 'yaw' (degrees)
-            
+
         Returns:
             The component value, or 0.0 on error
         """
@@ -423,7 +423,7 @@ class ReachyController:
 
     def _set_pose_via_manager(self, **kwargs) -> bool:
         """Set pose via MovementManager if available.
-        
+
         Returns True if successful, False if MovementManager not available.
         """
         if self._movement_manager is None:
@@ -580,7 +580,7 @@ class ReachyController:
 
     def _update_look_at(self) -> None:
         """Update robot to look at the target coordinates.
-        
+
         NOTE: Disabled to prevent conflict with MovementManager's control loop.
         """
         logger.warning("_update_look_at is disabled - MovementManager controls head pose")
@@ -651,11 +651,11 @@ class ReachyController:
 
     def _get_imu_value(self, sensor_type: str, index: int) -> float:
         """Get a specific IMU sensor value.
-        
+
         Args:
             sensor_type: 'accelerometer', 'gyroscope', or 'temperature'
             index: Array index (0=x, 1=y, 2=z) or -1 for scalar values
-            
+
         Returns:
             The sensor value, or 0.0 on error
         """
@@ -705,7 +705,7 @@ class ReachyController:
 
     def _get_respeaker(self):
         """Get ReSpeaker device from media manager with thread-safe access.
-        
+
         Returns a context manager that holds the lock during ReSpeaker operations.
         Usage:
             with self._get_respeaker() as respeaker:
@@ -779,11 +779,11 @@ class ReachyController:
 
     def get_noise_suppression(self) -> float:
         """Get noise suppression level (0-100%).
-        
+
         PP_MIN_NS represents "minimum signal preservation ratio":
         - PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% suppression
         - PP_MIN_NS = 0.15 means "keep at least 15% of signal" = 85% suppression
-        
+
         We display "noise suppression strength" to user, so:
         - suppression_percent = (1.0 - PP_MIN_NS) * 100
         """
@@ -834,10 +834,10 @@ class ReachyController:
 
     def get_doa_angle(self) -> tuple[float, bool] | None:
         """Get Direction of Arrival angle from microphone array.
-        
+
         The DOA angle indicates the direction of the sound source relative to the robot.
         Angle is in radians: 0 = left, π/2 = front/back, π = right.
-        
+
         Returns:
             Tuple of (angle_radians, speech_detected), or None if unavailable.
             - angle_radians: Sound source direction in radians
@@ -854,7 +854,7 @@ class ReachyController:
 
     def get_doa_angle_degrees(self) -> float:
         """Get DOA angle in degrees for Home Assistant entity.
-        
+
         Returns the raw DOA angle in degrees (0-180°).
         SDK convention: 0° = left, 90° = front, 180° = right
         """
@@ -868,7 +868,7 @@ class ReachyController:
 
     def get_speech_detected(self) -> bool:
         """Get speech detection status from DOA.
-        
+
         Returns True if speech is currently detected.
         """
         doa = self.get_doa_angle()

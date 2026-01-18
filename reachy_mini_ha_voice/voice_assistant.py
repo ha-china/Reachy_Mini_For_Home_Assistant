@@ -49,6 +49,7 @@ class AudioProcessingContext:
 
 # Audio chunk size for consistent streaming (matches reference project)
 AUDIO_BLOCK_SIZE = 1024  # samples at 16kHz = 64ms
+MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 10  # Max 10 chunks (~640ms) to prevent memory leak
 
 
 class VoiceAssistantService:
@@ -714,6 +715,9 @@ class VoiceAssistantService:
 
                     if audio_data.ndim == 1:
                         self._audio_buffer = np.concatenate([self._audio_buffer, audio_data])
+                        # Prevent unbounded buffer growth - keep only recent audio
+                        if len(self._audio_buffer) > MAX_AUDIO_BUFFER_SIZE:
+                            self._audio_buffer = self._audio_buffer[-MAX_AUDIO_BUFFER_SIZE:]
             except (TypeError, ValueError):
                 pass
 

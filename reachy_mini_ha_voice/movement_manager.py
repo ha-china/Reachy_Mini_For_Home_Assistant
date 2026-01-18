@@ -21,13 +21,15 @@ import math
 import random
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from queue import Queue, Empty
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+from .animation_player import AnimationPlayer
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -42,9 +44,6 @@ try:
 except ImportError:
     SDK_UTILS_AVAILABLE = False
     logger.warning("SDK utils not available, using fallback pose composition")
-
-# Import animation player
-from .animation_player import AnimationPlayer
 
 
 # =============================================================================
@@ -182,6 +181,8 @@ class MovementManager:
 
         # Thread control
         self._stop_event = threading.Event()
+        self._draining_event = threading.Event()  # Thread-safe graceful shutdown flag
+        self._emotion_playing_event = threading.Event()  # Pause when emotion animation playing
         self._thread: Optional[threading.Thread] = None
 
         # Error throttling
@@ -206,10 +207,10 @@ class MovementManager:
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         self._face_tracking_lock = threading.Lock()
-        
+
         # Camera server reference for face tracking
         self._camera_server = None
-        
+
         # Face tracking smoothing (exponential moving average)
         self._smoothed_face_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_smoothing_factor = 0.3
@@ -241,6 +242,20 @@ class MovementManager:
     def set_idle(self) -> None:
         """Thread-safe: Return to idle state."""
         self._command_queue.put(("set_state", RobotState.IDLE))
+
+    def pause_for_emotion(self) -> None:
+        """Thread-safe: Pause control loop while emotion animation is playing.
+
+        This prevents MovementManager from sending commands that conflict
+        with the SDK's recorded move playback.
+        """
+        self._emotion_playing_event.set()
+        logger.debug("MovementManager paused for emotion animation")
+
+    def resume_after_emotion(self) -> None:
+        """Thread-safe: Resume control loop after emotion animation completes."""
+        self._emotion_playing_event.clear()
+        logger.debug("MovementManager resumed after emotion animation")
 
     def queue_action(self, action: PendingAction) -> None:
         """Thread-safe: Queue a motion action."""
@@ -303,7 +318,7 @@ class MovementManager:
 
     def set_face_tracking_offsets(self, offsets: Tuple[float, float, float, float, float, float]) -> None:
         """Thread-safe: Update face tracking offsets manually.
-        
+
         Args:
             offsets: Tuple of (x, y, z, roll, pitch, yaw) in meters/radians
         """
@@ -382,8 +397,8 @@ class MovementManager:
                 # Start unfreezing when leaving listening mode
                 self._start_antenna_unfreeze()
 
-            logger.debug("State changed: %s -> %s, animation: %s", 
-                        old_state.value, payload.value, animation_name)
+            logger.debug("State changed: %s -> %s, animation: %s",
+                         old_state.value, payload.value, animation_name)
 
         elif cmd == "action":
             self._start_action(payload)
@@ -530,7 +545,7 @@ class MovementManager:
         self.state.frozen_antenna_right = current_right
         self.state.antenna_blend = 0.0  # Fully frozen
         logger.debug("Antennas frozen at left=%.2f, right=%.2f",
-                    math.degrees(current_left), math.degrees(current_right))
+                     math.degrees(current_left), math.degrees(current_right))
 
     def _start_antenna_unfreeze(self) -> None:
         """Start unfreezing antennas (smooth blend back to normal)."""
@@ -687,8 +702,7 @@ class MovementManager:
             self.state.next_look_around_time = now + IDLE_LOOK_AROUND_DURATION * 2 + interval
 
             logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°",
-                        target_yaw, target_pitch)
-
+                         target_yaw, target_pitch)
 
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         """Compose final pose from all sources using SDK's compose_world_offset.
@@ -786,9 +800,9 @@ class MovementManager:
         if blend < 1.0:
             # Blend between frozen position and target position
             antenna_left = (self.state.frozen_antenna_left * (1.0 - blend) +
-                          target_antenna_left * blend)
+                            target_antenna_left * blend)
             antenna_right = (self.state.frozen_antenna_right * (1.0 - blend) +
-                           target_antenna_right * blend)
+                             target_antenna_right * blend)
         else:
             antenna_left = target_antenna_left
             antenna_right = target_antenna_right
@@ -825,8 +839,18 @@ class MovementManager:
         if self.robot is None:
             return
 
+        # Skip sending commands during graceful shutdown drain phase
+        # This prevents partial command transmission that can crash daemon
+        if self._draining_event.is_set():
+            return
+
+        # Skip sending commands while emotion animation is playing
+        # This prevents "a move is currently running" warning spam
+        if self._emotion_playing_event.is_set():
+            return
+
         now = self._now()
-        
+
         # Check if we should skip due to connection loss (but always try periodically)
         if self._connection_lost:
             if now - self._last_reconnect_attempt < self._reconnect_attempt_interval:
@@ -848,7 +872,7 @@ class MovementManager:
             # Command succeeded - update connection health
             self._last_successful_command = now
             self._consecutive_errors = 0  # Reset error counter
-            
+
             if self._connection_lost:
                 logger.info("✓ Connection to robot restored")
                 self._connection_lost = False
@@ -860,7 +884,7 @@ class MovementManager:
 
             # Check if this is a connection error
             is_connection_error = "Lost connection" in error_msg or "ZError" in error_msg
-            
+
             if is_connection_error:
                 if not self._connection_lost:
                     # First time detecting connection loss
@@ -871,7 +895,10 @@ class MovementManager:
                         self._last_reconnect_attempt = now
                     else:
                         # Transient error, log but don't mark as lost yet
-                        self._log_error_throttled(f"Transient connection error ({self._consecutive_errors}/{self._max_consecutive_errors}): {error_msg}")
+                        err_cnt = self._consecutive_errors
+                        max_err = self._max_consecutive_errors
+                        self._log_error_throttled(
+                            f"Transient connection error ({err_cnt}/{max_err}): {error_msg}")
                 else:
                     # Already in lost state, use throttled logging
                     self._log_error_throttled(f"Connection still lost: {error_msg}")
@@ -974,19 +1001,37 @@ class MovementManager:
         logger.info("Movement manager started")
 
     def stop(self) -> None:
-        """Stop the control loop and reset robot."""
+        """Stop the control loop and reset robot.
+
+        Implements graceful shutdown to prevent daemon crashes:
+        1. Stop sending new commands to robot (drain mode)
+        2. Wait for current command cycle to complete
+        3. Signal control loop to stop
+        4. Wait for thread to finish cleanly
+        """
         if self._thread is None or not self._thread.is_alive():
             return
 
         logger.info("Stopping movement manager...")
 
-        # Signal stop
+        # Phase 1: Enter drain mode - stop sending commands to robot
+        # This prevents partial command transmission that can crash daemon
+        self._draining_event.set()
+
+        # Give the control loop time to finish any in-flight command
+        # At 100Hz, one cycle is 10ms, so 50ms (5 cycles) is plenty
+        time.sleep(0.05)
+
+        # Phase 2: Signal stop
         self._stop_event.set()
 
-        # Wait for thread with shorter timeout
+        # Phase 3: Wait for thread with reasonable timeout
         self._thread.join(timeout=0.5)
         if self._thread.is_alive():
             logger.warning("Movement manager thread did not stop in time")
+
+        # Reset drain flag for potential restart
+        self._draining_event.clear()
 
         # Skip reset to neutral - let the app manager handle it
         # This speeds up shutdown significantly

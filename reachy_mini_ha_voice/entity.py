@@ -2,36 +2,26 @@
 
 from abc import abstractmethod
 from collections.abc import Iterable
-from typing import Callable, List, Optional, Union, TYPE_CHECKING
+from typing import Callable, List, Optional, Union
 import logging
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     ListEntitiesBinarySensorResponse,
-    ListEntitiesButtonResponse,
     ListEntitiesCameraResponse,
     ListEntitiesMediaPlayerResponse,
     ListEntitiesNumberResponse,
     ListEntitiesRequest,
-    ListEntitiesSelectResponse,
-    ListEntitiesSensorResponse,
-    ListEntitiesSwitchResponse,
     ListEntitiesTextSensorResponse,
     BinarySensorStateResponse,
-    ButtonCommandRequest,
     CameraImageRequest,
     CameraImageResponse,
     MediaPlayerCommandRequest,
     MediaPlayerStateResponse,
     NumberCommandRequest,
     NumberStateResponse,
-    SelectCommandRequest,
-    SelectStateResponse,
-    SensorStateResponse,
     SubscribeHomeAssistantStatesRequest,
     SubscribeStatesRequest,
-    SwitchCommandRequest,
-    SwitchStateResponse,
     TextSensorStateResponse,
 )
 from aioesphomeapi.model import MediaPlayerCommand, MediaPlayerState, MediaPlayerEntityFeature
@@ -40,9 +30,6 @@ from google.protobuf import message
 from .api_server import APIServer
 from .audio_player import AudioPlayer
 from .util import call_all
-
-if TYPE_CHECKING:
-    from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
 
@@ -416,4 +403,3 @@ class CameraEntity(ESPHomeEntity):
                     data=b"",
                     done=True,
                 )
-

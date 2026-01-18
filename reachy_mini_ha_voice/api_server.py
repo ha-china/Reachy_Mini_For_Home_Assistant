@@ -175,4 +175,4 @@ class APIServer(asyncio.Protocol):
             assert self._buffer is not None, "Buffer should be set"
 
         cstr = self._buffer
-        self._buffer = cstr[end_of_frame_pos : self._buffer_len + end_of_frame_pos]
+        self._buffer = cstr[end_of_frame_pos: self._buffer_len + end_of_frame_pos]

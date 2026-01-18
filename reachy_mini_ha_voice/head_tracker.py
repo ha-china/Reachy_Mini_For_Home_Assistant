@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class HeadTracker:
     """Lightweight head tracker using YOLO for face detection.
-    
+
     Model is loaded at initialization time to ensure face tracking
     is ready immediately (matching conversation_app behavior).
     """
@@ -46,7 +46,7 @@ class HeadTracker:
         self._detections_class = None
         self._model_load_attempted = False
         self._model_load_error: Optional[str] = None
-        
+
         # Load model immediately at init (not lazy)
         self._load_model()
 
@@ -54,23 +54,23 @@ class HeadTracker:
         """Load YOLO model with retry logic."""
         if self._model_load_attempted:
             return
-        
+
         self._model_load_attempted = True
-        
+
         try:
             from ultralytics import YOLO
             from supervision import Detections
             from huggingface_hub import hf_hub_download
             import time
-            
+
             self._detections_class = Detections
-            
+
             # Download with retries
             max_retries = 3
             retry_delay = 5
             model_path = None
             last_error = None
-            
+
             for attempt in range(max_retries):
                 try:
                     model_path = hf_hub_download(
@@ -86,10 +86,10 @@ class HeadTracker:
                             attempt + 1, max_retries, e, retry_delay
                         )
                         time.sleep(retry_delay)
-            
+
             if model_path is None:
                 raise last_error
-            
+
             self.model = YOLO(model_path).to(self._device)
             logger.info("YOLO face detection model loaded")
         except ImportError as e:

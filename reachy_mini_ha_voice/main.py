@@ -9,8 +9,9 @@ import asyncio
 import logging
 import socket
 import threading
-import time
 from typing import Optional
+
+from .voice_assistant import VoiceAssistantService
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +46,6 @@ except ImportError:
             self.stop_event.set()
 
     ReachyMini = None
-
-
-from .voice_assistant import VoiceAssistantService
-from .motion import ReachyMiniMotion
 
 
 class ReachyMiniHaVoice(ReachyMiniApp):

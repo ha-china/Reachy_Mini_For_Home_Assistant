@@ -1,9 +1,21 @@
 [
   {
+    "version": "0.8.6",
+    "date": "2026-01-18",
+    "changes": [
+      "Fix: Audio buffer memory leak - added size limit to prevent unbounded growth",
+      "Fix: Temp file leak - downloaded audio files now cleaned up after playback",
+      "Fix: Camera thread termination timeout increased for clean shutdown",
+      "Fix: Thread-safe draining flag using threading.Event",
+      "Fix: Silent failures now logged for debugging"
+    ]
+  },
+  {
     "version": "0.8.5",
     "date": "2026-01-18",
     "changes": [
-      "Fix: DOA turn-to-sound direction inverted - now turns correctly toward sound source"
+      "Fix: DOA turn-to-sound direction inverted - now turns correctly toward sound source",
+      "Fix: Graceful shutdown prevents daemon crash on app stop"
     ]
   },
   {

@@ -364,8 +364,8 @@ class AudioPlayer:
         for unsub in self._sendspin_unsubscribers:
             try:
                 unsub()
-            except Exception:
-                pass
+            except Exception as e:
+                _LOGGER.debug("Error during Sendspin unsubscribe: %s", e)
         self._sendspin_unsubscribers.clear()
 
         if self._sendspin_client is not None:
@@ -434,6 +434,7 @@ class AudioPlayer:
 
     def _play_file(self, file_path: str) -> None:
         """Play an audio file with optional speech-driven sway animation."""
+        temp_file_path = None  # Track temp file for cleanup
         try:
             # Handle URLs - download first
             if file_path.startswith(("http://", "https://")):
@@ -443,6 +444,7 @@ class AudioPlayer:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                     urllib.request.urlretrieve(file_path, tmp.name)
                     file_path = tmp.name
+                    temp_file_path = tmp.name  # Remember for cleanup
 
             if self._stop_flag.is_set():
                 return
@@ -509,6 +511,14 @@ class AudioPlayer:
         except Exception as e:
             _LOGGER.error("Error playing audio: %s", e)
         finally:
+            # Clean up temp file if we created one
+            if temp_file_path is not None:
+                try:
+                    import os
+                    os.unlink(temp_file_path)
+                except Exception:
+                    pass  # Ignore cleanup errors
+
             self.is_playing = False
             if self._playlist and not self._stop_flag.is_set():
                 self._play_next()

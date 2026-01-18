@@ -124,7 +124,7 @@ class EntityRegistry:
         self.reachy_controller = reachy_controller
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
-        
+
         # Gesture detection state
         self._current_gesture = "none"
         self._gesture_confidence = 0.0
