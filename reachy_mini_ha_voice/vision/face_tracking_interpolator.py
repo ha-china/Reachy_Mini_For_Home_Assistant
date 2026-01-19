@@ -31,6 +31,10 @@ class InterpolationConfig:
     offset_scale: float = 0.6  # Scale factor for tracking offsets
     pitch_offset_deg: float = 9.0  # Pitch compensation (look down)
     yaw_offset_deg: float = -7.0  # Yaw compensation (turn right)
+    # Rotation limits (radians) to prevent IK collisions
+    max_pitch_rad: float = 0.5  # ~28 degrees
+    max_yaw_rad: float = 0.8  # ~46 degrees
+    max_roll_rad: float = 0.3  # ~17 degrees
 
 
 class FaceTrackingInterpolator:
@@ -84,13 +88,18 @@ class FaceTrackingInterpolator:
         yaw_offset_rad = np.radians(self.config.yaw_offset_deg)
         scaled_rot[2] += yaw_offset_rad
 
+        # Clamp rotations to prevent IK collisions
+        clamped_roll = max(-self.config.max_roll_rad, min(self.config.max_roll_rad, float(scaled_rot[0])))
+        clamped_pitch = max(-self.config.max_pitch_rad, min(self.config.max_pitch_rad, float(scaled_rot[1])))
+        clamped_yaw = max(-self.config.max_yaw_rad, min(self.config.max_yaw_rad, float(scaled_rot[2])))
+
         self._offsets = [
             float(scaled_trans[0]),
             float(scaled_trans[1]),
             float(scaled_trans[2]),
-            float(scaled_rot[0]),
-            float(scaled_rot[1]),
-            float(scaled_rot[2]),
+            clamped_roll,
+            clamped_pitch,
+            clamped_yaw,
         ]
 
     def process_face_lost(self, current_time: float) -> None:
