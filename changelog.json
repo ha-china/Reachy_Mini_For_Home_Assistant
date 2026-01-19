@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.9.5",
+    "date": "2026-01-19",
+    "changes": [
+      "New: Audio diagnostics system - real-time RMS level, NaN/Inf count, and silence percentage monitoring",
+      "Optimize: Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms → 16ms)",
+      "Optimize: Audio loop delay reduced from 10ms to 1ms for faster VAD response",
+      "Optimize: Stereo to mono conversion uses first channel instead of mean for cleaner signal"
+    ]
+  },
+  {
     "version": "0.9.0",
     "date": "2026-01-18",
     "changes": [
