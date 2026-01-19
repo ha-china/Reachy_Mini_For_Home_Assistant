@@ -1,16 +1,15 @@
 """Entities module for Home Assistant integration.
 
 This module handles ESPHome entity definitions:
-- EntityRegistry: Central registry for all HA entities
-- Entity types: Sensors, switches, buttons, numbers, etc.
 - EventEmotionMapper: HA event to robot emotion mapping
+- EmotionKeywordDetector: LLM response emotion detection
 - Entity keys: Consistent key management
+- Entity factory: Entity creation utilities
+
+Note: EntityRegistry is in the parent package to avoid circular imports.
+Import it directly: from reachy_mini_ha_voice.entity_registry import EntityRegistry
 """
 
-# Re-export main classes for backward compatibility
-from ..entity_registry import EntityRegistry
-from ..entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
-from ..entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
 from .event_emotion_mapper import (
     EventSource,
     EventEmotionMapping,
@@ -19,6 +18,8 @@ from .event_emotion_mapper import (
     DEFAULT_EVENT_EMOTION_MAP,
     load_event_mappings,
 )
+from .emotion_detector import EmotionKeywordDetector
+
 # Entity keys - single source of truth
 from .entity_keys import (
     ENTITY_KEYS,
@@ -28,17 +29,6 @@ from .entity_keys import (
 )
 
 __all__ = [
-    "EntityRegistry",
-    "get_entity_key",
-    "ENTITY_KEYS",
-    "BinarySensorEntity",
-    "CameraEntity",
-    "NumberEntity",
-    "TextSensorEntity",
-    "SensorEntity",
-    "SwitchEntity",
-    "SelectEntity",
-    "ButtonEntity",
     # Event emotion mapping
     "EventSource",
     "EventEmotionMapping",
@@ -46,7 +36,11 @@ __all__ = [
     "EventEmotionMapper",
     "DEFAULT_EVENT_EMOTION_MAP",
     "load_event_mappings",
+    # Emotion detection
+    "EmotionKeywordDetector",
     # Entity keys
+    "ENTITY_KEYS",
+    "get_entity_key",
     "register_entity_key",
     "get_next_available_key",
 ]
