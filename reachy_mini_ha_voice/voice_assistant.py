@@ -61,12 +61,6 @@ MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 40  # Max 40 chunks (~640ms) to preve
 AUDIO_DIAG_LOG_INTERVAL = 1.0  # Log diagnostics every N seconds
 AUDIO_DIAG_RMS_THRESHOLD = 0.001  # RMS below this is considered silence
 
-# Digital gain settings for boosting quiet microphone input
-# The ReSpeaker XVF3800 often outputs very quiet audio (RMS ~0.001)
-# Normal speech should be RMS ~0.01-0.1, so we apply digital gain
-# This works together with hardware AGC (set to 40dB max)
-AUDIO_DIGITAL_GAIN = 6.0  # Linear multiplier (6x = +15.5dB boost)
-
 
 class VoiceAssistantService:
     """Voice assistant service that runs ESPHome protocol server."""
@@ -973,13 +967,7 @@ class VoiceAssistantService:
                     elif audio_data.ndim == 2:
                         audio_data = audio_data[:, 0].copy()
 
-                    # Apply digital gain to boost quiet microphone input
-                    # The ReSpeaker outputs very quiet audio that VAD struggles to detect
-                    audio_data = audio_data * AUDIO_DIGITAL_GAIN
-                    # Clip to prevent distortion (will be clipped again in PCM conversion)
-                    audio_data = np.clip(audio_data, -1.0, 1.0)
-
-                    # Calculate RMS for this chunk (after gain, before resampling)
+                    # Calculate RMS for this chunk (before resampling)
                     if audio_data.size > 0:
                         chunk_rms = float(np.sqrt(np.mean(audio_data ** 2)))
                         self._audio_diag_rms_sum += chunk_rms
