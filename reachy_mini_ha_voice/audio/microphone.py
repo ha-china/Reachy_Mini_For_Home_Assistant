@@ -25,11 +25,11 @@ class MicrophoneDefaults:
     """Default microphone settings for voice recognition."""
 
     agc_enabled: bool = True
-    agc_max_gain: float = 30.0  # dB
+    agc_max_gain: float = 42.0  # dB (increased from 30 for distant speech)
     noise_suppression: float = 15.0  # percentage
-    agc_desired_level: float = -18.0  # dB
-    agc_time_constant: float = 0.5  # seconds
-    mic_gain: float = 2.0  # linear multiplier
+    agc_desired_level: float = -12.0  # dB (increased from -18 for louder output)
+    agc_time_constant: float = 0.3  # seconds (faster response for voice commands)
+    mic_gain: float = 6.0  # linear multiplier (increased from 2.0 for quiet mic)
 
 
 class MicrophoneOptimizer:
