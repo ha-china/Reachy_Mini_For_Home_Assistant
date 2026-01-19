@@ -934,6 +934,9 @@ class VoiceAssistantService:
                     if audio_data.dtype != np.float32:
                         audio_data = np.asarray(audio_data, dtype=np.float32)
 
+                    # Clean NaN/Inf values early to prevent downstream errors
+                    audio_data = np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0)
+
                     # Convert stereo to mono (use first channel for better quality)
                     if audio_data.ndim == 2 and audio_data.shape[1] >= 2:
                         # Use first channel instead of mean - cleaner signal
@@ -973,8 +976,10 @@ class VoiceAssistantService:
 
     def _convert_to_pcm(self, audio_chunk_array: np.ndarray) -> bytes:
         """Convert float32 audio array to 16-bit PCM bytes."""
+        # Replace NaN/Inf with 0 to avoid casting errors
+        audio_clean = np.nan_to_num(audio_chunk_array, nan=0.0, posinf=1.0, neginf=-1.0)
         return (
-            (np.clip(audio_chunk_array, -1.0, 1.0) * 32767.0)
+            (np.clip(audio_clean, -1.0, 1.0) * 32767.0)
             .astype("<i2")
             .tobytes()
         )
