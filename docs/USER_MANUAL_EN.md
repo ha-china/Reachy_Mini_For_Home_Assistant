@@ -20,8 +20,9 @@ Install `reachy_mini_ha_voice` from the Reachy Mini App Store.
 ### Step 2: Start the App
 The app will automatically:
 - Start the ESPHome server on port 6053
-- Download required wake word models and sound files
+- Load pre-packaged wake word models
 - Register with mDNS for auto-discovery
+- Connect to Sendspin server if available on network
 
 ### Step 3: Connect to Home Assistant
 **Automatic (Recommended):**
@@ -81,6 +82,13 @@ The robot can play 35 different emotions:
 - AGC (Auto Gain Control, 0-40dB)
 - Noise suppression (0-100%)
 - Echo cancellation (built-in)
+
+### Sendspin Multi-Room Audio
+- Automatic discovery of Sendspin servers via mDNS
+- Synchronized multi-room audio playback
+- Reachy Mini acts as a PLAYER to receive audio streams
+- Auto-pause during voice conversations
+- No user configuration required
 
 ### DOA Sound Tracking
 - Direction of Arrival detection
