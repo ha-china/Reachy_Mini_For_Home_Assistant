@@ -1,0 +1,89 @@
+{
+  "$schema": "gesture_mappings_schema.json",
+  "_description": "Gesture to action mappings for Reachy Mini",
+  "_version": "1.0",
+
+  "settings": {
+    "min_confidence": 0.7,
+    "default_cooldown": 2.0
+  },
+
+  "mappings": {
+    "like": {
+      "action": "emotion",
+      "emotion": "happy",
+      "ha_event": "gesture_like",
+      "cooldown": 2.0
+    },
+    "ok": {
+      "action": "emotion",
+      "emotion": "nod",
+      "ha_event": "gesture_ok",
+      "cooldown": 2.0
+    },
+    "peace": {
+      "action": "emotion",
+      "emotion": "cheerful1",
+      "ha_event": "gesture_peace",
+      "cooldown": 2.0
+    },
+    "dislike": {
+      "action": "emotion",
+      "emotion": "sad",
+      "ha_event": "gesture_dislike",
+      "cooldown": 2.0
+    },
+    "stop": {
+      "action": "stop_speaking",
+      "emotion": "alert",
+      "ha_event": "gesture_stop",
+      "cooldown": 2.0
+    },
+    "call": {
+      "action": "start_listening",
+      "ha_event": "gesture_call",
+      "cooldown": 3.0
+    },
+    "palm": {
+      "action": "pause_motion",
+      "ha_event": "gesture_palm",
+      "cooldown": 2.0
+    },
+    "fist": {
+      "action": "emotion",
+      "emotion": "alert",
+      "ha_event": "gesture_fist",
+      "cooldown": 2.0
+    },
+    "one": {
+      "action": "ha_event",
+      "ha_event": "gesture_one",
+      "cooldown": 2.0
+    },
+    "two_up": {
+      "action": "ha_event",
+      "ha_event": "gesture_two",
+      "cooldown": 2.0
+    },
+    "three": {
+      "action": "ha_event",
+      "ha_event": "gesture_three",
+      "cooldown": 2.0
+    },
+    "four": {
+      "action": "ha_event",
+      "ha_event": "gesture_four",
+      "cooldown": 2.0
+    }
+  },
+
+  "_actions": {
+    "emotion": "Play an emotion animation (requires 'emotion' field)",
+    "sound": "Play a sound (requires 'sound' field)",
+    "start_listening": "Trigger voice assistant listening",
+    "stop_speaking": "Interrupt TTS playback",
+    "pause_motion": "Pause all robot motion",
+    "ha_event": "Send event to Home Assistant (requires 'ha_event' field)",
+    "none": "No action"
+  }
+}

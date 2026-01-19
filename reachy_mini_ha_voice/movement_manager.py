@@ -21,30 +21,32 @@ import math
 import random
 import threading
 import time
-from dataclasses import dataclass
-from enum import Enum
 from queue import Queue, Empty
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from .animation_player import AnimationPlayer
 from .emotion_moves import EmotionMove, is_emotion_available
+from .motion.state_machine import (
+    RobotState,
+    MovementState,
+    PendingAction,
+    STATE_ANIMATION_MAP,
+)
+from .motion.antenna import AntennaController
+from .motion.pose_composer import (
+    create_head_pose_matrix,
+    compose_poses,
+    extract_yaw_from_pose,
+    clamp_body_yaw,
+)
+from .audio.doa_tracker import DOATracker, DOAConfig
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
-
-# Import SDK utilities for pose composition (same as conversation_app)
-try:
-    from reachy_mini.utils import create_head_pose
-    from reachy_mini.utils.interpolation import compose_world_offset
-    SDK_UTILS_AVAILABLE = True
-except ImportError:
-    SDK_UTILS_AVAILABLE = False
-    logger.warning("SDK utils not available, using fallback pose composition")
 
 
 # =============================================================================
@@ -54,14 +56,6 @@ except ImportError:
 # Control loop frequency - daemon now supports higher rates
 CONTROL_LOOP_FREQUENCY_HZ = 100  # 100Hz control loop (same as conversation_app)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
-
-# Body yaw safety limits (matches SDK's inverse_kinematics_safe constraints)
-# SDK limits body_yaw to ±160° and head-body relative angle to ±65°
-MAX_BODY_YAW_RAD = math.radians(160.0)
-MIN_BODY_YAW_RAD = math.radians(-160.0)
-
-# Antenna freeze parameters (listening mode)
-ANTENNA_BLEND_DURATION = 0.5  # Seconds to blend back from frozen state
 
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
@@ -74,92 +68,6 @@ IDLE_LOOK_AROUND_YAW_RANGE = 25.0     # Maximum yaw angle in degrees
 IDLE_LOOK_AROUND_PITCH_RANGE = 10.0   # Maximum pitch angle in degrees
 IDLE_LOOK_AROUND_DURATION = 1.2       # Duration of look-around action in seconds
 IDLE_INACTIVITY_THRESHOLD = 5.0       # Seconds of inactivity before look-around starts
-
-# State to animation mapping
-# Note: SPEAKING uses idle animation as base, with speech_sway offsets layered on top
-STATE_ANIMATION_MAP = {
-    "idle": "idle",
-    "listening": "listening",
-    "thinking": "thinking",
-    "speaking": "idle",  # Base animation only; actual motion from speech_sway
-}
-
-
-class RobotState(Enum):
-    """Robot state machine states."""
-    IDLE = "idle"
-    LISTENING = "listening"
-    THINKING = "thinking"
-    SPEAKING = "speaking"
-
-
-@dataclass
-class MovementState:
-    """Internal movement state (only modified by control loop)."""
-    # Current robot state
-    robot_state: RobotState = RobotState.IDLE
-
-    # Animation offsets (from AnimationPlayer)
-    anim_pitch: float = 0.0
-    anim_yaw: float = 0.0
-    anim_roll: float = 0.0
-    anim_x: float = 0.0
-    anim_y: float = 0.0
-    anim_z: float = 0.0
-    anim_antenna_left: float = 0.0
-    anim_antenna_right: float = 0.0
-
-    # Speech sway offsets (from audio analysis)
-    sway_pitch: float = 0.0
-    sway_yaw: float = 0.0
-    sway_roll: float = 0.0
-    sway_x: float = 0.0
-    sway_y: float = 0.0
-    sway_z: float = 0.0
-
-    # Target pose (from actions)
-    target_pitch: float = 0.0
-    target_yaw: float = 0.0
-    target_roll: float = 0.0
-    target_x: float = 0.0
-    target_y: float = 0.0
-    target_z: float = 0.0
-    target_antenna_left: float = 0.0
-    target_antenna_right: float = 0.0
-
-    # Timing
-    last_activity_time: float = 0.0
-    idle_start_time: float = 0.0
-
-    # Antenna freeze state (listening mode)
-    antenna_frozen: bool = False
-    frozen_antenna_left: float = 0.0
-    frozen_antenna_right: float = 0.0
-    antenna_blend: float = 1.0  # 0=frozen, 1=normal
-    antenna_blend_start_time: float = 0.0
-
-    # Idle look-around behavior
-    next_look_around_time: float = 0.0
-    look_around_in_progress: bool = False
-
-    # Face tracking animation suppression
-    face_detected: bool = False
-    face_lost_time: float = 0.0
-    animation_blend: float = 1.0  # 0=suppressed (face tracking), 1=full animation
-
-
-@dataclass
-class PendingAction:
-    """A pending motion action."""
-    name: str
-    target_pitch: float = 0.0
-    target_yaw: float = 0.0
-    target_roll: float = 0.0
-    target_x: float = 0.0
-    target_y: float = 0.0
-    target_z: float = 0.0
-    duration: float = 0.5
-    callback: Optional[Callable] = None
 
 
 class MovementManager:
@@ -190,6 +98,8 @@ class MovementManager:
         self._draining_event = threading.Event()  # Thread-safe graceful shutdown flag
         self._emotion_playing_event = threading.Event()  # Pause when emotion animation playing
         self._robot_paused_event = threading.Event()  # Pause when robot disconnected/sleeping
+        self._robot_resumed_event = threading.Event()  # Signal when robot resumes (for event-driven wait)
+        self._robot_resumed_event.set()  # Start in resumed state
         self._thread: Optional[threading.Thread] = None
 
         # Error throttling
@@ -230,7 +140,17 @@ class MovementManager:
         self._emotion_start_time: float = 0.0
         self._emotion_move_lock = threading.Lock()
 
-        logger.info("MovementManager initialized with AnimationPlayer")
+        # DOA (Direction of Arrival) sound tracking
+        self._doa_tracker = DOATracker(
+            movement_callback=self._on_doa_turn,
+            config=DOAConfig(),
+        )
+        self._doa_enabled = True  # Can be disabled via entity
+
+        # Antenna controller (handles freeze/unfreeze for listening mode)
+        self._antenna_controller = AntennaController(time_func=self._now)
+
+        logger.info("MovementManager initialized with AnimationPlayer and DOA tracking")
 
     # =========================================================================
     # Thread-safe public API (called from any thread)
@@ -283,6 +203,7 @@ class MovementManager:
         """
         if not self._robot_paused_event.is_set():
             self._robot_paused_event.set()
+            self._robot_resumed_event.clear()  # Clear resume signal
             # Reset connection tracking state
             self._connection_lost = False
             self._consecutive_errors = 0
@@ -296,8 +217,74 @@ class MovementManager:
         """
         if self._robot_paused_event.is_set():
             self._robot_paused_event.clear()
+            self._robot_resumed_event.set()  # Signal resume to wake waiting threads
             self._last_successful_command = self._now()
             logger.info("MovementManager resumed - robot reconnected")
+
+    def suspend(self) -> None:
+        """Suspend the movement manager for sleep mode.
+
+        This stops the control loop thread to release CPU resources.
+        The service can be resumed later with resume().
+        """
+        if not self.is_running:
+            logger.debug("MovementManager not running, nothing to suspend")
+            return
+
+        logger.info("Suspending MovementManager for sleep...")
+
+        # First pause the robot operations
+        self.pause_for_robot_disconnect()
+
+        # Then stop the control loop thread to release CPU
+        self._draining_event.set()
+        time.sleep(0.05)  # Wait for in-flight commands
+        self._stop_event.set()
+
+        # Wait for thread to finish
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            if self._thread.is_alive():
+                logger.warning("MovementManager thread did not stop cleanly during suspend")
+
+        # Clear events for next start
+        self._draining_event.clear()
+        self._stop_event.clear()
+
+        logger.info("MovementManager suspended - CPU released")
+
+    def resume_from_suspend(self) -> None:
+        """Resume the movement manager after sleep.
+
+        This restarts the control loop thread.
+        """
+        if self.is_running:
+            logger.debug("MovementManager already running")
+            return
+
+        logger.info("Resuming MovementManager from sleep...")
+
+        # Resume robot operations
+        self.resume_after_robot_connect()
+
+        # Restart the control loop thread
+        self._stop_event.clear()
+        self._draining_event.clear()
+
+        # Reset idle animation state
+        self._animation_player.set_animation("idle")
+        self.state.robot_state = RobotState.IDLE
+        self.state.idle_start_time = self._now()
+
+        # Start thread
+        self._thread = threading.Thread(
+            target=self._control_loop,
+            daemon=True,
+            name="MovementManager",
+        )
+        self._thread.start()
+
+        logger.info("MovementManager resumed from sleep")
 
     def queue_emotion_move(self, emotion_name: str) -> bool:
         """Thread-safe: Queue an emotion move to be played by the control loop.
@@ -373,6 +360,66 @@ class MovementManager:
         """
         self._camera_server = camera_server
         logger.info("Camera server set for face tracking")
+
+    # =========================================================================
+    # DOA (Direction of Arrival) Sound Tracking API
+    # =========================================================================
+
+    def set_doa_enabled(self, enabled: bool) -> None:
+        """Enable or disable DOA sound tracking.
+
+        Args:
+            enabled: True to enable, False to disable
+        """
+        self._doa_enabled = enabled
+        self._doa_tracker.enabled = enabled
+        logger.info("DOA tracking %s", "enabled" if enabled else "disabled")
+
+    def update_doa(self, angle_deg: float, energy: float) -> bool:
+        """Update DOA tracker with new sound direction data.
+
+        This should be called from the audio processing loop with data
+        from the ReSpeaker microphone array.
+
+        Args:
+            angle_deg: Direction of arrival in degrees (-180 to 180)
+            energy: Sound energy level (0 to 1)
+
+        Returns:
+            True if a turn was triggered, False otherwise
+        """
+        if not self._doa_enabled:
+            return False
+
+        # Update face detection state for DOA tracker
+        self._doa_tracker.set_face_detected(self.state.face_detected)
+
+        # Update conversation state
+        in_conversation = self.state.robot_state in (
+            RobotState.LISTENING,
+            RobotState.THINKING,
+            RobotState.SPEAKING,
+        )
+        self._doa_tracker.set_conversation_mode(in_conversation)
+
+        return self._doa_tracker.update(angle_deg, energy)
+
+    def _on_doa_turn(self, yaw_degrees: float, duration: float) -> None:
+        """Callback from DOATracker when a turn should be executed.
+
+        Args:
+            yaw_degrees: Target yaw angle in degrees
+            duration: Duration of the turn in seconds
+        """
+        # Create a look action similar to idle look-around
+        action = PendingAction(
+            name="doa_turn",
+            target_yaw=math.radians(yaw_degrees),
+            target_pitch=0.0,  # Keep pitch neutral for DOA turns
+            duration=duration,
+        )
+        self._command_queue.put(("action", action))
+        logger.debug("DOA turn queued: %.1f° over %.1fs", yaw_degrees, duration)
 
     def set_face_tracking_offsets(self, offsets: Tuple[float, float, float, float, float, float]) -> None:
         """Thread-safe: Update face tracking offsets manually.
@@ -619,43 +666,17 @@ class MovementManager:
 
     def _freeze_antennas(self) -> None:
         """Freeze antennas at current position (for listening mode)."""
-        # Capture current antenna positions
         current_left = self.state.target_antenna_left + self.state.anim_antenna_left
         current_right = self.state.target_antenna_right + self.state.anim_antenna_right
-
-        self.state.antenna_frozen = True
-        self.state.frozen_antenna_left = current_left
-        self.state.frozen_antenna_right = current_right
-        self.state.antenna_blend = 0.0  # Fully frozen
-        logger.debug("Antennas frozen at left=%.2f, right=%.2f",
-                     math.degrees(current_left), math.degrees(current_right))
+        self._antenna_controller.freeze(current_left, current_right)
 
     def _start_antenna_unfreeze(self) -> None:
         """Start unfreezing antennas (smooth blend back to normal)."""
-        if not self.state.antenna_frozen:
-            return
-
-        self.state.antenna_blend_start_time = self._now()
-        logger.debug("Starting antenna unfreeze")
+        self._antenna_controller.start_unfreeze()
 
     def _update_antenna_blend(self, dt: float) -> None:
         """Update antenna blend state for smooth unfreezing."""
-        if not self.state.antenna_frozen:
-            return
-
-        if self.state.antenna_blend >= 1.0:
-            # Fully unfrozen
-            self.state.antenna_frozen = False
-            return
-
-        # Calculate blend progress
-        elapsed = self._now() - self.state.antenna_blend_start_time
-        if elapsed > 0:
-            self.state.antenna_blend = min(1.0, elapsed / ANTENNA_BLEND_DURATION)
-
-            if self.state.antenna_blend >= 1.0:
-                self.state.antenna_frozen = False
-                logger.debug("Antennas unfrozen")
+        self._antenna_controller.update(dt)
 
     def _update_animation_blend(self) -> None:
         """Update animation blend factor when face is lost.
@@ -836,117 +857,59 @@ class MovementManager:
             return self._emotion_move is not None
 
     def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
-        """Compose final pose from all sources using SDK's compose_world_offset.
+        """Compose final pose from all sources using pose_composer utilities.
 
         Body yaw follows head yaw to enable natural head tracking with body rotation.
-        When head turns beyond a threshold, body rotates to follow it, similar to
-        how the reference project's sweep_look tool synchronizes body_yaw with head_yaw.
+        When head turns beyond a threshold, body rotates to follow it.
 
         Returns:
             Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
         """
-        # Build primary head pose from target state
-        if SDK_UTILS_AVAILABLE:
-            primary_head = create_head_pose(
-                x=self.state.target_x,
-                y=self.state.target_y,
-                z=self.state.target_z,
-                roll=self.state.target_roll,
-                pitch=self.state.target_pitch,
-                yaw=self.state.target_yaw,
-                degrees=False,
-                mm=False,
-            )
-        else:
-            # Fallback: build matrix manually
-            rotation = R.from_euler('xyz', [
-                self.state.target_roll,
-                self.state.target_pitch,
-                self.state.target_yaw,
-            ])
-            primary_head = np.eye(4)
-            primary_head[:3, :3] = rotation.as_matrix()
-            primary_head[0, 3] = self.state.target_x
-            primary_head[1, 3] = self.state.target_y
-            primary_head[2, 3] = self.state.target_z
+        # Build primary head pose from target state (using pose_composer utility)
+        primary_head = create_head_pose_matrix(
+            x=self.state.target_x,
+            y=self.state.target_y,
+            z=self.state.target_z,
+            roll=self.state.target_roll,
+            pitch=self.state.target_pitch,
+            yaw=self.state.target_yaw,
+        )
 
         # Build secondary pose from animation + face tracking + speech sway
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
 
         # Apply animation blend factor (0 when face detected, 1 when no face)
-        # This suppresses breathing animation during face tracking
         anim_blend = self.state.animation_blend
-        anim_x = self.state.anim_x * anim_blend
-        anim_y = self.state.anim_y * anim_blend
-        anim_z = self.state.anim_z * anim_blend
-        anim_roll = self.state.anim_roll * anim_blend
-        anim_pitch = self.state.anim_pitch * anim_blend
-        anim_yaw = self.state.anim_yaw * anim_blend
+        secondary_x = self.state.anim_x * anim_blend + self.state.sway_x + face_offsets[0]
+        secondary_y = self.state.anim_y * anim_blend + self.state.sway_y + face_offsets[1]
+        secondary_z = self.state.anim_z * anim_blend + self.state.sway_z + face_offsets[2]
+        secondary_roll = self.state.anim_roll * anim_blend + self.state.sway_roll + face_offsets[3]
+        secondary_pitch = self.state.anim_pitch * anim_blend + self.state.sway_pitch + face_offsets[4]
+        secondary_yaw = self.state.anim_yaw * anim_blend + self.state.sway_yaw + face_offsets[5]
 
-        secondary_x = anim_x + self.state.sway_x + face_offsets[0]
-        secondary_y = anim_y + self.state.sway_y + face_offsets[1]
-        secondary_z = anim_z + self.state.sway_z + face_offsets[2]
-        secondary_roll = anim_roll + self.state.sway_roll + face_offsets[3]
-        secondary_pitch = anim_pitch + self.state.sway_pitch + face_offsets[4]
-        secondary_yaw = anim_yaw + self.state.sway_yaw + face_offsets[5]
+        # Build secondary pose and compose with primary (using pose_composer utilities)
+        secondary_head = create_head_pose_matrix(
+            x=secondary_x, y=secondary_y, z=secondary_z,
+            roll=secondary_roll, pitch=secondary_pitch, yaw=secondary_yaw,
+        )
+        final_head = compose_poses(primary_head, secondary_head)
 
-        if SDK_UTILS_AVAILABLE:
-            secondary_head = create_head_pose(
-                x=secondary_x,
-                y=secondary_y,
-                z=secondary_z,
-                roll=secondary_roll,
-                pitch=secondary_pitch,
-                yaw=secondary_yaw,
-                degrees=False,
-                mm=False,
-            )
-            # Compose using SDK's compose_world_offset (same as conversation_app)
-            final_head = compose_world_offset(primary_head, secondary_head, reorthonormalize=True)
-        else:
-            # Fallback: simple addition (less accurate but works)
-            secondary_rotation = R.from_euler('xyz', [secondary_roll, secondary_pitch, secondary_yaw])
-            secondary_head = np.eye(4)
-            secondary_head[:3, :3] = secondary_rotation.as_matrix()
-            secondary_head[0, 3] = secondary_x
-            secondary_head[1, 3] = secondary_y
-            secondary_head[2, 3] = secondary_z
-
-            # Simple composition: R_final = R_secondary @ R_primary, t_final = t_primary + t_secondary
-            final_head = np.eye(4)
-            final_head[:3, :3] = secondary_head[:3, :3] @ primary_head[:3, :3]
-            final_head[:3, 3] = primary_head[:3, 3] + secondary_head[:3, 3]
-
-        # Antenna pose with freeze blending
-        # Apply animation blend to antenna as well (suppress when face detected)
+        # Antenna pose with freeze blending (using AntennaController)
         anim_antenna_left = self.state.anim_antenna_left * anim_blend
         anim_antenna_right = self.state.anim_antenna_right * anim_blend
 
         target_antenna_left = self.state.target_antenna_left + anim_antenna_left
         target_antenna_right = self.state.target_antenna_right + anim_antenna_right
 
-        # Apply antenna freeze blending (listening mode)
-        blend = self.state.antenna_blend
-        if blend < 1.0:
-            # Blend between frozen position and target position
-            antenna_left = (self.state.frozen_antenna_left * (1.0 - blend) +
-                            target_antenna_left * blend)
-            antenna_right = (self.state.frozen_antenna_right * (1.0 - blend) +
-                             target_antenna_right * blend)
-        else:
-            antenna_left = target_antenna_left
-            antenna_right = target_antenna_right
+        # Apply antenna freeze blending via controller
+        antenna_left, antenna_right = self._antenna_controller.get_blended_positions(
+            target_antenna_left, target_antenna_right
+        )
 
-        # Calculate body_yaw to follow head yaw
-        # Extract yaw from the final head pose rotation matrix
-        # The rotation matrix uses xyz euler convention
-        final_rotation = R.from_matrix(final_head[:3, :3])
-        _, _, final_head_yaw = final_rotation.as_euler('xyz')
-
-        # Body follows head yaw directly, clamped to safe range
-        # SDK's inverse_kinematics_safe limits body_yaw to ±160°
-        body_yaw = max(MIN_BODY_YAW_RAD, min(MAX_BODY_YAW_RAD, final_head_yaw))
+        # Calculate body_yaw to follow head yaw (using pose_composer utilities)
+        final_head_yaw = extract_yaw_from_pose(final_head)
+        body_yaw = clamp_body_yaw(final_head_yaw)
 
         return final_head, (antenna_right, antenna_left), body_yaw
 
@@ -976,6 +939,11 @@ class MovementManager:
         # Skip sending commands while emotion animation is playing
         # This prevents "a move is currently running" warning spam
         if self._emotion_playing_event.is_set():
+            return
+
+        # Skip sending commands while robot is paused (disconnected/sleeping)
+        # Double-check here to catch race conditions during sleep transition
+        if self._robot_paused_event.is_set():
             return
 
         now = self._now()
@@ -1069,8 +1037,8 @@ class MovementManager:
                 # 2. Check if robot is paused (disconnected/sleeping)
                 if self._robot_paused_event.is_set():
                     # Robot is disconnected, skip all control commands
-                    # Just wait and check again
-                    time.sleep(0.1)
+                    # Wait for resume signal (event-driven, wakes immediately on resume)
+                    self._robot_resumed_event.wait(timeout=0.5)
                     continue
 
                 # 3. Check if emotion move is playing - takes priority over other motions

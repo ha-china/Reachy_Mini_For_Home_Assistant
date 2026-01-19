@@ -597,3 +597,28 @@ class AudioPlayer:
         self._unduck_volume = volume / 100.0
         self._duck_volume = self._unduck_volume / 2
         self._current_volume = self._unduck_volume
+
+    def suspend(self) -> None:
+        """Suspend the audio player for sleep mode.
+
+        Stops any current playback and clears the playlist.
+        """
+        _LOGGER.info("Suspending AudioPlayer for sleep...")
+
+        # Stop any current playback
+        self.stop()
+
+        # Clear sway callback to release reference
+        self._sway_callback = None
+
+        _LOGGER.info("AudioPlayer suspended")
+
+    def resume(self) -> None:
+        """Resume the audio player after sleep."""
+        _LOGGER.info("Resuming AudioPlayer from sleep...")
+
+        # Nothing specific to restore - audio player is stateless
+        # Just ensure flags are reset
+        self._stop_flag.clear()
+
+        _LOGGER.info("AudioPlayer resumed")

@@ -5,112 +5,28 @@ for the Reachy Mini voice assistant.
 """
 
 import logging
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
 from .system_diagnostics import get_system_diagnostics
+from .entities.entity_keys import ENTITY_KEYS, get_entity_key
+from .entities.entity_factory import (
+    EntityDefinition,
+    EntityType,
+    create_entity,
+    get_diagnostic_sensor_definitions,
+    get_imu_sensor_definitions,
+    get_robot_info_definitions,
+    get_pose_control_definitions,
+    get_look_at_definitions,
+)
 
 if TYPE_CHECKING:
     from .reachy_controller import ReachyController
     from .camera_server import MJPEGCameraServer
 
 _LOGGER = logging.getLogger(__name__)
-
-
-# Fixed entity key mapping - ensures consistent keys across restarts
-# Keys are based on object_id hash to ensure uniqueness and consistency
-ENTITY_KEYS: Dict[str, int] = {
-    # Media player (key 0 reserved)
-    "reachy_mini_media_player": 0,
-    # Phase 1: Basic status and volume
-    "daemon_state": 100,
-    "backend_ready": 101,
-    "speaker_volume": 103,
-    # Phase 2: Motor control
-    "motors_enabled": 200,
-    "motor_mode": 201,
-    "wake_up": 202,
-    "go_to_sleep": 203,
-    # Phase 3: Pose control
-    "head_x": 300,
-    "head_y": 301,
-    "head_z": 302,
-    "head_roll": 303,
-    "head_pitch": 304,
-    "head_yaw": 305,
-    "body_yaw": 306,
-    "antenna_left": 307,
-    "antenna_right": 308,
-    # Phase 4: Look at control
-    "look_at_x": 400,
-    "look_at_y": 401,
-    "look_at_z": 402,
-    # Phase 5: DOA (Direction of Arrival) - re-added for wakeup turn-to-sound
-    "doa_angle": 500,
-    "speech_detected": 501,
-    # Phase 6: Diagnostic information
-    "control_loop_frequency": 600,
-    "sdk_version": 601,
-    "robot_name": 602,
-    "wireless_version": 603,
-    "simulation_mode": 604,
-    "wlan_ip": 605,
-    "error_message": 606,  # Moved to diagnostic
-    # Phase 7: IMU sensors
-    "imu_accel_x": 700,
-    "imu_accel_y": 701,
-    "imu_accel_z": 702,
-    "imu_gyro_x": 703,
-    "imu_gyro_y": 704,
-    "imu_gyro_z": 705,
-    "imu_temperature": 706,
-    # Phase 8: Emotion selector
-    "emotion": 800,
-    # Phase 9: Audio controls
-    "microphone_volume": 900,
-    # Phase 10: Camera
-    "camera_url": 1000,  # Keep for backward compatibility
-    "camera": 1001,      # New camera entity
-    # Phase 11: LED control (disabled - not visible)
-    # "led_brightness": 1100,
-    # "led_effect": 1101,
-    # "led_color_r": 1102,
-    # "led_color_g": 1103,
-    # "led_color_b": 1104,
-    # Phase 12: Audio processing
-    "agc_enabled": 1200,
-    "agc_max_gain": 1201,
-    "noise_suppression": 1202,
-    "echo_cancellation_converged": 1203,
-    # Phase 13: Sendspin - auto-enabled via mDNS, no user entities needed
-    # Phase 21: Continuous conversation
-    "continuous_conversation": 1500,
-    # Phase 22: Gesture detection
-    "gesture_detected": 1600,
-    "gesture_confidence": 1601,
-    # Phase 23: Face detection status
-    "face_detected": 1700,
-    # Phase 24: System diagnostics (psutil)
-    "sys_cpu_percent": 1800,
-    "sys_cpu_temperature": 1801,
-    "sys_memory_percent": 1802,
-    "sys_memory_used": 1803,
-    "sys_disk_percent": 1804,
-    "sys_disk_free": 1805,
-    "sys_uptime": 1806,
-    "sys_process_cpu": 1807,
-    "sys_process_memory": 1808,
-}
-
-
-def get_entity_key(object_id: str) -> int:
-    """Get a consistent entity key for the given object_id."""
-    if object_id in ENTITY_KEYS:
-        return ENTITY_KEYS[object_id]
-    # Fallback: generate key from hash (should not happen if all entities are registered)
-    _LOGGER.warning(f"Entity key not found for {object_id}, generating from hash")
-    return abs(hash(object_id)) % 10000 + 2000
 
 
 class EntityRegistry:
@@ -135,6 +51,10 @@ class EntityRegistry:
         self.reachy_controller = reachy_controller
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
+
+        # Sleep state entities (will be initialized in _setup_phase2_entities)
+        self._sleep_mode_entity: Optional[BinarySensorEntity] = None
+        self._services_suspended_entity: Optional[BinarySensorEntity] = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -310,150 +230,55 @@ class EntityRegistry:
             on_press=rc.go_to_sleep,
         ))
 
-        _LOGGER.debug("Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep")
+        # Sleep mode sensor - reflects daemon state (STOPPED = sleeping)
+        # This is read-only and updated by the SleepManager
+        self._sleep_mode_entity = BinarySensorEntity(
+            server=self.server,
+            key=get_entity_key("sleep_mode"),
+            name="Sleep Mode",
+            object_id="sleep_mode",
+            icon="mdi:sleep",
+            device_class="running",  # Shows as "Running/Not Running" which maps well to awake/sleeping
+        )
+        entities.append(self._sleep_mode_entity)
+
+        # Services suspended sensor - shows if ML models are unloaded
+        self._services_suspended_entity = BinarySensorEntity(
+            server=self.server,
+            key=get_entity_key("services_suspended"),
+            name="Services Suspended",
+            object_id="services_suspended",
+            icon="mdi:pause-circle",
+            device_class="running",
+        )
+        entities.append(self._services_suspended_entity)
+
+        _LOGGER.debug("Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep, sleep_mode, services_suspended")
 
     def _setup_phase3_entities(self, entities: List) -> None:
         """Setup Phase 3 entities: Pose control."""
         rc = self.reachy_controller
 
-        # Head position controls (X, Y, Z in mm)
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("head_x"),
-            name="Head X Position",
-            object_id="head_x",
-            min_value=-50.0,
-            max_value=50.0,
-            step=1.0,
-            icon="mdi:axis-x-arrow",
-            unit_of_measurement="mm",
-            mode=2,
-            value_getter=rc.get_head_x,
-            value_setter=rc.set_head_x,
-        ))
+        # Map definitions to actual getter/setter pairs
+        callback_map = {
+            "head_x": (rc.get_head_x, rc.set_head_x),
+            "head_y": (rc.get_head_y, rc.set_head_y),
+            "head_z": (rc.get_head_z, rc.set_head_z),
+            "head_roll": (rc.get_head_roll, rc.set_head_roll),
+            "head_pitch": (rc.get_head_pitch, rc.set_head_pitch),
+            "head_yaw": (rc.get_head_yaw, rc.set_head_yaw),
+            "body_yaw": (rc.get_body_yaw, rc.set_body_yaw),
+            "antenna_left": (rc.get_antenna_left, rc.set_antenna_left),
+            "antenna_right": (rc.get_antenna_right, rc.set_antenna_right),
+        }
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("head_y"),
-            name="Head Y Position",
-            object_id="head_y",
-            min_value=-50.0,
-            max_value=50.0,
-            step=1.0,
-            icon="mdi:axis-y-arrow",
-            unit_of_measurement="mm",
-            mode=2,
-            value_getter=rc.get_head_y,
-            value_setter=rc.set_head_y,
-        ))
-
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("head_z"),
-            name="Head Z Position",
-            object_id="head_z",
-            min_value=-50.0,
-            max_value=50.0,
-            step=1.0,
-            icon="mdi:axis-z-arrow",
-            unit_of_measurement="mm",
-            mode=2,
-            value_getter=rc.get_head_z,
-            value_setter=rc.set_head_z,
-        ))
-
-        # Head orientation controls (Roll, Pitch, Yaw in degrees)
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("head_roll"),
-            name="Head Roll",
-            object_id="head_roll",
-            min_value=-40.0,
-            max_value=40.0,
-            step=1.0,
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="°",
-            mode=2,
-            value_getter=rc.get_head_roll,
-            value_setter=rc.set_head_roll,
-        ))
-
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("head_pitch"),
-            name="Head Pitch",
-            object_id="head_pitch",
-            min_value=-40.0,
-            max_value=40.0,
-            step=1.0,
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="°",
-            mode=2,
-            value_getter=rc.get_head_pitch,
-            value_setter=rc.set_head_pitch,
-        ))
-
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("head_yaw"),
-            name="Head Yaw",
-            object_id="head_yaw",
-            min_value=-180.0,
-            max_value=180.0,
-            step=1.0,
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="°",
-            mode=2,
-            value_getter=rc.get_head_yaw,
-            value_setter=rc.set_head_yaw,
-        ))
-
-        # Body yaw control
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("body_yaw"),
-            name="Body Yaw",
-            object_id="body_yaw",
-            min_value=-160.0,
-            max_value=160.0,
-            step=1.0,
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="°",
-            mode=2,
-            value_getter=rc.get_body_yaw,
-            value_setter=rc.set_body_yaw,
-        ))
-
-        # Antenna controls
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("antenna_left"),
-            name="Antenna(L)",
-            object_id="antenna_left",
-            min_value=-90.0,
-            max_value=90.0,
-            step=1.0,
-            icon="mdi:antenna",
-            unit_of_measurement="°",
-            mode=2,
-            value_getter=rc.get_antenna_left,
-            value_setter=rc.set_antenna_left,
-        ))
-
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("antenna_right"),
-            name="Antenna(R)",
-            object_id="antenna_right",
-            min_value=-90.0,
-            max_value=90.0,
-            step=1.0,
-            icon="mdi:antenna",
-            unit_of_measurement="°",
-            mode=2,
-            value_getter=rc.get_antenna_right,
-            value_setter=rc.set_antenna_right,
-        ))
+        definitions = get_pose_control_definitions()
+        for defn in definitions:
+            callbacks = callback_map.get(defn.key_name)
+            if callbacks:
+                defn.value_getter = callbacks[0]
+                defn.command_handler = callbacks[1]
+            entities.append(create_entity(self.server, defn))
 
         _LOGGER.debug("Phase 3 entities registered: head position/orientation, body_yaw, antennas")
 
@@ -461,50 +286,20 @@ class EntityRegistry:
         """Setup Phase 4 entities: Look at control."""
         rc = self.reachy_controller
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("look_at_x"),
-            name="Look At X",
-            object_id="look_at_x",
-            min_value=-2.0,
-            max_value=2.0,
-            step=0.1,
-            icon="mdi:crosshairs-gps",
-            unit_of_measurement="m",
-            mode=1,  # Box mode for precise input
-            value_getter=rc.get_look_at_x,
-            value_setter=rc.set_look_at_x,
-        ))
+        # Map definitions to actual getter/setter pairs
+        callback_map = {
+            "look_at_x": (rc.get_look_at_x, rc.set_look_at_x),
+            "look_at_y": (rc.get_look_at_y, rc.set_look_at_y),
+            "look_at_z": (rc.get_look_at_z, rc.set_look_at_z),
+        }
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("look_at_y"),
-            name="Look At Y",
-            object_id="look_at_y",
-            min_value=-2.0,
-            max_value=2.0,
-            step=0.1,
-            icon="mdi:crosshairs-gps",
-            unit_of_measurement="m",
-            mode=1,
-            value_getter=rc.get_look_at_y,
-            value_setter=rc.set_look_at_y,
-        ))
-
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("look_at_z"),
-            name="Look At Z",
-            object_id="look_at_z",
-            min_value=-2.0,
-            max_value=2.0,
-            step=0.1,
-            icon="mdi:crosshairs-gps",
-            unit_of_measurement="m",
-            mode=1,
-            value_getter=rc.get_look_at_z,
-            value_setter=rc.set_look_at_z,
-        ))
+        definitions = get_look_at_definitions()
+        for defn in definitions:
+            callbacks = callback_map.get(defn.key_name)
+            if callbacks:
+                defn.value_getter = callbacks[0]
+                defn.command_handler = callbacks[1]
+            entities.append(create_entity(self.server, defn))
 
         _LOGGER.debug("Phase 4 entities registered: look_at_x/y/z")
 
@@ -534,85 +329,51 @@ class EntityRegistry:
             value_getter=rc.get_speech_detected,
         ))
 
-        _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected")
+        # DOA sound tracking control switch
+        def get_doa_tracking_state() -> bool:
+            """Get current DOA tracking state."""
+            if rc._movement_manager is not None:
+                return rc._movement_manager._doa_enabled
+            return True
+
+        def set_doa_tracking_state(enabled: bool) -> None:
+            """Set DOA tracking state."""
+            if rc._movement_manager is not None:
+                rc._movement_manager.set_doa_enabled(enabled)
+            _LOGGER.info("DOA tracking %s", "enabled" if enabled else "disabled")
+
+        entities.append(SwitchEntity(
+            server=self.server,
+            key=get_entity_key("doa_tracking_enabled"),
+            name="DOA Sound Tracking",
+            object_id="doa_tracking_enabled",
+            icon="mdi:ear-hearing",
+            state_getter=get_doa_tracking_state,
+            state_setter=set_doa_tracking_state,
+            initial_state=True,
+        ))
+
+        _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected, doa_tracking_enabled")
 
     def _setup_phase6_entities(self, entities: List) -> None:
         """Setup Phase 6 entities: Diagnostic information."""
         rc = self.reachy_controller
 
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("control_loop_frequency"),
-            name="Control Loop Frequency",
-            object_id="control_loop_frequency",
-            icon="mdi:speedometer",
-            unit_of_measurement="Hz",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_control_loop_frequency,
-        ))
+        # Map definitions to actual value getters
+        getter_map = {
+            "control_loop_frequency": rc.get_control_loop_frequency,
+            "sdk_version": rc.get_sdk_version,
+            "robot_name": rc.get_robot_name,
+            "wireless_version": rc.get_wireless_version,
+            "simulation_mode": rc.get_simulation_mode,
+            "wlan_ip": rc.get_wlan_ip,
+            "error_message": rc.get_error_message,
+        }
 
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("sdk_version"),
-            name="SDK Version",
-            object_id="sdk_version",
-            icon="mdi:information",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_sdk_version,
-        ))
-
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("robot_name"),
-            name="Robot Name",
-            object_id="robot_name",
-            icon="mdi:robot",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_robot_name,
-        ))
-
-        entities.append(BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("wireless_version"),
-            name="Wireless Version",
-            object_id="wireless_version",
-            icon="mdi:wifi",
-            device_class="connectivity",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_wireless_version,
-        ))
-
-        entities.append(BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("simulation_mode"),
-            name="Simulation Mode",
-            object_id="simulation_mode",
-            icon="mdi:virtual-reality",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_simulation_mode,
-        ))
-
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("wlan_ip"),
-            name="WLAN IP",
-            object_id="wlan_ip",
-            icon="mdi:ip-network",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_wlan_ip,
-        ))
-
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("error_message"),
-            name="Error Message",
-            object_id="error_message",
-            icon="mdi:alert-circle",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_error_message,
-        ))
+        definitions = get_robot_info_definitions()
+        for defn in definitions:
+            defn.value_getter = getter_map.get(defn.key_name)
+            entities.append(create_entity(self.server, defn))
 
         _LOGGER.debug(
             "Phase 6 entities registered: control_loop_frequency, sdk_version, "
@@ -623,93 +384,21 @@ class EntityRegistry:
         """Setup Phase 7 entities: IMU sensors (wireless only)."""
         rc = self.reachy_controller
 
-        # IMU Accelerometer
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_accel_x"),
-            name="IMU Accel X",
-            object_id="imu_accel_x",
-            icon="mdi:axis-x-arrow",
-            unit_of_measurement="m/s²",
-            accuracy_decimals=3,
-            state_class="measurement",
-            value_getter=rc.get_imu_accel_x,
-        ))
+        # Map definitions to actual value getters
+        getter_map = {
+            "imu_accel_x": rc.get_imu_accel_x,
+            "imu_accel_y": rc.get_imu_accel_y,
+            "imu_accel_z": rc.get_imu_accel_z,
+            "imu_gyro_x": rc.get_imu_gyro_x,
+            "imu_gyro_y": rc.get_imu_gyro_y,
+            "imu_gyro_z": rc.get_imu_gyro_z,
+            "imu_temperature": rc.get_imu_temperature,
+        }
 
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_accel_y"),
-            name="IMU Accel Y",
-            object_id="imu_accel_y",
-            icon="mdi:axis-y-arrow",
-            unit_of_measurement="m/s²",
-            accuracy_decimals=3,
-            state_class="measurement",
-            value_getter=rc.get_imu_accel_y,
-        ))
-
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_accel_z"),
-            name="IMU Accel Z",
-            object_id="imu_accel_z",
-            icon="mdi:axis-z-arrow",
-            unit_of_measurement="m/s²",
-            accuracy_decimals=3,
-            state_class="measurement",
-            value_getter=rc.get_imu_accel_z,
-        ))
-
-        # IMU Gyroscope
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_gyro_x"),
-            name="IMU Gyro X",
-            object_id="imu_gyro_x",
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="rad/s",
-            accuracy_decimals=3,
-            state_class="measurement",
-            value_getter=rc.get_imu_gyro_x,
-        ))
-
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_gyro_y"),
-            name="IMU Gyro Y",
-            object_id="imu_gyro_y",
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="rad/s",
-            accuracy_decimals=3,
-            state_class="measurement",
-            value_getter=rc.get_imu_gyro_y,
-        ))
-
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_gyro_z"),
-            name="IMU Gyro Z",
-            object_id="imu_gyro_z",
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="rad/s",
-            accuracy_decimals=3,
-            state_class="measurement",
-            value_getter=rc.get_imu_gyro_z,
-        ))
-
-        # IMU Temperature
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("imu_temperature"),
-            name="IMU Temperature",
-            object_id="imu_temperature",
-            icon="mdi:thermometer",
-            unit_of_measurement="°C",
-            accuracy_decimals=1,
-            device_class="temperature",
-            state_class="measurement",
-            value_getter=rc.get_imu_temperature,
-        ))
+        definitions = get_imu_sensor_definitions()
+        for defn in definitions:
+            defn.value_getter = getter_map.get(defn.key_name)
+            entities.append(create_entity(self.server, defn))
 
         _LOGGER.debug("Phase 7 entities registered: IMU accelerometer, gyroscope, temperature")
 
@@ -978,6 +667,32 @@ class EntityRegistry:
         if hasattr(self, '_gesture_confidence_entity') and self._gesture_confidence_entity:
             self._gesture_confidence_entity.update_state()
 
+    def set_sleep_mode(self, is_sleeping: bool) -> None:
+        """Update the sleep mode state and push to Home Assistant.
+
+        Args:
+            is_sleeping: True if robot is in sleep mode, False if awake
+        """
+        if self._sleep_mode_entity is not None:
+            # For "running" device_class, True = running (awake), False = not running (sleeping)
+            # So we invert the is_sleeping value
+            self._sleep_mode_entity._state = not is_sleeping
+            self._sleep_mode_entity.update_state()
+            _LOGGER.debug("Sleep mode state updated: sleeping=%s", is_sleeping)
+
+    def set_services_suspended(self, is_suspended: bool) -> None:
+        """Update the services suspended state and push to Home Assistant.
+
+        Args:
+            is_suspended: True if services are suspended (ML models unloaded)
+        """
+        if self._services_suspended_entity is not None:
+            # For "running" device_class, True = running, False = not running
+            # So we invert: suspended means NOT running
+            self._services_suspended_entity._state = not is_suspended
+            self._services_suspended_entity.update_state()
+            _LOGGER.debug("Services suspended state updated: suspended=%s", is_suspended)
+
     def find_entity_references(self, entities: List) -> None:
         """Find and store references to special entities from existing list.
 
@@ -992,138 +707,30 @@ class EntityRegistry:
 
         These sensors provide system health information for the robot's
         computer, useful for monitoring resource usage and debugging.
+
+        Uses entity factory for declarative entity creation.
         """
         diag = get_system_diagnostics()
 
-        # CPU Usage
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_cpu_percent"),
-            name="System CPU Usage",
-            object_id="sys_cpu_percent",
-            icon="mdi:cpu-64-bit",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_cpu_percent,
-        ))
+        # Get definitions from factory and bind value getters
+        definitions = get_diagnostic_sensor_definitions()
+        getter_map = {
+            "sys_cpu_percent": diag.get_cpu_percent,
+            "sys_cpu_temperature": diag.get_cpu_temperature,
+            "sys_memory_percent": diag.get_memory_percent,
+            "sys_memory_used": diag.get_memory_used_gb,
+            "sys_disk_percent": diag.get_disk_percent,
+            "sys_disk_free": diag.get_disk_free_gb,
+            "sys_uptime": diag.get_uptime_hours,
+            "sys_process_cpu": diag.get_process_cpu_percent,
+            "sys_process_memory": diag.get_process_memory_mb,
+        }
 
-        # CPU Temperature (may not be available on all platforms)
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_cpu_temperature"),
-            name="System CPU Temperature",
-            object_id="sys_cpu_temperature",
-            icon="mdi:thermometer",
-            unit_of_measurement="°C",
-            accuracy_decimals=1,
-            device_class="temperature",
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_cpu_temperature,
-        ))
-
-        # Memory Usage
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_memory_percent"),
-            name="System Memory Usage",
-            object_id="sys_memory_percent",
-            icon="mdi:memory",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_memory_percent,
-        ))
-
-        # Memory Used (GB)
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_memory_used"),
-            name="System Memory Used",
-            object_id="sys_memory_used",
-            icon="mdi:memory",
-            unit_of_measurement="GB",
-            accuracy_decimals=2,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_memory_used_gb,
-        ))
-
-        # Disk Usage
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_disk_percent"),
-            name="System Disk Usage",
-            object_id="sys_disk_percent",
-            icon="mdi:harddisk",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_disk_percent,
-        ))
-
-        # Disk Free (GB)
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_disk_free"),
-            name="System Disk Free",
-            object_id="sys_disk_free",
-            icon="mdi:harddisk",
-            unit_of_measurement="GB",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_disk_free_gb,
-        ))
-
-        # System Uptime (hours)
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_uptime"),
-            name="System Uptime",
-            object_id="sys_uptime",
-            icon="mdi:clock-outline",
-            unit_of_measurement="h",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_uptime_hours,
-        ))
-
-        # Process CPU (this app)
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_process_cpu"),
-            name="App CPU Usage",
-            object_id="sys_process_cpu",
-            icon="mdi:application-cog",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_process_cpu_percent,
-        ))
-
-        # Process Memory (this app)
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("sys_process_memory"),
-            name="App Memory Usage",
-            object_id="sys_process_memory",
-            icon="mdi:application-cog",
-            unit_of_measurement="MB",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,  # diagnostic
-            value_getter=diag.get_process_memory_mb,
-        ))
+        for defn in definitions:
+            defn.value_getter = getter_map.get(defn.key_name)
+            entities.append(create_entity(self.server, defn))
 
         _LOGGER.debug(
-            "Phase 24 entities registered: sys_cpu_percent, sys_cpu_temperature, "
-            "sys_memory_percent, sys_memory_used, sys_disk_percent, sys_disk_free, "
-            "sys_uptime, sys_process_cpu, sys_process_memory"
+            "Phase 24 entities registered: %d diagnostic sensors",
+            len(definitions)
         )

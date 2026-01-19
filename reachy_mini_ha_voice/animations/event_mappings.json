@@ -1,0 +1,131 @@
+{
+  "$schema": "event_mappings_schema.json",
+  "_description": "Home Assistant event to robot emotion mappings",
+  "_version": "1.0",
+
+  "settings": {
+    "max_triggers_per_minute": 3,
+    "default_cooldown": 60.0
+  },
+
+  "mappings": {
+    "binary_sensor.front_door": [
+      {
+        "state": "on",
+        "emotion": "curious",
+        "cooldown": 30.0,
+        "priority": 70,
+        "description": "Someone at the door - robot looks curious"
+      }
+    ],
+
+    "binary_sensor.back_door": [
+      {
+        "state": "on",
+        "emotion": "alert",
+        "cooldown": 30.0,
+        "priority": 60,
+        "description": "Back door opened - robot looks alert"
+      }
+    ],
+
+    "binary_sensor.living_room_motion": [
+      {
+        "state": "on",
+        "emotion": "alert",
+        "cooldown": 120.0,
+        "priority": 40,
+        "description": "Motion detected - brief alert"
+      }
+    ],
+
+    "binary_sensor.doorbell": [
+      {
+        "state": "on",
+        "emotion": "excited",
+        "cooldown": 10.0,
+        "priority": 90,
+        "description": "Doorbell rang - excited reaction"
+      }
+    ],
+
+    "input_boolean.morning_routine": [
+      {
+        "state": "on",
+        "emotion": "happy",
+        "cooldown": 3600.0,
+        "priority": 60,
+        "description": "Morning routine started - happy greeting"
+      }
+    ],
+
+    "input_boolean.bedtime_routine": [
+      {
+        "state": "on",
+        "emotion": "sleepy",
+        "cooldown": 3600.0,
+        "priority": 60,
+        "description": "Bedtime - sleepy animation"
+      }
+    ],
+
+    "input_boolean.party_mode": [
+      {
+        "state": "on",
+        "emotion": "cheerful1",
+        "cooldown": 60.0,
+        "priority": 50,
+        "description": "Party mode activated - cheerful"
+      }
+    ],
+
+    "input_boolean.robot_happy_trigger": [
+      {
+        "state": "on",
+        "emotion": "happy",
+        "cooldown": 5.0,
+        "priority": 80,
+        "description": "Manual happy trigger from HA automation"
+      }
+    ],
+
+    "input_boolean.robot_sad_trigger": [
+      {
+        "state": "on",
+        "emotion": "sad",
+        "cooldown": 5.0,
+        "priority": 80,
+        "description": "Manual sad trigger from HA automation"
+      }
+    ],
+
+    "input_boolean.robot_alert_trigger": [
+      {
+        "state": "on",
+        "emotion": "alert",
+        "cooldown": 5.0,
+        "priority": 80,
+        "description": "Manual alert trigger from HA automation"
+      }
+    ]
+  },
+
+  "_emotions": {
+    "happy": "Joyful expression with antenna wiggle",
+    "sad": "Downcast expression",
+    "alert": "Attentive, wide-eyed look",
+    "curious": "Head tilt, interested expression",
+    "sleepy": "Droopy, tired animation",
+    "excited": "Enthusiastic bouncing",
+    "cheerful1": "Happy dance-like movement",
+    "nod": "Nodding in agreement"
+  },
+
+  "_usage": {
+    "description": "Create input_boolean helpers in HA and use automations to trigger robot emotions",
+    "example_automation": {
+      "trigger": "time-based or event-based trigger",
+      "action": "Turn on input_boolean.robot_happy_trigger, then turn it off after 1 second"
+    }
+  }
+}

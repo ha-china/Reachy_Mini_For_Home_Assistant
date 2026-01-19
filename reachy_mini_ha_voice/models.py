@@ -85,6 +85,10 @@ class ServerState:
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
 
+    # Sleep state (updated by SleepManager)
+    is_sleeping: bool = False
+    services_suspended: bool = False
+
     def save_preferences(self) -> None:
         """Save preferences as JSON."""
         _LOGGER.debug("Saving preferences: %s", self.preferences_path)

@@ -3,6 +3,11 @@
 Ported from reachy_mini_conversation_app for voice assistant integration.
 Model is loaded at initialization time (not lazy) to ensure face tracking
 is ready immediately when the camera server starts.
+
+Performance Optimizations:
+- Optional frame downscaling for faster inference on low-power devices
+- Frame skip support for reduced CPU usage when tracking is stable
+- Configurable inference resolution (default: native resolution)
 """
 
 from __future__ import annotations
@@ -21,6 +26,10 @@ class HeadTracker:
 
     Model is loaded at initialization time to ensure face tracking
     is ready immediately (matching conversation_app behavior).
+
+    Performance Features:
+    - Frame downscaling: Reduces inference resolution for ~4x speedup
+    - Frame skipping: Reuses last detection result for stable tracking
     """
 
     def __init__(
@@ -29,6 +38,7 @@ class HeadTracker:
         model_filename: str = "model.pt",
         confidence_threshold: float = 0.3,
         device: str = "cpu",
+        inference_scale: float = 1.0,  # Scale factor for inference (0.5 = half resolution)
     ) -> None:
         """Initialize YOLO-based head tracker.
 
@@ -37,6 +47,7 @@ class HeadTracker:
             model_filename: Model file name
             confidence_threshold: Minimum confidence for face detection
             device: Device to run inference on ('cpu' or 'cuda')
+            inference_scale: Scale factor for inference (0.5 = half res for ~4x speedup)
         """
         self.confidence_threshold = confidence_threshold
         self.model = None
@@ -46,6 +57,14 @@ class HeadTracker:
         self._detections_class = None
         self._model_load_attempted = False
         self._model_load_error: Optional[str] = None
+
+        # Performance optimization settings
+        self._inference_scale = min(1.0, max(0.25, inference_scale))
+
+        # Frame skip support for stable tracking
+        self._last_detection: Optional[Tuple[NDArray, float]] = None
+        self._frames_since_detection = 0
+        self._max_skip_frames = 0  # 0 = no skipping (can be set externally)
 
         # Load model immediately at init (not lazy)
         self._load_model()
@@ -177,14 +196,33 @@ class HeadTracker:
 
         h, w = img.shape[:2]
 
+        # Frame skip optimization: return last detection if within skip limit
+        if (self._max_skip_frames > 0 and
+                self._last_detection is not None and
+                self._frames_since_detection < self._max_skip_frames):
+            self._frames_since_detection += 1
+            return self._last_detection
+
         try:
+            # Downscale image for faster inference if scale < 1.0
+            if self._inference_scale < 1.0:
+                import cv2
+                new_w = int(w * self._inference_scale)
+                new_h = int(h * self._inference_scale)
+                inference_img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            else:
+                inference_img = img
+                new_w, new_h = w, h
+
             # Run YOLO inference
-            results = self.model(img, verbose=False)
+            results = self.model(inference_img, verbose=False)
             detections = self._detections_class.from_ultralytics(results[0])
 
             # Select best face
             face_idx = self._select_best_face(detections)
             if face_idx is None:
+                self._last_detection = None
+                self._frames_since_detection = 0
                 return None, None
 
             bbox = detections.xyxy[face_idx]
@@ -192,11 +230,90 @@ class HeadTracker:
             if detections.confidence is not None:
                 confidence = float(detections.confidence[face_idx])
 
-            # Get face center in [-1, 1] coordinates
+            # Scale bbox back to original resolution if downscaled
+            if self._inference_scale < 1.0:
+                scale_factor = 1.0 / self._inference_scale
+                bbox = bbox * scale_factor
+
+            # Get face center in [-1, 1] coordinates (using original dimensions)
             face_center = self._bbox_to_normalized_coords(bbox, w, h)
+
+            # Cache result for frame skipping
+            self._last_detection = (face_center, confidence)
+            self._frames_since_detection = 0
 
             return face_center, confidence
 
         except Exception as e:
             logger.debug("Error in head position detection: %s", e)
             return None, None
+
+    def set_inference_scale(self, scale: float) -> None:
+        """Set the inference resolution scale factor.
+
+        Args:
+            scale: Scale factor (0.25 to 1.0). Lower = faster but less accurate.
+        """
+        self._inference_scale = min(1.0, max(0.25, scale))
+        logger.debug("Inference scale set to %.2f", self._inference_scale)
+
+    def set_max_skip_frames(self, skip: int) -> None:
+        """Set maximum frames to skip between detections.
+
+        Args:
+            skip: Number of frames to skip (0 = no skipping).
+                  Higher values reduce CPU but may cause tracking lag.
+        """
+        self._max_skip_frames = max(0, skip)
+        logger.debug("Max skip frames set to %d", self._max_skip_frames)
+
+    def clear_detection_cache(self) -> None:
+        """Clear cached detection result."""
+        self._last_detection = None
+        self._frames_since_detection = 0
+
+    def suspend(self) -> None:
+        """Suspend the head tracker to release YOLO model from memory.
+
+        Call resume() to reload the model.
+        """
+        if self.model is None:
+            logger.debug("HeadTracker model not loaded, nothing to suspend")
+            return
+
+        logger.info("Suspending HeadTracker - releasing YOLO model...")
+
+        try:
+            # Release YOLO model from memory
+            del self.model
+            self.model = None
+
+            # Also clear the detections class reference
+            self._detections_class = None
+
+            # Reset load state so resume can reload
+            self._model_load_attempted = False
+            self._model_load_error = None
+
+            # Clear detection cache
+            self.clear_detection_cache()
+
+            logger.info("HeadTracker suspended - YOLO model released")
+        except Exception as e:
+            logger.warning("Error suspending HeadTracker: %s", e)
+
+    def resume(self) -> None:
+        """Resume the head tracker by reloading the YOLO model."""
+        if self.model is not None:
+            logger.debug("HeadTracker model already loaded")
+            return
+
+        logger.info("Resuming HeadTracker - reloading YOLO model...")
+
+        # Reload the model
+        self._load_model()
+
+        if self.is_available:
+            logger.info("HeadTracker resumed - YOLO model loaded")
+        else:
+            logger.warning("HeadTracker resume failed - model not available")

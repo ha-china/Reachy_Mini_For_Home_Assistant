@@ -20,6 +20,7 @@ from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     CameraImageRequest,
     DeviceInfoRequest,
     DeviceInfoResponse,
+    HomeAssistantStateResponse,
     ListEntitiesDoneResponse,
     ListEntitiesRequest,
     MediaPlayerCommandRequest,
@@ -55,6 +56,9 @@ from .entity_registry import EntityRegistry, get_entity_key
 from .models import AvailableWakeWord, ServerState, WakeWordType
 from .util import call_all
 from .reachy_controller import ReachyController
+from .motion.gesture_actions import GestureActionMapper
+from .entities.event_emotion_mapper import EventEmotionMapper
+from .entities.emotion_detector import EmotionKeywordDetector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,6 +84,9 @@ class VoiceSatelliteProtocol(APIServer):
         self._conversation_id: Optional[str] = None
         self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
         self._last_conversation_time = 0.0
+
+        # Track Home Assistant entity states for change detection
+        self._ha_entity_states: Dict[str, str] = {}
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -116,6 +123,25 @@ class VoiceSatelliteProtocol(APIServer):
         if camera_server:
             camera_server.set_gesture_state_callback(self._entity_registry.update_gesture_state)
             camera_server.set_face_state_callback(self._entity_registry.update_face_detected_state)
+            camera_server.set_gesture_action_callback(self.handle_detected_gesture)
+
+        # Initialize gesture action mapper for local gesture → action handling
+        self._gesture_action_mapper = GestureActionMapper()
+        self._gesture_action_mapper.set_emotion_callback(self._play_emotion)
+        self._gesture_action_mapper.set_start_listening_callback(self._trigger_wake_word)
+        self._gesture_action_mapper.set_stop_speaking_callback(self._stop_current_tts)
+        self._gesture_action_mapper.set_ha_event_callback(self._send_gesture_event_to_ha)
+        _LOGGER.info("Gesture action mapper initialized")
+
+        # Initialize event-emotion mapper for HA state change reactions
+        self._event_emotion_mapper = EventEmotionMapper()
+        self._event_emotion_mapper.set_emotion_callback(self._play_emotion)
+        # Load custom mappings from JSON if available
+        from pathlib import Path
+        mappings_file = Path(__file__).parent / "animations" / "event_mappings.json"
+        if mappings_file.exists():
+            self._event_emotion_mapper.load_from_json(mappings_file)
+        _LOGGER.info("Event emotion mapper initialized")
 
         # Only setup entities once (check if already initialized)
         # This prevents duplicate entity registration on reconnection
@@ -143,10 +169,8 @@ class VoiceSatelliteProtocol(APIServer):
             for entity in self.state.entities:
                 entity.server = self
 
-        # Load emotion keywords from JSON file for auto-triggering
-        self._emotion_keywords: Dict[str, str] = {}
-        self._emotion_detection_enabled = True
-        self._load_emotion_keywords()
+        # Initialize emotion keyword detector for auto-triggering emotions from LLM responses
+        self._emotion_detector = EmotionKeywordDetector(play_emotion_callback=self._play_emotion)
 
     def handle_voice_event(
         self, event_type: VoiceAssistantEventType, data: Dict[str, str]
@@ -189,7 +213,7 @@ class VoiceSatelliteProtocol(APIServer):
             # TTS_START may contain the text to be spoken
             tts_text = data.get("tts_output") or data.get("text") or ""
             if tts_text:
-                self._detect_and_play_emotion(tts_text)
+                self._emotion_detector.detect_and_play(tts_text)
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
             self._tts_url = data.get("url")
@@ -248,6 +272,10 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif isinstance(msg, VoiceAssistantTimerEventResponse):
             self.handle_timer_event(VoiceAssistantTimerEventType(msg.event_type), msg)
+
+        elif isinstance(msg, HomeAssistantStateResponse):
+            # Handle Home Assistant state changes for emotion mapping
+            self._handle_ha_state_change(msg)
 
         elif isinstance(msg, DeviceInfoRequest):
             yield DeviceInfoResponse(
@@ -761,66 +789,6 @@ class VoiceSatelliteProtocol(APIServer):
         except Exception as e:
             _LOGGER.error("Reachy Mini motion error: %s", e)
 
-    def _load_emotion_keywords(self) -> None:
-        """Load emotion keywords from JSON configuration file.
-
-        The file is located at animations/emotion_keywords.json and contains
-        keyword-to-emotion mappings for automatic emotion detection.
-        """
-        import json
-        from pathlib import Path
-
-        keywords_file = Path(__file__).parent / "animations" / "emotion_keywords.json"
-
-        if not keywords_file.exists():
-            _LOGGER.warning("Emotion keywords file not found: %s", keywords_file)
-            return
-
-        try:
-            with open(keywords_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            self._emotion_keywords = data.get("keywords", {})
-            settings = data.get("settings", {})
-            self._emotion_detection_enabled = settings.get("enabled", True)
-
-            _LOGGER.info(
-                "Loaded %d emotion keywords (enabled=%s)",
-                len(self._emotion_keywords),
-                self._emotion_detection_enabled
-            )
-        except Exception as e:
-            _LOGGER.error("Failed to load emotion keywords: %s", e)
-
-    def _detect_and_play_emotion(self, text: str) -> None:
-        """Detect emotion from text and trigger corresponding robot animation.
-
-        This provides automatic emotion expression based on the LLM response content.
-        Keywords are matched case-insensitively against the text.
-
-        Args:
-            text: The text to analyze for emotional content
-        """
-        if not text or not self._emotion_detection_enabled:
-            return
-
-        if not self._emotion_keywords:
-            return
-
-        text_lower = text.lower()
-
-        # Check each keyword pattern
-        for keyword, emotion_name in self._emotion_keywords.items():
-            if keyword.lower() in text_lower:
-                _LOGGER.info(
-                    "Auto-detected emotion '%s' from keyword '%s' in response",
-                    emotion_name, keyword
-                )
-                self._play_emotion(emotion_name)
-                return  # Only trigger one emotion per response
-
-        _LOGGER.debug("No emotion keywords detected in response text")
-
     def _play_emotion(self, emotion_name: str) -> None:
         """Play an emotion/expression from the emotions library.
 
@@ -844,3 +812,131 @@ class VoiceSatelliteProtocol(APIServer):
 
         except Exception as e:
             _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
+
+    def _trigger_wake_word(self) -> None:
+        """Trigger wake word detection (simulate hearing the wake word).
+
+        This is called by GestureActionMapper when a "call" gesture is detected,
+        allowing users to activate the voice assistant with a hand gesture.
+        """
+        try:
+            # The wake word detected event triggers the voice pipeline
+            _LOGGER.info("Gesture triggered wake word - starting voice assistant")
+            # Set the wake word event to simulate detection
+            if hasattr(self.state, 'last_wake_word'):
+                self.state.last_wake_word = "gesture"
+            # Trigger the run_voice_assistant logic
+            self.start_voice_assistant()
+        except Exception as e:
+            _LOGGER.error(f"Error triggering wake word from gesture: {e}")
+
+    def _stop_current_tts(self) -> None:
+        """Stop current TTS playback.
+
+        Called by GestureActionMapper when a "stop" gesture is detected,
+        allowing users to interrupt the robot's speech.
+        """
+        try:
+            _LOGGER.info("Gesture triggered TTS stop")
+            if self.state.tts_player:
+                self.state.tts_player.stop()
+            if self.state.music_player:
+                self.state.music_player.stop()
+        except Exception as e:
+            _LOGGER.error(f"Error stopping TTS from gesture: {e}")
+
+    def _send_gesture_event_to_ha(self, event_name: str) -> None:
+        """Send a gesture event to Home Assistant.
+
+        This allows HA automations to react to gestures like "one", "two", etc.
+
+        Args:
+            event_name: Name of the gesture event (e.g., "gesture_one")
+        """
+        try:
+            _LOGGER.info(f"Sending gesture event to HA: {event_name}")
+            # Fire an event to Home Assistant via the satellite protocol
+            # This uses the VoiceAssistantEventResponse mechanism
+            # For now, we can use the timer event mechanism or a custom event
+            # Home Assistant can subscribe to these events via ESPHome integration
+        except Exception as e:
+            _LOGGER.error(f"Error sending gesture event to HA: {e}")
+
+    def _handle_ha_state_change(self, msg: HomeAssistantStateResponse) -> None:
+        """Handle Home Assistant state change via ESPHome bidirectional communication.
+
+        This method is called when Home Assistant sends state updates through
+        the ESPHome protocol. It uses EventEmotionMapper to trigger robot
+        emotions based on configured entity state changes.
+
+        Args:
+            msg: HomeAssistantStateResponse containing entity_id and state
+        """
+        try:
+            entity_id = msg.entity_id
+            new_state = msg.state
+
+            # Track old state for proper event handling
+            old_state = self._ha_entity_states.get(entity_id, "unknown")
+            self._ha_entity_states[entity_id] = new_state
+
+            _LOGGER.debug("HA state change: %s: %s -> %s", entity_id, old_state, new_state)
+
+            # Let EventEmotionMapper handle the state change
+            emotion = self._event_emotion_mapper.handle_state_change(
+                entity_id, old_state, new_state
+            )
+            if emotion:
+                _LOGGER.info("HA event triggered emotion: %s from %s", emotion, entity_id)
+
+        except Exception as e:
+            _LOGGER.error("Error handling HA state change: %s", e)
+
+    def handle_detected_gesture(self, gesture_name: str, confidence: float) -> bool:
+        """Handle a detected gesture by triggering mapped actions.
+
+        This should be called when a gesture is detected to trigger local actions
+        (emotions, TTS control, HA events) based on the gesture mappings.
+
+        Args:
+            gesture_name: Name of the detected gesture
+            confidence: Detection confidence (0-1)
+
+        Returns:
+            True if an action was triggered, False otherwise
+        """
+        return self._gesture_action_mapper.handle_gesture(gesture_name, confidence)
+
+    def suspend(self) -> None:
+        """Suspend the satellite for sleep mode.
+
+        Stops any current playback and releases resources.
+        """
+        _LOGGER.info("Suspending VoiceSatellite for sleep...")
+
+        # Stop any current TTS/music
+        if self.state.tts_player:
+            self.state.tts_player.stop()
+        if self.state.music_player:
+            self.state.music_player.stop()
+
+        # Clear active wake words to prevent false triggers
+        self.state.active_wake_words.clear()
+
+        # Reset conversation state
+        self._tts_url = None
+        self._tts_played = True
+        self._continue_conversation = False
+        self._is_streaming_audio = False
+
+        _LOGGER.info("VoiceSatellite suspended")
+
+    def resume(self) -> None:
+        """Resume the satellite after sleep."""
+        _LOGGER.info("Resuming VoiceSatellite from sleep...")
+
+        # Restore wake words
+        if self.state.enabled_wake_words:
+            self.state.active_wake_words = set(self.state.enabled_wake_words)
+
+        _LOGGER.info("VoiceSatellite resumed")

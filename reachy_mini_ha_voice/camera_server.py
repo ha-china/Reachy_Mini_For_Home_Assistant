@@ -18,12 +18,9 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-# Import SDK interpolation utilities (same as conversation_app)
-try:
-    from reachy_mini.utils.interpolation import linear_pose_interpolation
-    SDK_INTERPOLATION_AVAILABLE = True
-except ImportError:
-    SDK_INTERPOLATION_AVAILABLE = False
+# Import adaptive frame rate manager
+from .vision.frame_processor import AdaptiveFrameRateManager, FrameRateConfig
+from .vision.face_tracking_interpolator import FaceTrackingInterpolator, InterpolationConfig
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -100,49 +97,42 @@ class MJPEGCameraServer:
         self._current_gesture = "none"
         self._gesture_confidence = 0.0
         self._gesture_lock = threading.Lock()
-        self._gesture_frame_counter = 0
-        self._gesture_detection_interval = 3  # Run gesture detection every N frames
         self._gesture_state_callback = None  # Callback to notify entity registry
+        self._gesture_action_callback = None  # Callback for gesture → action mapping
 
         # Face detection state callback (similar to gesture)
         self._face_state_callback = None  # Callback to notify entity registry
         self._last_face_detected_state = False  # Track previous state for change detection
 
-        # Face tracking timing (smooth interpolation when face lost)
-        # Reference project values: face_lost_delay=2.0, interpolation_duration=1.0
-        # We use similar but slightly faster for more responsive feel
-        self._last_face_detected_time: Optional[float] = None
-        self._interpolation_start_time: Optional[float] = None
-        self._interpolation_start_pose: Optional[np.ndarray] = None
-        self._face_lost_delay = 2.0  # Match reference: wait 2s before interpolating back
-        self._interpolation_duration = 1.0  # Match reference: 1s to return to neutral
-
-        # Offset scaling (same as conversation_app)
-        self._offset_scale = 0.6
+        # Face tracking interpolator (handles smooth return to neutral)
+        self._face_interpolator = FaceTrackingInterpolator(
+            config=InterpolationConfig(
+                face_lost_delay=2.0,
+                interpolation_duration=1.0,
+                offset_scale=0.6,
+                pitch_offset_deg=9.0,
+                yaw_offset_deg=-7.0,
+            )
+        )
 
         # =====================================================================
-        # Resource optimization: Adaptive frame rate for face tracking
+        # Adaptive frame rate manager (replaces inline logic)
         # =====================================================================
-        # High frequency when: face detected, in conversation, or recently active
-        # Low frequency when: idle and no face for extended period
-        # Ultra-low when: idle for very long time (just MJPEG stream, minimal AI)
-        self._fps_high = fps  # Normal tracking rate (15fps)
-        self._fps_low = 2     # Low power rate (2fps) - periodic face check
-        self._fps_idle = 0.5  # Ultra-low power (0.5fps) - minimal CPU usage
-        self._current_fps = fps
+        self._frame_rate_manager = AdaptiveFrameRateManager(
+            config=FrameRateConfig(
+                fps_high=fps,
+                fps_low=2,
+                fps_idle=0.5,
+                low_power_threshold=5.0,
+                idle_threshold=30.0,
+                gesture_detection_interval=3,
+            )
+        )
 
-        # Conversation state (set by voice assistant)
-        self._in_conversation = False
-        self._conversation_lock = threading.Lock()
-
-        # Adaptive tracking timing
-        self._no_face_duration = 0.0  # How long since last face detection
-        self._low_power_threshold = 5.0   # Switch to low power after 5s without face
-        self._idle_threshold = 30.0       # Switch to idle mode after 30s without face
-        self._last_face_check_time = 0.0
-
-        # Skip AI inference in idle mode (only stream MJPEG)
-        self._ai_enabled = True
+        # Stream client tracking for resource optimization
+        self._active_stream_clients: set = set()
+        self._stream_client_lock = threading.Lock()
+        self._next_client_id = 0
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -204,9 +194,18 @@ class MJPEGCameraServer:
         _LOGGER.info("  Snapshot URL: http://<ip>:%d/snapshot", self.port)
 
     async def stop(self) -> None:
-        """Stop the MJPEG camera server."""
+        """Stop the MJPEG camera server and release all resources.
+
+        This method ensures complete cleanup of:
+        - Capture thread
+        - HTTP server
+        - ML models (head tracker, gesture detector)
+        - Frame buffers and state
+        """
+        _LOGGER.info("Stopping MJPEG camera server...")
         self._running = False
 
+        # 1. Stop capture thread
         if self._capture_thread:
             # Wait up to 3 seconds - longer than max sleep time (2s in idle mode)
             self._capture_thread.join(timeout=3.0)
@@ -214,12 +213,189 @@ class MJPEGCameraServer:
                 _LOGGER.warning("Camera capture thread did not stop cleanly")
             self._capture_thread = None
 
+        # 2. Stop HTTP server
         if self._server:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
 
-        _LOGGER.info("MJPEG Camera server stopped")
+        # 3. Release ML models (explicit cleanup)
+        self._release_ml_models()
+
+        # 4. Clear frame buffer
+        with self._frame_lock:
+            self._last_frame = None
+            self._last_frame_time = 0
+
+        # 5. Clear tracking state
+        with self._face_tracking_lock:
+            self._face_tracking_offsets = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        with self._gesture_lock:
+            self._current_gesture = "none"
+            self._gesture_confidence = 0.0
+
+        # 6. Clear active clients
+        with self._stream_client_lock:
+            self._active_stream_clients.clear()
+
+        _LOGGER.info("MJPEG Camera server stopped - all resources released")
+
+    def _release_ml_models(self) -> None:
+        """Release ML models from memory.
+
+        This is called during stop() and suspend_processing() to free GPU/CPU memory.
+        """
+        # Release YOLO head tracker model
+        if self._head_tracker is not None:
+            try:
+                # Try to call close() if available, otherwise just delete
+                if hasattr(self._head_tracker, 'close'):
+                    self._head_tracker.close()
+                del self._head_tracker
+                self._head_tracker = None
+                _LOGGER.debug("Head tracker model released")
+            except Exception as e:
+                _LOGGER.warning("Error releasing head tracker: %s", e)
+
+        # Release gesture detector model
+        if self._gesture_detector is not None:
+            try:
+                if hasattr(self._gesture_detector, 'close'):
+                    self._gesture_detector.close()
+                del self._gesture_detector
+                self._gesture_detector = None
+                _LOGGER.debug("Gesture detector model released")
+            except Exception as e:
+                _LOGGER.warning("Error releasing gesture detector: %s", e)
+
+    async def __aenter__(self) -> "MJPEGCameraServer":
+        """Context manager entry - start the server."""
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        """Context manager exit - stop the server and release resources."""
+        await self.stop()
+        return False  # Don't suppress exceptions
+
+    def suspend_processing(self) -> None:
+        """Suspend AI processing for sleep mode.
+
+        This releases ML models from memory while keeping basic MJPEG
+        streaming capability (though it will only serve cached frames).
+
+        Call resume_processing() to restore full functionality.
+        """
+        _LOGGER.info("Suspending camera processing for sleep mode...")
+
+        # Suspend frame rate manager
+        self._frame_rate_manager.suspend()
+        self._face_tracking_enabled = False
+        self._gesture_detection_enabled = False
+
+        # Release ML models (use shared method to avoid duplication)
+        self._release_ml_models()
+
+        # Reset tracking state
+        with self._face_tracking_lock:
+            self._face_tracking_offsets = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        with self._gesture_lock:
+            self._current_gesture = "none"
+            self._gesture_confidence = 0.0
+
+        _LOGGER.info("Camera processing suspended - ML models released")
+
+    def resume_processing(self) -> None:
+        """Resume AI processing after sleep mode.
+
+        This reloads ML models and restores full camera functionality.
+        Should be called after robot has fully woken up.
+        """
+        _LOGGER.info("Resuming camera processing after sleep...")
+
+        # Resume frame rate manager
+        self._frame_rate_manager.resume()
+
+        # Reload head tracker if face tracking was originally enabled
+        if self.enable_face_tracking and self._head_tracker is None:
+            try:
+                from .head_tracker import HeadTracker
+                self._head_tracker = HeadTracker()
+                self._face_tracking_enabled = True
+                _LOGGER.info("Head tracker model reloaded")
+            except Exception as e:
+                _LOGGER.warning("Failed to reload head tracker: %s", e)
+                self._face_tracking_enabled = False
+
+        # Reload gesture detector
+        if self._gesture_detector is None:
+            try:
+                from .gesture_detector import GestureDetector
+                self._gesture_detector = GestureDetector()
+                if self._gesture_detector.is_available:
+                    self._gesture_detection_enabled = True
+                    _LOGGER.info("Gesture detector model reloaded")
+                else:
+                    self._gesture_detector = None
+                    self._gesture_detection_enabled = False
+            except Exception as e:
+                _LOGGER.warning("Failed to reload gesture detector: %s", e)
+                self._gesture_detection_enabled = False
+
+        _LOGGER.info("Camera processing resumed - full functionality restored")
+
+    def suspend(self) -> None:
+        """Fully suspend the camera server for sleep mode.
+
+        This stops the capture thread and releases all resources to free CPU.
+        Call resume_from_suspend() to restart.
+        """
+        if not self._running:
+            _LOGGER.debug("Camera server not running, nothing to suspend")
+            return
+
+        _LOGGER.info("Suspending camera server for sleep...")
+
+        # First suspend AI processing
+        self.suspend_processing()
+
+        # Stop the capture thread to release CPU
+        self._running = False
+        if self._capture_thread is not None:
+            self._capture_thread.join(timeout=3.0)
+            if self._capture_thread.is_alive():
+                _LOGGER.warning("Camera capture thread did not stop cleanly during suspend")
+            self._capture_thread = None
+
+        _LOGGER.info("Camera server suspended - CPU released")
+
+    async def resume_from_suspend(self) -> None:
+        """Resume the camera server after sleep.
+
+        This restarts the capture thread and reloads ML models.
+        """
+        if self._running:
+            _LOGGER.debug("Camera server already running")
+            return
+
+        _LOGGER.info("Resuming camera server from sleep...")
+
+        self._running = True
+
+        # Resume AI processing (reloads models)
+        self.resume_processing()
+
+        # Restart capture thread
+        self._capture_thread = threading.Thread(
+            target=self._capture_frames,
+            daemon=True,
+            name="camera-capture"
+        )
+        self._capture_thread.start()
+
+        _LOGGER.info("Camera server resumed from sleep")
 
     def _capture_frames(self) -> None:
         """Background thread to capture frames from Reachy Mini and do face tracking.
@@ -264,25 +440,8 @@ class MJPEGCameraServer:
                             face_detect_count += 1
                             face_detected = self._process_face_tracking(frame, current_time)
 
-                            # Update adaptive timing based on detection result
-                            if face_detected:
-                                self._no_face_duration = 0.0
-                                self._current_fps = self._fps_high
-                                self._ai_enabled = True
-                            else:
-                                # Accumulate no-face duration
-                                if self._last_face_detected_time is not None:
-                                    self._no_face_duration = current_time - self._last_face_detected_time
-                                else:
-                                    self._no_face_duration += 1.0 / self._current_fps
-
-                                # Adaptive power mode
-                                if self._no_face_duration > self._idle_threshold:
-                                    self._current_fps = self._fps_idle
-                                elif self._no_face_duration > self._low_power_threshold:
-                                    self._current_fps = self._fps_low
-
-                            self._last_face_check_time = current_time
+                            # Update adaptive frame rate manager
+                            self._frame_rate_manager.update(face_detected=face_detected)
 
                             # Check for face detection state change and notify callback
                             # Use is_face_detected() which considers face_lost_delay
@@ -298,35 +457,27 @@ class MJPEGCameraServer:
                         # Handle smooth interpolation when face lost
                         self._process_face_lost_interpolation(current_time)
 
-                        # Gesture detection (only when face detected recently)
+                        # Gesture detection (using frame rate manager)
                         if (self._gesture_detection_enabled
                                 and self._gesture_detector is not None
-                                and self._no_face_duration < 5.0):
-                            # Only detect gestures when someone is present
-                            self._gesture_frame_counter += 1
-                            if self._gesture_frame_counter >= self._gesture_detection_interval:
-                                self._gesture_frame_counter = 0
-                                self._process_gesture_detection(frame)
+                                and self._frame_rate_manager.should_run_gesture_detection()):
+                            self._process_gesture_detection(frame)
 
                     # Log stats every 30 seconds
                     if current_time - last_log_time >= 30.0:
                         fps = frame_count / (current_time - last_log_time)
                         detect_fps = face_detect_count / (current_time - last_log_time)
-                        if self._current_fps == self._fps_high:
-                            mode = "HIGH"
-                        elif self._current_fps == self._fps_low:
-                            mode = "LOW"
-                        else:
-                            mode = "IDLE"
+                        mode = self._frame_rate_manager.current_mode.value.upper()
+                        no_face = self._frame_rate_manager.state.no_face_duration
                         _LOGGER.debug(
                             "Camera: %.1f fps, AI: %.1f fps (%s), no_face: %.0fs",
-                            fps, detect_fps, mode, self._no_face_duration)
+                            fps, detect_fps, mode, no_face)
                         frame_count = 0
                         face_detect_count = 0
                         last_log_time = current_time
 
-                # Sleep to maintain target FPS (use current adaptive rate)
-                sleep_time = 1.0 / self._current_fps
+                # Sleep to maintain target FPS (use adaptive rate)
+                sleep_time = self._frame_rate_manager.get_sleep_interval()
                 time.sleep(sleep_time)
 
             except Exception as e:
@@ -336,31 +487,36 @@ class MJPEGCameraServer:
         _LOGGER.info("Camera capture thread stopped")
 
     def _should_run_ai_inference(self, current_time: float) -> bool:
-        """Determine if AI inference (face/gesture detection) should run.
-
-        Returns True if:
-        - In conversation mode (always run)
-        - Face was recently detected
-        - Periodic check in low power mode
-        """
-        # Always run during conversation
-        with self._conversation_lock:
-            if self._in_conversation:
-                return True
-
-        # High frequency mode: run every frame
-        if self._current_fps == self._fps_high:
-            return True
-
-        # Low/idle power mode: run periodically
-        time_since_last = current_time - self._last_face_check_time
-        return time_since_last >= (1.0 / self._current_fps)
+        """Determine if AI inference (face/gesture detection) should run."""
+        return self._frame_rate_manager.should_run_inference()
 
     def _has_stream_clients(self) -> bool:
         """Check if there are active MJPEG stream clients."""
-        # For now, always return True to keep stream available
-        # Could be optimized to track actual client connections
-        return True
+        with self._stream_client_lock:
+            return len(self._active_stream_clients) > 0
+
+    def _register_stream_client(self) -> int:
+        """Register a new stream client and return its ID."""
+        with self._stream_client_lock:
+            client_id = self._next_client_id
+            self._next_client_id += 1
+            self._active_stream_clients.add(client_id)
+            _LOGGER.debug("Stream client registered: %d (total: %d)",
+                         client_id, len(self._active_stream_clients))
+            return client_id
+
+    def _unregister_stream_client(self, client_id: int) -> None:
+        """Unregister a stream client."""
+        with self._stream_client_lock:
+            self._active_stream_clients.discard(client_id)
+            _LOGGER.debug("Stream client unregistered: %d (total: %d)",
+                         client_id, len(self._active_stream_clients))
+
+    @property
+    def stream_client_count(self) -> int:
+        """Get the number of active stream clients."""
+        with self._stream_client_lock:
+            return len(self._active_stream_clients)
 
     def _process_face_tracking(self, frame: np.ndarray, current_time: float) -> bool:
         """Process face tracking on a frame.
@@ -375,17 +531,16 @@ class MJPEGCameraServer:
             face_center, confidence = self._head_tracker.get_head_position(frame)
 
             if face_center is not None:
-                # Face detected - update tracking
-                self._last_face_detected_time = current_time
-                self._interpolation_start_time = None  # Stop any interpolation
+                # Face detected - notify interpolator
+                self._face_interpolator.on_face_detected(current_time)
 
                 # Convert normalized coordinates to pixel coordinates
                 h, w = frame.shape[:2]
                 eye_center_norm = (face_center + 1) / 2
 
                 eye_center_pixels = [
-                    eye_center_norm[0] * w,
-                    eye_center_norm[1] * h,
+                    int(eye_center_norm[0] * w),
+                    int(eye_center_norm[1] * h),
                 ]
 
                 # Get the head pose needed to look at the target
@@ -400,32 +555,12 @@ class MJPEGCameraServer:
                 translation = target_pose[:3, 3]
                 rotation = R.from_matrix(target_pose[:3, :3]).as_euler("xyz", degrees=False)
 
-                # Scale down for smoother tracking (same as conversation_app)
-                translation = translation * self._offset_scale
-                rotation = rotation * self._offset_scale
+                # Update interpolator with new offsets (handles scaling and compensation)
+                self._face_interpolator.update_offsets(translation, rotation)
 
-                # Apply pitch offset compensation (robot tends to look up)
-                # rotation[1] is pitch in xyz euler order
-                # Positive pitch = look down in robot coordinate system
-                pitch_offset_rad = np.radians(9.0)  # Look down 9 degrees
-                rotation[1] += pitch_offset_rad
-
-                # Apply yaw offset compensation (robot tends to look to user's right)
-                # rotation[2] is yaw in xyz euler order
-                # Negative yaw = turn right (towards user's left from robot's perspective)
-                yaw_offset_rad = np.radians(-7.0)  # Turn right 7 degrees
-                rotation[2] += yaw_offset_rad
-
-                # Update face tracking offsets
+                # Sync to thread-safe storage
                 with self._face_tracking_lock:
-                    self._face_tracking_offsets = [
-                        float(translation[0]),
-                        float(translation[1]),
-                        float(translation[2]),
-                        float(rotation[0]),
-                        float(rotation[1]),
-                        float(rotation[2]),
-                    ]
+                    self._face_tracking_offsets = list(self._face_interpolator.get_offsets())
 
                 return True
 
@@ -437,91 +572,12 @@ class MJPEGCameraServer:
 
     def _process_face_lost_interpolation(self, current_time: float) -> None:
         """Handle smooth interpolation back to neutral when face is lost."""
-        if self._last_face_detected_time is None:
-            return
+        # Delegate to interpolator
+        self._face_interpolator.process_face_lost(current_time)
 
-        time_since_face_lost = current_time - self._last_face_detected_time
-
-        if time_since_face_lost < self._face_lost_delay:
-            return  # Still within delay period, keep current offsets
-
-        # Start interpolation if not already started
-        if self._interpolation_start_time is None:
-            self._interpolation_start_time = current_time
-            # Capture current pose as start of interpolation
-            with self._face_tracking_lock:
-                current_offsets = self._face_tracking_offsets.copy()
-
-            # Convert to 4x4 pose matrix
-            pose_matrix = np.eye(4, dtype=np.float32)
-            pose_matrix[:3, 3] = current_offsets[:3]
-            pose_matrix[:3, :3] = R.from_euler("xyz", current_offsets[3:]).as_matrix()
-            self._interpolation_start_pose = pose_matrix
-
-        # Calculate interpolation progress
-        elapsed = current_time - self._interpolation_start_time
-        t = min(1.0, elapsed / self._interpolation_duration)
-
-        # Interpolate to neutral (identity matrix)
-        if self._interpolation_start_pose is not None:
-            neutral_pose = np.eye(4, dtype=np.float32)
-            interpolated_pose = self._linear_pose_interpolation(
-                self._interpolation_start_pose, neutral_pose, t
-            )
-
-            # Extract translation and rotation
-            translation = interpolated_pose[:3, 3]
-            rotation = R.from_matrix(interpolated_pose[:3, :3]).as_euler("xyz", degrees=False)
-
-            with self._face_tracking_lock:
-                self._face_tracking_offsets = [
-                    float(translation[0]),
-                    float(translation[1]),
-                    float(translation[2]),
-                    float(rotation[0]),
-                    float(rotation[1]),
-                    float(rotation[2]),
-                ]
-
-        # Reset when interpolation complete
-        if t >= 1.0:
-            self._last_face_detected_time = None
-            self._interpolation_start_time = None
-            self._interpolation_start_pose = None
-
-    def _linear_pose_interpolation(
-        self, start: np.ndarray, end: np.ndarray, t: float
-    ) -> np.ndarray:
-        """Linear interpolation between two 4x4 pose matrices.
-
-        Uses SDK's linear_pose_interpolation if available, otherwise falls back
-        to manual SLERP implementation.
-        """
-        if SDK_INTERPOLATION_AVAILABLE:
-            return linear_pose_interpolation(start, end, t)
-
-        # Fallback: manual interpolation
-        # Interpolate translation
-        start_trans = start[:3, 3]
-        end_trans = end[:3, 3]
-        interp_trans = start_trans * (1 - t) + end_trans * t
-
-        # Interpolate rotation using SLERP
-        start_rot = R.from_matrix(start[:3, :3])
-        end_rot = R.from_matrix(end[:3, :3])
-
-        # Use scipy's slerp - create Rotation array from list
-        from scipy.spatial.transform import Slerp
-        key_rots = R.from_quat(np.array([start_rot.as_quat(), end_rot.as_quat()]))
-        slerp = Slerp([0, 1], key_rots)
-        interp_rot = slerp(t)
-
-        # Build result matrix
-        result = np.eye(4, dtype=np.float32)
-        result[:3, :3] = interp_rot.as_matrix()
-        result[:3, 3] = interp_trans
-
-        return result
+        # Sync interpolated offsets to thread-safe storage
+        with self._face_tracking_lock:
+            self._face_tracking_offsets = list(self._face_interpolator.get_offsets())
 
     # =========================================================================
     # Public API for face tracking
@@ -546,12 +602,7 @@ class MJPEGCameraServer:
         Returns:
             True if face is detected, False otherwise
         """
-        if self._last_face_detected_time is None:
-            return False
-
-        # Face is considered detected if we saw it recently
-        time_since_detected = time.time() - self._last_face_detected_time
-        return time_since_detected < self._face_lost_delay
+        return self._face_interpolator.is_face_detected()
 
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
@@ -560,8 +611,7 @@ class MJPEGCameraServer:
         self._face_tracking_enabled = enabled
         if not enabled:
             # Start interpolation back to neutral
-            self._last_face_detected_time = time.time()
-            self._interpolation_start_time = None
+            self._face_interpolator.reset_interpolation()
         _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
 
     def set_conversation_mode(self, in_conversation: bool) -> None:
@@ -573,14 +623,8 @@ class MJPEGCameraServer:
         Args:
             in_conversation: True when voice assistant is actively conversing
         """
-        with self._conversation_lock:
-            self._in_conversation = in_conversation
-
+        self._frame_rate_manager.set_conversation_mode(in_conversation)
         if in_conversation:
-            # Immediately switch to high frequency mode
-            self._current_fps = self._fps_high
-            self._ai_enabled = True
-            self._no_face_duration = 0.0  # Reset no-face timer
             _LOGGER.debug("Face tracking: conversation mode ON (high frequency)")
         else:
             _LOGGER.debug("Face tracking: conversation mode OFF (adaptive)")
@@ -623,6 +667,16 @@ class MJPEGCameraServer:
                 except Exception:
                     pass  # Ignore callback errors
 
+            # Trigger gesture actions (emotions, listening, etc.)
+            if state_changed and self._gesture_action_callback:
+                try:
+                    self._gesture_action_callback(
+                        self._current_gesture,
+                        self._gesture_confidence
+                    )
+                except Exception as e:
+                    _LOGGER.debug("Gesture action callback error: %s", e)
+
         except Exception as e:
             _LOGGER.warning("Gesture detection error: %s", e)
 
@@ -656,6 +710,13 @@ class MJPEGCameraServer:
     def set_gesture_state_callback(self, callback) -> None:
         """Set callback to notify when gesture state changes."""
         self._gesture_state_callback = callback
+
+    def set_gesture_action_callback(self, callback) -> None:
+        """Set callback for gesture action handling.
+
+        The callback receives (gesture_name: str, confidence: float).
+        """
+        self._gesture_action_callback = callback
 
     def set_face_state_callback(self, callback) -> None:
         """Set callback to notify when face detection state changes."""
@@ -840,6 +901,9 @@ class MJPEGCameraServer:
 
     async def _handle_stream(self, writer: asyncio.StreamWriter) -> None:
         """Handle MJPEG stream request."""
+        # Register this client for tracking
+        client_id = self._register_stream_client()
+
         # Send MJPEG headers
         response = (
             "HTTP/1.1 200 OK\r\n"
@@ -851,7 +915,7 @@ class MJPEGCameraServer:
         writer.write(response.encode('utf-8'))
         await writer.drain()
 
-        _LOGGER.debug("Started MJPEG stream")
+        _LOGGER.debug("Started MJPEG stream for client %d", client_id)
 
         last_sent_time = 0
 
@@ -883,8 +947,11 @@ class MJPEGCameraServer:
                 await asyncio.sleep(0.01)
 
         except (ConnectionResetError, BrokenPipeError):
-            _LOGGER.debug("Client disconnected from stream")
+            _LOGGER.debug("Client %d disconnected from stream", client_id)
         except Exception as e:
-            _LOGGER.error("Error in MJPEG stream: %s", e)
+            _LOGGER.error("Error in MJPEG stream for client %d: %s", client_id, e)
+        finally:
+            # Always unregister client when done
+            self._unregister_stream_client(client_id)
 
-        _LOGGER.debug("Ended MJPEG stream")
+        _LOGGER.debug("Ended MJPEG stream for client %d", client_id)

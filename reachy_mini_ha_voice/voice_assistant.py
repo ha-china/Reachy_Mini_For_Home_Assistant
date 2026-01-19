@@ -24,9 +24,11 @@ from .audio_player import AudioPlayer
 from .satellite import VoiceSatelliteProtocol
 from .util import get_mac
 from .zeroconf import HomeAssistantZeroconf
-from .motion import ReachyMiniMotion
+from .reachy_motion import ReachyMiniMotion
 from .camera_server import MJPEGCameraServer
 from .robot_state_monitor import RobotStateMonitor
+from .core import SleepManager, Config
+from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,9 +87,14 @@ class VoiceAssistantService:
         # Audio buffer for fixed-size chunk output
         self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
 
-        # Robot state monitor - tracks connection to daemon
+        # Robot state monitor - tracks connection to daemon (legacy, kept for compatibility)
         self._robot_state_monitor: Optional[RobotStateMonitor] = None
         self._robot_services_paused = threading.Event()  # Set when services should pause
+        self._robot_services_resumed = threading.Event()  # Event-driven resume signaling
+        self._robot_services_resumed.set()  # Start in resumed state
+
+        # New sleep manager for proper sleep/wake handling
+        self._sleep_manager: Optional[SleepManager] = None
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -225,7 +232,24 @@ class VoiceAssistantService:
         # Sendspin is for music playback, so connect to music_player
         await music_player.start_sendspin_discovery()
 
-        # Start robot state monitor if robot is available
+        # Start sleep manager for proper sleep/wake handling
+        # This monitors the daemon state and coordinates service suspend/resume
+        self._sleep_manager = SleepManager(
+            daemon_url=Config.daemon.url,
+            check_interval=Config.daemon.check_interval,
+            resume_delay=Config.sleep.resume_delay,
+        )
+
+        # Register sleep/wake callbacks
+        self._sleep_manager.on_sleep(self._on_sleep)
+        self._sleep_manager.on_wake(self._on_wake)
+        self._sleep_manager.on_pre_resume(self._on_pre_resume)
+
+        # Start the sleep manager
+        await self._sleep_manager.start()
+        _LOGGER.info("Sleep manager started")
+
+        # Start legacy robot state monitor for connection tracking (kept for compatibility)
         if self.reachy_mini is not None:
             self._robot_state_monitor = RobotStateMonitor(self.reachy_mini)
             self._robot_state_monitor.on_disconnected(self._on_robot_disconnected)
@@ -243,6 +267,7 @@ class VoiceAssistantService:
         """
         _LOGGER.warning("Robot disconnected - pausing robot-dependent services")
         self._robot_services_paused.set()
+        self._robot_services_resumed.clear()  # Clear resume signal
 
         # Clear audio buffer to avoid processing stale data
         self._audio_buffer = np.array([], dtype=np.float32)
@@ -258,6 +283,7 @@ class VoiceAssistantService:
         """
         _LOGGER.info("Robot reconnected - resuming robot-dependent services")
         self._robot_services_paused.clear()
+        self._robot_services_resumed.set()  # Signal resume to wake waiting threads
 
         # Resume movement manager
         if self._motion is not None and self._motion._movement_manager is not None:
@@ -274,23 +300,158 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Failed to restart Reachy Mini media: %s", e)
 
+    def _on_sleep(self) -> None:
+        """Called when the robot enters sleep mode.
+
+        This is triggered by the SleepManager when the daemon enters STOPPED state.
+        At this point, we should:
+        1. Stop all resource-intensive operations
+        2. Release ML models from memory
+        3. Keep only ESPHome server running for HA control
+        """
+        _LOGGER.info("Robot entering sleep mode - suspending services...")
+        self._robot_services_paused.set()
+        self._robot_services_resumed.clear()
+
+        # Update state
+        if self._state is not None:
+            self._state.is_sleeping = True
+            self._state.services_suspended = True
+
+        # Clear audio buffer
+        self._audio_buffer = np.array([], dtype=np.float32)
+
+        # Suspend camera server (stops thread and releases YOLO model)
+        if self._camera_server is not None:
+            try:
+                self._camera_server.suspend()
+                _LOGGER.debug("Camera server suspended")
+            except Exception as e:
+                _LOGGER.warning("Error suspending camera: %s", e)
+
+        # Suspend motion controller (stops control loop thread)
+        if self._motion is not None and self._motion._movement_manager is not None:
+            try:
+                self._motion._movement_manager.suspend()
+                _LOGGER.debug("Motion controller suspended")
+            except Exception as e:
+                _LOGGER.warning("Error suspending motion: %s", e)
+
+        # Suspend satellite
+        if self._state is not None and self._state.satellite is not None:
+            try:
+                self._state.satellite.suspend()
+                _LOGGER.debug("Satellite suspended")
+            except Exception as e:
+                _LOGGER.warning("Error suspending satellite: %s", e)
+
+        # Suspend audio players
+        if self._state is not None:
+            if self._state.tts_player is not None:
+                try:
+                    self._state.tts_player.suspend()
+                except Exception as e:
+                    _LOGGER.warning("Error suspending TTS player: %s", e)
+            if self._state.music_player is not None:
+                try:
+                    self._state.music_player.suspend()
+                except Exception as e:
+                    _LOGGER.warning("Error suspending music player: %s", e)
+
+        # Stop media recording to save CPU
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.stop_recording()
+                self.reachy_mini.media.stop_playing()
+                _LOGGER.debug("Media system stopped")
+            except Exception as e:
+                _LOGGER.warning("Error stopping media: %s", e)
+
+        _LOGGER.info("Services suspended - system in low-power mode")
+
+    def _on_wake(self) -> None:
+        """Called when the robot starts waking up.
+
+        This is triggered immediately when daemon state changes from STOPPED.
+        The actual service resume happens after the configured delay (30s default).
+        """
+        _LOGGER.info("Robot waking up - will resume services after delay...")
+
+    def _on_pre_resume(self) -> None:
+        """Called just before services are resumed.
+
+        This happens after the resume delay (30s default).
+        At this point, the daemon should be fully ready.
+        """
+        _LOGGER.info("Resuming services after wake delay...")
+        self._robot_services_paused.clear()
+
+        # Update state
+        if self._state is not None:
+            self._state.is_sleeping = False
+
+        # Restart media system first
+        if self.reachy_mini is not None:
+            try:
+                media = self.reachy_mini.media
+                if media.audio is not None:
+                    media.start_recording()
+                    media.start_playing()
+                    _LOGGER.info("Media system restarted")
+            except Exception as e:
+                _LOGGER.warning("Failed to restart media: %s", e)
+
+        # Resume camera server (reloads YOLO model and restarts capture thread)
+        if self._camera_server is not None:
+            try:
+                self._camera_server.resume_from_suspend()
+                _LOGGER.debug("Camera server resumed from suspend")
+            except Exception as e:
+                _LOGGER.warning("Error resuming camera: %s", e)
+
+        # Resume motion controller (restarts control loop thread)
+        if self._motion is not None and self._motion._movement_manager is not None:
+            try:
+                self._motion._movement_manager.resume_from_suspend()
+                _LOGGER.debug("Motion controller resumed from suspend")
+            except Exception as e:
+                _LOGGER.warning("Error resuming motion: %s", e)
+
+        # Resume satellite
+        if self._state is not None and self._state.satellite is not None:
+            try:
+                self._state.satellite.resume()
+                _LOGGER.debug("Satellite resumed")
+            except Exception as e:
+                _LOGGER.warning("Error resuming satellite: %s", e)
+
+        # Resume audio players
+        if self._state is not None:
+            if self._state.tts_player is not None:
+                try:
+                    self._state.tts_player.resume()
+                except Exception as e:
+                    _LOGGER.warning("Error resuming TTS player: %s", e)
+            if self._state.music_player is not None:
+                try:
+                    self._state.music_player.resume()
+                except Exception as e:
+                    _LOGGER.warning("Error resuming music player: %s", e)
+
+        # Update state - services are no longer suspended
+        if self._state is not None:
+            self._state.services_suspended = False
+
+        # Signal waiting threads that services are resumed
+        self._robot_services_resumed.set()
+
+        _LOGGER.info("All services resumed - system fully operational")
+
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
 
-        This method configures the XMOS XVF3800 audio processor for optimal
-        voice command recognition at distances up to 2-3 meters.
-
-        If user has previously set values via Home Assistant, those values are
-        restored from preferences. Otherwise, default optimized values are used.
-
-        Key optimizations:
-        1. Enable AGC with higher max gain for distant speech
-        2. Reduce noise suppression to preserve quiet speech
-        3. Increase base microphone gain
-        4. Optimize AGC response times for voice commands
-
-        Reference: reachy_mini/src/reachy_mini/media/audio_control_utils.py
-        XMOS docs: https://www.xmos.com/documentation/XM-014888-PC/
+        Delegates to MicrophoneOptimizer for actual settings configuration.
+        User preferences from Home Assistant override defaults when available.
         """
         if self.reachy_mini is None:
             return
@@ -307,99 +468,17 @@ class VoiceAssistantService:
                 _LOGGER.debug("ReSpeaker device not found")
                 return
 
-            # Get saved preferences (if any)
+            # Build preferences from saved state
             prefs = self._state.preferences if self._state else None
+            mic_prefs = MicrophonePreferences(
+                agc_enabled=prefs.agc_enabled if prefs else None,
+                agc_max_gain=prefs.agc_max_gain if prefs else None,
+                noise_suppression=prefs.noise_suppression if prefs else None,
+            )
 
-            # ========== 1. AGC (Automatic Gain Control) Settings ==========
-            # Use saved value if available, otherwise use default (enabled)
-            agc_enabled = prefs.agc_enabled if (prefs and prefs.agc_enabled is not None) else True
-            try:
-                respeaker.write("PP_AGCONOFF", [1 if agc_enabled else 0])
-                _LOGGER.info("AGC %s (PP_AGCONOFF=%d)%s",
-                             "enabled" if agc_enabled else "disabled",
-                             1 if agc_enabled else 0,
-                             " [from preferences]" if (prefs and prefs.agc_enabled is not None) else " [default]")
-            except Exception as e:
-                _LOGGER.debug("Could not set AGC: %s", e)
-
-            # Use saved value if available, otherwise use default (30dB)
-            agc_max_gain = prefs.agc_max_gain if (prefs and prefs.agc_max_gain is not None) else 30.0
-            try:
-                respeaker.write("PP_AGCMAXGAIN", [agc_max_gain])
-                _LOGGER.info("AGC max gain set (PP_AGCMAXGAIN=%.1fdB)%s",
-                             agc_max_gain,
-                             " [from preferences]" if (prefs and prefs.agc_max_gain is not None) else " [default]")
-            except Exception as e:
-                _LOGGER.debug("Could not set PP_AGCMAXGAIN: %s", e)
-
-            # Set AGC desired output level (target level after gain)
-            # More negative = quieter output, less negative = louder
-            # Default is around -25dB, set to -18dB for stronger output
-            try:
-                respeaker.write("PP_AGCDESIREDLEVEL", [-18.0])
-                _LOGGER.debug("AGC desired level set (PP_AGCDESIREDLEVEL=-18.0dB)")
-            except Exception as e:
-                _LOGGER.debug("Could not set PP_AGCDESIREDLEVEL: %s", e)
-
-            # Optimize AGC time constants for voice commands
-            # Faster attack time helps capture sudden speech onset
-            try:
-                respeaker.write("PP_AGCTIME", [0.5])  # Main time constant (seconds)
-                _LOGGER.debug("AGC time constant set (PP_AGCTIME=0.5s)")
-            except Exception as e:
-                _LOGGER.debug("Could not set PP_AGCTIME: %s", e)
-
-            # ========== 2. Base Microphone Gain ==========
-            # Increase base microphone gain for better sensitivity
-            # Default is 1.0, increase to 2.0 for distant speech
-            # Range: 0.0-4.0 (float, linear gain multiplier)
-            try:
-                respeaker.write("AUDIO_MGR_MIC_GAIN", [2.0])
-                _LOGGER.info("Microphone gain increased (AUDIO_MGR_MIC_GAIN=2.0)")
-            except Exception as e:
-                _LOGGER.debug("Could not set AUDIO_MGR_MIC_GAIN: %s", e)
-
-            # ========== 3. Noise Suppression Settings ==========
-            # Use saved value if available, otherwise use default (15%)
-            # PP_MIN_NS: minimum noise suppression threshold
-            # Higher values = less aggressive suppression = better voice pickup
-            # PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% max suppression
-            # UI shows "noise suppression strength" so 15% = PP_MIN_NS of 0.85
-            noise_suppression = prefs.noise_suppression if (prefs and prefs.noise_suppression is not None) else 15.0
-            pp_min_ns = 1.0 - (noise_suppression / 100.0)  # Convert percentage to PP_MIN_NS value
-            try:
-                respeaker.write("PP_MIN_NS", [pp_min_ns])
-                _LOGGER.info("Noise suppression set to %.0f%% strength (PP_MIN_NS=%.2f)%s",
-                             noise_suppression, pp_min_ns,
-                             " [from preferences]" if (prefs and prefs.noise_suppression is not None) else " [default]")
-            except Exception as e:
-                _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
-
-            # PP_MIN_NN: minimum noise floor estimation
-            # Higher values = less aggressive noise floor tracking
-            try:
-                respeaker.write("PP_MIN_NN", [pp_min_ns])  # Match PP_MIN_NS
-                _LOGGER.debug("Noise floor threshold set (PP_MIN_NN=%.2f)", pp_min_ns)
-            except Exception as e:
-                _LOGGER.debug("Could not set PP_MIN_NN: %s", e)
-
-            # ========== 4. Echo Cancellation Settings ==========
-            # Ensure echo cancellation is enabled (important for TTS playback)
-            try:
-                respeaker.write("PP_ECHOONOFF", [1])
-                _LOGGER.debug("Echo cancellation enabled (PP_ECHOONOFF=1)")
-            except Exception as e:
-                _LOGGER.debug("Could not set PP_ECHOONOFF: %s", e)
-
-            # ========== 5. High-pass filter (remove low frequency noise) ==========
-            try:
-                respeaker.write("AEC_HPFONOFF", [1])
-                _LOGGER.debug("High-pass filter enabled (AEC_HPFONOFF=1)")
-            except Exception as e:
-                _LOGGER.debug("Could not set AEC_HPFONOFF: %s", e)
-
-            _LOGGER.info("Microphone settings initialized (AGC=%s, MaxGain=%.0fdB, NoiseSuppression=%.0f%%)",
-                         "ON" if agc_enabled else "OFF", agc_max_gain, noise_suppression)
+            # Delegate to optimizer
+            optimizer = MicrophoneOptimizer()
+            optimizer.optimize(respeaker, mic_prefs)
 
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)
@@ -459,6 +538,11 @@ class VoiceAssistantService:
         if self._robot_state_monitor:
             self._robot_state_monitor.stop()
             self._robot_state_monitor = None
+
+        # 10. Stop sleep manager
+        if self._sleep_manager:
+            await self._sleep_manager.stop()
+            self._sleep_manager = None
 
         _LOGGER.info("Voice assistant service stopped.")
 
@@ -668,9 +752,9 @@ class VoiceAssistantService:
             try:
                 # Check if robot services are paused (sleep mode / disconnected)
                 if self._robot_services_paused.is_set():
-                    # Wait for reconnection, checking periodically
+                    # Wait for resume signal (event-driven, wakes immediately on resume)
                     consecutive_audio_errors = 0  # Reset on pause
-                    time.sleep(0.5)
+                    self._robot_services_resumed.wait(timeout=1.0)
                     continue
 
                 if not self._wait_for_satellite():
@@ -700,9 +784,11 @@ class VoiceAssistantService:
                                 "Audio errors indicate robot may be asleep - pausing audio processing"
                             )
                             self._robot_services_paused.set()
+                            self._robot_services_resumed.clear()
                             # Clear audio buffer
                             self._audio_buffer = np.array([], dtype=np.float32)
-                    time.sleep(0.1)
+                    # Wait for resume signal instead of polling
+                    self._robot_services_resumed.wait(timeout=0.5)
                     continue
 
                 # Check if this is a connection error
@@ -710,7 +796,8 @@ class VoiceAssistantService:
                     # Don't log - the state monitor will handle this
                     if not self._robot_services_paused.is_set():
                         _LOGGER.debug("Connection error detected, waiting for state monitor")
-                    time.sleep(0.5)
+                    # Wait for resume signal instead of polling
+                    self._robot_services_resumed.wait(timeout=1.0)
                 else:
                     # Log unexpected errors (but limit frequency)
                     consecutive_audio_errors += 1

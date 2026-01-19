@@ -1198,3 +1198,106 @@ from aioesphomeapi.api_pb2 import (
 - [reachy_mini_conversation_app](https://github.com/pollen-robotics/reachy_mini_conversation_app)
 - [sendspin-cli](https://github.com/Sendspin/sendspin-cli)
 - [home-assistant-voice](https://github.com/esphome/home-assistant-voice-pe/blob/dev/home-assistant-voice.yaml)
+
+---
+
+## 🔧 Code Refactoring & Improvement Plan (v0.9.0+)
+
+> Comprehensive improvement plan based on code analysis
+> Target Platform: Raspberry Pi CM4 (4GB RAM, 4-core CPU)
+
+### Code Size Statistics
+
+| File | Original | Current | Status |
+|------|----------|---------|--------|
+| `movement_manager.py` | 1205 | 1173 | ⚠️ Modularized but still large |
+| `entity_registry.py` | 1129 | 736 | ✅ Optimized (-34%) |
+| `voice_assistant.py` | 1097 | 1004 | ✅ Optimized (-8%) |
+| `reachy_controller.py` | 878 | 878 | ⚠️ Borderline |
+| `camera_server.py` | 1070 | 957 | ✅ Optimized (-11%) |
+| `satellite.py` | 1003 | 942 | ✅ Optimized (-6%) |
+| `audio_player.py` | 599 | 599 | ✅ Acceptable |
+
+> **Optimization Notes**:
+> - `entity_registry.py`: Factory pattern refactoring reduced 376 lines
+> - `voice_assistant.py`: Using `MicrophoneOptimizer` module reduced 93 lines
+> - `camera_server.py`: Using `FaceTrackingInterpolator` module reduced 113 lines
+> - `satellite.py`: Using `EmotionKeywordDetector` module reduced 61 lines
+
+### New Module List
+
+| Directory | Module | Lines | Description |
+|-----------|--------|-------|-------------|
+| `core/` | `daemon_monitor.py` | 314 | Daemon state monitoring + Sleep detection |
+| `core/` | `service_base.py` | 534 | SleepAwareService + RobustOperationMixin |
+| `core/` | `sleep_manager.py` | 247 | Sleep/Wake coordination |
+| `core/` | `config.py` | 350 | Centralized configuration |
+| `core/` | `exceptions.py` | 56 | Custom exception classes |
+| `core/` | `health_monitor.py` | 255 | Service health checking |
+| `core/` | `memory_monitor.py` | 246 | Memory usage monitoring |
+| `motion/` | `antenna.py` | 153 | Antenna freeze/unfreeze control |
+| `motion/` | `pose_composer.py` | 274 | Pose composition utilities |
+| `motion/` | `gesture_actions.py` | 358 | Gesture to action mapping |
+| `motion/` | `state_machine.py` | 65 | State machine definitions |
+| `motion/` | `smoothing.py` | 127 | Smoothing/transition algorithms |
+| `vision/` | `frame_processor.py` | 223 | Adaptive frame rate management |
+| `vision/` | `face_tracking_interpolator.py` | 216 | Face lost interpolation |
+| `audio/` | `doa_tracker.py` | 164 | Direction of Arrival tracking |
+| `audio/` | `microphone.py` | 231 | ReSpeaker microphone optimization |
+| `entities/` | `entity_factory.py` | 449 | Entity factory pattern |
+| `entities/` | `entity_keys.py` | 108 | Entity key constants |
+| `entities/` | `event_emotion_mapper.py` | 297 | HA event to emotion mapping |
+| `entities/` | `emotion_detector.py` | 119 | LLM emotion keyword detection |
+
+### Improvement Plan Status
+
+#### Phase 1: Sleep State Management ✅ Complete
+
+- [x] Create `core/daemon_monitor.py` - DaemonStateMonitor
+- [x] Create `core/service_base.py` - SleepAwareService interface
+- [x] Create `core/sleep_manager.py` - SleepManager
+- [x] All services implement `suspend()`/`resume()` methods
+- [x] Add Sleep state sensor to HA
+- [ ] Test complete Sleep/Wake cycle
+
+#### Phase 2: Code Modularization ✅ Complete
+
+- [x] Create new directory structure (`core/`, `motion/`, `audio/`, `vision/`, `entities/`)
+- [x] Extract from `movement_manager.py` → `motion/antenna.py`, `motion/pose_composer.py`
+- [x] Extract from `camera_server.py` → `vision/frame_processor.py`, `vision/face_tracking_interpolator.py`
+- [x] Extract from `entity_registry.py` → `entities/entity_factory.py`, `entities/entity_keys.py`
+- [x] Create `core/config.py` for centralized configuration
+- [x] Ensure no circular dependencies
+
+#### Phase 3: Stability & Performance ✅ Complete
+
+- [x] Create `core/exceptions.py` - Custom exception classes
+- [x] Implement `RobustOperationMixin` - Unified error handling
+- [x] `CameraServer` implements Context Manager pattern
+- [x] Improve `CameraServer` resource cleanup
+- [x] Fix MJPEG client tracking (proper register/unregister)
+- [x] Add `core/health_monitor.py` - Service health checking
+- [x] Add `core/memory_monitor.py` - Memory usage monitoring
+- [ ] Long-running stability test (24h+)
+
+#### Phase 4: Feature Enhancements ✅ Complete
+
+- [x] Create `motion/gesture_actions.py` - GestureActionMapper
+- [x] Add `animations/gesture_mappings.json` - Gesture action config
+- [x] Create `audio/doa_tracker.py` - DOATracker
+- [x] Implement sound source tracking with motion control integration
+- [x] Create `entities/event_emotion_mapper.py` - EventEmotionMapper
+- [x] Add `animations/event_mappings.json` - HA event emotion mapping
+- [x] Add DOA tracking toggle HA entity
+
+### SDK Compatibility Verification ✅ Passed
+
+| API Call | Status | Notes |
+|----------|--------|-------|
+| `set_target(head, antennas, body_yaw)` | ✅ | Correct usage |
+| `goto_target()` | ✅ | Correct usage |
+| `look_at_image(u: int, v: int)` | ✅ | Fixed float→int |
+| `create_head_pose(degrees=False)` | ✅ | Using radians |
+| `compose_world_offset()` | ✅ | SDK function correctly called |
+| `linear_pose_interpolation()` | ✅ | Has fallback implementation |
+| Body yaw range | ✅ | Clamped to ±160° |

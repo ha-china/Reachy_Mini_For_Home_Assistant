@@ -71,6 +71,7 @@ class RobotStateMonitor:
 
         # Thread control
         self._stop_event = threading.Event()
+        self._connected_event = threading.Event()  # Event-driven connection waiting
         self._thread: Optional[threading.Thread] = None
 
         # State tracking
@@ -186,6 +187,12 @@ class RobotStateMonitor:
             self._state = new_state
             self._last_state_change_time = time.monotonic()
 
+        # Update connected event for event-driven waiting
+        if new_state == RobotConnectionState.CONNECTED:
+            self._connected_event.set()
+        else:
+            self._connected_event.clear()
+
         # State changed, invoke callbacks outside the lock
         if old_state == RobotConnectionState.CONNECTED and new_state == RobotConnectionState.DISCONNECTED:
             logger.warning("Robot connection lost - pausing services")
@@ -248,9 +255,7 @@ class RobotStateMonitor:
         Returns:
             True if connected within timeout, False otherwise.
         """
-        start = time.monotonic()
-        while time.monotonic() - start < timeout:
-            if self.is_connected:
-                return True
-            time.sleep(0.5)
-        return False
+        # Use event-driven waiting instead of polling
+        if self.is_connected:
+            return True
+        return self._connected_event.wait(timeout=timeout)
