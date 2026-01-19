@@ -58,7 +58,7 @@ DEFAULT_EVENT_EMOTION_MAP: Dict[str, List[EventEmotionMapping]] = {
         EventEmotionMapping(
             entity_id="binary_sensor.front_door",
             state_value="on",
-            emotion="curious",
+            emotion="curious1",
             cooldown=30.0,
             priority=70,
             description="Someone at the door",
@@ -70,7 +70,7 @@ DEFAULT_EVENT_EMOTION_MAP: Dict[str, List[EventEmotionMapping]] = {
         EventEmotionMapping(
             entity_id="binary_sensor.living_room_motion",
             state_value="on",
-            emotion="alert",
+            emotion="surprised1",
             cooldown=60.0,
             priority=50,
             description="Motion detected",
@@ -82,7 +82,7 @@ DEFAULT_EVENT_EMOTION_MAP: Dict[str, List[EventEmotionMapping]] = {
         EventEmotionMapping(
             entity_id="input_boolean.morning_routine",
             state_value="on",
-            emotion="happy",
+            emotion="cheerful1",
             cooldown=3600.0,  # Once per hour
             priority=60,
             description="Good morning!",
@@ -92,7 +92,7 @@ DEFAULT_EVENT_EMOTION_MAP: Dict[str, List[EventEmotionMapping]] = {
         EventEmotionMapping(
             entity_id="input_boolean.bedtime_routine",
             state_value="on",
-            emotion="sleepy",
+            emotion="sleep1",
             cooldown=3600.0,
             priority=60,
             description="Bedtime",

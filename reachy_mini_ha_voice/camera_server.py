@@ -56,6 +56,7 @@ class MJPEGCameraServer:
         fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
+        face_confidence_threshold: float = 0.5,  # Min confidence for face detection
     ):
         """
         Initialize the MJPEG camera server.
@@ -67,6 +68,7 @@ class MJPEGCameraServer:
             fps: Target frames per second for the stream
             quality: JPEG quality (1-100)
             enable_face_tracking: Enable face tracking for head movement
+            face_confidence_threshold: Minimum confidence for face detection (0-1)
         """
         self.reachy_mini = reachy_mini
         self.host = host
@@ -74,6 +76,7 @@ class MJPEGCameraServer:
         self.fps = fps
         self.quality = quality
         self.enable_face_tracking = enable_face_tracking
+        self._face_confidence_threshold = face_confidence_threshold
 
         self._server: Optional[asyncio.Server] = None
         self._running = False
@@ -146,8 +149,11 @@ class MJPEGCameraServer:
         if self.enable_face_tracking:
             try:
                 from .head_tracker import HeadTracker
-                self._head_tracker = HeadTracker()
-                _LOGGER.info("Face tracking enabled with YOLO head tracker")
+                self._head_tracker = HeadTracker(
+                    confidence_threshold=self._face_confidence_threshold
+                )
+                _LOGGER.info("Face tracking enabled with YOLO head tracker (confidence=%.2f)",
+                           self._face_confidence_threshold)
             except ImportError as e:
                 _LOGGER.error("Failed to import head tracker: %s", e)
                 self._head_tracker = None
@@ -322,9 +328,12 @@ class MJPEGCameraServer:
         if self.enable_face_tracking and self._head_tracker is None:
             try:
                 from .head_tracker import HeadTracker
-                self._head_tracker = HeadTracker()
+                self._head_tracker = HeadTracker(
+                    confidence_threshold=self._face_confidence_threshold
+                )
                 self._face_tracking_enabled = True
-                _LOGGER.info("Head tracker model reloaded")
+                _LOGGER.info("Head tracker model reloaded (confidence=%.2f)",
+                           self._face_confidence_threshold)
             except Exception as e:
                 _LOGGER.warning("Failed to reload head tracker: %s", e)
                 self._face_tracking_enabled = False

@@ -42,19 +42,19 @@ DEFAULT_GESTURE_MAPPINGS: Dict[str, GestureMapping] = {
     "like": GestureMapping(
         gesture_name="like",
         action=GestureAction.EMOTION,
-        emotion="happy",
+        emotion="cheerful1",
         ha_event_name="gesture_like",
     ),
     "ok": GestureMapping(
         gesture_name="ok",
         action=GestureAction.EMOTION,
-        emotion="nod",
+        emotion="yes1",
         ha_event_name="gesture_ok",
     ),
     "peace": GestureMapping(
         gesture_name="peace",
         action=GestureAction.EMOTION,
-        emotion="cheerful1",
+        emotion="enthusiastic1",
         ha_event_name="gesture_peace",
     ),
 
@@ -62,13 +62,13 @@ DEFAULT_GESTURE_MAPPINGS: Dict[str, GestureMapping] = {
     "dislike": GestureMapping(
         gesture_name="dislike",
         action=GestureAction.EMOTION,
-        emotion="sad",
+        emotion="sad1",
         ha_event_name="gesture_dislike",
     ),
     "stop": GestureMapping(
         gesture_name="stop",
         action=GestureAction.STOP_SPEAKING,
-        emotion="alert",
+        emotion="surprised1",
         ha_event_name="gesture_stop",
     ),
 
@@ -88,7 +88,7 @@ DEFAULT_GESTURE_MAPPINGS: Dict[str, GestureMapping] = {
     "fist": GestureMapping(
         gesture_name="fist",
         action=GestureAction.EMOTION,
-        emotion="alert",
+        emotion="rage1",
         ha_event_name="gesture_fist",
     ),
 

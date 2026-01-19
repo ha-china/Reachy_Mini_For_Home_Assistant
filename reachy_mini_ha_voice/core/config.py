@@ -84,6 +84,7 @@ class CameraConfig:
 
     # Face tracking
     face_tracking_enabled: bool = True
+    face_confidence_threshold: float = 0.5  # Min confidence for face detection (0.3 too low, causes false positives)
     face_lost_delay: float = 2.0         # Wait before returning to neutral
     interpolation_duration: float = 1.0  # Time to return to neutral
     offset_scale: float = 0.6            # Face offset multiplier
