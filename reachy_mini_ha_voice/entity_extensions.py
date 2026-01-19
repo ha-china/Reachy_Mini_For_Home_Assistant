@@ -61,7 +61,7 @@ class SensorEntity(ESPHomeEntity):
         self.accuracy_decimals = accuracy_decimals
         self.device_class = device_class
         self.entity_category = entity_category
-        # Convert string state_class to int if needed (for backward compatibility)
+        # Convert string state_class to enum
         if isinstance(state_class, str):
             state_class_map = {
                 "": SensorStateClass.NONE,

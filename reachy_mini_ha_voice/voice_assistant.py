@@ -90,14 +90,13 @@ class VoiceAssistantService:
         # Audio buffer for fixed-size chunk output
         self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
 
-
-        # Robot state monitor - tracks connection to daemon (legacy, kept for compatibility)
+        # Robot state monitor - tracks connection to daemon
         self._robot_state_monitor: Optional[RobotStateMonitor] = None
         self._robot_services_paused = threading.Event()  # Set when services should pause
         self._robot_services_resumed = threading.Event()  # Event-driven resume signaling
         self._robot_services_resumed.set()  # Start in resumed state
 
-        # New sleep manager for proper sleep/wake handling
+        # Sleep manager for sleep/wake handling
         self._sleep_manager: Optional[SleepManager] = None
 
     async def start(self) -> None:
@@ -257,7 +256,7 @@ class VoiceAssistantService:
         await self._sleep_manager.start()
         _LOGGER.info("Sleep manager started")
 
-        # Start legacy robot state monitor for connection tracking (kept for compatibility)
+        # Start robot state monitor for connection tracking
         if self.reachy_mini is not None:
             self._robot_state_monitor = RobotStateMonitor(self.reachy_mini)
             self._robot_state_monitor.on_disconnected(self._on_robot_disconnected)

@@ -191,34 +191,6 @@ class Config:
     sleep: SleepConfig = SleepConfig()
     api: APIConfig = APIConfig()
 
-    # Legacy flat access for backward compatibility
-    # Daemon
-    DAEMON_URL = daemon.url
-    DAEMON_CHECK_INTERVAL = daemon.check_interval
-
-    # ESPHome
-    ESPHOME_PORT = esphome.port
-    ESPHOME_DEVICE_NAME = esphome.device_name
-    ESPHOME_FRIENDLY_NAME = esphome.friendly_name
-
-    # Camera
-    CAMERA_PORT = camera.port
-    CAMERA_FPS = camera.fps_high
-    CAMERA_FPS_LOW = camera.fps_low
-    CAMERA_FPS_IDLE = camera.fps_idle
-    CAMERA_QUALITY = camera.quality
-
-    # Motion
-    CONTROL_RATE_HZ = motion.control_rate_hz
-    CONTROL_INTERVAL = motion.control_interval
-
-    # Audio
-    AUDIO_SAMPLE_RATE = audio.sample_rate
-    AUDIO_BLOCK_SIZE = audio.block_size
-
-    # Sleep
-    RESUME_DELAY = sleep.resume_delay
-
     _initialized = False
     _config_file: Optional[Path] = None
 
@@ -281,7 +253,6 @@ class Config:
             cls.sleep.resume_delay
         )
 
-        cls._sync_legacy_attrs()
         logger.debug("Loaded configuration from environment")
 
     @classmethod
@@ -326,27 +297,6 @@ class Config:
             for key, value in data["api"].items():
                 if hasattr(cls.api, key):
                     setattr(cls.api, key, value)
-
-        cls._sync_legacy_attrs()
-
-    @classmethod
-    def _sync_legacy_attrs(cls) -> None:
-        """Sync legacy flat attributes with nested configs."""
-        cls.DAEMON_URL = cls.daemon.url
-        cls.DAEMON_CHECK_INTERVAL = cls.daemon.check_interval
-        cls.ESPHOME_PORT = cls.esphome.port
-        cls.ESPHOME_DEVICE_NAME = cls.esphome.device_name
-        cls.ESPHOME_FRIENDLY_NAME = cls.esphome.friendly_name
-        cls.CAMERA_PORT = cls.camera.port
-        cls.CAMERA_FPS = cls.camera.fps_high
-        cls.CAMERA_FPS_LOW = cls.camera.fps_low
-        cls.CAMERA_FPS_IDLE = cls.camera.fps_idle
-        cls.CAMERA_QUALITY = cls.camera.quality
-        cls.CONTROL_RATE_HZ = cls.motion.control_rate_hz
-        cls.CONTROL_INTERVAL = cls.motion.control_interval
-        cls.AUDIO_SAMPLE_RATE = cls.audio.sample_rate
-        cls.AUDIO_BLOCK_SIZE = cls.audio.block_size
-        cls.RESUME_DELAY = cls.sleep.resume_delay
 
     @classmethod
     def initialize(cls, config_file: Optional[Path] = None) -> None:
