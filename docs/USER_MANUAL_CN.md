@@ -4,7 +4,7 @@
 
 ### 硬件
 - Reachy Mini 机器人（带 ReSpeaker XVF3800 麦克风）
-- 网络连接（WiFi 或有线）
+- WiFi 网络连接
 
 ### 软件
 - Home Assistant（2024.1 或更高版本）

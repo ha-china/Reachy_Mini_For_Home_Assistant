@@ -4,7 +4,7 @@
 
 ### Hardware
 - Reachy Mini robot (with ReSpeaker XVF3800 microphone)
-- Network connection (WiFi or Ethernet)
+- WiFi network connection
 
 ### Software
 - Home Assistant (2024.1 or later)
