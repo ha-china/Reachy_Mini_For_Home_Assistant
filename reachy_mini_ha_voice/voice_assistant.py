@@ -50,9 +50,12 @@ class AudioProcessingContext:
     last_active: Optional[float] = None
 
 
-# Audio chunk size for consistent streaming (matches reference project)
-AUDIO_BLOCK_SIZE = 1024  # samples at 16kHz = 64ms
-MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 10  # Max 10 chunks (~640ms) to prevent memory leak
+# Audio chunk size for consistent streaming
+# Smaller chunks = faster VAD response
+# ESPHome typical range: 256-512 samples
+# Going smaller improves latency but increases CPU/network overhead
+AUDIO_BLOCK_SIZE = 256  # samples at 16kHz = 16ms (optimized for low latency)
+MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 40  # Max 40 chunks (~640ms) to prevent memory leak
 
 
 class VoiceAssistantService:
@@ -783,7 +786,7 @@ class VoiceAssistantService:
                 # Get audio from Reachy Mini
                 audio_chunk = self._get_reachy_audio_chunk()
                 if audio_chunk is None:
-                    time.sleep(0.01)
+                    time.sleep(0.001)  # 1ms - minimal delay to avoid busy loop
                     continue
 
                 # Audio successfully obtained, reset error counter
@@ -905,6 +908,25 @@ class VoiceAssistantService:
         # Get new audio data from SDK
         audio_data = self.reachy_mini.media.get_audio_sample()
 
+        # Debug: Log SDK audio data statistics and sample rate (once at startup)
+        if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
+            if not hasattr(self, '_audio_sample_rate_logged'):
+                self._audio_sample_rate_logged = True
+                try:
+                    input_rate = self.reachy_mini.media.get_input_audio_samplerate()
+                    _LOGGER.info(
+                        "Audio input: sample_rate=%d Hz, shape=%s, dtype=%s (expected 16000 Hz)",
+                        input_rate, audio_data.shape, audio_data.dtype
+                    )
+                    if input_rate != 16000:
+                        _LOGGER.warning(
+                            "Audio sample rate mismatch! Got %d Hz, expected 16000 Hz. "
+                            "STT may be slow or inaccurate. Consider resampling.",
+                            input_rate
+                        )
+                except Exception as e:
+                    _LOGGER.warning("Could not get audio sample rate: %s", e)
+
         # Append new data to buffer if valid
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
             try:
@@ -912,13 +934,28 @@ class VoiceAssistantService:
                     if audio_data.dtype != np.float32:
                         audio_data = np.asarray(audio_data, dtype=np.float32)
 
-                    # Convert stereo to mono
-                    if audio_data.ndim == 2 and audio_data.shape[1] == 2:
-                        audio_data = audio_data.mean(axis=1)
+                    # Convert stereo to mono (use first channel for better quality)
+                    if audio_data.ndim == 2 and audio_data.shape[1] >= 2:
+                        # Use first channel instead of mean - cleaner signal
+                        audio_data = audio_data[:, 0].copy()
                     elif audio_data.ndim == 2:
                         audio_data = audio_data[:, 0].copy()
 
+                    # Resample if needed (SDK may return non-16kHz audio)
                     if audio_data.ndim == 1:
+                        if not hasattr(self, '_input_sample_rate'):
+                            try:
+                                self._input_sample_rate = self.reachy_mini.media.get_input_audio_samplerate()
+                            except Exception:
+                                self._input_sample_rate = 16000  # Assume 16kHz if can't get
+
+                        # Resample to 16kHz if needed
+                        if self._input_sample_rate != 16000 and self._input_sample_rate > 0:
+                            from scipy.signal import resample
+                            new_length = int(len(audio_data) * 16000 / self._input_sample_rate)
+                            if new_length > 0:
+                                audio_data = resample(audio_data, new_length).astype(np.float32)
+
                         self._audio_buffer = np.concatenate([self._audio_buffer, audio_data])
                         # Prevent unbounded buffer growth - keep only recent audio
                         if len(self._audio_buffer) > MAX_AUDIO_BUFFER_SIZE:
