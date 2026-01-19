@@ -25,7 +25,7 @@ class MicrophoneDefaults:
     """Default microphone settings for voice recognition."""
 
     agc_enabled: bool = True
-    agc_max_gain: float = 42.0  # dB (increased from 30 for distant speech)
+    agc_max_gain: float = 40.0  # dB (max supported by XVF3800 for quiet mic)
     noise_suppression: float = 15.0  # percentage
     agc_desired_level: float = -12.0  # dB (increased from -18 for louder output)
     agc_time_constant: float = 0.3  # seconds (faster response for voice commands)

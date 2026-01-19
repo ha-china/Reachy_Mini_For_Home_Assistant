@@ -64,7 +64,8 @@ AUDIO_DIAG_RMS_THRESHOLD = 0.001  # RMS below this is considered silence
 # Digital gain settings for boosting quiet microphone input
 # The ReSpeaker XVF3800 often outputs very quiet audio (RMS ~0.001)
 # Normal speech should be RMS ~0.01-0.1, so we apply digital gain
-AUDIO_DIGITAL_GAIN = 10.0  # Linear multiplier (10x = +20dB boost)
+# This works together with hardware AGC (set to 40dB max)
+AUDIO_DIGITAL_GAIN = 6.0  # Linear multiplier (6x = +15.5dB boost)
 
 
 class VoiceAssistantService:

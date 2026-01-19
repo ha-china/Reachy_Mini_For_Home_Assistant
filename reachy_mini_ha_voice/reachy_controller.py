@@ -778,7 +778,7 @@ class ReachyController:
         """Get AGC maximum gain in dB (0-40 dB range)."""
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_agc_max_gain', 30.0)  # Default to optimized value
+                return getattr(self, '_agc_max_gain', 40.0)  # Default to max for quiet mic
             try:
                 result = respeaker.read("PP_AGCMAXGAIN")
                 if result is not None:
@@ -786,7 +786,7 @@ class ReachyController:
                     return self._agc_max_gain
             except Exception as e:
                 logger.debug(f"Error getting AGC max gain: {e}")
-        return getattr(self, '_agc_max_gain', 30.0)
+        return getattr(self, '_agc_max_gain', 40.0)
 
     def set_agc_max_gain(self, gain: float) -> None:
         """Set AGC maximum gain in dB (0-40 dB range)."""
