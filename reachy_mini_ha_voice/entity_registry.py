@@ -348,9 +348,8 @@ class EntityRegistry:
             name="DOA Sound Tracking",
             object_id="doa_tracking_enabled",
             icon="mdi:ear-hearing",
-            state_getter=get_doa_tracking_state,
-            state_setter=set_doa_tracking_state,
-            initial_state=True,
+            value_getter=get_doa_tracking_state,
+            value_setter=set_doa_tracking_state,
         ))
 
         _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected, doa_tracking_enabled")
