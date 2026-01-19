@@ -89,6 +89,10 @@ class ServerState:
     is_sleeping: bool = False
     services_suspended: bool = False
 
+    # Callbacks for sleep/wake from HA buttons (set by VoiceAssistant)
+    on_ha_sleep: Optional[object] = None  # Callable[[], None]
+    on_ha_wake: Optional[object] = None   # Callable[[], None]
+
     def save_preferences(self) -> None:
         """Save preferences as JSON."""
         _LOGGER.debug("Saving preferences: %s", self.preferences_path)

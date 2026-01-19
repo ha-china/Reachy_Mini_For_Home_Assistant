@@ -153,6 +153,10 @@ class VoiceAssistantService:
         # Set motion controller reference in state
         self._state.motion = self._motion
 
+        # Set sleep/wake callbacks for HA button triggers
+        self._state.on_ha_sleep = self._on_sleep
+        self._state.on_ha_wake = lambda: asyncio.create_task(self._on_wake_from_ha())
+
         # Start Reachy Mini media system if available
         if self.reachy_mini is not None:
             try:
@@ -446,6 +450,20 @@ class VoiceAssistantService:
         self._robot_services_resumed.set()
 
         _LOGGER.info("All services resumed - system fully operational")
+
+    async def _on_wake_from_ha(self) -> None:
+        """Called when wake_up is triggered from Home Assistant button.
+
+        This bypasses the DaemonStateMonitor polling and directly resumes services
+        after a short delay to allow the robot to wake up.
+        """
+        _LOGGER.info("Wake triggered from HA - resuming services after short delay...")
+
+        # Wait for robot to wake up (shorter than the normal 30s resume delay)
+        await asyncio.sleep(5.0)
+
+        # Call the pre-resume handler to resume all services
+        self._on_pre_resume()
 
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.

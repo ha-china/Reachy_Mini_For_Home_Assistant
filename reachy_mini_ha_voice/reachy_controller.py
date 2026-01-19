@@ -49,6 +49,10 @@ class ReachyController:
         self._speaker_volume = 100  # Default volume
         self._movement_manager = None  # Set later via set_movement_manager()
 
+        # Callback for sleep/wake to notify VoiceAssistant
+        self._on_sleep_callback = None
+        self._on_wake_callback = None
+
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
         # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
@@ -58,6 +62,14 @@ class ReachyController:
 
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
         self._respeaker_lock = __import__('threading').Lock()
+
+    def set_sleep_callback(self, callback) -> None:
+        """Set callback to be called when go_to_sleep is triggered."""
+        self._on_sleep_callback = callback
+
+    def set_wake_callback(self, callback) -> None:
+        """Set callback to be called when wake_up is triggered."""
+        self._on_wake_callback = callback
 
     def set_movement_manager(self, movement_manager) -> None:
         """Set the MovementManager instance for pose control.
@@ -320,6 +332,12 @@ class ReachyController:
         try:
             self.reachy.wake_up()
             logger.info("Wake up animation executed")
+            # Notify callback (VoiceAssistant will resume services)
+            if self._on_wake_callback is not None:
+                try:
+                    self._on_wake_callback()
+                except Exception as e:
+                    logger.error(f"Error in wake callback: {e}")
         except Exception as e:
             logger.error(f"Error executing wake up: {e}")
 
@@ -332,6 +350,12 @@ class ReachyController:
         try:
             self.reachy.goto_sleep()
             logger.info("Sleep animation executed")
+            # Notify callback (VoiceAssistant will suspend services)
+            if self._on_sleep_callback is not None:
+                try:
+                    self._on_sleep_callback()
+                except Exception as e:
+                    logger.error(f"Error in sleep callback: {e}")
         except Exception as e:
             logger.error(f"Error executing sleep: {e}")
 

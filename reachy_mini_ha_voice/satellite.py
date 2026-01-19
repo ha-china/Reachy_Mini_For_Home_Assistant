@@ -92,6 +92,24 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
+        # Connect sleep/wake callbacks to ServerState callbacks
+        def on_sleep_from_ha():
+            if state.on_ha_sleep is not None:
+                try:
+                    state.on_ha_sleep()
+                except Exception as e:
+                    _LOGGER.error("Error in on_ha_sleep callback: %s", e)
+
+        def on_wake_from_ha():
+            if state.on_ha_wake is not None:
+                try:
+                    state.on_ha_wake()
+                except Exception as e:
+                    _LOGGER.error("Error in on_ha_wake callback: %s", e)
+
+        self.reachy_controller.set_sleep_callback(on_sleep_from_ha)
+        self.reachy_controller.set_wake_callback(on_wake_from_ha)
+
         # Connect MovementManager to ReachyController for pose control from HA
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
