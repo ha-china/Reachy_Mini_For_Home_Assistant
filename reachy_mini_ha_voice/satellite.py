@@ -935,8 +935,6 @@ class VoiceSatelliteProtocol(APIServer):
         """Resume the satellite after sleep."""
         _LOGGER.info("Resuming VoiceSatellite from sleep...")
 
-        # Restore wake words
-        if self.state.enabled_wake_words:
-            self.state.active_wake_words = set(self.state.enabled_wake_words)
+        # Wake words are preserved in state.active_wake_words, no need to restore
 
         _LOGGER.info("VoiceSatellite resumed")
