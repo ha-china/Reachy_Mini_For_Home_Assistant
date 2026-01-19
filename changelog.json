@@ -4,7 +4,6 @@
     "date": "2026-01-19",
     "changes": [
       "Refactor: Modularize codebase - new core/motion/vision/audio/entities module structure",
-      "New: Audio diagnostics system - real-time RMS level, NaN/Inf count, and silence percentage monitoring",
       "New: Direct callbacks for HA sleep/wake buttons to suspend/resume services",
       "Optimize: Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms → 16ms)",
       "Optimize: Audio loop delay reduced from 10ms to 1ms for faster VAD response",

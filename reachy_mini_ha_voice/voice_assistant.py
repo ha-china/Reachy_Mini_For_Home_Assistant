@@ -57,10 +57,6 @@ class AudioProcessingContext:
 AUDIO_BLOCK_SIZE = 256  # samples at 16kHz = 16ms (optimized for low latency)
 MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 40  # Max 40 chunks (~640ms) to prevent memory leak
 
-# Audio diagnostics settings
-AUDIO_DIAG_LOG_INTERVAL = 1.0  # Log diagnostics every N seconds
-AUDIO_DIAG_RMS_THRESHOLD = 0.001  # RMS below this is considered silence
-
 
 class VoiceAssistantService:
     """Voice assistant service that runs ESPHome protocol server."""
@@ -94,14 +90,6 @@ class VoiceAssistantService:
         # Audio buffer for fixed-size chunk output
         self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
 
-        # Audio diagnostics tracking
-        self._audio_diag_last_log: float = 0.0
-        self._audio_diag_chunk_count: int = 0
-        self._audio_diag_nan_count: int = 0
-        self._audio_diag_inf_count: int = 0
-        self._audio_diag_silent_count: int = 0
-        self._audio_diag_rms_sum: float = 0.0
-        self._audio_diag_start_time: Optional[float] = None
 
         # Robot state monitor - tracks connection to daemon (legacy, kept for compatibility)
         self._robot_state_monitor: Optional[RobotStateMonitor] = None
@@ -918,10 +906,6 @@ class VoiceAssistantService:
         Returns:
             PCM audio bytes of fixed size, or None if not enough data.
         """
-        # Initialize diagnostic start time
-        if self._audio_diag_start_time is None:
-            self._audio_diag_start_time = time.monotonic()
-
         # Get new audio data from SDK
         audio_data = self.reachy_mini.media.get_audio_sample()
 
@@ -951,12 +935,6 @@ class VoiceAssistantService:
                     if audio_data.dtype != np.float32:
                         audio_data = np.asarray(audio_data, dtype=np.float32)
 
-                    # Count NaN/Inf values BEFORE replacement (for diagnostics)
-                    nan_count = int(np.isnan(audio_data).sum())
-                    inf_count = int(np.isinf(audio_data).sum())
-                    self._audio_diag_nan_count += nan_count
-                    self._audio_diag_inf_count += inf_count
-
                     # Clean NaN/Inf values early to prevent downstream errors
                     audio_data = np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0)
 
@@ -967,13 +945,6 @@ class VoiceAssistantService:
                     elif audio_data.ndim == 2:
                         audio_data = audio_data[:, 0].copy()
 
-                    # Calculate RMS for this chunk (before resampling)
-                    if audio_data.size > 0:
-                        chunk_rms = float(np.sqrt(np.mean(audio_data ** 2)))
-                        self._audio_diag_rms_sum += chunk_rms
-                        self._audio_diag_chunk_count += 1
-                        if chunk_rms < AUDIO_DIAG_RMS_THRESHOLD:
-                            self._audio_diag_silent_count += 1
 
                     # Resample if needed (SDK may return non-16kHz audio)
                     if audio_data.ndim == 1:
@@ -994,29 +965,6 @@ class VoiceAssistantService:
                         # Prevent unbounded buffer growth - keep only recent audio
                         if len(self._audio_buffer) > MAX_AUDIO_BUFFER_SIZE:
                             self._audio_buffer = self._audio_buffer[-MAX_AUDIO_BUFFER_SIZE:]
-
-                    # Log diagnostics periodically
-                    now = time.monotonic()
-                    if now - self._audio_diag_last_log >= AUDIO_DIAG_LOG_INTERVAL:
-                        elapsed = now - self._audio_diag_start_time
-                        avg_rms = self._audio_diag_rms_sum / max(1, self._audio_diag_chunk_count)
-                        silent_pct = (self._audio_diag_silent_count / max(1, self._audio_diag_chunk_count)) * 100
-                        _LOGGER.info(
-                            "Audio diag [%.1fs]: chunks=%d, nan=%d, inf=%d, avg_rms=%.6f, silent=%.1f%%",
-                            elapsed,
-                            self._audio_diag_chunk_count,
-                            self._audio_diag_nan_count,
-                            self._audio_diag_inf_count,
-                            avg_rms,
-                            silent_pct,
-                        )
-                        # Reset counters for next interval
-                        self._audio_diag_last_log = now
-                        self._audio_diag_chunk_count = 0
-                        self._audio_diag_nan_count = 0
-                        self._audio_diag_inf_count = 0
-                        self._audio_diag_silent_count = 0
-                        self._audio_diag_rms_sum = 0.0
 
             except (TypeError, ValueError):
                 pass
