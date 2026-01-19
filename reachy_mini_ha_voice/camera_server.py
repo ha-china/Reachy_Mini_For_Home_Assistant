@@ -380,7 +380,7 @@ class MJPEGCameraServer:
 
         _LOGGER.info("Camera server suspended - CPU released")
 
-    async def resume_from_suspend(self) -> None:
+    def resume_from_suspend(self) -> None:
         """Resume the camera server after sleep.
 
         This restarts the capture thread and reloads ML models.
