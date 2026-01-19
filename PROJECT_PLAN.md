@@ -156,36 +156,76 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 ```
 reachy_mini_ha_voice/
 ├── reachy_mini_ha_voice/
-│   ├── __init__.py             # Package initialization
+│   ├── __init__.py             # Package initialization (v0.9.5)
 │   ├── __main__.py             # Command line entry
 │   ├── main.py                 # ReachyMiniApp entry
-│   ├── voice_assistant.py      # Voice assistant service
-│   ├── satellite.py            # ESPHome protocol handling
-│   ├── audio_player.py         # Audio player (TTS + Sendspin)
-│   ├── camera_server.py        # MJPEG camera stream server + face tracking
+│   ├── voice_assistant.py      # Voice assistant service (1066 lines)
+│   ├── satellite.py            # ESPHome protocol handling (982 lines)
+│   ├── audio_player.py         # Audio player (TTS + Sendspin) (624 lines)
+│   ├── camera_server.py        # MJPEG camera stream server + face tracking (966 lines)
 │   ├── head_tracker.py         # YOLO face detector
-│   ├── motion.py               # Motion control (high-level API)
-│   ├── movement_manager.py     # Unified movement manager (100Hz control loop)
+│   ├── movement_manager.py     # Unified movement manager (100Hz control loop) (1173 lines)
 │   ├── animation_player.py     # JSON-driven animation system
 │   ├── speech_sway.py          # Voice-driven head micro-movements
 │   ├── models.py               # Data models
 │   ├── entity.py               # ESPHome base entity
 │   ├── entity_extensions.py    # Extended entity types
-│   ├── entity_registry.py      # Entity registry
-│   ├── reachy_controller.py    # Reachy Mini controller wrapper
+│   ├── entity_registry.py      # Entity registry (735 lines)
+│   ├── reachy_controller.py    # Reachy Mini controller wrapper (902 lines)
 │   ├── gesture_detector.py     # HaGRID gesture detection
+│   ├── robot_state_monitor.py  # Robot connection state monitoring
+│   ├── system_diagnostics.py   # System diagnostics (CPU/Memory/Disk)
+│   ├── emotion_moves.py        # Emotion action playback
 │   ├── api_server.py           # HTTP API server
 │   ├── zeroconf.py             # mDNS discovery (ESPHome + Sendspin)
 │   └── util.py                 # Utility functions
-│   └── animations/             # Animation definitions
-│       ├── conversation_animations.json  # Conversation state animations
-│       └── emotion_keywords.json         # Emotion keyword mapping (280+ keywords)
+│   │
+│   ├── core/                   # Core infrastructure modules
+│   │   ├── __init__.py         # Module exports
+│   │   ├── config.py           # Centralized configuration (368 lines)
+│   │   ├── daemon_monitor.py   # Daemon state monitoring (329 lines)
+│   │   ├── service_base.py     # SleepAwareService base class (566 lines)
+│   │   ├── sleep_manager.py    # Sleep/Wake coordination (269 lines)
+│   │   ├── health_monitor.py   # Service health checking (309 lines)
+│   │   ├── memory_monitor.py   # Memory usage monitoring (275 lines)
+│   │   └── exceptions.py       # Custom exception classes (71 lines)
+│   │
+│   ├── motion/                 # Motion control modules
+│   │   ├── __init__.py         # Module exports
+│   │   ├── antenna.py          # Antenna freeze/unfreeze control (197 lines)
+│   │   ├── pose_composer.py    # Pose composition utilities (273 lines)
+│   │   ├── gesture_actions.py  # Gesture to action mapping (383 lines)
+│   │   ├── smoothing.py        # Smoothing/transition algorithms (198 lines)
+│   │   └── state_machine.py    # State machine definitions (91 lines)
+│   │
+│   ├── vision/                 # Vision processing modules
+│   │   ├── __init__.py         # Module exports
+│   │   ├── frame_processor.py  # Adaptive frame rate management (268 lines)
+│   │   └── face_tracking_interpolator.py  # Face lost interpolation (225 lines)
+│   │
+│   ├── audio/                  # Audio processing modules
+│   │   ├── __init__.py         # Module exports
+│   │   ├── microphone.py       # ReSpeaker microphone optimization (230 lines)
+│   │   └── doa_tracker.py      # Direction of Arrival tracking (206 lines)
+│   │
+│   ├── entities/               # Home Assistant entity modules
+│   │   ├── __init__.py         # Module exports
+│   │   ├── entity_factory.py   # Entity factory pattern (516 lines)
+│   │   ├── entity_keys.py      # Entity key constants (155 lines)
+│   │   ├── event_emotion_mapper.py  # HA event to emotion mapping (341 lines)
+│   │   └── emotion_detector.py # LLM emotion keyword detection (119 lines)
+│   │
+│   ├── animations/             # Animation definitions
+│   │   ├── conversation_animations.json  # Conversation state animations
+│   │   └── emotion_keywords.json         # Emotion keyword mapping (280+ keywords)
+│   │
 │   └── wakewords/              # Wake word models
 │       ├── okay_nabu.json/.tflite
 │       ├── hey_jarvis.json/.tflite (openWakeWord)
 │       ├── alexa.json/.tflite
 │       ├── hey_luna.json/.tflite
 │       └── stop.json/.tflite   # Stop word detection
+│
 ├── sounds/                     # Sound effect files (auto-download)
 │   ├── wake_word_triggered.flac
 │   └── timer_finished.flac
@@ -864,7 +904,7 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 
 ---
 
-## Feature Priority Summary (Updated v0.8.3)
+## Feature Priority Summary (Updated v0.9.5)
 
 ### Completed ✅
 - ✅ **Phase 1-12**: Core ESPHome entities and voice assistant
@@ -893,7 +933,7 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 | Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
 | Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
 | Phase 14 | ✅ Complete | 95% | Emotion keyword detection with 280+ keywords, 35 categories |
-| Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head (v0.8.3) |
+| Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head |
 | Phase 16 | ✅ Complete | 100% | JSON-driven animation system (100Hz control loop) |
 | Phase 17 | ✅ Complete | 100% | Antenna sync animation during speech |
 | Phase 18 | ❌ Not done | 10% | Camera implemented, missing multi-person gaze |
@@ -902,8 +942,9 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 | Phase 21 | ❌ Not done | 0% | Home Assistant scene integration not implemented |
 | Phase 22 | ✅ Complete | 100% | Gesture detection with HaGRID ONNX models |
 | Phase 24 | ✅ Complete | 100% | System diagnostics with psutil (9 sensors) |
+| **v0.9.5** | ✅ Complete | 100% | Modular architecture refactoring |
 
-**Overall Completion**: **Phase 1-17 + 22 + 24: ~99%** | **Phase 18-21: ~20%**
+**Overall Completion**: **Phase 1-17 + 22 + 24 + v0.9.5: ~100%** | **Phase 18-21: ~20%**
 
 
 ---
@@ -1201,52 +1242,54 @@ from aioesphomeapi.api_pb2 import (
 
 ---
 
-## 🔧 Code Refactoring & Improvement Plan (v0.9.0+)
+## 🔧 Code Refactoring & Improvement Plan (v0.9.5)
 
 > Comprehensive improvement plan based on code analysis
 > Target Platform: Raspberry Pi CM4 (4GB RAM, 4-core CPU)
 
-### Code Size Statistics
+### Code Size Statistics (Updated 2026-01-19)
 
 | File | Original | Current | Status |
 |------|----------|---------|--------|
 | `movement_manager.py` | 1205 | 1173 | ⚠️ Modularized but still large |
-| `entity_registry.py` | 1129 | 736 | ✅ Optimized (-34%) |
-| `voice_assistant.py` | 1097 | 1004 | ✅ Optimized (-8%) |
-| `reachy_controller.py` | 878 | 878 | ⚠️ Borderline |
-| `camera_server.py` | 1070 | 957 | ✅ Optimized (-11%) |
-| `satellite.py` | 1003 | 942 | ✅ Optimized (-6%) |
-| `audio_player.py` | 599 | 599 | ✅ Acceptable |
+| `voice_assistant.py` | 1097 | 1066 | ✅ Optimized (-3%) |
+| `satellite.py` | 1003 | 982 | ✅ Optimized (-2%) |
+| `camera_server.py` | 1070 | 966 | ✅ Optimized (-10%) |
+| `reachy_controller.py` | 878 | 902 | ⚠️ Slight increase |
+| `entity_registry.py` | 1129 | 735 | ✅ Optimized (-35%) |
+| `audio_player.py` | 599 | 624 | ✅ Acceptable |
+| `core/service_base.py` | - | 566 | 🆕 New module |
+| `entities/entity_factory.py` | - | 516 | 🆕 New module |
 
 > **Optimization Notes**:
-> - `entity_registry.py`: Factory pattern refactoring reduced 376 lines
-> - `voice_assistant.py`: Using `MicrophoneOptimizer` module reduced 93 lines
-> - `camera_server.py`: Using `FaceTrackingInterpolator` module reduced 113 lines
-> - `satellite.py`: Using `EmotionKeywordDetector` module reduced 61 lines
+> - `entity_registry.py`: Factory pattern refactoring reduced 394 lines
+> - `camera_server.py`: Using `FaceTrackingInterpolator` module reduced 104 lines
+> - `satellite.py`: Using `EmotionKeywordDetector` module reduced 21 lines
+> - New modular architecture with 5 sub-packages: `core/`, `motion/`, `vision/`, `audio/`, `entities/`
 
-### New Module List
+### New Module List (Updated 2026-01-19)
 
 | Directory | Module | Lines | Description |
 |-----------|--------|-------|-------------|
-| `core/` | `daemon_monitor.py` | 314 | Daemon state monitoring + Sleep detection |
-| `core/` | `service_base.py` | 534 | SleepAwareService + RobustOperationMixin |
-| `core/` | `sleep_manager.py` | 247 | Sleep/Wake coordination |
-| `core/` | `config.py` | 350 | Centralized configuration |
-| `core/` | `exceptions.py` | 56 | Custom exception classes |
-| `core/` | `health_monitor.py` | 255 | Service health checking |
-| `core/` | `memory_monitor.py` | 246 | Memory usage monitoring |
-| `motion/` | `antenna.py` | 153 | Antenna freeze/unfreeze control |
-| `motion/` | `pose_composer.py` | 274 | Pose composition utilities |
-| `motion/` | `gesture_actions.py` | 358 | Gesture to action mapping |
-| `motion/` | `state_machine.py` | 65 | State machine definitions |
-| `motion/` | `smoothing.py` | 127 | Smoothing/transition algorithms |
-| `vision/` | `frame_processor.py` | 223 | Adaptive frame rate management |
-| `vision/` | `face_tracking_interpolator.py` | 216 | Face lost interpolation |
-| `audio/` | `doa_tracker.py` | 164 | Direction of Arrival tracking |
-| `audio/` | `microphone.py` | 231 | ReSpeaker microphone optimization |
-| `entities/` | `entity_factory.py` | 449 | Entity factory pattern |
-| `entities/` | `entity_keys.py` | 108 | Entity key constants |
-| `entities/` | `event_emotion_mapper.py` | 297 | HA event to emotion mapping |
+| `core/` | `config.py` | 368 | Centralized nested configuration |
+| `core/` | `daemon_monitor.py` | 329 | Daemon state monitoring + Sleep detection |
+| `core/` | `service_base.py` | 566 | SleepAwareService + RobustOperationMixin |
+| `core/` | `sleep_manager.py` | 269 | Sleep/Wake coordination |
+| `core/` | `health_monitor.py` | 309 | Service health checking |
+| `core/` | `memory_monitor.py` | 275 | Memory usage monitoring |
+| `core/` | `exceptions.py` | 71 | Custom exception classes |
+| `motion/` | `antenna.py` | 197 | Antenna freeze/unfreeze control |
+| `motion/` | `pose_composer.py` | 273 | Pose composition utilities |
+| `motion/` | `gesture_actions.py` | 383 | Gesture to action mapping |
+| `motion/` | `state_machine.py` | 91 | State machine definitions |
+| `motion/` | `smoothing.py` | 198 | Smoothing/transition algorithms |
+| `vision/` | `frame_processor.py` | 268 | Adaptive frame rate management |
+| `vision/` | `face_tracking_interpolator.py` | 225 | Face lost interpolation |
+| `audio/` | `doa_tracker.py` | 206 | Direction of Arrival tracking |
+| `audio/` | `microphone.py` | 230 | ReSpeaker microphone optimization |
+| `entities/` | `entity_factory.py` | 516 | Entity factory pattern |
+| `entities/` | `entity_keys.py` | 155 | Entity key constants |
+| `entities/` | `event_emotion_mapper.py` | 341 | HA event to emotion mapping |
 | `entities/` | `emotion_detector.py` | 119 | LLM emotion keyword detection |
 
 ### Improvement Plan Status
@@ -1301,3 +1344,44 @@ from aioesphomeapi.api_pb2 import (
 | `compose_world_offset()` | ✅ | SDK function correctly called |
 | `linear_pose_interpolation()` | ✅ | Has fallback implementation |
 | Body yaw range | ✅ | Clamped to ±160° |
+
+---
+
+## 🔧 v0.9.5 Updates (2026-01-19)
+
+### Major Changes: Modular Architecture Refactoring
+
+The codebase has been restructured into a modular architecture with 5 sub-packages:
+
+| Package | Purpose | Key Modules |
+|---------|---------|-------------|
+| `core/` | Core infrastructure | `config.py`, `service_base.py`, `sleep_manager.py`, `health_monitor.py` |
+| `motion/` | Motion control | `antenna.py`, `pose_composer.py`, `gesture_actions.py`, `smoothing.py` |
+| `vision/` | Vision processing | `frame_processor.py`, `face_tracking_interpolator.py` |
+| `audio/` | Audio processing | `microphone.py`, `doa_tracker.py` |
+| `entities/` | HA entity management | `entity_factory.py`, `entity_keys.py`, `event_emotion_mapper.py` |
+
+### New Features
+
+1. **Direct Sleep/Wake Callbacks**
+   - HA sleep/wake buttons directly call `suspend()`/`resume()` on services
+   - More reliable than polling-based approach
+
+2. **Synchronous Camera Resume**
+   - `camera_server.resume_from_suspend()` is now synchronous
+   - Ensures camera is ready before voice assistant starts listening
+
+### Audio Optimizations
+
+| Parameter | Before | After | Improvement |
+|-----------|--------|-------|-------------|
+| Audio chunk size | 1024 samples | 256 samples | 64ms → 16ms latency |
+| Audio loop delay | 10ms | 1ms | Faster VAD response |
+| Stereo→Mono | Mean of channels | First channel | Cleaner signal |
+
+### Code Quality Improvements
+
+- Removed all legacy/compatibility code
+- Centralized configuration in nested dataclasses
+- NaN/Inf cleaning in audio pipeline
+- Rotation clamping in face tracking to prevent IK collisions
