@@ -168,6 +168,16 @@ The robot can play 35 different emotions:
 |--------|------|-------------|
 | Camera | Camera | Live MJPEG stream |
 
+### 3D Visualization Card
+A custom Lovelace card is available for real-time 3D visualization of the Reachy Mini robot in Home Assistant.
+
+Install from: [ha-reachy-mini](https://github.com/Desmond-Dong/ha-reachy-mini)
+
+Features:
+- Real-time 3D robot visualization
+- Interactive view of robot state
+- Connects to robot daemon for live updates
+
 ### Phase 12: Audio Processing
 | Entity | Type | Description |
 |--------|------|-------------|

@@ -168,6 +168,16 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 |------|------|------|
 | Camera | 摄像头 | 实时 MJPEG 流 |
 
+### 3D 可视化卡片
+可在 Home Assistant 中安装自定义 Lovelace 卡片，实时 3D 可视化 Reachy Mini 机器人。
+
+安装地址：[ha-reachy-mini](https://github.com/Desmond-Dong/ha-reachy-mini)
+
+功能：
+- 实时 3D 机器人可视化
+- 交互式机器人状态视图
+- 连接机器人守护进程获取实时更新
+
 ### 阶段 12：音频处理
 | 实体 | 类型 | 说明 |
 |------|------|------|
