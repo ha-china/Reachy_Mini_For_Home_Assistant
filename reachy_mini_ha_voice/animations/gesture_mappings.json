@@ -11,31 +11,31 @@
   "mappings": {
     "like": {
       "action": "emotion",
-      "emotion": "happy",
+      "emotion": "cheerful1",
       "ha_event": "gesture_like",
       "cooldown": 2.0
     },
     "ok": {
       "action": "emotion",
-      "emotion": "nod",
+      "emotion": "yes1",
       "ha_event": "gesture_ok",
       "cooldown": 2.0
     },
     "peace": {
       "action": "emotion",
-      "emotion": "cheerful1",
+      "emotion": "enthusiastic1",
       "ha_event": "gesture_peace",
       "cooldown": 2.0
     },
     "dislike": {
       "action": "emotion",
-      "emotion": "sad",
+      "emotion": "sad1",
       "ha_event": "gesture_dislike",
       "cooldown": 2.0
     },
     "stop": {
       "action": "stop_speaking",
-      "emotion": "alert",
+      "emotion": "surprised1",
       "ha_event": "gesture_stop",
       "cooldown": 2.0
     },
@@ -51,7 +51,7 @@
     },
     "fist": {
       "action": "emotion",
-      "emotion": "alert",
+      "emotion": "rage1",
       "ha_event": "gesture_fist",
       "cooldown": 2.0
     },
