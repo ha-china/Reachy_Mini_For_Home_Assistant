@@ -492,7 +492,6 @@ class VoiceAssistantService:
 
         Delegates to MicrophoneOptimizer for actual settings configuration.
         User preferences from Home Assistant override defaults when available.
-        Also syncs applied values back to preferences for HA entity display.
         """
         if self.reachy_mini is None:
             return
@@ -520,26 +519,6 @@ class VoiceAssistantService:
             # Delegate to optimizer
             optimizer = MicrophoneOptimizer()
             optimizer.optimize(respeaker, mic_prefs)
-
-            # Sync applied values back to preferences if they were using defaults
-            # This ensures HA entities show the actual applied values
-            if self._state and prefs:
-                defaults = optimizer.defaults
-                updated = False
-
-                if prefs.agc_enabled is None:
-                    prefs.agc_enabled = defaults.agc_enabled
-                    updated = True
-                if prefs.agc_max_gain is None:
-                    prefs.agc_max_gain = defaults.agc_max_gain
-                    updated = True
-                if prefs.noise_suppression is None:
-                    prefs.noise_suppression = defaults.noise_suppression
-                    updated = True
-
-                if updated:
-                    self._state.save_preferences()
-                    _LOGGER.debug("Synced default microphone settings to preferences")
 
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)
