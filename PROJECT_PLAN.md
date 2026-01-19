@@ -94,7 +94,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │   State Machine: on_wakeup → on_listening → on_speaking → on_idle     │  │
 │  │                                                                       │  │
 │  │  ┌────────────────────────────────────────────────────────────────┐   │  │
-│  │  │ Body Following (v0.8.3)                                        │   │  │
+│  │  │ Body Following                                                │   │  │
 │  │  │ • Body yaw syncs with head yaw for natural tracking            │   │  │
 │  │  │ • Extracted from final head pose matrix                        │   │  │
 │  │  └────────────────────────────────────────────────────────────────┘   │  │
@@ -124,6 +124,53 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │ (User configured)│  │ (Conversation)   │  │ (User configured)          │ │
 │  └──────────────────┘  └──────────────────┘  └────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Software Module Architecture (v0.9.5)
+
+```
+reachy_mini_ha_voice/
+│
+├── main.py                    # Application entry point
+├── voice_assistant.py         # Voice assistant service orchestrator
+├── satellite.py               # ESPHome protocol handler
+│
+├── core/                      # Core Infrastructure
+│   ├── config.py              # Centralized nested configuration
+│   ├── service_base.py        # SleepAwareService base class
+│   ├── sleep_manager.py       # Sleep/Wake lifecycle management
+│   ├── daemon_monitor.py      # Daemon state monitoring
+│   ├── health_monitor.py      # Service health checking
+│   ├── memory_monitor.py      # Memory usage monitoring
+│   └── exceptions.py          # Custom exception classes
+│
+├── motion/                    # Motion Control
+│   ├── antenna.py             # Antenna animation control
+│   ├── pose_composer.py       # Pose composition from multiple sources
+│   ├── gesture_actions.py     # Gesture → Robot action mapping
+│   ├── smoothing.py           # Motion smoothing algorithms
+│   └── state_machine.py       # Robot state definitions
+│
+├── vision/                    # Vision Processing
+│   ├── frame_processor.py     # Adaptive frame rate management
+│   └── face_tracking_interpolator.py  # Smooth face tracking
+│
+├── audio/                     # Audio Processing
+│   ├── microphone.py          # ReSpeaker XVF3800 optimization
+│   └── doa_tracker.py         # Direction of Arrival tracking
+│
+├── entities/                  # Home Assistant Entities
+│   ├── entity_factory.py      # Entity creation factory
+│   ├── entity_keys.py         # Entity key constants
+│   ├── event_emotion_mapper.py # HA event → Emotion mapping
+│   └── emotion_detector.py    # LLM text emotion detection
+│
+└── [Other modules]
+    ├── movement_manager.py    # 100Hz unified motion control loop
+    ├── camera_server.py       # MJPEG stream + face tracking
+    ├── audio_player.py        # TTS + Sendspin playback
+    ├── entity_registry.py     # ESPHome entity registry
+    └── reachy_controller.py   # Reachy Mini SDK wrapper
 ```
 
 ## Completed Features
