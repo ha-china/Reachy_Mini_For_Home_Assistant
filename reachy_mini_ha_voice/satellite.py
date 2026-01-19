@@ -67,6 +67,7 @@ class VoiceSatelliteProtocol(APIServer):
     """Voice satellite protocol handler for ESPHome."""
 
     def __init__(self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None) -> None:
+        _LOGGER.info("VoiceSatelliteProtocol.__init__ called - new connection")
         super().__init__(state.name)
         self.state = state
         self.state.satellite = self
@@ -171,6 +172,18 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Initialize emotion keyword detector for auto-triggering emotions from LLM responses
         self._emotion_detector = EmotionKeywordDetector(play_emotion_callback=self._play_emotion)
+        _LOGGER.info("VoiceSatelliteProtocol.__init__ completed")
+
+    def connection_made(self, transport) -> None:
+        """Called when a client connects."""
+        peer = transport.get_extra_info('peername')
+        _LOGGER.info("ESPHome client connected from %s", peer)
+        super().connection_made(transport)
+
+    def connection_lost(self, exc) -> None:
+        """Called when a client disconnects."""
+        _LOGGER.info("ESPHome client disconnected: %s", exc)
+        super().connection_lost(exc)
 
     def handle_voice_event(
         self, event_type: VoiceAssistantEventType, data: Dict[str, str]
