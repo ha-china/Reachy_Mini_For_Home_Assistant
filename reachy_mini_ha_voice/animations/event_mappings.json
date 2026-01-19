@@ -12,7 +12,7 @@
     "binary_sensor.front_door": [
       {
         "state": "on",
-        "emotion": "curious",
+        "emotion": "curious1",
         "cooldown": 30.0,
         "priority": 70,
         "description": "Someone at the door - robot looks curious"
@@ -22,7 +22,7 @@
     "binary_sensor.back_door": [
       {
         "state": "on",
-        "emotion": "alert",
+        "emotion": "surprised1",
         "cooldown": 30.0,
         "priority": 60,
         "description": "Back door opened - robot looks alert"
@@ -32,7 +32,7 @@
     "binary_sensor.living_room_motion": [
       {
         "state": "on",
-        "emotion": "alert",
+        "emotion": "surprised1",
         "cooldown": 120.0,
         "priority": 40,
         "description": "Motion detected - brief alert"
@@ -42,7 +42,7 @@
     "binary_sensor.doorbell": [
       {
         "state": "on",
-        "emotion": "excited",
+        "emotion": "enthusiastic1",
         "cooldown": 10.0,
         "priority": 90,
         "description": "Doorbell rang - excited reaction"
@@ -52,7 +52,7 @@
     "input_boolean.morning_routine": [
       {
         "state": "on",
-        "emotion": "happy",
+        "emotion": "cheerful1",
         "cooldown": 3600.0,
         "priority": 60,
         "description": "Morning routine started - happy greeting"
@@ -62,7 +62,7 @@
     "input_boolean.bedtime_routine": [
       {
         "state": "on",
-        "emotion": "sleepy",
+        "emotion": "sleep1",
         "cooldown": 3600.0,
         "priority": 60,
         "description": "Bedtime - sleepy animation"
@@ -82,7 +82,7 @@
     "input_boolean.robot_happy_trigger": [
       {
         "state": "on",
-        "emotion": "happy",
+        "emotion": "cheerful1",
         "cooldown": 5.0,
         "priority": 80,
         "description": "Manual happy trigger from HA automation"
@@ -92,7 +92,7 @@
     "input_boolean.robot_sad_trigger": [
       {
         "state": "on",
-        "emotion": "sad",
+        "emotion": "sad1",
         "cooldown": 5.0,
         "priority": 80,
         "description": "Manual sad trigger from HA automation"
@@ -102,7 +102,7 @@
     "input_boolean.robot_alert_trigger": [
       {
         "state": "on",
-        "emotion": "alert",
+        "emotion": "surprised1",
         "cooldown": 5.0,
         "priority": 80,
         "description": "Manual alert trigger from HA automation"
@@ -111,14 +111,13 @@
   },
 
   "_emotions": {
-    "happy": "Joyful expression with antenna wiggle",
-    "sad": "Downcast expression",
-    "alert": "Attentive, wide-eyed look",
-    "curious": "Head tilt, interested expression",
-    "sleepy": "Droopy, tired animation",
-    "excited": "Enthusiastic bouncing",
-    "cheerful1": "Happy dance-like movement",
-    "nod": "Nodding in agreement"
+    "cheerful1": "Joyful expression with antenna wiggle",
+    "sad1": "Downcast expression",
+    "surprised1": "Attentive, wide-eyed look",
+    "curious1": "Head tilt, interested expression",
+    "sleep1": "Droopy, tired animation",
+    "enthusiastic1": "Enthusiastic bouncing",
+    "yes1": "Nodding in agreement"
   },
 
   "_usage": {

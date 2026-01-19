@@ -842,7 +842,7 @@ class MovementManager:
 
                 # Clamp body_yaw to safe range to prevent IK collision warnings
                 # SDK's inverse_kinematics_safe limits body_yaw to ±160°
-                clamped_body_yaw = max(MIN_BODY_YAW_RAD, min(MAX_BODY_YAW_RAD, float(body_yaw)))
+                clamped_body_yaw = clamp_body_yaw(float(body_yaw))
 
                 return (head_pose, antenna_tuple, clamped_body_yaw)
 
