@@ -278,6 +278,7 @@ class VoiceSatelliteProtocol(APIServer):
             self._handle_ha_state_change(msg)
 
         elif isinstance(msg, DeviceInfoRequest):
+            _LOGGER.info("DeviceInfoRequest received, sending DeviceInfoResponse")
             yield DeviceInfoResponse(
                 uses_password=False,
                 name=self.state.name,

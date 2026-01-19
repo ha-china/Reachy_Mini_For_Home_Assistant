@@ -44,8 +44,10 @@ class APIServer(asyncio.Protocol):
     def process_packet(self, msg_type: int, packet_data: bytes) -> None:
         msg_class = MESSAGE_TYPE_TO_PROTO[msg_type]
         msg_inst = msg_class.FromString(packet_data)
+        _LOGGER.debug("Received message: %s", msg_class.__name__)
 
         if isinstance(msg_inst, HelloRequest):
+            _LOGGER.info("HelloRequest received, sending HelloResponse")
             self.send_messages(
                 [
                     HelloResponse(
@@ -58,6 +60,7 @@ class APIServer(asyncio.Protocol):
             return
 
         if isinstance(msg_inst, AuthenticationRequest):
+            _LOGGER.info("AuthenticationRequest received, sending AuthenticationResponse")
             self.send_messages([AuthenticationResponse()])
         elif isinstance(msg_inst, DisconnectRequest):
             self.send_messages([DisconnectResponse()])
@@ -87,6 +90,7 @@ class APIServer(asyncio.Protocol):
     def connection_made(self, transport) -> None:
         self._transport = transport
         self._writelines = transport.writelines
+        _LOGGER.info("ESPHome client connected from %s", transport.get_extra_info('peername'))
 
     def data_received(self, data: bytes):
         if self._buffer is None:
@@ -140,6 +144,7 @@ class APIServer(asyncio.Protocol):
         return cstr[original_pos:new_pos]
 
     def connection_lost(self, exc):
+        _LOGGER.info("ESPHome client disconnected: %s", exc)
         self._transport = None
         self._writelines = None
 
