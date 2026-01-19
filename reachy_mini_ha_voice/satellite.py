@@ -146,29 +146,39 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Only setup entities once (check if already initialized)
         # This prevents duplicate entity registration on reconnection
-        if not getattr(self.state, '_entities_initialized', False):
-            if self.state.media_player_entity is None:
-                self.state.media_player_entity = MediaPlayerEntity(
-                    server=self,
-                    key=get_entity_key("reachy_mini_media_player"),
-                    name="Media Player",
-                    object_id="reachy_mini_media_player",
-                    music_player=state.music_player,
-                    announce_player=state.tts_player,
-                )
-                self.state.entities.append(self.state.media_player_entity)
+        try:
+            _LOGGER.info("Checking entity initialization state...")
+            if not getattr(self.state, '_entities_initialized', False):
+                _LOGGER.info("Setting up entities for first time...")
+                if self.state.media_player_entity is None:
+                    _LOGGER.info("Creating MediaPlayerEntity...")
+                    self.state.media_player_entity = MediaPlayerEntity(
+                        server=self,
+                        key=get_entity_key("reachy_mini_media_player"),
+                        name="Media Player",
+                        object_id="reachy_mini_media_player",
+                        music_player=state.music_player,
+                        announce_player=state.tts_player,
+                    )
+                    self.state.entities.append(self.state.media_player_entity)
+                    _LOGGER.info("MediaPlayerEntity created")
 
-            # Setup all entities using the registry
-            self._entity_registry.setup_all_entities(self.state.entities)
+                # Setup all entities using the registry
+                _LOGGER.info("Setting up all entities via registry...")
+                self._entity_registry.setup_all_entities(self.state.entities)
 
-            # Mark entities as initialized
-            self.state._entities_initialized = True
-            _LOGGER.info("Entities initialized: %d total", len(self.state.entities))
-        else:
-            _LOGGER.debug("Entities already initialized, skipping setup")
-            # Update server reference in existing entities
-            for entity in self.state.entities:
-                entity.server = self
+                # Mark entities as initialized
+                self.state._entities_initialized = True
+                _LOGGER.info("Entities initialized: %d total", len(self.state.entities))
+            else:
+                _LOGGER.info("Entities already initialized, updating server references")
+                # Update server reference in existing entities
+                for entity in self.state.entities:
+                    entity.server = self
+                _LOGGER.info("Server references updated for %d entities", len(self.state.entities))
+        except Exception as e:
+            _LOGGER.error("Error during entity setup: %s", e, exc_info=True)
+            raise
 
         # Initialize emotion keyword detector for auto-triggering emotions from LLM responses
         self._emotion_detector = EmotionKeywordDetector(play_emotion_callback=self._play_emotion)
