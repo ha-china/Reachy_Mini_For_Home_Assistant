@@ -1,18 +1,16 @@
 """Vision module for Reachy Mini.
 
-This module handles all vision-related functionality:
-- CameraServer: MJPEG streaming server
+This module handles vision processing utilities:
 - FrameProcessor: Frame processing and adaptive frame rate management
-- HeadTracker: YOLO-based face tracking
-- GestureDetector: Hand gesture recognition
+- FaceTrackingInterpolator: Smooth pose interpolation when face is lost
+
+Note: MJPEGCameraServer, HeadTracker, and GestureDetector are in the parent
+package to avoid circular imports. Import them directly:
+    from reachy_mini_ha_voice.camera_server import MJPEGCameraServer
+    from reachy_mini_ha_voice.head_tracker import HeadTracker
+    from reachy_mini_ha_voice.gesture_detector import GestureDetector
 """
 
-# Re-export main classes for backward compatibility
-from ..camera_server import MJPEGCameraServer
-from ..head_tracker import HeadTracker
-from ..gesture_detector import GestureDetector
-
-# New modular components
 from .frame_processor import (
     FrameRateMode,
     FrameRateConfig,
@@ -26,10 +24,6 @@ from .face_tracking_interpolator import (
 )
 
 __all__ = [
-    # Main classes
-    "MJPEGCameraServer",
-    "HeadTracker",
-    "GestureDetector",
     # Frame processing
     "FrameRateMode",
     "FrameRateConfig",
