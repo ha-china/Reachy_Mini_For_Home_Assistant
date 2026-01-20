@@ -3,6 +3,7 @@
 import hashlib
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 
 
 def call_all(*funcs: Callable[[], None] | None) -> None:
@@ -15,12 +16,31 @@ def call_all(*funcs: Callable[[], None] | None) -> None:
 def get_mac() -> str:
     """Return a stable MAC address for device identification.
 
-    Uses the machine's hardware MAC address (via uuid.getnode()) which
-    is stable across app reinstalls, preventing Home Assistant from
-    seeing the device as new each time.
+    Uses a cached device ID stored in a file to ensure the same ID
+    is used across restarts, preventing Home Assistant from seeing
+    the device as new each time.
     """
-    # uuid.getnode() returns the hardware MAC address as an integer
-    # This is stable for the same machine regardless of app reinstalls
+    # Store device ID in a persistent location
+    # Note: After refactoring util.py moved from root to core/, so we need
+    # parent.parent.parent to get to the same location as before (outside the package)
+    local_dir = Path(__file__).parent.parent.parent / "local"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    device_id_file = local_dir / ".device_id"
+
+    if device_id_file.exists():
+        try:
+            return device_id_file.read_text().strip()
+        except Exception:
+            pass
+
+    # Generate a stable device ID based on machine UUID
     machine_id = uuid.getnode()
-    # Create a hash to ensure consistent 12-char hex format
-    return hashlib.md5(str(machine_id).encode()).hexdigest()[:12]
+    # Create a hash to ensure consistent format
+    device_id = hashlib.md5(str(machine_id).encode()).hexdigest()[:12]
+
+    try:
+        device_id_file.write_text(device_id)
+    except Exception:
+        pass
+
+    return device_id

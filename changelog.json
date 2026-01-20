@@ -3,7 +3,7 @@
     "version": "0.9.7",
     "date": "2026-01-20",
     "changes": [
-      "Fix: Device ID now uses hardware MAC address directly (stable across reinstalls)",
+      "Fix: Device ID file path corrected after util.py moved to core/ subdirectory (prevents HA seeing device as new)",
       "Fix: Animation file path corrected (was looking in wrong directory)",
       "Fix: Remove hey_jarvis from required wake words (it's optional in openWakeWord/)"
     ]
