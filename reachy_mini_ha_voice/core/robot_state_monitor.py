@@ -15,8 +15,9 @@ Key features:
 import logging
 import threading
 import time
+from collections.abc import Callable
 from enum import Enum
-from typing import Callable, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -65,14 +66,14 @@ class RobotStateMonitor:
         self._state_lock = threading.Lock()
 
         # Callbacks
-        self._on_connected_callbacks: List[Callable[[], None]] = []
-        self._on_disconnected_callbacks: List[Callable[[], None]] = []
+        self._on_connected_callbacks: list[Callable[[], None]] = []
+        self._on_disconnected_callbacks: list[Callable[[], None]] = []
         self._callbacks_lock = threading.Lock()
 
         # Thread control
         self._stop_event = threading.Event()
         self._connected_event = threading.Event()  # Event-driven connection waiting
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         # State tracking
         self._last_state_change_time = 0.0

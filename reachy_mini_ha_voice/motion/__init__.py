@@ -1,88 +1,107 @@
 """Motion control module for Reachy Mini.
 
 This module handles all motion-related functionality:
+- MovementManager: Core 100Hz motion control loop
+- ReachyMiniMotion: High-level motion API
 - StateMachine: Movement state management (RobotState, MovementState)
 - Smoothing: Interpolation and transition algorithms
 - GestureActions: Gesture-to-action mapping
 - Antenna: Antenna freeze/unfreeze control
 - PoseComposer: Pose composition utilities
-
-Note: MovementManager is in the parent module to avoid circular imports.
-Import it directly: from reachy_mini_ha_voice.movement_manager import MovementManager
+- EmotionMoves: Emotion animation playback
+- SpeechSway: Speech-driven head motion
+- AnimationPlayer: Animation playback system
 """
 
-from .state_machine import RobotState, MovementState, PendingAction, STATE_ANIMATION_MAP
-from .smoothing import (
-    ease_in_out_cubic,
-    ease_out_cubic,
-    lerp,
-    lerp_angle,
-    interpolate_pose,
-    smooth_value,
-    clamp,
-    normalize_angle,
-    pose_distance,
-    blend_poses,
-)
-from .gesture_actions import (
-    GestureAction,
-    GestureMapping,
-    GestureActionMapper,
-    DEFAULT_GESTURE_MAPPINGS,
-    load_gesture_mappings,
-)
+from .animation_player import AnimationPlayer
 from .antenna import (
+    ANTENNA_BLEND_DURATION,
     AntennaController,
     AntennaState,
-    ANTENNA_BLEND_DURATION,
     calculate_antenna_blend,
 )
+from .emotion_moves import EmotionMove, is_emotion_available, list_available_emotions
+from .gesture_actions import (
+    DEFAULT_GESTURE_MAPPINGS,
+    GestureAction,
+    GestureActionMapper,
+    GestureMapping,
+    load_gesture_mappings,
+)
+from .movement_manager import MovementManager
 from .pose_composer import (
-    PoseComponents,
     AntennaComponents,
-    create_head_pose_matrix,
-    compose_poses,
-    extract_yaw_from_pose,
+    PoseComponents,
     clamp_body_yaw,
     compose_full_pose,
+    compose_poses,
     compute_antenna_positions,
+    create_head_pose_matrix,
+    extract_yaw_from_pose,
 )
+from .reachy_motion import ReachyMiniMotion
+from .smoothing import (
+    blend_poses,
+    clamp,
+    ease_in_out_cubic,
+    ease_out_cubic,
+    interpolate_pose,
+    lerp,
+    lerp_angle,
+    normalize_angle,
+    pose_distance,
+    smooth_value,
+)
+from .speech_sway import SpeechSwayRT, analyze_audio_for_sway
+from .state_machine import STATE_ANIMATION_MAP, MovementState, PendingAction, RobotState
 
 __all__ = [
-    # State machine
-    "RobotState",
-    "MovementState",
-    "PendingAction",
-    "STATE_ANIMATION_MAP",
-    # Smoothing
-    "ease_in_out_cubic",
-    "ease_out_cubic",
-    "lerp",
-    "lerp_angle",
-    "interpolate_pose",
-    "smooth_value",
-    "clamp",
-    "normalize_angle",
-    "pose_distance",
-    "blend_poses",
-    # Gesture actions
-    "GestureAction",
-    "GestureMapping",
-    "GestureActionMapper",
+    "ANTENNA_BLEND_DURATION",
     "DEFAULT_GESTURE_MAPPINGS",
-    "load_gesture_mappings",
+    "STATE_ANIMATION_MAP",
+    # Animation
+    "AnimationPlayer",
+    "AntennaComponents",
     # Antenna control
     "AntennaController",
     "AntennaState",
-    "ANTENNA_BLEND_DURATION",
-    "calculate_antenna_blend",
+    # Emotion moves
+    "EmotionMove",
+    # Gesture actions
+    "GestureAction",
+    "GestureActionMapper",
+    "GestureMapping",
+    # Core motion control
+    "MovementManager",
+    "MovementState",
+    "PendingAction",
     # Pose composition
     "PoseComponents",
-    "AntennaComponents",
-    "create_head_pose_matrix",
-    "compose_poses",
-    "extract_yaw_from_pose",
+    "ReachyMiniMotion",
+    # State machine
+    "RobotState",
+    # Speech sway
+    "SpeechSwayRT",
+    "analyze_audio_for_sway",
+    "blend_poses",
+    "calculate_antenna_blend",
+    "clamp",
     "clamp_body_yaw",
     "compose_full_pose",
+    "compose_poses",
     "compute_antenna_positions",
+    "create_head_pose_matrix",
+    # Smoothing
+    "ease_in_out_cubic",
+    "ease_out_cubic",
+    "extract_yaw_from_pose",
+    "interpolate_pose",
+    "is_emotion_available",
+    "lerp",
+    "lerp_angle",
+    "list_available_emotions",
+    "load_gesture_mappings",
+    "normalize_angle",
+    "pose_distance",
+    "smooth_value",
 ]

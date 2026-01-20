@@ -5,12 +5,13 @@ reducing boilerplate code in entity_registry.py.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
-from ..entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
-from ..entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
+from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
+from .entity_extensions import ButtonEntity, SelectEntity, SensorEntity, SwitchEntity
 from .entity_keys import get_entity_key
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,29 +39,29 @@ class EntityDefinition:
     icon: str = "mdi:information"
 
     # Common optional fields
-    entity_category: Optional[int] = None  # 0=None, 1=config, 2=diagnostic
+    entity_category: int | None = None  # 0=None, 1=config, 2=diagnostic
 
     # Sensor specific
-    unit_of_measurement: Optional[str] = None
-    accuracy_decimals: Optional[int] = None
-    state_class: Optional[str] = None
-    device_class: Optional[str] = None
+    unit_of_measurement: str | None = None
+    accuracy_decimals: int | None = None
+    state_class: str | None = None
+    device_class: str | None = None
 
     # Number specific
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    step: Optional[float] = None
-    mode: Optional[int] = None  # 0=auto, 1=box, 2=slider
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    mode: int | None = None  # 0=auto, 1=box, 2=slider
 
     # Select specific
-    options: Optional[List[str]] = None
+    options: list[str] | None = None
 
     # Callbacks (set at runtime)
-    value_getter: Optional[Callable] = None
-    command_handler: Optional[Callable] = None
+    value_getter: Callable | None = None
+    command_handler: Callable | None = None
 
     # Additional kwargs
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def create_entity(server, definition: EntityDefinition) -> Any:
@@ -173,7 +174,7 @@ def create_entity(server, definition: EntityDefinition) -> Any:
         raise ValueError(f"Unknown entity type: {definition.entity_type}")
 
 
-def create_entities(server, definitions: List[EntityDefinition]) -> List[Any]:
+def create_entities(server, definitions: list[EntityDefinition]) -> list[Any]:
     """Create multiple entities from definitions.
 
     Args:
@@ -197,7 +198,7 @@ def create_entities(server, definitions: List[EntityDefinition]) -> List[Any]:
 # Predefined entity definition groups
 # ============================================================================
 
-def get_diagnostic_sensor_definitions() -> List[EntityDefinition]:
+def get_diagnostic_sensor_definitions() -> list[EntityDefinition]:
     """Get definitions for diagnostic sensor entities."""
     return [
         EntityDefinition(
@@ -303,7 +304,7 @@ def get_diagnostic_sensor_definitions() -> List[EntityDefinition]:
     ]
 
 
-def get_imu_sensor_definitions() -> List[EntityDefinition]:
+def get_imu_sensor_definitions() -> list[EntityDefinition]:
     """Get definitions for IMU sensor entities."""
     definitions = []
 
@@ -349,7 +350,7 @@ def get_imu_sensor_definitions() -> List[EntityDefinition]:
     return definitions
 
 
-def get_robot_info_definitions() -> List[EntityDefinition]:
+def get_robot_info_definitions() -> list[EntityDefinition]:
     """Get definitions for robot info entities."""
     return [
         EntityDefinition(
@@ -415,7 +416,7 @@ def get_robot_info_definitions() -> List[EntityDefinition]:
     ]
 
 
-def get_pose_control_definitions() -> List[EntityDefinition]:
+def get_pose_control_definitions() -> list[EntityDefinition]:
     """Get definitions for pose control entities (Phase 3)."""
     definitions = []
 
@@ -495,7 +496,7 @@ def get_pose_control_definitions() -> List[EntityDefinition]:
     return definitions
 
 
-def get_look_at_definitions() -> List[EntityDefinition]:
+def get_look_at_definitions() -> list[EntityDefinition]:
     """Get definitions for look-at control entities (Phase 4)."""
     definitions = []
 

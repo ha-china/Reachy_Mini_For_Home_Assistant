@@ -4,10 +4,9 @@ import hashlib
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
 
 
-def call_all(*funcs: Optional[Callable[[], None]]) -> None:
+def call_all(*funcs: Callable[[], None] | None) -> None:
     """Call all non-None functions."""
     for func in funcs:
         if func is not None:

@@ -12,15 +12,16 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Optional, Tuple, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from .face_tracking_interpolator import FaceTrackingInterpolator, InterpolationConfig
+
 # Import adaptive frame rate manager
-from .vision.frame_processor import AdaptiveFrameRateManager, FrameRateConfig
-from .vision.face_tracking_interpolator import FaceTrackingInterpolator, InterpolationConfig
+from .frame_processor import AdaptiveFrameRateManager, FrameRateConfig
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -78,20 +79,20 @@ class MJPEGCameraServer:
         self.enable_face_tracking = enable_face_tracking
         self._face_confidence_threshold = face_confidence_threshold
 
-        self._server: Optional[asyncio.Server] = None
+        self._server: asyncio.Server | None = None
         self._running = False
         self._frame_interval = 1.0 / fps
-        self._last_frame: Optional[bytes] = None
+        self._last_frame: bytes | None = None
         self._last_frame_time: float = 0
         self._frame_lock = threading.Lock()
 
         # Frame capture thread
-        self._capture_thread: Optional[threading.Thread] = None
+        self._capture_thread: threading.Thread | None = None
 
         # Face tracking state
         self._head_tracker = None
         self._face_tracking_enabled = True  # Enabled by default for always-on face tracking
-        self._face_tracking_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self._face_tracking_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
 
         # Gesture detection state
@@ -537,7 +538,7 @@ class MJPEGCameraServer:
             return False
 
         try:
-            face_center, confidence = self._head_tracker.get_head_position(frame)
+            face_center, _confidence = self._head_tracker.get_head_position(frame)
 
             if face_center is not None:
                 # Face detected - notify interpolator
@@ -592,7 +593,7 @@ class MJPEGCameraServer:
     # Public API for face tracking
     # =========================================================================
 
-    def get_face_tracking_offsets(self) -> Tuple[float, float, float, float, float, float]:
+    def get_face_tracking_offsets(self) -> tuple[float, float, float, float, float, float]:
         """Get current face tracking offsets (thread-safe).
 
         Returns:
@@ -731,7 +732,7 @@ class MJPEGCameraServer:
         """Set callback to notify when face detection state changes."""
         self._face_state_callback = callback
 
-    def _get_camera_frame(self) -> Optional[np.ndarray]:
+    def _get_camera_frame(self) -> np.ndarray | None:
         """Get a frame from Reachy Mini's camera."""
         if self.reachy_mini is None:
             # Return a test pattern if no robot connected
@@ -783,7 +784,7 @@ class MJPEGCameraServer:
 
         return frame
 
-    def get_snapshot(self) -> Optional[bytes]:
+    def get_snapshot(self) -> bytes | None:
         """Get the latest frame as JPEG bytes."""
         with self._frame_lock:
             return self._last_frame
@@ -805,7 +806,7 @@ class MJPEGCameraServer:
             # Read headers (we don't need them but must consume them)
             while True:
                 line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-                if line == b'\r\n' or line == b'\n' or line == b'':
+                if line in {b'\r\n', b'\n', b''}:
                     break
 
             # Parse request path
@@ -824,7 +825,7 @@ class MJPEGCameraServer:
             else:
                 await self._handle_index(writer)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _LOGGER.debug("Client connection timeout")
         except ConnectionResetError:
             _LOGGER.debug("Client connection reset")

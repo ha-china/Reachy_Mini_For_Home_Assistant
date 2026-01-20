@@ -58,3 +58,101 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx"]
+
+# ============================================================================
+# Ruff - Fast Python linter and formatter
+# ============================================================================
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["reachy_mini_ha_voice"]
+
+# Exclude reference code and generated files
+exclude = [
+    "reference/",
+    "__pycache__",
+    ".git",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort (import sorting)
+    "B",      # flake8-bugbear (common bugs)
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade (modern Python syntax)
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking (TYPE_CHECKING optimization)
+    "RUF",    # Ruff-specific rules
+    "PTH",    # flake8-use-pathlib
+    "PL",     # Pylint
+]
+ignore = [
+    "E501",     # line too long (handled by formatter)
+    "PLR0913",  # too many arguments (common in robot control)
+    "PLR2004",  # magic value comparison (many thresholds in motion code)
+    "PLR0912",  # too many branches
+    "PLR0915",  # too many statements
+    "PLR0911",  # too many return statements
+    "SIM108",   # use ternary operator (sometimes less readable)
+    "B008",     # function call in default argument (used for field factories)
+    # The following are intentional patterns in this codebase:
+    "PLC0415",  # import-outside-top-level (lazy imports for optional deps)
+    "PLW0603",  # global-statement (used for singletons)
+    "SIM102",   # collapsible-if (sometimes more readable expanded)
+    "SIM105",   # suppressible-exception (explicit try/except is clearer)
+    "PTH123",   # builtin-open (pathlib not always better)
+    "PTH108",   # os-unlink (pathlib not always better)
+    "RUF013",   # implicit-optional (legacy code)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__ are intentional
+
+[tool.ruff.lint.isort]
+known-first-party = ["reachy_mini_ha_voice"]
+
+# ============================================================================
+# Mypy - Static type checker
+# ============================================================================
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false  # Too noisy for mixed typed/untyped codebase
+warn_unused_ignores = true
+disallow_untyped_defs = false  # Start lenient, can tighten later
+check_untyped_defs = false  # Too strict for initial setup
+ignore_missing_imports = true  # Many robot SDK libs lack type stubs
+no_implicit_optional = false  # Allow implicit Optional for now
+# Disable some checks that are too strict for this codebase
+disable_error_code = [
+    "union-attr",  # Too many Optional accesses without None checks
+    "no-redef",    # Class redefinitions for SDK compatibility
+    "attr-defined",  # Some dynamic attributes from SDK
+    "assignment",  # Variable type changes (common in Python)
+    "arg-type",    # Argument type mismatches (often SDK issues)
+    "unused-ignore",  # Type ignore comments from before config
+    "return-value",  # Return type mismatches (often fine)
+    "no-untyped-def",  # Missing type annotations (too strict initially)
+    "valid-type",  # Type validity (some edge cases)
+    "has-type",    # Cannot determine type
+    "call-arg",    # Too few/many arguments
+    "import-untyped",  # Missing stubs for third-party libs
+    "misc",        # Miscellaneous errors
+]
+exclude = [
+    "reference/",
+    "tests/",
+]
+
+# Stricter checking for core modules (can enable gradually)
+[[tool.mypy.overrides]]
+module = [
+    "reachy_mini_ha_voice.core.*",
+    "reachy_mini_ha_voice.motion.smoothing",
+    "reachy_mini_ha_voice.motion.pose_composer",
+]
+disallow_untyped_defs = true
+warn_unreachable = true

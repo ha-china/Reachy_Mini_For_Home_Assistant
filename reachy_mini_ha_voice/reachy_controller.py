@@ -1,12 +1,13 @@
 """Reachy Mini controller wrapper for ESPHome entities."""
 
 import logging
-import time
-from typing import Any, Dict, Optional, TYPE_CHECKING
 import math
+import time
+from typing import TYPE_CHECKING, Any, Optional
+
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 import requests
+from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -56,7 +57,7 @@ class ReachyController:
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
         # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
-        self._state_cache: Dict[str, Any] = {}
+        self._state_cache: dict[str, Any] = {}
         self._cache_ttl = 2.0  # 2 second cache TTL for status queries (increased from 1s)
         self._last_status_query = 0.0
 
@@ -87,7 +88,7 @@ class ReachyController:
 
     # ========== Phase 1: Basic Status & Volume ==========
 
-    def _get_cached_status(self) -> Optional[Dict]:
+    def _get_cached_status(self) -> dict | None:
         """Get cached daemon status to reduce query frequency.
 
         Note: get_status() may trigger I/O, so we cache it.
@@ -361,7 +362,7 @@ class ReachyController:
 
     # ========== Phase 3: Pose Control ==========
 
-    def _get_head_pose(self) -> Optional[np.ndarray]:
+    def _get_head_pose(self) -> np.ndarray | None:
         """Get current head pose from SDK.
 
         Note: SDK's get_current_head_pose() is non-blocking - it returns
@@ -376,7 +377,7 @@ class ReachyController:
             logger.error(f"Error getting head pose: {e}")
             return None
 
-    def _get_joint_positions(self) -> Optional[tuple]:
+    def _get_joint_positions(self) -> tuple | None:
         """Get current joint positions from SDK.
 
         Note: SDK's get_current_joint_positions() is non-blocking - it returns

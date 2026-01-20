@@ -7,9 +7,10 @@ for all services in the system.
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +33,14 @@ class ServiceHealth:
     last_check_time: float = 0.0
     last_healthy_time: float = 0.0
     error_count: int = 0
-    last_error: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    last_error: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
 
     def is_healthy(self) -> bool:
         """Check if service is healthy."""
         return self.status == HealthStatus.HEALTHY
 
-    def mark_healthy(self, now: Optional[float] = None) -> None:
+    def mark_healthy(self, now: float | None = None) -> None:
         """Mark service as healthy."""
         now = now or time.monotonic()
         self.status = HealthStatus.HEALTHY
@@ -48,7 +49,7 @@ class ServiceHealth:
         self.error_count = 0
         self.last_error = None
 
-    def mark_unhealthy(self, error: str, now: Optional[float] = None) -> None:
+    def mark_unhealthy(self, error: str, now: float | None = None) -> None:
         """Mark service as unhealthy."""
         now = now or time.monotonic()
         self.status = HealthStatus.UNHEALTHY
@@ -56,7 +57,7 @@ class ServiceHealth:
         self.error_count += 1
         self.last_error = error
 
-    def mark_degraded(self, reason: str, now: Optional[float] = None) -> None:
+    def mark_degraded(self, reason: str, now: float | None = None) -> None:
         """Mark service as degraded (partially working)."""
         now = now or time.monotonic()
         self.status = HealthStatus.DEGRADED
@@ -84,7 +85,7 @@ class HealthChecker:
         check_func: Callable[[], bool],
         interval: float = 30.0,
         timeout: float = 5.0,
-        on_unhealthy: Optional[Callable[[ServiceHealth], None]] = None,
+        on_unhealthy: Callable[[ServiceHealth], None] | None = None,
     ):
         """Initialize health checker.
 
@@ -103,7 +104,7 @@ class HealthChecker:
 
         self._health = ServiceHealth(name=name)
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
 
@@ -189,7 +190,7 @@ class HealthMonitor:
             default_interval: Default check interval for services
         """
         self._default_interval = default_interval
-        self._checkers: Dict[str, HealthChecker] = {}
+        self._checkers: dict[str, HealthChecker] = {}
         self._lock = threading.Lock()
         self._running = False
 
@@ -197,8 +198,8 @@ class HealthMonitor:
         self,
         name: str,
         check_func: Callable[[], bool],
-        interval: Optional[float] = None,
-        on_unhealthy: Optional[Callable[[ServiceHealth], None]] = None,
+        interval: float | None = None,
+        on_unhealthy: Callable[[ServiceHealth], None] | None = None,
     ) -> None:
         """Register a health checker for a service.
 
@@ -252,14 +253,14 @@ class HealthMonitor:
                 checker.stop()
         logger.info("Health monitor stopped")
 
-    def get_service_health(self, name: str) -> Optional[ServiceHealth]:
+    def get_service_health(self, name: str) -> ServiceHealth | None:
         """Get health status for a specific service."""
         with self._lock:
             if name in self._checkers:
                 return self._checkers[name].health
         return None
 
-    def get_all_health(self) -> Dict[str, ServiceHealth]:
+    def get_all_health(self) -> dict[str, ServiceHealth]:
         """Get health status for all services."""
         with self._lock:
             return {name: checker.health for name, checker in self._checkers.items()}
@@ -288,7 +289,7 @@ class HealthMonitor:
         else:
             return HealthStatus.UNHEALTHY
 
-    def check_all_now(self) -> Dict[str, ServiceHealth]:
+    def check_all_now(self) -> dict[str, ServiceHealth]:
         """Perform immediate health check on all services."""
         with self._lock:
             return {
@@ -298,7 +299,7 @@ class HealthMonitor:
 
 
 # Global health monitor instance
-_health_monitor: Optional[HealthMonitor] = None
+_health_monitor: HealthMonitor | None = None
 
 
 def get_health_monitor() -> HealthMonitor:

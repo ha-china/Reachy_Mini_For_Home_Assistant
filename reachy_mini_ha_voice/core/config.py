@@ -16,12 +16,11 @@ Usage:
     fps = camera_cfg.fps
 """
 
-import os
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +191,7 @@ class Config:
     api: APIConfig = APIConfig()
 
     _initialized = False
-    _config_file: Optional[Path] = None
+    _config_file: Path | None = None
 
     @classmethod
     def load_from_file(cls, path: Path) -> None:
@@ -206,7 +205,7 @@ class Config:
             return
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
 
             cls._apply_overrides(data)
@@ -299,7 +298,7 @@ class Config:
                     setattr(cls.api, key, value)
 
     @classmethod
-    def initialize(cls, config_file: Optional[Path] = None) -> None:
+    def initialize(cls, config_file: Path | None = None) -> None:
         """Initialize configuration.
 
         Loads from config file if provided, then applies environment overrides.

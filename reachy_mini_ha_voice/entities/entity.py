@@ -1,21 +1,21 @@
 """ESPHome entity definitions."""
 
-from abc import abstractmethod
-from collections.abc import Iterable
-from typing import Callable, List, Optional, Union
 import logging
+from abc import abstractmethod
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
+    BinarySensorStateResponse,
+    CameraImageRequest,
+    CameraImageResponse,
     ListEntitiesBinarySensorResponse,
     ListEntitiesCameraResponse,
     ListEntitiesMediaPlayerResponse,
     ListEntitiesNumberResponse,
     ListEntitiesRequest,
     ListEntitiesTextSensorResponse,
-    BinarySensorStateResponse,
-    CameraImageRequest,
-    CameraImageResponse,
     MediaPlayerCommandRequest,
     MediaPlayerStateResponse,
     NumberCommandRequest,
@@ -24,12 +24,14 @@ from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     SubscribeStatesRequest,
     TextSensorStateResponse,
 )
-from aioesphomeapi.model import MediaPlayerCommand, MediaPlayerState, MediaPlayerEntityFeature
+from aioesphomeapi.model import MediaPlayerCommand, MediaPlayerEntityFeature, MediaPlayerState
 from google.protobuf import message
 
-from .api_server import APIServer
-from .audio_player import AudioPlayer
-from .util import call_all
+from ..audio.audio_player import AudioPlayer
+from ..core.util import call_all
+
+if TYPE_CHECKING:
+    from ..protocol.api_server import APIServer
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 class ESPHomeEntity:
     """Base class for ESPHome entities."""
 
-    def __init__(self, server: APIServer) -> None:
+    def __init__(self, server: "APIServer") -> None:
         self.server = server
 
     @abstractmethod
@@ -50,7 +52,7 @@ class MediaPlayerEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
@@ -69,9 +71,9 @@ class MediaPlayerEntity(ESPHomeEntity):
 
     def play(
         self,
-        url: Union[str, List[str]],
+        url: str | list[str],
         announcement: bool = False,
-        done_callback: Optional[Callable[[], None]] = None,
+        done_callback: Callable[[], None] | None = None,
     ) -> Iterable[message.Message]:
         if announcement:
             if self.music_player.is_playing:
@@ -163,13 +165,13 @@ class TextSensorEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
         icon: str = "",
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        value_getter: Optional[Callable[[], str]] = None,
+        value_getter: Callable[[], str] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -219,14 +221,14 @@ class BinarySensorEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
         icon: str = "",
         device_class: str = "",
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        value_getter: Optional[Callable[[], bool]] = None,
+        value_getter: Callable[[], bool] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -278,7 +280,7 @@ class NumberEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
@@ -289,8 +291,8 @@ class NumberEntity(ESPHomeEntity):
         unit_of_measurement: str = "",
         mode: int = 0,  # 0 = auto, 1 = box, 2 = slider
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        value_getter: Optional[Callable[[], float]] = None,
-        value_setter: Optional[Callable[[float], None]] = None,
+        value_getter: Callable[[], float] | None = None,
+        value_setter: Callable[[float], None] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -358,12 +360,12 @@ class CameraEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
         icon: str = "mdi:camera",
-        image_getter: Optional[Callable[[], Optional[bytes]]] = None,
+        image_getter: Callable[[], bytes | None] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -372,7 +374,7 @@ class CameraEntity(ESPHomeEntity):
         self.icon = icon
         self._image_getter = image_getter
 
-    def get_image(self) -> Optional[bytes]:
+    def get_image(self) -> bytes | None:
         """Get the current camera image as JPEG bytes."""
         if self._image_getter:
             return self._image_getter()

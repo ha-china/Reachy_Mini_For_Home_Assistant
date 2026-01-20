@@ -11,12 +11,14 @@ Performance Optimizations:
 """
 
 from __future__ import annotations
+
 import logging
-from typing import Tuple, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
 
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +58,13 @@ class HeadTracker:
         self._device = device
         self._detections_class = None
         self._model_load_attempted = False
-        self._model_load_error: Optional[str] = None
+        self._model_load_error: str | None = None
 
         # Performance optimization settings
         self._inference_scale = min(1.0, max(0.25, inference_scale))
 
         # Frame skip support for stable tracking
-        self._last_detection: Optional[Tuple[NDArray, float]] = None
+        self._last_detection: tuple[NDArray, float] | None = None
         self._frames_since_detection = 0
         self._max_skip_frames = 0  # 0 = no skipping (can be set externally)
 
@@ -77,10 +79,11 @@ class HeadTracker:
         self._model_load_attempted = True
 
         try:
-            from ultralytics import YOLO
-            from supervision import Detections
-            from huggingface_hub import hf_hub_download
             import time
+
+            from huggingface_hub import hf_hub_download
+            from supervision import Detections
+            from ultralytics import YOLO
 
             self._detections_class = Detections
 
@@ -125,7 +128,7 @@ class HeadTracker:
         """Check if the head tracker is available and ready."""
         return self.model is not None and self._detections_class is not None
 
-    def _select_best_face(self, detections) -> Optional[int]:
+    def _select_best_face(self, detections) -> int | None:
         """Select the best face based on confidence and area.
 
         Args:
@@ -182,7 +185,7 @@ class HeadTracker:
 
     def get_head_position(
         self, img: NDArray[np.uint8]
-    ) -> Tuple[Optional[NDArray[np.float32]], Optional[float]]:
+    ) -> tuple[NDArray[np.float32] | None, float | None]:
         """Get head position from face detection.
 
         Args:

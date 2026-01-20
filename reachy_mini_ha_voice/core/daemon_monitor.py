@@ -15,9 +15,9 @@ The daemon exposes /api/daemon/status which returns DaemonStatus with states:
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, List, Optional
 
 import aiohttp
 
@@ -43,8 +43,8 @@ class DaemonStatus:
     """Status information from the daemon API."""
     state: DaemonState
     robot_name: str = ""
-    version: Optional[str] = None
-    error: Optional[str] = None
+    version: str | None = None
+    error: str | None = None
 
     @property
     def is_sleeping(self) -> bool:
@@ -95,22 +95,22 @@ class DaemonStateMonitor:
 
         # State tracking
         self._current_state = DaemonState.UNAVAILABLE
-        self._last_status: Optional[DaemonStatus] = None
+        self._last_status: DaemonStatus | None = None
         self._state_lock = threading.Lock()
 
         # Callbacks
-        self._on_sleep_callbacks: List[Callable[[], None]] = []
-        self._on_wake_callbacks: List[Callable[[], None]] = []
-        self._on_state_change_callbacks: List[Callable[[DaemonState, DaemonState], None]] = []
-        self._on_unavailable_callbacks: List[Callable[[], None]] = []
+        self._on_sleep_callbacks: list[Callable[[], None]] = []
+        self._on_wake_callbacks: list[Callable[[], None]] = []
+        self._on_state_change_callbacks: list[Callable[[DaemonState, DaemonState], None]] = []
+        self._on_unavailable_callbacks: list[Callable[[], None]] = []
 
         # Control
         self._running = False
         self._stop_event = asyncio.Event()
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
 
         # Session management
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     @property
     def current_state(self) -> DaemonState:
@@ -119,7 +119,7 @@ class DaemonStateMonitor:
             return self._current_state
 
     @property
-    def last_status(self) -> Optional[DaemonStatus]:
+    def last_status(self) -> DaemonStatus | None:
         """Get the last received daemon status."""
         with self._state_lock:
             return self._last_status
@@ -234,7 +234,7 @@ class DaemonStateMonitor:
                     timeout=self._check_interval
                 )
                 break  # Stop event was set
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass  # Continue monitoring
 
         logger.debug("Daemon monitor loop ended")

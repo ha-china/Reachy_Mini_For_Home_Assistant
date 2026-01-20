@@ -5,7 +5,6 @@ interpolation, and easing.
 """
 
 import math
-from typing import Dict
 
 import numpy as np
 
@@ -73,11 +72,11 @@ def lerp_angle(start: float, end: float, t: float) -> float:
 
 
 def interpolate_pose(
-    start_pose: Dict[str, float],
-    end_pose: Dict[str, float],
+    start_pose: dict[str, float],
+    end_pose: dict[str, float],
     t: float,
     use_easing: bool = True
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Interpolate between two pose dictionaries.
 
     Args:
@@ -93,14 +92,14 @@ def interpolate_pose(
         t = ease_in_out_cubic(t)
 
     result = {}
-    for key in start_pose:
+    for key, start_value in start_pose.items():
         if key in end_pose:
             if key in ('pitch', 'yaw', 'roll'):
-                result[key] = lerp_angle(start_pose[key], end_pose[key], t)
+                result[key] = lerp_angle(start_value, end_pose[key], t)
             else:
-                result[key] = lerp(start_pose[key], end_pose[key], t)
+                result[key] = lerp(start_value, end_pose[key], t)
         else:
-            result[key] = start_pose[key]
+            result[key] = start_value
 
     return result
 

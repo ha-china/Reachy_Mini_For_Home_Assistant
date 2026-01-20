@@ -5,26 +5,25 @@ for the Reachy Mini voice assistant.
 """
 
 import logging
-from typing import TYPE_CHECKING, Callable, List, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Optional
 
+from ..core.system_diagnostics import get_system_diagnostics
 from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
-from .entity_extensions import SensorEntity, SwitchEntity, SelectEntity, ButtonEntity
-from .system_diagnostics import get_system_diagnostics
-from .entities.entity_keys import ENTITY_KEYS, get_entity_key
-from .entities.entity_factory import (
-    EntityDefinition,
-    EntityType,
+from .entity_extensions import ButtonEntity, SelectEntity, SensorEntity, SwitchEntity
+from .entity_factory import (
     create_entity,
     get_diagnostic_sensor_definitions,
     get_imu_sensor_definitions,
-    get_robot_info_definitions,
-    get_pose_control_definitions,
     get_look_at_definitions,
+    get_pose_control_definitions,
+    get_robot_info_definitions,
 )
+from .entity_keys import get_entity_key
 
 if TYPE_CHECKING:
-    from .reachy_controller import ReachyController
-    from .camera_server import MJPEGCameraServer
+    from ..reachy_controller import ReachyController
+    from ..vision.camera_server import MJPEGCameraServer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +36,7 @@ class EntityRegistry:
         server,
         reachy_controller: "ReachyController",
         camera_server: Optional["MJPEGCameraServer"] = None,
-        play_emotion_callback: Optional[Callable[[str], None]] = None,
+        play_emotion_callback: Callable[[str], None] | None = None,
     ):
         """Initialize the entity registry.
 
@@ -53,8 +52,8 @@ class EntityRegistry:
         self._play_emotion_callback = play_emotion_callback
 
         # Sleep state entities (will be initialized in _setup_phase2_entities)
-        self._sleep_mode_entity: Optional[BinarySensorEntity] = None
-        self._services_suspended_entity: Optional[BinarySensorEntity] = None
+        self._sleep_mode_entity: BinarySensorEntity | None = None
+        self._services_suspended_entity: BinarySensorEntity | None = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -126,7 +125,7 @@ class EntityRegistry:
             "Dying": "dying1",
         }
 
-    def setup_all_entities(self, entities: List) -> None:
+    def setup_all_entities(self, entities: list) -> None:
         """Setup all entity phases.
 
         Args:
@@ -154,7 +153,7 @@ class EntityRegistry:
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
-    def _setup_phase1_entities(self, entities: List) -> None:
+    def _setup_phase1_entities(self, entities: list) -> None:
         """Setup Phase 1 entities: Basic status and volume control."""
         rc = self.reachy_controller
 
@@ -195,7 +194,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, speaker_volume")
 
-    def _setup_phase2_entities(self, entities: List) -> None:
+    def _setup_phase2_entities(self, entities: list) -> None:
         """Setup Phase 2 entities: Motor control."""
         rc = self.reachy_controller
 
@@ -255,7 +254,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep, sleep_mode, services_suspended")
 
-    def _setup_phase3_entities(self, entities: List) -> None:
+    def _setup_phase3_entities(self, entities: list) -> None:
         """Setup Phase 3 entities: Pose control."""
         rc = self.reachy_controller
 
@@ -282,7 +281,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 3 entities registered: head position/orientation, body_yaw, antennas")
 
-    def _setup_phase4_entities(self, entities: List) -> None:
+    def _setup_phase4_entities(self, entities: list) -> None:
         """Setup Phase 4 entities: Look at control."""
         rc = self.reachy_controller
 
@@ -303,7 +302,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 4 entities registered: look_at_x/y/z")
 
-    def _setup_phase5_entities(self, entities: List) -> None:
+    def _setup_phase5_entities(self, entities: list) -> None:
         """Setup Phase 5 entities: DOA (Direction of Arrival) for wakeup turn-to-sound."""
         rc = self.reachy_controller
 
@@ -354,7 +353,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected, doa_tracking_enabled")
 
-    def _setup_phase6_entities(self, entities: List) -> None:
+    def _setup_phase6_entities(self, entities: list) -> None:
         """Setup Phase 6 entities: Diagnostic information."""
         rc = self.reachy_controller
 
@@ -379,7 +378,7 @@ class EntityRegistry:
             "robot_name, wireless_version, simulation_mode, wlan_ip, error_message"
         )
 
-    def _setup_phase7_entities(self, entities: List) -> None:
+    def _setup_phase7_entities(self, entities: list) -> None:
         """Setup Phase 7 entities: IMU sensors (wireless only)."""
         rc = self.reachy_controller
 
@@ -401,7 +400,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 7 entities registered: IMU accelerometer, gyroscope, temperature")
 
-    def _setup_phase8_entities(self, entities: List) -> None:
+    def _setup_phase8_entities(self, entities: list) -> None:
         """Setup Phase 8 entities: Emotion selector."""
 
         def get_emotion() -> str:
@@ -428,7 +427,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 8 entities registered: emotion selector")
 
-    def _setup_phase9_entities(self, entities: List) -> None:
+    def _setup_phase9_entities(self, entities: list) -> None:
         """Setup Phase 9 entities: Audio controls."""
         rc = self.reachy_controller
 
@@ -450,10 +449,10 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 9 entities registered: microphone_volume")
 
-    def _setup_phase10_entities(self, entities: List) -> None:
+    def _setup_phase10_entities(self, entities: list) -> None:
         """Setup Phase 10 entities: Camera for Home Assistant integration."""
 
-        def get_camera_image() -> Optional[bytes]:
+        def get_camera_image() -> bytes | None:
             """Get camera snapshot as JPEG bytes."""
             if self.camera_server:
                 return self.camera_server.get_snapshot()
@@ -470,7 +469,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 10 entities registered: camera (ESPHome Camera entity)")
 
-    def _setup_phase12_entities(self, entities: List) -> None:
+    def _setup_phase12_entities(self, entities: list) -> None:
         """Setup Phase 12 entities: Audio processing parameters (via local SDK)."""
         rc = self.reachy_controller
 
@@ -558,7 +557,7 @@ class EntityRegistry:
             "noise_suppression, echo_cancellation_converged"
         )
 
-    def _setup_phase21_entities(self, entities: List) -> None:
+    def _setup_phase21_entities(self, entities: list) -> None:
         """Setup Phase 21 entities: Continuous conversation mode."""
 
         def get_continuous_conversation() -> bool:
@@ -589,7 +588,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 21 entities registered: continuous_conversation")
 
-    def _setup_phase22_entities(self, entities: List) -> None:
+    def _setup_phase22_entities(self, entities: list) -> None:
         """Setup Phase 22 entities: Gesture detection."""
 
         def get_gesture() -> str:
@@ -631,7 +630,7 @@ class EntityRegistry:
 
         _LOGGER.debug("Phase 22 entities registered: gesture_detected, gesture_confidence")
 
-    def _setup_phase23_entities(self, entities: List) -> None:
+    def _setup_phase23_entities(self, entities: list) -> None:
         """Setup Phase 23 entities: Face detection status."""
 
         def get_face_detected() -> bool:
@@ -692,7 +691,7 @@ class EntityRegistry:
             self._services_suspended_entity.update_state()
             _LOGGER.debug("Services suspended state updated: suspended=%s", is_suspended)
 
-    def find_entity_references(self, entities: List) -> None:
+    def find_entity_references(self, entities: list) -> None:
         """Find and store references to special entities from existing list.
 
         Args:
@@ -701,7 +700,7 @@ class EntityRegistry:
         # DOA entities are read-only sensors, no special references needed
         pass
 
-    def _setup_phase24_entities(self, entities: List) -> None:
+    def _setup_phase24_entities(self, entities: list) -> None:
         """Setup Phase 24 entities: System diagnostics (psutil).
 
         These sensors provide system health information for the robot's

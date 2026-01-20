@@ -6,8 +6,8 @@ allowing the robot to express emotions naturally during conversation.
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ class EmotionKeywordDetector:
 
     def __init__(
         self,
-        config_path: Optional[Path] = None,
-        play_emotion_callback: Optional[Callable[[str], None]] = None,
+        config_path: Path | None = None,
+        play_emotion_callback: Callable[[str], None] | None = None,
     ):
         """Initialize the emotion detector.
 
@@ -30,7 +30,7 @@ class EmotionKeywordDetector:
             config_path: Path to emotion_keywords.json. Defaults to animations folder.
             play_emotion_callback: Function to call when emotion is detected.
         """
-        self._keywords: Dict[str, str] = {}
+        self._keywords: dict[str, str] = {}
         self._enabled: bool = True
         self._play_emotion_callback = play_emotion_callback
 
@@ -46,7 +46,7 @@ class EmotionKeywordDetector:
             return
 
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             self._keywords = data.get("keywords", {})
@@ -69,7 +69,7 @@ class EmotionKeywordDetector:
         """
         self._play_emotion_callback = callback
 
-    def detect_and_play(self, text: str) -> Optional[str]:
+    def detect_and_play(self, text: str) -> str | None:
         """Detect emotion from text and trigger corresponding animation.
 
         Keywords are matched case-insensitively against the text.

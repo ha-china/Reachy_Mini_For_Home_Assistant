@@ -14,8 +14,9 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from enum import Enum
-from typing import Callable, Optional, TypeVar, Any
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class RobustOperationMixin:
         self._max_consecutive_errors = max_errors
         self._error_reset_interval = reset_interval
         self._restart_on_max_errors = restart_on_max_errors
-        self._restart_callback: Optional[Callable] = None
+        self._restart_callback: Callable | None = None
         self._error_logger = logging.getLogger(f"{__name__}.robust")
 
     def set_restart_callback(self, callback: Callable) -> None:
@@ -108,8 +109,7 @@ class RobustOperationMixin:
 
     def _reset_error_count(self) -> None:
         """Reset the error counter after successful operation."""
-        if self._error_count > 0:
-            self._error_count = 0
+        self._error_count = min(self._error_count, 0)
 
     def _execute_with_recovery(
         self,
@@ -535,7 +535,7 @@ class ServiceManager:
         self._is_suspended = True
         self._logger.info("All services suspended")
 
-    async def resume_all(self, delay: Optional[float] = None) -> None:
+    async def resume_all(self, delay: float | None = None) -> None:
         """Resume all suspended services.
 
         Args:

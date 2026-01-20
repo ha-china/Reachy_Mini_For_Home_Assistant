@@ -8,11 +8,14 @@ with set_target() calls, avoiding "a move is currently running" warnings.
 """
 
 from __future__ import annotations
+
 import logging
-from typing import Optional, Tuple, List
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,7 @@ logger = logging.getLogger(__name__)
 try:
     from reachy_mini.motion.recorded_move import RecordedMoves
     from reachy_mini.utils import create_head_pose
-    RECORDED_MOVES: Optional[RecordedMoves] = RecordedMoves(
+    RECORDED_MOVES: RecordedMoves | None = RecordedMoves(
         "pollen-robotics/reachy-mini-emotions-library"
     )
     EMOTION_AVAILABLE = True
@@ -40,7 +43,7 @@ def is_emotion_available() -> bool:
     return EMOTION_AVAILABLE
 
 
-def list_available_emotions() -> List[str]:
+def list_available_emotions() -> list[str]:
     """Get list of available emotion names."""
     if not EMOTION_AVAILABLE or RECORDED_MOVES is None:
         return []
@@ -78,7 +81,7 @@ class EmotionMove:
 
     def evaluate(
         self, t: float
-    ) -> Tuple[NDArray[np.float64], NDArray[np.float64], float]:
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
         """Evaluate emotion pose at time t.
 
         Args:

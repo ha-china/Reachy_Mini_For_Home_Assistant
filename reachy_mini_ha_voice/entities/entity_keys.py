@@ -5,14 +5,13 @@ Keys are fixed to ensure consistency across restarts.
 """
 
 import logging
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
 
 # Fixed entity key mapping - ensures consistent keys across restarts
 # Keys are based on phase/category organization
-ENTITY_KEYS: Dict[str, int] = {
+ENTITY_KEYS: dict[str, int] = {
     # Media player (key 0 reserved)
     "reachy_mini_media_player": 0,
 

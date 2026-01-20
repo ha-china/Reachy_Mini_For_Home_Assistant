@@ -7,7 +7,6 @@ allowing the camera/head to gracefully return to neutral position.
 import logging
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -44,7 +43,7 @@ class FaceTrackingInterpolator:
     to a neutral head position using SLERP for rotations.
     """
 
-    def __init__(self, config: Optional[InterpolationConfig] = None):
+    def __init__(self, config: InterpolationConfig | None = None):
         """Initialize the interpolator.
 
         Args:
@@ -53,12 +52,12 @@ class FaceTrackingInterpolator:
         self.config = config or InterpolationConfig()
 
         # Interpolation state
-        self._last_face_detected_time: Optional[float] = None
-        self._interpolation_start_time: Optional[float] = None
-        self._interpolation_start_pose: Optional[np.ndarray] = None
+        self._last_face_detected_time: float | None = None
+        self._interpolation_start_time: float | None = None
+        self._interpolation_start_pose: np.ndarray | None = None
 
         # Current offsets (x, y, z, roll, pitch, yaw)
-        self._offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self._offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     def on_face_detected(self, current_time: float) -> None:
         """Call when a face is detected.
@@ -192,7 +191,7 @@ class FaceTrackingInterpolator:
 
         return result
 
-    def get_offsets(self) -> Tuple[float, float, float, float, float, float]:
+    def get_offsets(self) -> tuple[float, float, float, float, float, float]:
         """Get current face tracking offsets.
 
         Returns:
@@ -216,7 +215,7 @@ class FaceTrackingInterpolator:
         self._last_face_detected_time = time.time()
         self._interpolation_start_time = None
 
-    def set_raw_offsets(self, offsets: List[float]) -> None:
+    def set_raw_offsets(self, offsets: list[float]) -> None:
         """Set offsets directly (thread-safe wrapper use case).
 
         Args:

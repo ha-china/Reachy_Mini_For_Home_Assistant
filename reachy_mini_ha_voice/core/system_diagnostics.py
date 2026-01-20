@@ -9,12 +9,8 @@ appear in the Diagnostics section in Home Assistant.
 
 import logging
 import time
-from typing import Optional, TYPE_CHECKING
 
 import psutil
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +89,7 @@ class SystemDiagnostics:
 
             # Try common sensor names
             for name in ["coretemp", "cpu_thermal", "cpu-thermal", "k10temp", "zenpower"]:
-                if name in temps and temps[name]:
+                if temps.get(name):
                     return temps[name][0].current
 
             # Fallback: first available sensor
@@ -243,7 +239,7 @@ class SystemDiagnostics:
 
 
 # Singleton instance for easy access
-_diagnostics_instance: Optional[SystemDiagnostics] = None
+_diagnostics_instance: SystemDiagnostics | None = None
 
 
 def get_system_diagnostics() -> SystemDiagnostics:

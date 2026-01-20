@@ -13,22 +13,25 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from queue import Queue
-from typing import Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
-
 from reachy_mini import ReachyMini
 
-from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
-from .audio_player import AudioPlayer
-from .satellite import VoiceSatelliteProtocol
-from .util import get_mac
-from .zeroconf import HomeAssistantZeroconf
-from .reachy_motion import ReachyMiniMotion
-from .camera_server import MJPEGCameraServer
-from .robot_state_monitor import RobotStateMonitor
-from .core import SleepManager, Config
+from .audio.audio_player import AudioPlayer
 from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
+from .core import Config, SleepManager
+from .core.robot_state_monitor import RobotStateMonitor
+from .core.util import get_mac
+from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
+from .motion.reachy_motion import ReachyMiniMotion
+from .protocol.satellite import VoiceSatelliteProtocol
+from .protocol.zeroconf import HomeAssistantZeroconf
+from .vision.camera_server import MJPEGCameraServer
+
+if TYPE_CHECKING:
+    from pymicro_wakeword import MicroWakeWord
+    from pyopen_wakeword import OpenWakeWord
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,13 +44,13 @@ _LOCAL_DIR = _MODULE_DIR.parent / "local"
 @dataclass
 class AudioProcessingContext:
     """Context for audio processing, holding mutable state."""
-    wake_words: List = field(default_factory=list)
-    micro_features: Optional[object] = None
-    micro_inputs: List = field(default_factory=list)
-    oww_features: Optional[object] = None
-    oww_inputs: List = field(default_factory=list)
+    wake_words: list = field(default_factory=list)
+    micro_features: object | None = None
+    micro_inputs: list = field(default_factory=list)
+    oww_features: object | None = None
+    oww_inputs: list = field(default_factory=list)
     has_oww: bool = False
-    last_active: Optional[float] = None
+    last_active: float | None = None
 
 
 # Audio chunk size for consistent streaming
@@ -63,7 +66,7 @@ class VoiceAssistantService:
 
     def __init__(
         self,
-        reachy_mini: Optional[ReachyMini] = None,
+        reachy_mini: ReachyMini | None = None,
         name: str = "Reachy Mini",
         host: str = "0.0.0.0",
         port: int = 6053,
@@ -83,21 +86,21 @@ class VoiceAssistantService:
         self._discovery = None
         self._audio_thread = None
         self._running = False
-        self._state: Optional[ServerState] = None
+        self._state: ServerState | None = None
         self._motion = ReachyMiniMotion(reachy_mini)
-        self._camera_server: Optional[MJPEGCameraServer] = None
+        self._camera_server: MJPEGCameraServer | None = None
 
         # Audio buffer for fixed-size chunk output
         self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
 
         # Robot state monitor - tracks connection to daemon
-        self._robot_state_monitor: Optional[RobotStateMonitor] = None
+        self._robot_state_monitor: RobotStateMonitor | None = None
         self._robot_services_paused = threading.Event()  # Set when services should pause
         self._robot_services_resumed = threading.Event()  # Event-driven resume signaling
         self._robot_services_resumed.set()  # Start in resumed state
 
         # Sleep manager for sleep/wake handling
-        self._sleep_manager: Optional[SleepManager] = None
+        self._sleep_manager: SleepManager | None = None
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -614,9 +617,9 @@ class VoiceAssistantService:
         if not missing_wakewords and not missing_sounds:
             _LOGGER.info("All required files verified successfully.")
 
-    def _load_available_wake_words(self) -> Dict[str, AvailableWakeWord]:
+    def _load_available_wake_words(self) -> dict[str, AvailableWakeWord]:
         """Load available wake word configurations."""
-        available_wake_words: Dict[str, AvailableWakeWord] = {}
+        available_wake_words: dict[str, AvailableWakeWord] = {}
 
         # Load order: OpenWakeWord first, then MicroWakeWord, then external
         # Later entries override earlier ones, so MicroWakeWord takes priority
@@ -636,7 +639,7 @@ class VoiceAssistantService:
                     continue
 
                 try:
-                    with open(config_path, "r", encoding="utf-8") as f:
+                    with open(config_path, encoding="utf-8") as f:
                         config = json.load(f)
 
                     model_type = WakeWordType(config.get("type", "micro"))
@@ -662,7 +665,7 @@ class VoiceAssistantService:
         """Load user preferences."""
         if preferences_path.exists():
             try:
-                with open(preferences_path, "r", encoding="utf-8") as f:
+                with open(preferences_path, encoding="utf-8") as f:
                     data = json.load(f)
                 return Preferences(**data)
             except Exception as e:
@@ -672,15 +675,13 @@ class VoiceAssistantService:
 
     def _load_wake_models(
         self,
-        available_wake_words: Dict[str, AvailableWakeWord],
+        available_wake_words: dict[str, AvailableWakeWord],
         preferences: Preferences,
     ):
         """Load wake word models."""
-        from pymicro_wakeword import MicroWakeWord
-        from pyopen_wakeword import OpenWakeWord
 
-        wake_models: Dict[str, Union[MicroWakeWord, OpenWakeWord]] = {}
-        active_wake_words: Set[str] = set()
+        wake_models: dict[str, MicroWakeWord | OpenWakeWord] = {}
+        active_wake_words: set[str] = set()
 
         # Try to load preferred models
         if preferences.active_wake_words:
@@ -694,7 +695,7 @@ class VoiceAssistantService:
                     _LOGGER.debug("Loading wake model: %s", wake_word_id)
                     loaded_model = wake_word.load()
                     # Set id attribute on the model for later identification
-                    setattr(loaded_model, 'id', wake_word_id)
+                    loaded_model.id = wake_word_id
                     wake_models[wake_word_id] = loaded_model
                     active_wake_words.add(wake_word_id)
                 except Exception as e:
@@ -708,7 +709,7 @@ class VoiceAssistantService:
                     _LOGGER.debug("Loading default wake model: %s", self.wake_model)
                     loaded_model = wake_word.load()
                     # Set id attribute on the model for later identification
-                    setattr(loaded_model, 'id', self.wake_model)
+                    loaded_model.id = self.wake_model
                     wake_models[self.wake_model] = loaded_model
                     active_wake_words.add(self.wake_model)
                 except Exception as e:
@@ -724,7 +725,7 @@ class VoiceAssistantService:
         if stop_config.exists():
             try:
                 model = MicroWakeWord.from_config(stop_config)
-                setattr(model, 'id', 'stop')
+                model.id = 'stop'
                 return model
             except Exception as e:
                 _LOGGER.warning("Failed to load stop model: %s", e)
@@ -734,7 +735,7 @@ class VoiceAssistantService:
         okay_nabu_config = _WAKEWORDS_DIR / "okay_nabu.json"
         if okay_nabu_config.exists():
             model = MicroWakeWord.from_config(okay_nabu_config)
-            setattr(model, 'id', 'stop')
+            model.id = 'stop'
             return model
 
         return None
@@ -863,8 +864,8 @@ class VoiceAssistantService:
 
     def _update_wake_words_list(self, ctx: AudioProcessingContext) -> None:
         """Update wake words list if changed."""
-        from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
         from pymicro_wakeword import MicroWakeWordFeatures
+        from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
 
         if (not ctx.wake_words) or (self._state.wake_words_changed and self._state.wake_words):
             self._state.wake_words_changed = False
@@ -887,7 +888,7 @@ class VoiceAssistantService:
                 if ww_id in self._state.active_wake_words:
                     # Ensure the model has an 'id' attribute for later use
                     if not hasattr(ww_model, 'id'):
-                        setattr(ww_model, 'id', ww_id)
+                        ww_model.id = ww_id
                     ctx.wake_words.append(ww_model)
 
             ctx.has_oww = any(isinstance(ww, OpenWakeWord) for ww in ctx.wake_words)
@@ -896,7 +897,7 @@ class VoiceAssistantService:
 
             _LOGGER.info("Active wake words updated: %s (features reset)", list(self._state.active_wake_words))
 
-    def _get_reachy_audio_chunk(self) -> Optional[bytes]:
+    def _get_reachy_audio_chunk(self) -> bytes | None:
         """Get fixed-size audio chunk from Reachy Mini's microphone.
 
         Returns exactly AUDIO_BLOCK_SIZE samples each time, buffering

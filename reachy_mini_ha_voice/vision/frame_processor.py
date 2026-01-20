@@ -11,9 +11,9 @@ The adaptive frame rate system optimizes CPU usage by:
 
 import logging
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class ProcessingState:
     # Timing
     no_face_duration: float = 0.0
     last_face_check_time: float = 0.0
-    last_face_detected_time: Optional[float] = None
+    last_face_detected_time: float | None = None
 
     # Counters
     gesture_frame_counter: int = 0
@@ -80,8 +80,8 @@ class AdaptiveFrameRateManager:
 
     def __init__(
         self,
-        config: Optional[FrameRateConfig] = None,
-        time_func: Optional[Callable[[], float]] = None,
+        config: FrameRateConfig | None = None,
+        time_func: Callable[[], float] | None = None,
     ):
         """Initialize the frame rate manager.
 

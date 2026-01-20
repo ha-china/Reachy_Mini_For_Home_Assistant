@@ -8,8 +8,8 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,8 @@ class MemoryMonitor:
         warning_threshold_mb: float = 500.0,
         critical_threshold_mb: float = 800.0,
         check_interval: float = 60.0,
-        on_warning: Optional[Callable[[MemoryStats], None]] = None,
-        on_critical: Optional[Callable[[MemoryStats], None]] = None,
+        on_warning: Callable[[MemoryStats], None] | None = None,
+        on_critical: Callable[[MemoryStats], None] | None = None,
     ):
         """Initialize memory monitor.
 
@@ -85,11 +85,11 @@ class MemoryMonitor:
         self._on_critical = on_critical
 
         self._current_stats = MemoryStats()
-        self._history: List[MemoryStats] = []
+        self._history: list[MemoryStats] = []
         self._max_history = 60  # Keep last 60 samples
 
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
 
@@ -103,7 +103,7 @@ class MemoryMonitor:
             return self._current_stats
 
     @property
-    def history(self) -> List[MemoryStats]:
+    def history(self) -> list[MemoryStats]:
         """Get memory history."""
         with self._lock:
             return self._history.copy()
@@ -133,7 +133,7 @@ class MemoryMonitor:
         else:
             # Fallback: try to read from /proc on Linux
             try:
-                with open('/proc/self/statm', 'r') as f:
+                with open('/proc/self/statm') as f:
                     parts = f.read().split()
                     page_size = os.sysconf('SC_PAGE_SIZE')
                     stats.rss_bytes = int(parts[1]) * page_size
@@ -264,7 +264,7 @@ class MemoryMonitor:
 
 
 # Global memory monitor instance
-_memory_monitor: Optional[MemoryMonitor] = None
+_memory_monitor: MemoryMonitor | None = None
 
 
 def get_memory_monitor() -> MemoryMonitor:

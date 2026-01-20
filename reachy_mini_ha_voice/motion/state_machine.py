@@ -4,9 +4,9 @@ This module contains the state machine for robot movement states
 and related data structures.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional
 
 
 class RobotState(Enum):
@@ -88,4 +88,4 @@ class PendingAction:
     target_y: float = 0.0
     target_z: float = 0.0
     duration: float = 0.5
-    callback: Optional[Callable] = None
+    callback: Callable | None = None

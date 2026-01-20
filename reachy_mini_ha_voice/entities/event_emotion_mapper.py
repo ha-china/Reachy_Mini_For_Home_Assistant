@@ -8,10 +8,10 @@ import json
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class EventEmotionMapping:
     emotion: str  # Emotion animation name
     cooldown: float = 60.0  # Minimum seconds between triggers
     priority: int = 50  # Higher = more important (0-100)
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -48,11 +48,11 @@ class EventTrigger:
     old_state: str
     new_state: str
     timestamp: float
-    emotion: Optional[str] = None
+    emotion: str | None = None
 
 
 # Default emotion mappings based on common HA entities
-DEFAULT_EVENT_EMOTION_MAP: Dict[str, List[EventEmotionMapping]] = {
+DEFAULT_EVENT_EMOTION_MAP: dict[str, list[EventEmotionMapping]] = {
     # Door/window sensors
     "binary_sensor.front_door": [
         EventEmotionMapping(
@@ -119,7 +119,7 @@ class EventEmotionMapper:
 
     def __init__(
         self,
-        mappings: Optional[Dict[str, List[EventEmotionMapping]]] = None,
+        mappings: dict[str, list[EventEmotionMapping]] | None = None,
         max_triggers_per_minute: int = 3,
     ):
         """Initialize the event emotion mapper.
@@ -128,10 +128,10 @@ class EventEmotionMapper:
             mappings: Custom event mappings. Uses defaults if None.
             max_triggers_per_minute: Rate limit for emotion triggers
         """
-        self._mappings: Dict[str, List[EventEmotionMapping]] = {}
-        self._last_trigger_times: Dict[str, float] = {}
-        self._emotion_callback: Optional[Callable[[str], None]] = None
-        self._trigger_history: List[EventTrigger] = []
+        self._mappings: dict[str, list[EventEmotionMapping]] = {}
+        self._last_trigger_times: dict[str, float] = {}
+        self._emotion_callback: Callable[[str], None] | None = None
+        self._trigger_history: list[EventTrigger] = []
         self._max_history = 100
         self._triggers_this_minute = 0
         self._minute_start_time = time.monotonic()
@@ -168,7 +168,7 @@ class EventEmotionMapper:
             self._mappings[entity_id].append(mapping)
         logger.debug("Added event mapping: %s -> %s", entity_id, mapping.emotion)
 
-    def remove_mapping(self, entity_id: str, state_value: Optional[str] = None) -> None:
+    def remove_mapping(self, entity_id: str, state_value: str | None = None) -> None:
         """Remove event mapping(s)."""
         with self._lock:
             if entity_id in self._mappings:
@@ -185,7 +185,7 @@ class EventEmotionMapper:
         entity_id: str,
         old_state: str,
         new_state: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Handle a Home Assistant state change.
 
         Args:
@@ -265,11 +265,11 @@ class EventEmotionMapper:
         if len(self._trigger_history) > self._max_history:
             self._trigger_history.pop(0)
 
-    def get_trigger_history(self) -> List[EventTrigger]:
+    def get_trigger_history(self) -> list[EventTrigger]:
         """Get recent trigger history."""
         return self._trigger_history.copy()
 
-    def get_mappings(self) -> Dict[str, List[EventEmotionMapping]]:
+    def get_mappings(self) -> dict[str, list[EventEmotionMapping]]:
         """Get all current mappings."""
         with self._lock:
             return {k: v.copy() for k, v in self._mappings.items()}
@@ -288,7 +288,7 @@ class EventEmotionMapper:
             return False
 
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             settings = data.get("settings", {})
@@ -319,7 +319,7 @@ class EventEmotionMapper:
             return False
 
 
-def load_event_mappings(json_path: Optional[Path] = None) -> Dict[str, List[EventEmotionMapping]]:
+def load_event_mappings(json_path: Path | None = None) -> dict[str, list[EventEmotionMapping]]:
     """Load event mappings from JSON file or return defaults.
 
     Args:

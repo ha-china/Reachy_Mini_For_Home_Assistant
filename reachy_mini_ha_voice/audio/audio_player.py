@@ -14,10 +14,12 @@ import socket
 import threading
 import time
 from collections.abc import Callable
-from typing import List, Optional, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .zeroconf import SendspinDiscovery
+    from aiosendspin.models.core import StreamStartMessage
+
+    from ..protocol.zeroconf import SendspinDiscovery
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +30,9 @@ MOVEMENT_LATENCY_S = 0.2  # 200ms latency between audio start and head movement
 
 # Check if aiosendspin is available
 try:
-    from aiosendspin.client import SendspinClient, PCMFormat
-    from aiosendspin.models.types import Roles, AudioCodec, PlayerCommand
+    from aiosendspin.client import PCMFormat, SendspinClient
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
-    from aiosendspin.models.core import StreamStartMessage
+    from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles
     SENDSPIN_AVAILABLE = True
 except ImportError:
     SENDSPIN_AVAILABLE = False
@@ -72,8 +73,8 @@ class AudioPlayer:
         """
         self.reachy_mini = reachy_mini
         self.is_playing = False
-        self._playlist: List[str] = []
-        self._done_callback: Optional[Callable[[], None]] = None
+        self._playlist: list[str] = []
+        self._done_callback: Callable[[], None] | None = None
         self._done_callback_lock = threading.Lock()
         self._duck_volume: float = 0.5
         self._unduck_volume: float = 1.0
@@ -81,23 +82,23 @@ class AudioPlayer:
         self._stop_flag = threading.Event()
 
         # Speech sway callback for audio-driven head motion
-        self._sway_callback: Optional[Callable[[dict], None]] = None
+        self._sway_callback: Callable[[dict], None] | None = None
 
         # Sendspin support (auto-enabled via mDNS discovery)
         # Uses stable client_id so HA recognizes the same device after restart
         self._sendspin_client_id = _get_stable_client_id()
-        self._sendspin_client: Optional["SendspinClient"] = None
+        self._sendspin_client: SendspinClient | None = None
         self._sendspin_enabled = False
-        self._sendspin_url: Optional[str] = None
-        self._sendspin_discovery: Optional["SendspinDiscovery"] = None
-        self._sendspin_unsubscribers: List[Callable] = []
+        self._sendspin_url: str | None = None
+        self._sendspin_discovery: SendspinDiscovery | None = None
+        self._sendspin_unsubscribers: list[Callable] = []
 
         # Audio buffer for Sendspin playback
-        self._sendspin_audio_format: Optional["PCMFormat"] = None
+        self._sendspin_audio_format: PCMFormat | None = None
         self._sendspin_playback_started = False
         self._sendspin_paused = False  # Pause Sendspin when voice assistant is active
 
-    def set_sway_callback(self, callback: Optional[Callable[[dict], None]]) -> None:
+    def set_sway_callback(self, callback: Callable[[dict], None] | None) -> None:
         """Set callback for speech-driven sway animation.
 
         Args:
@@ -123,7 +124,7 @@ class AudioPlayer:
         return self._sendspin_enabled and self._sendspin_client is not None
 
     @property
-    def sendspin_url(self) -> Optional[str]:
+    def sendspin_url(self) -> str | None:
         """Get current Sendspin server URL."""
         return self._sendspin_url
 
@@ -164,7 +165,7 @@ class AudioPlayer:
             return
 
         # Import here to avoid circular imports
-        from .zeroconf import SendspinDiscovery
+        from ..protocol.zeroconf import SendspinDiscovery
 
         _LOGGER.info("Starting Sendspin server discovery...")
         self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found)
@@ -342,12 +343,12 @@ class AudioPlayer:
         _LOGGER.debug("Sendspin stream started")
         # No need to clear buffer - just start fresh
 
-    def _on_sendspin_stream_end(self, roles: Optional[List[Roles]]) -> None:
+    def _on_sendspin_stream_end(self, roles: list[Roles] | None) -> None:
         """Handle stream end from Sendspin server."""
         if roles is None or Roles.PLAYER in roles:
             _LOGGER.debug("Sendspin stream ended")
 
-    def _on_sendspin_stream_clear(self, roles: Optional[List[Roles]]) -> None:
+    def _on_sendspin_stream_clear(self, roles: list[Roles] | None) -> None:
         """Handle stream clear from Sendspin server."""
         if roles is None or Roles.PLAYER in roles:
             _LOGGER.debug("Sendspin stream cleared")
@@ -395,8 +396,8 @@ class AudioPlayer:
 
     def play(
         self,
-        url: Union[str, List[str]],
-        done_callback: Optional[Callable[[], None]] = None,
+        url: str | list[str],
+        done_callback: Callable[[], None] | None = None,
         stop_first: bool = True,
     ) -> None:
         """Play audio from URL(s).
@@ -438,8 +439,8 @@ class AudioPlayer:
         try:
             # Handle URLs - download first
             if file_path.startswith(("http://", "https://")):
-                import urllib.request
                 import tempfile
+                import urllib.request
 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                     urllib.request.urlretrieve(file_path, tmp.name)
@@ -460,7 +461,7 @@ class AudioPlayer:
                     # Pre-analyze audio for speech sway if callback is set
                     sway_frames = []
                     if self._sway_callback is not None:
-                        from .speech_sway import SpeechSwayRT
+                        from ..motion.speech_sway import SpeechSwayRT
                         sway = SpeechSwayRT()
                         sway_frames = sway.feed(data, sample_rate)
                         _LOGGER.debug("Generated %d sway frames for %.2fs audio",
@@ -540,7 +541,7 @@ class AudioPlayer:
     def _on_playback_finished(self) -> None:
         """Called when playback is finished."""
         self.is_playing = False
-        todo_callback: Optional[Callable[[], None]] = None
+        todo_callback: Callable[[], None] | None = None
 
         with self._done_callback_lock:
             if self._done_callback:
@@ -566,7 +567,7 @@ class AudioPlayer:
                 pass
         self.is_playing = False
 
-    def resume(self) -> None:
+    def resume_playback(self) -> None:
         """Resume playback from where it was paused."""
         self._stop_flag.clear()
         if self._playlist:

@@ -6,7 +6,7 @@ for optimal voice command recognition at distances up to 2-3 meters.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,9 +15,9 @@ _LOGGER = logging.getLogger(__name__)
 class MicrophonePreferences:
     """User preferences for microphone settings."""
 
-    agc_enabled: Optional[bool] = None
-    agc_max_gain: Optional[float] = None
-    noise_suppression: Optional[float] = None
+    agc_enabled: bool | None = None
+    agc_max_gain: float | None = None
+    noise_suppression: float | None = None
 
 
 @dataclass
@@ -45,7 +45,7 @@ class MicrophoneOptimizer:
     XMOS docs: https://www.xmos.com/documentation/XM-014888-PC/
     """
 
-    def __init__(self, defaults: Optional[MicrophoneDefaults] = None):
+    def __init__(self, defaults: MicrophoneDefaults | None = None):
         """Initialize the optimizer.
 
         Args:
@@ -56,7 +56,7 @@ class MicrophoneOptimizer:
     def optimize(
         self,
         respeaker: Any,
-        preferences: Optional[MicrophonePreferences] = None
+        preferences: MicrophonePreferences | None = None
     ) -> bool:
         """Apply optimized microphone settings.
 

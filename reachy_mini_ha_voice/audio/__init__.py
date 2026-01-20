@@ -1,20 +1,20 @@
 """Audio module for Reachy Mini.
 
 This module handles all audio-related functionality:
+- AudioPlayer: Audio playback with Sendspin support
 - DOATracker: Direction of Arrival sound localization
 - MicrophoneOptimizer: ReSpeaker XVF3800 microphone configuration
-
-Note: AudioPlayer and VoiceSatelliteProtocol are in the parent package
-to avoid circular imports.
 """
 
-from .doa_tracker import DOATracker, DOAConfig
-from .microphone import MicrophoneOptimizer, MicrophonePreferences, MicrophoneDefaults
+from .audio_player import AudioPlayer
+from .doa_tracker import DOAConfig, DOATracker
+from .microphone import MicrophoneDefaults, MicrophoneOptimizer, MicrophonePreferences
 
 __all__ = [
-    "DOATracker",
+    "AudioPlayer",
     "DOAConfig",
+    "DOATracker",
+    "MicrophoneDefaults",
     "MicrophoneOptimizer",
     "MicrophonePreferences",
-    "MicrophoneDefaults",
 ]

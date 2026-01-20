@@ -6,8 +6,9 @@ Analyzes audio loudness to drive natural head movements during TTS playback.
 
 import math
 from collections import deque
+from collections.abc import Callable
 from itertools import islice
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -93,7 +94,7 @@ def _resample_linear(x: NDArray[np.float32], sr_in: int, sr_out: int) -> NDArray
     """Lightweight linear resampler for short buffers."""
     if sr_in == sr_out or x.size == 0:
         return x
-    n_out = int(round(x.size * sr_out / sr_in))
+    n_out = round(x.size * sr_out / sr_in)
     if n_out <= 1:
         return np.zeros(0, dtype=np.float32)
     t_in = np.linspace(0.0, 1.0, num=x.size, dtype=np.float32, endpoint=True)
@@ -143,7 +144,7 @@ class SpeechSwayRT:
         self.sway_down = 0
         self.t = 0.0
 
-    def feed(self, pcm: NDArray[Any], sr: Optional[int] = None) -> List[Dict[str, float]]:
+    def feed(self, pcm: NDArray[Any], sr: int | None = None) -> list[dict[str, float]]:
         """Stream in PCM chunk. Returns list of sway dicts, one per hop.
 
         Args:
@@ -167,7 +168,7 @@ class SpeechSwayRT:
         else:
             self.carry = x
 
-        out: List[Dict[str, float]] = []
+        out: list[dict[str, float]] = []
 
         while self.carry.size >= HOP:
             hop = self.carry[:HOP]
@@ -243,7 +244,7 @@ class SpeechSwayRT:
 def analyze_audio_for_sway(
     audio_data: NDArray[Any],
     sample_rate: int,
-    callback: Callable[[Dict[str, float]], None],
+    callback: Callable[[dict[str, float]], None],
 ) -> None:
     """Analyze entire audio and call callback for each sway frame.
 

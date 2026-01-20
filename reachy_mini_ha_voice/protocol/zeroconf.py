@@ -3,14 +3,15 @@
 import asyncio
 import logging
 import socket
-from typing import Any, Callable, Coroutine, Optional
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-from .util import get_mac
+from ..core.util import get_mac
 
 _LOGGER = logging.getLogger(__name__)
 
 try:
-    from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf, AsyncServiceBrowser
+    from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZeroconf
     ZEROCONF_AVAILABLE = True
 except ImportError:
     _LOGGER.fatal("pip install zeroconf")
@@ -40,7 +41,7 @@ class HomeAssistantZeroconf:
     """Zeroconf service for Home Assistant discovery."""
 
     def __init__(
-        self, port: int, name: Optional[str] = None, host: Optional[str] = None
+        self, port: int, name: str | None = None, host: str | None = None
     ) -> None:
         self.port = port
         self.name = name or f"reachy-mini-{get_mac()[:6]}"
@@ -91,10 +92,10 @@ class SendspinDiscovery:
             on_server_found: Async callback called with server URL when discovered.
         """
         self._on_server_found = on_server_found
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._zeroconf: Optional[AsyncZeroconf] = None
-        self._browser: Optional["AsyncServiceBrowser"] = None
-        self._discovery_task: Optional[asyncio.Task] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._zeroconf: AsyncZeroconf | None = None
+        self._browser: AsyncServiceBrowser | None = None
+        self._discovery_task: asyncio.Task | None = None
         self._running = False
 
     @property

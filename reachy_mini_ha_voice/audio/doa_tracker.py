@@ -7,8 +7,8 @@ when idle.
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,8 @@ class DOATracker:
 
     def __init__(
         self,
-        movement_callback: Optional[Callable[[float, float], None]] = None,
-        config: Optional[DOAConfig] = None,
+        movement_callback: Callable[[float, float], None] | None = None,
+        config: DOAConfig | None = None,
     ):
         """Initialize the DOA tracker.
 
@@ -182,10 +182,7 @@ class DOATracker:
         if self._face_detected:
             return False
 
-        if self._in_conversation:
-            return False
-
-        return True
+        return not self._in_conversation
 
     def _get_zone(self, angle: float) -> int:
         """Get the direction zone for an angle.

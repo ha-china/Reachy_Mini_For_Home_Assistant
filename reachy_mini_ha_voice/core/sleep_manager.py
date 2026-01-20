@@ -19,7 +19,7 @@ because they must remain active during sleep for the Wake Up button.
 
 import asyncio
 import logging
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 from .daemon_monitor import DaemonState, DaemonStateMonitor
 from .service_base import ServiceManager, SleepAwareService
@@ -72,13 +72,14 @@ class SleepManager:
 
         # State
         self._is_sleeping = False
-        self._resume_task: Optional[asyncio.Task] = None
+        self._resume_task: asyncio.Task | None = None
+        self._sleep_task: asyncio.Task | None = None
         self._running = False
 
         # Additional callbacks for custom handling
-        self._on_sleep_callbacks: List[Callable[[], None]] = []
-        self._on_wake_callbacks: List[Callable[[], None]] = []
-        self._on_pre_resume_callbacks: List[Callable[[], None]] = []
+        self._on_sleep_callbacks: list[Callable[[], None]] = []
+        self._on_wake_callbacks: list[Callable[[], None]] = []
+        self._on_pre_resume_callbacks: list[Callable[[], None]] = []
 
         # Register daemon monitor callbacks
         self._daemon_monitor.on_sleep(self._handle_sleep)
@@ -170,7 +171,7 @@ class SleepManager:
         self._is_sleeping = True
         await self._suspend_services()
 
-    async def force_resume(self, delay: Optional[float] = None) -> None:
+    async def force_resume(self, delay: float | None = None) -> None:
         """Force all services to resume.
 
         Args:
@@ -202,7 +203,8 @@ class SleepManager:
             self._resume_task.cancel()
 
         # Run sleep handling in the event loop
-        asyncio.create_task(self._on_sleep_async())
+        # Store reference to prevent garbage collection
+        self._sleep_task = asyncio.create_task(self._on_sleep_async())
 
     def _handle_wake(self) -> None:
         """Handle wake event from daemon monitor."""

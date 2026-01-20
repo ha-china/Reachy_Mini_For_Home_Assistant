@@ -5,15 +5,17 @@ import logging
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from queue import Queue
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from queue import Queue
+
     from pymicro_wakeword import MicroWakeWord
     from pyopen_wakeword import OpenWakeWord
-    from .entity import ESPHomeEntity, MediaPlayerEntity
-    from .audio_player import AudioPlayer
-    from .satellite import VoiceSatelliteProtocol
+
+    from .audio.audio_player import AudioPlayer
+    from .entities.entity import ESPHomeEntity, MediaPlayerEntity
+    from .protocol.satellite import VoiceSatelliteProtocol
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +30,10 @@ class AvailableWakeWord:
     id: str
     type: WakeWordType
     wake_word: str
-    trained_languages: List[str]
+    trained_languages: list[str]
     wake_word_path: Path
 
-    def load(self) -> "Union[MicroWakeWord, OpenWakeWord]":
+    def load(self) -> "MicroWakeWord | OpenWakeWord":
         if self.type == WakeWordType.MICRO_WAKE_WORD:
             from pymicro_wakeword import MicroWakeWord
             return MicroWakeWord.from_config(config_path=self.wake_word_path)
@@ -39,7 +41,7 @@ class AvailableWakeWord:
         if self.type == WakeWordType.OPEN_WAKE_WORD:
             from pyopen_wakeword import OpenWakeWord
             oww_model = OpenWakeWord.from_model(model_path=self.wake_word_path)
-            setattr(oww_model, "wake_word", self.wake_word)
+            oww_model.wake_word = self.wake_word
             return oww_model
 
         raise ValueError(f"Unexpected wake word type: {self.type}")
@@ -47,11 +49,11 @@ class AvailableWakeWord:
 
 @dataclass
 class Preferences:
-    active_wake_words: List[str] = field(default_factory=list)
+    active_wake_words: list[str] = field(default_factory=list)
     # Audio processing settings (persisted from Home Assistant)
-    agc_enabled: Optional[bool] = None  # None = use hardware default
-    agc_max_gain: Optional[float] = None  # None = use hardware default
-    noise_suppression: Optional[float] = None  # None = use hardware default
+    agc_enabled: bool | None = None  # None = use hardware default
+    agc_max_gain: float | None = None  # None = use hardware default
+    noise_suppression: float | None = None  # None = use hardware default
     # Continuous conversation mode (controlled from Home Assistant)
     continuous_conversation: bool = False
 
@@ -61,11 +63,11 @@ class ServerState:
     """Global server state."""
     name: str
     mac_address: str
-    audio_queue: "Queue[Optional[bytes]]"
-    entities: "List[ESPHomeEntity]"
-    available_wake_words: "Dict[str, AvailableWakeWord]"
-    wake_words: "Dict[str, Union[MicroWakeWord, OpenWakeWord]]"
-    active_wake_words: Set[str]
+    audio_queue: "Queue[bytes | None]"
+    entities: "list[ESPHomeEntity]"
+    available_wake_words: "dict[str, AvailableWakeWord]"
+    wake_words: "dict[str, MicroWakeWord | OpenWakeWord]"
+    active_wake_words: set[str]
     stop_word: "MicroWakeWord"
     music_player: "AudioPlayer"
     tts_player: "AudioPlayer"
@@ -76,12 +78,12 @@ class ServerState:
     download_dir: Path
 
     # Reachy Mini specific
-    reachy_mini: Optional[object] = None
+    reachy_mini: object | None = None
     motion_enabled: bool = True
-    motion: Optional[object] = None  # ReachyMiniMotion instance
+    motion: object | None = None  # ReachyMiniMotion instance
 
-    media_player_entity: "Optional[MediaPlayerEntity]" = None
-    satellite: "Optional[VoiceSatelliteProtocol]" = None
+    media_player_entity: "MediaPlayerEntity | None" = None
+    satellite: "VoiceSatelliteProtocol | None" = None
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
 
@@ -90,8 +92,8 @@ class ServerState:
     services_suspended: bool = False
 
     # Callbacks for sleep/wake from HA buttons (set by VoiceAssistant)
-    on_ha_sleep: Optional[object] = None  # Callable[[], None]
-    on_ha_wake: Optional[object] = None   # Callable[[], None]
+    on_ha_sleep: object | None = None  # Callable[[], None]
+    on_ha_wake: object | None = None   # Callable[[], None]
 
     def save_preferences(self) -> None:
         """Save preferences as JSON."""

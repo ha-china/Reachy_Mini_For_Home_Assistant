@@ -21,27 +21,27 @@ import math
 import random
 import threading
 import time
-from queue import Queue, Empty
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from queue import Empty, Queue
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
+from ..audio.doa_tracker import DOAConfig, DOATracker
 from .animation_player import AnimationPlayer
+from .antenna import AntennaController
 from .emotion_moves import EmotionMove, is_emotion_available
-from .motion.state_machine import (
-    RobotState,
+from .pose_composer import (
+    clamp_body_yaw,
+    compose_poses,
+    create_head_pose_matrix,
+    extract_yaw_from_pose,
+)
+from .state_machine import (
+    STATE_ANIMATION_MAP,
     MovementState,
     PendingAction,
-    STATE_ANIMATION_MAP,
+    RobotState,
 )
-from .motion.antenna import AntennaController
-from .motion.pose_composer import (
-    create_head_pose_matrix,
-    compose_poses,
-    extract_yaw_from_pose,
-    clamp_body_yaw,
-)
-from .audio.doa_tracker import DOATracker, DOAConfig
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -83,7 +83,7 @@ class MovementManager:
         self._now = time.monotonic
 
         # Command queue - all external threads communicate through this
-        self._command_queue: Queue[Tuple[str, Any]] = Queue()
+        self._command_queue: Queue[tuple[str, Any]] = Queue()
 
         # Internal state (only modified by control loop)
         self.state = MovementState()
@@ -100,7 +100,7 @@ class MovementManager:
         self._robot_paused_event = threading.Event()  # Pause when robot disconnected/sleeping
         self._robot_resumed_event = threading.Event()  # Signal when robot resumes (for event-driven wait)
         self._robot_resumed_event.set()  # Start in resumed state
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         # Error throttling
         self._last_error_time = 0.0
@@ -117,12 +117,12 @@ class MovementManager:
         self._max_consecutive_errors = 5
 
         # Pending action
-        self._pending_action: Optional[PendingAction] = None
+        self._pending_action: PendingAction | None = None
         self._action_start_time: float = 0.0
-        self._action_start_pose: Dict[str, float] = {}
+        self._action_start_pose: dict[str, float] = {}
 
         # Face tracking offsets (from camera worker)
-        self._face_tracking_offsets: Tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        self._face_tracking_offsets: tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         self._face_tracking_lock = threading.Lock()
 
         # Camera server reference for face tracking
@@ -132,11 +132,11 @@ class MovementManager:
         # Reference project applies face tracking offsets directly without smoothing
         # Smoothing causes "lag" and "trailing" that looks unnatural
         # Only smooth interpolation when face is lost (handled in camera_server.py)
-        self._smoothed_face_offsets: List[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self._smoothed_face_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         # self._face_smoothing_factor = 0.3  # DISABLED - direct application instead
 
         # Emotion move playback state
-        self._emotion_move: Optional[EmotionMove] = None
+        self._emotion_move: EmotionMove | None = None
         self._emotion_start_time: float = 0.0
         self._emotion_move_lock = threading.Lock()
 
@@ -421,7 +421,7 @@ class MovementManager:
         self._command_queue.put(("action", action))
         logger.debug("DOA turn queued: %.1f° over %.1fs", yaw_degrees, duration)
 
-    def set_face_tracking_offsets(self, offsets: Tuple[float, float, float, float, float, float]) -> None:
+    def set_face_tracking_offsets(self, offsets: tuple[float, float, float, float, float, float]) -> None:
         """Thread-safe: Update face tracking offsets manually.
 
         Args:
@@ -432,14 +432,14 @@ class MovementManager:
 
     def set_target_pose(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        roll: Optional[float] = None,
-        pitch: Optional[float] = None,
-        yaw: Optional[float] = None,
-        antenna_left: Optional[float] = None,
-        antenna_right: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        roll: float | None = None,
+        pitch: float | None = None,
+        yaw: float | None = None,
+        antenna_left: float | None = None,
+        antenna_right: float | None = None,
     ) -> None:
         """Thread-safe: Set target pose components.
 
@@ -805,7 +805,7 @@ class MovementManager:
             logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°",
                          target_yaw, target_pitch)
 
-    def _update_emotion_move(self) -> Optional[Tuple[np.ndarray, Tuple[float, float], float]]:
+    def _update_emotion_move(self) -> tuple[np.ndarray, tuple[float, float], float] | None:
         """Update emotion move playback and return pose if active.
 
         When an emotion move is playing, this method samples the pose from
@@ -856,7 +856,7 @@ class MovementManager:
         with self._emotion_move_lock:
             return self._emotion_move is not None
 
-    def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
+    def _compose_final_pose(self) -> tuple[np.ndarray, tuple[float, float], float]:
         """Compose final pose from all sources using pose_composer utilities.
 
         Body yaw follows head yaw to enable natural head tracking with body rotation.
@@ -917,7 +917,7 @@ class MovementManager:
     # Internal: Robot control (runs in control loop)
     # =========================================================================
 
-    def _issue_control_command(self, head_pose: np.ndarray, antennas: Tuple[float, float], body_yaw: float) -> None:
+    def _issue_control_command(self, head_pose: np.ndarray, antennas: tuple[float, float], body_yaw: float) -> None:
         """Send control command to robot with error throttling and connection health tracking.
 
         Body yaw follows head yaw for natural tracking. The SDK's automatic_body_yaw

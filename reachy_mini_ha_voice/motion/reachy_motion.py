@@ -5,7 +5,6 @@ MovementManager for unified 5Hz control with face tracking.
 """
 
 import logging
-from typing import Optional
 
 from .movement_manager import MovementManager, RobotState
 
@@ -21,7 +20,7 @@ class ReachyMiniMotion:
 
     def __init__(self, reachy_mini=None):
         self.reachy_mini = reachy_mini
-        self._movement_manager: Optional[MovementManager] = None
+        self._movement_manager: MovementManager | None = None
         self._camera_server = None  # Reference to camera server for face tracking control
         self._is_speaking = False
 
@@ -72,7 +71,7 @@ class ReachyMiniMotion:
             _LOGGER.info("Motion control stopped")
 
     @property
-    def movement_manager(self) -> Optional[MovementManager]:
+    def movement_manager(self) -> MovementManager | None:
         """Get the movement manager instance."""
         return self._movement_manager
 

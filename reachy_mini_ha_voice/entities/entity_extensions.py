@@ -1,16 +1,16 @@
 """Extended ESPHome entity types for Reachy Mini control."""
 
-from collections.abc import Iterable
-from typing import Callable, List, Optional
 import logging
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING
 
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
+    ButtonCommandRequest,
     ListEntitiesButtonResponse,
     ListEntitiesRequest,
     ListEntitiesSelectResponse,
     ListEntitiesSensorResponse,
     ListEntitiesSwitchResponse,
-    ButtonCommandRequest,
     SelectCommandRequest,
     SelectStateResponse,
     SensorStateResponse,
@@ -21,8 +21,10 @@ from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
 )
 from google.protobuf import message
 
-from .api_server import APIServer
 from .entity import ESPHomeEntity
+
+if TYPE_CHECKING:
+    from ..protocol.api_server import APIServer
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ class SensorEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
@@ -50,7 +52,7 @@ class SensorEntity(ESPHomeEntity):
         device_class: str = "",
         state_class: int = SensorStateClass.NONE,
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        value_getter: Optional[Callable[[], float]] = None,
+        value_getter: Callable[[], float] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -118,15 +120,15 @@ class SwitchEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
         icon: str = "",
         device_class: str = "",
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        value_getter: Optional[Callable[[], bool]] = None,
-        value_setter: Optional[Callable[[bool], None]] = None,
+        value_getter: Callable[[], bool] | None = None,
+        value_setter: Callable[[bool], None] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -183,15 +185,15 @@ class SelectEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
-        options: List[str],
+        options: list[str],
         icon: str = "",
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        value_getter: Optional[Callable[[], str]] = None,
-        value_setter: Optional[Callable[[str], None]] = None,
+        value_getter: Callable[[], str] | None = None,
+        value_setter: Callable[[str], None] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key
@@ -252,14 +254,14 @@ class ButtonEntity(ESPHomeEntity):
 
     def __init__(
         self,
-        server: APIServer,
+        server: "APIServer",
         key: int,
         name: str,
         object_id: str,
         icon: str = "",
         device_class: str = "",
         entity_category: int = 0,  # 0 = none, 1 = config, 2 = diagnostic
-        on_press: Optional[Callable[[], None]] = None,
+        on_press: Callable[[], None] | None = None,
     ) -> None:
         ESPHomeEntity.__init__(self, server)
         self.key = key

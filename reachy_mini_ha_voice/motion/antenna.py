@@ -6,7 +6,6 @@ and antenna blending during state transitions.
 
 import logging
 from dataclasses import dataclass
-from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +144,7 @@ class AntennaController:
         self,
         target_left: float,
         target_right: float,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Get antenna positions with freeze blending applied.
 
         Args:

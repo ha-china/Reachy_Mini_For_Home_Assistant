@@ -16,7 +16,6 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,12 +72,12 @@ class AnimationPlayer:
     """
 
     def __init__(self):
-        self._animations: Dict[str, AnimationParams] = {}
+        self._animations: dict[str, AnimationParams] = {}
         self._amplitude_scale: float = 1.0
         self._transition_duration: float = 0.3
         self._interpolation_duration: float = 1.0  # Time to interpolate to neutral (same as BreathingMove)
-        self._current_animation: Optional[str] = None
-        self._target_animation: Optional[str] = None
+        self._current_animation: str | None = None
+        self._target_animation: str | None = None
         self._transition_start: float = 0.0
         self._phase_start: float = 0.0
         self._lock = threading.Lock()
@@ -92,12 +91,12 @@ class AnimationPlayer:
         # Interpolation state (for smooth transition to neutral before oscillation)
         self._in_interpolation: bool = False
         self._interpolation_start_time: float = 0.0
-        self._interpolation_start_offsets: Dict[str, float] = {
+        self._interpolation_start_offsets: dict[str, float] = {
             "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
             "x": 0.0, "y": 0.0, "z": 0.0,
             "antenna_left": 0.0, "antenna_right": 0.0,
         }
-        self._last_offsets: Dict[str, float] = {
+        self._last_offsets: dict[str, float] = {
             "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
             "x": 0.0, "y": 0.0, "z": 0.0,
             "antenna_left": 0.0, "antenna_right": 0.0,
@@ -110,7 +109,7 @@ class AnimationPlayer:
             _LOGGER.warning("Animations file not found: %s", _ANIMATIONS_FILE)
             return
         try:
-            with open(_ANIMATIONS_FILE, "r", encoding="utf-8") as f:
+            with open(_ANIMATIONS_FILE, encoding="utf-8") as f:
                 data = json.load(f)
 
             settings = data.get("settings", {})
@@ -193,7 +192,7 @@ class AnimationPlayer:
             self._current_animation = None
             self._target_animation = None
 
-    def get_offsets(self, dt: float = 0.0) -> Dict[str, float]:
+    def get_offsets(self, dt: float = 0.0) -> dict[str, float]:
         """Calculate current animation offsets.
 
         Uses two-phase animation like BreathingMove in reference project:
@@ -332,7 +331,7 @@ class AnimationPlayer:
             return result
 
     @property
-    def current_animation(self) -> Optional[str]:
+    def current_animation(self) -> str | None:
         """Get the current animation name."""
         with self._lock:
             return self._current_animation

@@ -9,7 +9,6 @@ import asyncio
 import logging
 import socket
 import threading
-from typing import Optional
 
 from .voice_assistant import VoiceAssistantService
 
@@ -21,7 +20,7 @@ def _check_zenoh_available(timeout: float = 1.0) -> bool:
     try:
         with socket.create_connection(("127.0.0.1", 7447), timeout=timeout):
             return True
-    except (socket.timeout, ConnectionRefusedError, OSError):
+    except (TimeoutError, ConnectionRefusedError, OSError):
         return False
 
 
@@ -58,7 +57,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
     """
 
     # No custom web UI needed - configuration is automatic via Home Assistant
-    custom_app_url: Optional[str] = None
+    custom_app_url: str | None = None
 
     def __init__(self, *args, **kwargs):
         """Initialize the app."""

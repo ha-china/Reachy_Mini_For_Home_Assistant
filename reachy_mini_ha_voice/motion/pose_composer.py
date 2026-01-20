@@ -12,7 +12,6 @@ The composition logic follows the reachy_mini_conversation_app approach:
 import logging
 import math
 from dataclasses import dataclass
-from typing import Tuple, Optional, List
 
 import numpy as np
 
@@ -183,10 +182,10 @@ def clamp_body_yaw(yaw: float) -> float:
 def compose_full_pose(
     target: PoseComponents,
     animation: PoseComponents,
-    face_offsets: Tuple[float, float, float, float, float, float],
+    face_offsets: tuple[float, float, float, float, float, float],
     sway: PoseComponents,
     animation_blend: float = 1.0,
-) -> Tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float]:
     """Compose full head pose from all sources.
 
     Args:
@@ -242,7 +241,7 @@ def compute_antenna_positions(
     freeze_blend: float = 1.0,
     frozen_left: float = 0.0,
     frozen_right: float = 0.0,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Compute final antenna positions with blending.
 
     Args:

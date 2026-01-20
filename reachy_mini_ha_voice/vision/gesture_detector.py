@@ -1,14 +1,17 @@
 ﻿"""Gesture detection using HaGRID ONNX models."""
 
 from __future__ import annotations
+
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -100,14 +103,14 @@ class GestureDetector:
     def is_available(self) -> bool:
         return self._available
 
-    def _preprocess(self, frame: NDArray, size: Tuple[int, int]) -> NDArray:
+    def _preprocess(self, frame: NDArray, size: tuple[int, int]) -> NDArray:
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, size)
         img = (img.astype(np.float32) - self._mean) / self._std
         img = np.transpose(img, [2, 0, 1])
         return np.expand_dims(img, axis=0)
 
-    def _detect_hand(self, frame: NDArray) -> Optional[Tuple[int, int, int, int, float]]:
+    def _detect_hand(self, frame: NDArray) -> tuple[int, int, int, int, float] | None:
         if self._detector is None:
             return None
         h, w = frame.shape[:2]
@@ -133,7 +136,7 @@ class GestureDetector:
             return None
         return (x1, y1, x2, y2, best_c)
 
-    def _get_square_crop(self, frame: NDArray, box: Tuple[int, int, int, int]) -> NDArray:
+    def _get_square_crop(self, frame: NDArray, box: tuple[int, int, int, int]) -> NDArray:
         h, w = frame.shape[:2]
         x1, y1, x2, y2 = box
         bw, bh = x2 - x1, y2 - y1
@@ -145,7 +148,7 @@ class GestureDetector:
         x2, y2 = min(w-1, x2), min(h-1, y2)
         return frame[y1:y2, x1:x2]
 
-    def _classify(self, crop: NDArray) -> Tuple[Gesture, float]:
+    def _classify(self, crop: NDArray) -> tuple[Gesture, float]:
         if self._classifier is None or crop.size == 0:
             return Gesture.NONE, 0.0
         inp = self._preprocess(crop, self._classifier_size)
@@ -158,7 +161,7 @@ class GestureDetector:
         name = _GESTURE_CLASSES[idx]
         return _NAME_TO_GESTURE.get(name, Gesture.NONE), conf
 
-    def detect(self, frame: NDArray) -> Tuple[Gesture, float]:
+    def detect(self, frame: NDArray) -> tuple[Gesture, float]:
         if not self._available:
             return Gesture.NONE, 0.0
         try:

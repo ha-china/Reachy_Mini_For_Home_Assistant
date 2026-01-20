@@ -6,10 +6,10 @@ providing immediate visual feedback for user gestures.
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +30,14 @@ class GestureMapping:
     """Configuration for a gesture-to-action mapping."""
     gesture_name: str
     action: GestureAction
-    emotion: Optional[str] = None      # For EMOTION action
-    sound: Optional[str] = None        # For SOUND action
-    ha_event_name: Optional[str] = None  # For HA_EVENT action
+    emotion: str | None = None      # For EMOTION action
+    sound: str | None = None        # For SOUND action
+    ha_event_name: str | None = None  # For HA_EVENT action
     cooldown: float = 2.0              # Seconds before same gesture triggers again
 
 
 # Default gesture mappings based on HaGRID gesture set
-DEFAULT_GESTURE_MAPPINGS: Dict[str, GestureMapping] = {
+DEFAULT_GESTURE_MAPPINGS: dict[str, GestureMapping] = {
     # Positive gestures
     "like": GestureMapping(
         gesture_name="like",
@@ -135,7 +135,7 @@ class GestureActionMapper:
 
     def __init__(
         self,
-        mappings: Optional[Dict[str, GestureMapping]] = None,
+        mappings: dict[str, GestureMapping] | None = None,
         min_confidence: float = 0.7,
     ):
         """Initialize the gesture action mapper.
@@ -148,15 +148,15 @@ class GestureActionMapper:
         self._min_confidence = min_confidence
 
         # Cooldown tracking
-        self._last_trigger_times: Dict[str, float] = {}
+        self._last_trigger_times: dict[str, float] = {}
 
         # Callbacks
-        self._emotion_callback: Optional[Callable[[str], None]] = None
-        self._sound_callback: Optional[Callable[[str], None]] = None
-        self._start_listening_callback: Optional[Callable[[], None]] = None
-        self._stop_speaking_callback: Optional[Callable[[], None]] = None
-        self._pause_motion_callback: Optional[Callable[[], None]] = None
-        self._ha_event_callback: Optional[Callable[[str], None]] = None
+        self._emotion_callback: Callable[[str], None] | None = None
+        self._sound_callback: Callable[[str], None] | None = None
+        self._start_listening_callback: Callable[[], None] | None = None
+        self._stop_speaking_callback: Callable[[], None] | None = None
+        self._pause_motion_callback: Callable[[], None] | None = None
+        self._ha_event_callback: Callable[[str], None] | None = None
 
         # Time function (can be overridden for testing)
         import time
@@ -278,7 +278,7 @@ class GestureActionMapper:
         """Remove a gesture mapping."""
         self._mappings.pop(gesture_name.lower(), None)
 
-    def get_mappings(self) -> Dict[str, GestureMapping]:
+    def get_mappings(self) -> dict[str, GestureMapping]:
         """Get all current mappings."""
         return self._mappings.copy()
 
@@ -296,7 +296,7 @@ class GestureActionMapper:
             return False
 
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Load settings
@@ -335,7 +335,7 @@ class GestureActionMapper:
             return False
 
 
-def load_gesture_mappings(json_path: Optional[Path] = None) -> Dict[str, GestureMapping]:
+def load_gesture_mappings(json_path: Path | None = None) -> dict[str, GestureMapping]:
     """Load gesture mappings from JSON file or return defaults.
 
     Args:
@@ -351,7 +351,7 @@ def load_gesture_mappings(json_path: Optional[Path] = None) -> Dict[str, Gesture
 
     if json_path.exists():
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             mappings = {}

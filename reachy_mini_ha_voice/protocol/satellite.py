@@ -7,12 +7,12 @@ import posixpath
 import shutil
 import time
 from collections.abc import Iterable
-from typing import Dict, Optional, Set, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 
 if TYPE_CHECKING:
-    from .camera_server import MJPEGCameraServer
+    from ..vision.camera_server import MJPEGCameraServer
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
@@ -50,15 +50,15 @@ from google.protobuf import message
 from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
+from ..core.util import call_all
+from ..entities.emotion_detector import EmotionKeywordDetector
+from ..entities.entity import MediaPlayerEntity
+from ..entities.entity_registry import EntityRegistry, get_entity_key
+from ..entities.event_emotion_mapper import EventEmotionMapper
+from ..models import AvailableWakeWord, ServerState, WakeWordType
+from ..motion.gesture_actions import GestureActionMapper
+from ..reachy_controller import ReachyController
 from .api_server import APIServer
-from .entity import MediaPlayerEntity
-from .entity_registry import EntityRegistry, get_entity_key
-from .models import AvailableWakeWord, ServerState, WakeWordType
-from .util import call_all
-from .reachy_controller import ReachyController
-from .motion.gesture_actions import GestureActionMapper
-from .entities.event_emotion_mapper import EventEmotionMapper
-from .entities.emotion_detector import EmotionKeywordDetector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,19 +75,19 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Initialize streaming state early (before entity setup)
         self._is_streaming_audio = False
-        self._tts_url: Optional[str] = None
+        self._tts_url: str | None = None
         self._tts_played = False
         self._continue_conversation = False
         self._timer_finished = False
-        self._external_wake_words: Dict[str, VoiceAssistantExternalWakeWord] = {}
+        self._external_wake_words: dict[str, VoiceAssistantExternalWakeWord] = {}
 
         # Conversation tracking for continuous conversation
-        self._conversation_id: Optional[str] = None
+        self._conversation_id: str | None = None
         self._conversation_timeout = 300.0  # 5 minutes, same as ESPHome default
         self._last_conversation_time = 0.0
 
         # Track Home Assistant entity states for change detection
-        self._ha_entity_states: Dict[str, str] = {}
+        self._ha_entity_states: dict[str, str] = {}
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -208,13 +208,10 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("ESPHome client connected from %s", peer)
         super().connection_made(transport)
 
-    def connection_lost(self, exc) -> None:
-        """Called when a client disconnects."""
-        _LOGGER.info("ESPHome client disconnected: %s", exc)
-        super().connection_lost(exc)
+    # Note: connection_lost is defined later in the class with full cleanup logic
 
     def handle_voice_event(
-        self, event_type: VoiceAssistantEventType, data: Dict[str, str]
+        self, event_type: VoiceAssistantEventType, data: dict[str, str]
     ) -> None:
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
@@ -289,7 +286,7 @@ class VoiceSatelliteProtocol(APIServer):
     def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
         if isinstance(msg, VoiceAssistantEventResponse):
             # Pipeline event
-            data: Dict[str, str] = {}
+            data: dict[str, str] = {}
             for arg in msg.data:
                 data[arg.name] = arg.value
             self.handle_voice_event(VoiceAssistantEventType(msg.event_type), data)
@@ -390,7 +387,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif isinstance(msg, VoiceAssistantSetConfiguration):
             # Change active wake words
-            active_wake_words: Set[str] = set()
+            active_wake_words: set[str] = set()
 
             for wake_word_id in msg.active_wake_words:
                 if wake_word_id in self.state.wake_words:
@@ -415,7 +412,7 @@ class VoiceSatelliteProtocol(APIServer):
                 _LOGGER.debug("Loading wake word: %s", model_info.wake_word_path)
                 loaded_model = model_info.load()
                 # Set id attribute on the model for later identification
-                setattr(loaded_model, 'id', wake_word_id)
+                loaded_model.id = wake_word_id
                 self.state.wake_words[wake_word_id] = loaded_model
                 _LOGGER.info("Wake word loaded: %s", wake_word_id)
                 active_wake_words.add(wake_word_id)
@@ -454,7 +451,7 @@ class VoiceSatelliteProtocol(APIServer):
         self._conversation_id = None
         self._continue_conversation = False
 
-    def wakeup(self, wake_word: Union[MicroWakeWord, OpenWakeWord]) -> None:
+    def wakeup(self, wake_word: MicroWakeWord | OpenWakeWord) -> None:
         """Handle wake word detection - start voice pipeline."""
         if self._timer_finished:
             # Stop timer instead
@@ -579,7 +576,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _download_external_wake_word(
         self, external_wake_word: VoiceAssistantExternalWakeWord
-    ) -> Optional[AvailableWakeWord]:
+    ) -> AvailableWakeWord | None:
         eww_dir = self.state.download_dir / "external_wake_words"
         eww_dir.mkdir(parents=True, exist_ok=True)
 

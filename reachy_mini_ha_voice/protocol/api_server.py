@@ -4,7 +4,7 @@ import asyncio
 import logging
 from abc import abstractmethod
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi._frame_helper.packets import make_plain_text_packets
@@ -31,7 +31,7 @@ class APIServer(asyncio.Protocol):
 
     def __init__(self, name: str) -> None:
         self.name = name
-        self._buffer: Optional[bytes] = None
+        self._buffer: bytes | None = None
         self._buffer_len: int = 0
         self._pos: int = 0
         self._transport = None
@@ -76,7 +76,7 @@ class APIServer(asyncio.Protocol):
                 msgs = [msgs]
             self.send_messages(msgs)
 
-    def send_messages(self, msgs: List[message.Message]):
+    def send_messages(self, msgs: list[message.Message]):
         if self._writelines is None:
             return
 
