@@ -3,7 +3,7 @@
     "version": "0.9.7",
     "date": "2026-01-20",
     "changes": [
-      "Fix: Device ID now persisted in /var/lib/ or ~/.config/ to prevent HA seeing new device after reinstall",
+      "Fix: Device ID now uses hardware MAC address directly (stable across reinstalls)",
       "Fix: Animation file path corrected (was looking in wrong directory)",
       "Fix: Remove hey_jarvis from required wake words (it's optional in openWakeWord/)"
     ]
