@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.9.6",
+    "date": "2026-01-20",
+    "changes": [
+      "New: Add ruff linter/formatter and mypy type checker configuration",
+      "New: Add pre-commit hooks for automated code quality checks",
+      "Fix: Remove duplicate resume() method in audio_player.py",
+      "Fix: Remove duplicate connection_lost() method in satellite.py",
+      "Fix: Store asyncio task reference in sleep_manager.py to prevent garbage collection",
+      "Optimize: Use dict.items() for efficient iteration in smoothing.py"
+    ]
+  },
+  {
     "version": "0.9.5",
     "date": "2026-01-19",
     "changes": [
