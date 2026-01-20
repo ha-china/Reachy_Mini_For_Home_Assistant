@@ -573,11 +573,10 @@ class VoiceAssistantService:
     async def _verify_required_files(self) -> None:
         """Verify required model and sound files exist (bundled with package)."""
         # Required wake word files (bundled in wakewords/ directory)
+        # Note: hey_jarvis is in openWakeWord/ with version suffix, so not required here
         required_wakewords = [
             "okay_nabu.tflite",
             "okay_nabu.json",
-            "hey_jarvis.tflite",
-            "hey_jarvis.json",
             "stop.tflite",
             "stop.json",
         ]
