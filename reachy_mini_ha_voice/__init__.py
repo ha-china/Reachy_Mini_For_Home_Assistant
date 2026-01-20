@@ -13,7 +13,11 @@ Key features:
 - Smart home entity control through natural voice commands
 """
 
-__version__ = "0.9.7"
+try:
+    from importlib.metadata import version
+    __version__ = version("reachy_mini_ha_voice")
+except Exception:
+    __version__ = "0.0.0"  # Fallback for development
 __author__ = "Desmond Dong"
 
 # Don't import main module here to avoid runpy warning
