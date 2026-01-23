@@ -93,6 +93,10 @@ class VoiceAssistantService:
         # Audio buffer for fixed-size chunk output
         self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
 
+        # Audio overflow log throttling
+        self._last_audio_overflow_log = 0.0
+        self._suppressed_audio_overflows = 0
+
         # Robot state monitor - tracks connection to daemon
         self._robot_state_monitor: RobotStateMonitor | None = None
         self._robot_services_paused = threading.Event()  # Set when services should pause
@@ -246,7 +250,7 @@ class VoiceAssistantService:
         # This monitors the daemon state and coordinates service suspend/resume
         self._sleep_manager = SleepManager(
             daemon_url=Config.daemon.url,
-            check_interval=Config.daemon.check_interval,
+            check_interval=Config.daemon.check_interval_active,
             resume_delay=Config.sleep.resume_delay,
         )
 
@@ -261,7 +265,12 @@ class VoiceAssistantService:
 
         # Start robot state monitor for connection tracking
         if self.reachy_mini is not None:
-            self._robot_state_monitor = RobotStateMonitor(self.reachy_mini)
+            self._robot_state_monitor = RobotStateMonitor(
+                self.reachy_mini,
+                check_interval=Config.robot_state.check_interval_active,
+                sleep_interval=Config.robot_state.check_interval_sleep,
+                error_interval=Config.robot_state.check_interval_error,
+            )
             self._robot_state_monitor.on_disconnected(self._on_robot_disconnected)
             self._robot_state_monitor.on_connected(self._on_robot_connected)
             self._robot_state_monitor.start()
@@ -269,66 +278,22 @@ class VoiceAssistantService:
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 
-    def _on_robot_disconnected(self) -> None:
-        """Called when robot connection is lost (e.g., sleep mode).
+    def _suspend_non_esphome_services(self, reason: str, set_sleep_state: bool) -> None:
+        """Suspend all non-ESPHome services to reduce load.
 
-        Pauses robot-dependent services to prevent error spam.
-        ESPHome server and wake word detection continue running.
+        ESPHome server stays up so Home Assistant can wake the robot.
         """
-        _LOGGER.warning("Robot disconnected - pausing robot-dependent services")
-        self._robot_services_paused.set()
-        self._robot_services_resumed.clear()  # Clear resume signal
-
-        # Clear audio buffer to avoid processing stale data
-        self._audio_buffer = np.array([], dtype=np.float32)
-
-        # Pause movement manager
-        if self._motion is not None and self._motion._movement_manager is not None:
-            self._motion._movement_manager.pause_for_robot_disconnect()
-
-    def _on_robot_connected(self) -> None:
-        """Called when robot connection is restored.
-
-        Resumes robot-dependent services and reinitializes media.
-        """
-        _LOGGER.info("Robot reconnected - resuming robot-dependent services")
-        self._robot_services_paused.clear()
-        self._robot_services_resumed.set()  # Signal resume to wake waiting threads
-
-        # Resume movement manager
-        if self._motion is not None and self._motion._movement_manager is not None:
-            self._motion._movement_manager.resume_after_robot_connect()
-
-        # Try to restart media recording/playback
-        if self.reachy_mini is not None:
-            try:
-                media = self.reachy_mini.media
-                if media.audio is not None:
-                    media.start_recording()
-                    media.start_playing()
-                    _LOGGER.info("Reachy Mini media system restarted")
-            except Exception as e:
-                _LOGGER.warning("Failed to restart Reachy Mini media: %s", e)
-
-    def _on_sleep(self) -> None:
-        """Called when the robot enters sleep mode.
-
-        This is triggered by the SleepManager when the daemon enters STOPPED state.
-        At this point, we should:
-        1. Stop all resource-intensive operations
-        2. Release ML models from memory
-        3. Keep only ESPHome server running for HA control
-        """
-        _LOGGER.info("Robot entering sleep mode - suspending services...")
+        _LOGGER.warning("Suspending non-ESPHome services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
 
         # Update state
         if self._state is not None:
-            self._state.is_sleeping = True
+            if set_sleep_state:
+                self._state.is_sleeping = True
             self._state.services_suspended = True
 
-        # Clear audio buffer
+        # Clear audio buffer to avoid processing stale data
         self._audio_buffer = np.array([], dtype=np.float32)
 
         # Suspend camera server (stops thread and releases YOLO model)
@@ -377,28 +342,18 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error stopping media: %s", e)
 
-        _LOGGER.info("Services suspended - system in low-power mode")
+        _LOGGER.info("Services suspended - ESPHome only")
 
-    def _on_wake(self) -> None:
-        """Called when the robot starts waking up.
-
-        This is triggered immediately when daemon state changes from STOPPED.
-        The actual service resume happens after the configured delay (30s default).
-        """
-        _LOGGER.info("Robot waking up - will resume services after delay...")
-
-    def _on_pre_resume(self) -> None:
-        """Called just before services are resumed.
-
-        This happens after the resume delay (30s default).
-        At this point, the daemon should be fully ready.
-        """
-        _LOGGER.info("Resuming services after wake delay...")
+    def _resume_non_esphome_services(self, reason: str, clear_sleep_state: bool) -> None:
+        """Resume all non-ESPHome services after sleep/disconnect."""
+        _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
         self._robot_services_paused.clear()
 
         # Update state
         if self._state is not None:
-            self._state.is_sleeping = False
+            if clear_sleep_state:
+                self._state.is_sleeping = False
+            self._state.services_suspended = False
 
         # Restart media system first
         if self.reachy_mini is not None:
@@ -448,14 +403,65 @@ class VoiceAssistantService:
                 except Exception as e:
                     _LOGGER.warning("Error resuming music player: %s", e)
 
-        # Update state - services are no longer suspended
-        if self._state is not None:
-            self._state.services_suspended = False
-
         # Signal waiting threads that services are resumed
         self._robot_services_resumed.set()
 
         _LOGGER.info("All services resumed - system fully operational")
+
+    def _on_robot_disconnected(self) -> None:
+        """Called when robot connection is lost (e.g., daemon unavailable).
+
+        Suspends all non-ESPHome services to keep HA wake control available.
+        """
+        if self._robot_state_monitor is not None:
+            self._robot_state_monitor.set_daemon_unavailable(True)
+        self._suspend_non_esphome_services(reason="robot_disconnected", set_sleep_state=False)
+
+    def _on_robot_connected(self) -> None:
+        """Called when robot connection is restored.
+
+        Resumes non-ESPHome services unless the system is in sleep mode.
+        """
+        if self._robot_state_monitor is not None:
+            self._robot_state_monitor.set_daemon_unavailable(False)
+
+        if self._state is not None and self._state.is_sleeping:
+            _LOGGER.info("Robot connected but system is sleeping; deferring resume")
+            return
+
+        self._resume_non_esphome_services(reason="robot_connected", clear_sleep_state=False)
+
+    def _on_sleep(self) -> None:
+        """Called when the robot enters sleep mode.
+
+        This is triggered by the SleepManager when the daemon enters STOPPED state.
+        At this point, we should:
+        1. Stop all resource-intensive operations
+        2. Release ML models from memory
+        3. Keep only ESPHome server running for HA control
+        """
+        if self._robot_state_monitor is not None:
+            self._robot_state_monitor.set_sleeping(True)
+        self._suspend_non_esphome_services(reason="sleep", set_sleep_state=True)
+
+    def _on_wake(self) -> None:
+        """Called when the robot starts waking up.
+
+        This is triggered immediately when daemon state changes from STOPPED.
+        The actual service resume happens after the configured delay (30s default).
+        """
+        _LOGGER.info("Robot waking up - will resume services after delay...")
+
+    def _on_pre_resume(self) -> None:
+        """Called just before services are resumed.
+
+        This happens after the resume delay (30s default).
+        At this point, the daemon should be fully ready.
+        """
+        _LOGGER.info("Resuming services after wake delay...")
+        if self._robot_state_monitor is not None:
+            self._robot_state_monitor.set_sleeping(False)
+        self._resume_non_esphome_services(reason="wake_pre_resume", clear_sleep_state=True)
 
     async def _on_wake_from_ha(self) -> None:
         """Called when wake_up is triggered from Home Assistant button.
@@ -467,6 +473,10 @@ class VoiceAssistantService:
 
         # Wait for robot to wake up (shorter than the normal 30s resume delay)
         await asyncio.sleep(5.0)
+
+        if self._robot_state_monitor is not None:
+            self._robot_state_monitor.set_sleeping(False)
+            self._robot_state_monitor.set_daemon_unavailable(False)
 
         # Call the pre-resume handler to resume all services
         self._on_pre_resume()
@@ -521,10 +531,12 @@ class VoiceAssistantService:
 
         # 2. Set stop flag
         self._running = False
+        # Wake any threads blocked on resume signal
+        self._robot_services_resumed.set()
 
         # 3. Wait for audio thread to finish
         if self._audio_thread:
-            self._audio_thread.join(timeout=1.0)
+            self._audio_thread.join(timeout=Config.shutdown.audio_thread_join_timeout)
             if self._audio_thread.is_alive():
                 _LOGGER.warning("Audio thread did not stop in time")
 
@@ -539,19 +551,37 @@ class VoiceAssistantService:
         # 5. Stop ESPHome server
         if self._server:
             self._server.close()
-            await self._server.wait_closed()
+            try:
+                await asyncio.wait_for(
+                    self._server.wait_closed(),
+                    timeout=Config.shutdown.server_close_timeout,
+                )
+            except TimeoutError:
+                _LOGGER.warning("ESPHome server did not close in time")
 
         # 6. Unregister mDNS
         if self._discovery:
-            await self._discovery.unregister_server()
+            try:
+                await asyncio.wait_for(
+                    self._discovery.unregister_server(),
+                    timeout=Config.shutdown.server_close_timeout,
+                )
+            except TimeoutError:
+                _LOGGER.warning("mDNS unregister did not finish in time")
 
         # 6.5. Stop Sendspin
         if self._state and self._state.music_player:
-            await self._state.music_player.stop_sendspin()
+            try:
+                await asyncio.wait_for(
+                    self._state.music_player.stop_sendspin(),
+                    timeout=Config.shutdown.sendspin_stop_timeout,
+                )
+            except TimeoutError:
+                _LOGGER.warning("Sendspin stop did not finish in time")
 
         # 7. Stop camera server
         if self._camera_server:
-            await self._camera_server.stop()
+            await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
             self._camera_server = None
 
         # 8. Shutdown motion executor
@@ -565,7 +595,13 @@ class VoiceAssistantService:
 
         # 10. Stop sleep manager
         if self._sleep_manager:
-            await self._sleep_manager.stop()
+            try:
+                await asyncio.wait_for(
+                    self._sleep_manager.stop(),
+                    timeout=Config.shutdown.sleep_manager_stop_timeout,
+                )
+            except TimeoutError:
+                _LOGGER.warning("Sleep manager stop did not finish in time")
             self._sleep_manager = None
 
         _LOGGER.info("Voice assistant service stopped.")
@@ -749,12 +785,27 @@ class VoiceAssistantService:
         try:
             _LOGGER.info("Starting audio processing...")
 
-            if self.reachy_mini is not None:
-                _LOGGER.info("Using Reachy Mini's microphone")
-                self._audio_loop_reachy(ctx)
-            else:
-                _LOGGER.info("Using system microphone (fallback)")
-                self._audio_loop_fallback(ctx)
+            # Pre-wake: avoid SDK audio calls by using system mic for wake-word detection.
+            # Post-wake: use Reachy mic for streaming to HA.
+            last_source = None
+            while self._running:
+                use_reachy = (
+                    self.reachy_mini is not None
+                    and self._state is not None
+                    and self._state.satellite is not None
+                    and self._state.satellite.is_streaming_audio
+                )
+
+                if use_reachy:
+                    if last_source != "reachy":
+                        _LOGGER.info("Using Reachy Mini's microphone (streaming)")
+                        last_source = "reachy"
+                    self._audio_loop_reachy(ctx)
+                else:
+                    if last_source != "system":
+                        _LOGGER.info("Using system microphone (pre-wake, no SDK audio)")
+                        last_source = "system"
+                    self._audio_loop_fallback(ctx)
 
         except Exception:
             _LOGGER.exception("Error processing audio")
@@ -786,7 +837,8 @@ class VoiceAssistantService:
                 # Get audio from Reachy Mini
                 audio_chunk = self._get_reachy_audio_chunk()
                 if audio_chunk is None:
-                    time.sleep(0.001)  # 1ms - minimal delay to avoid busy loop
+                    idle_sleep = Config.audio.idle_sleep_sleeping if self._robot_services_paused.is_set() else Config.audio.idle_sleep_active
+                    time.sleep(idle_sleep)
                     continue
 
                 # Audio successfully obtained, reset error counter
@@ -824,7 +876,7 @@ class VoiceAssistantService:
                     consecutive_audio_errors += 1
                     if consecutive_audio_errors <= 3:
                         _LOGGER.error("Error in Reachy audio processing: %s", e)
-                    time.sleep(0.1)
+                    time.sleep(Config.audio.idle_sleep_sleeping)
 
     def _audio_loop_fallback(self, ctx: AudioProcessingContext) -> None:
         """Audio loop using system microphone (fallback)."""
@@ -839,15 +891,27 @@ class VoiceAssistantService:
             dtype="float32",
         ) as stream:
             while self._running:
+                # Always drain the input stream to avoid buffer overflow
+                audio_chunk_array, overflowed = stream.read(block_size)
+                if overflowed:
+                    now = time.monotonic()
+                    if now - self._last_audio_overflow_log >= 5.0:
+                        if self._suppressed_audio_overflows > 0:
+                            _LOGGER.warning(
+                                "Audio buffer overflow (suppressed %d repeats)",
+                                self._suppressed_audio_overflows,
+                            )
+                            self._suppressed_audio_overflows = 0
+                        else:
+                            _LOGGER.warning("Audio buffer overflow")
+                        self._last_audio_overflow_log = now
+                    else:
+                        self._suppressed_audio_overflows += 1
+
                 if not self._wait_for_satellite():
                     continue
 
                 self._update_wake_words_list(ctx)
-
-                # Get audio from system microphone
-                audio_chunk_array, overflowed = stream.read(block_size)
-                if overflowed:
-                    _LOGGER.warning("Audio buffer overflow")
 
                 audio_chunk_array = audio_chunk_array.reshape(-1)
                 audio_chunk = self._convert_to_pcm(audio_chunk_array)
@@ -857,7 +921,7 @@ class VoiceAssistantService:
     def _wait_for_satellite(self) -> bool:
         """Wait for satellite connection. Returns True if connected."""
         if self._state is None or self._state.satellite is None:
-            time.sleep(0.1)
+            time.sleep(Config.audio.fallback_wait_sleep)
             return False
         return True
 
@@ -958,7 +1022,13 @@ class VoiceAssistantService:
                             from scipy.signal import resample
                             new_length = int(len(audio_data) * 16000 / self._input_sample_rate)
                             if new_length > 0:
-                                audio_data = resample(audio_data, new_length).astype(np.float32)
+                                audio_data = resample(audio_data, new_length)
+                                audio_data = np.nan_to_num(
+                                    audio_data,
+                                    nan=0.0,
+                                    posinf=1.0,
+                                    neginf=-1.0,
+                                ).astype(np.float32)
 
                         self._audio_buffer = np.concatenate([self._audio_buffer, audio_data])
                         # Prevent unbounded buffer growth - keep only recent audio
@@ -996,8 +1066,9 @@ class VoiceAssistantService:
             ctx: Audio processing context
             audio_chunk: PCM audio bytes
         """
-        # Stream audio to Home Assistant
-        self._state.satellite.handle_audio(audio_chunk)
+        # Stream audio to Home Assistant only after wake (privacy: no pre-wake upload)
+        if self._state.satellite.is_streaming_audio:
+            self._state.satellite.handle_audio(audio_chunk)
 
         # Process wake word features
         self._process_features(ctx, audio_chunk)

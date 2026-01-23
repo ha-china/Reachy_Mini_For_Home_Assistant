@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.9.8",
+    "date": "2026-01-23",
+    "changes": [
+      "Fix: Prevent daemon crash when entering idle state"
+    ]
+  },
+  {
     "version": "0.9.7",
     "date": "2026-01-20",
     "changes": [

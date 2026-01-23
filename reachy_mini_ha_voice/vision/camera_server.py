@@ -200,7 +200,7 @@ class MJPEGCameraServer:
         _LOGGER.info("  Stream URL: http://<ip>:%d/stream", self.port)
         _LOGGER.info("  Snapshot URL: http://<ip>:%d/snapshot", self.port)
 
-    async def stop(self) -> None:
+    async def stop(self, join_timeout: float = 3.0) -> None:
         """Stop the MJPEG camera server and release all resources.
 
         This method ensures complete cleanup of:
@@ -214,8 +214,8 @@ class MJPEGCameraServer:
 
         # 1. Stop capture thread
         if self._capture_thread:
-            # Wait up to 3 seconds - longer than max sleep time (2s in idle mode)
-            self._capture_thread.join(timeout=3.0)
+            # Wait up to join_timeout seconds - longer than max sleep time (2s in idle mode)
+            self._capture_thread.join(timeout=join_timeout)
             if self._capture_thread.is_alive():
                 _LOGGER.warning("Camera capture thread did not stop cleanly")
             self._capture_thread = None
@@ -427,9 +427,14 @@ class MJPEGCameraServer:
 
                 # Determine if we should run AI inference this frame
                 should_run_ai = self._should_run_ai_inference(current_time)
+                should_run_gesture = (
+                    self._gesture_detection_enabled
+                    and self._gesture_detector is not None
+                    and self._frame_rate_manager.should_run_gesture_detection()
+                )
 
-                # Only get frame if needed (AI inference or MJPEG streaming)
-                frame = self._get_camera_frame() if should_run_ai or self._has_stream_clients() else None
+                # Only get frame if needed (AI inference, gesture detection, or MJPEG streaming)
+                frame = self._get_camera_frame() if should_run_ai or should_run_gesture or self._has_stream_clients() else None
 
                 if frame is not None:
                     frame_count += 1

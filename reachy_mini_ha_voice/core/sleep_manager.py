@@ -23,6 +23,7 @@ from collections.abc import Callable
 
 from .daemon_monitor import DaemonState, DaemonStateMonitor
 from .service_base import ServiceManager, SleepAwareService
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,12 @@ class SleepManager:
         self._daemon_monitor = DaemonStateMonitor(
             daemon_url=daemon_url,
             check_interval=check_interval,
+            sleep_interval=Config.daemon.check_interval_sleep,
+            error_interval=Config.daemon.check_interval_error,
+            max_backoff_interval=Config.daemon.max_backoff_interval,
+            backoff_multiplier=Config.daemon.backoff_multiplier,
+            backoff_error_threshold=Config.daemon.backoff_error_threshold,
+            connection_timeout=Config.daemon.connection_timeout,
         )
         self._service_manager = ServiceManager(resume_delay=resume_delay)
         self._resume_delay = resume_delay

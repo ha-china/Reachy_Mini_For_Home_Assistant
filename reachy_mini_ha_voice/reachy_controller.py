@@ -9,6 +9,8 @@ import numpy as np
 import requests
 from scipy.spatial.transform import Rotation as R
 
+from .core.config import Config
+
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
@@ -48,7 +50,18 @@ class ReachyController:
         """
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
+        self._microphone_volume = 50.0  # Default mic volume
         self._movement_manager = None  # Set later via set_movement_manager()
+
+        # Volume caching to reduce daemon HTTP load
+        self._volume_cache_ttl = Config.daemon.volume_cache_ttl  # seconds
+        self._speaker_volume_cache_ts = 0.0
+        self._microphone_volume_cache_ts = 0.0
+
+        # Shared session to reduce per-request overhead
+        self._http_session = requests.Session()
+        self._http_timeout = Config.daemon.connection_timeout
+        self._cache_ttl = Config.daemon.status_cache_ttl
 
         # Callback for sleep/wake to notify VoiceAssistant
         self._on_sleep_callback = None
@@ -58,7 +71,6 @@ class ReachyController:
         # Note: get_current_head_pose() and get_current_joint_positions() are
         # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
         self._state_cache: dict[str, Any] = {}
-        self._cache_ttl = 2.0  # 2 second cache TTL for status queries (increased from 1s)
         self._last_status_query = 0.0
 
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
@@ -136,16 +148,25 @@ class ReachyController:
         """Get speaker volume (0-100) with caching."""
         if not self.is_available:
             return self._speaker_volume
+
+        now = time.monotonic()
+        if now - self._speaker_volume_cache_ts < self._volume_cache_ttl:
+            return self._speaker_volume
+
         try:
             # Get volume from daemon API (use cached status for IP)
             status = self._get_cached_status()
             if status is None:
                 return self._speaker_volume
             wlan_ip = status.get('wlan_ip', 'localhost')
-            response = requests.get(f"http://{wlan_ip}:8000/api/volume/current", timeout=2)
+            response = self._http_session.get(
+                f"http://{wlan_ip}:8000/api/volume/current",
+                timeout=self._http_timeout,
+            )
             if response.status_code == 200:
                 data = response.json()
                 self._speaker_volume = float(data.get('volume', self._speaker_volume))
+                self._speaker_volume_cache_ts = now
         except Exception as e:
             logger.debug(f"Could not get volume from API: {e}")
         return self._speaker_volume
@@ -171,10 +192,10 @@ class ReachyController:
                 logger.error("Cannot get daemon status for volume control")
                 return
             wlan_ip = status.get('wlan_ip', 'localhost')
-            response = requests.post(
+            response = self._http_session.post(
                 f"http://{wlan_ip}:8000/api/volume/set",
                 json={"volume": int(volume)},
-                timeout=5
+                timeout=self._http_timeout,
             )
             if response.status_code == 200:
                 logger.info(f"Speaker volume set to {volume}%")
@@ -186,28 +207,33 @@ class ReachyController:
     def get_microphone_volume(self) -> float:
         """Get microphone volume (0-100) using daemon HTTP API."""
         if not self.is_available:
-            return getattr(self, '_microphone_volume', 50.0)
+            return self._microphone_volume
+
+        now = time.monotonic()
+        if now - self._microphone_volume_cache_ts < self._volume_cache_ttl:
+            return self._microphone_volume
 
         try:
             # Get WLAN IP from cached daemon status
             status = self._get_cached_status()
             if status is None:
-                return getattr(self, '_microphone_volume', 50.0)
+                return self._microphone_volume
             wlan_ip = status.get('wlan_ip', 'localhost')
 
             # Call the daemon API to get microphone volume
-            response = requests.get(
+            response = self._http_session.get(
                 f"http://{wlan_ip}:8000/api/volume/microphone/current",
-                timeout=2
+                timeout=self._http_timeout,
             )
             if response.status_code == 200:
                 data = response.json()
-                self._microphone_volume = float(data.get('volume', 50))
+                self._microphone_volume = float(data.get('volume', self._microphone_volume))
+                self._microphone_volume_cache_ts = now
                 return self._microphone_volume
         except Exception as e:
             logger.debug(f"Could not get microphone volume from API: {e}")
 
-        return getattr(self, '_microphone_volume', 50.0)
+        return self._microphone_volume
 
     def set_microphone_volume(self, volume: float) -> None:
         """
@@ -232,10 +258,10 @@ class ReachyController:
             wlan_ip = status.get('wlan_ip', 'localhost')
 
             # Call the daemon API to set microphone volume
-            response = requests.post(
+            response = self._http_session.post(
                 f"http://{wlan_ip}:8000/api/volume/microphone/set",
                 json={"volume": int(volume)},
-                timeout=5
+                timeout=self._http_timeout,
             )
             if response.status_code == 200:
                 logger.info(f"Microphone volume set to {volume}%")

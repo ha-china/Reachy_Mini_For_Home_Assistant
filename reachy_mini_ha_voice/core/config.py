@@ -55,8 +55,15 @@ def _env_int(key: str, default: int) -> int:
 class DaemonConfig:
     """Configuration for daemon monitoring."""
     url: str = "http://127.0.0.1:8000"
-    check_interval: float = 2.0  # seconds
-    connection_timeout: float = 5.0  # seconds
+    check_interval_active: float = 2.0  # seconds
+    check_interval_sleep: float = 8.0   # seconds
+    check_interval_error: float = 6.0   # seconds
+    max_backoff_interval: float = 15.0  # seconds
+    connection_timeout: float = 5.0     # seconds
+    backoff_multiplier: float = 1.5
+    backoff_error_threshold: int = 2
+    status_cache_ttl: float = 2.0  # seconds
+    volume_cache_ttl: float = 3.0  # seconds
 
 
 @dataclass
@@ -117,6 +124,9 @@ class MotionConfig:
 
     # Smoothing
     default_transition_duration: float = 0.3  # seconds
+    body_yaw_max_rate_deg_s: float = 60.0  # Max body yaw speed when tracking
+    body_yaw_deadband_rad: float = 0.003  # Ignore tiny yaw changes (~0.17°)
+    body_yaw_min_send_interval_s: float = 0.05  # Min interval for yaw updates
 
 
 @dataclass
@@ -129,6 +139,11 @@ class AudioConfig:
     # Buffering
     block_size: int = 1024  # samples
     max_buffer_size: int = 10240  # samples (10 blocks)
+
+    # Idle pacing
+    idle_sleep_active: float = 0.01  # seconds
+    idle_sleep_sleeping: float = 0.1  # seconds
+    fallback_wait_sleep: float = 0.1  # seconds
 
 
 @dataclass
@@ -167,6 +182,24 @@ class SleepConfig:
 
 
 @dataclass
+class ShutdownConfig:
+    """Configuration for shutdown behavior."""
+    audio_thread_join_timeout: float = 1.0  # seconds
+    camera_stop_timeout: float = 3.0  # seconds
+    server_close_timeout: float = 3.0  # seconds
+    sendspin_stop_timeout: float = 3.0  # seconds
+    sleep_manager_stop_timeout: float = 3.0  # seconds
+
+
+@dataclass
+class RobotStateConfig:
+    """Configuration for robot state monitoring."""
+    check_interval_active: float = 3.0  # seconds
+    check_interval_sleep: float = 8.0   # seconds
+    check_interval_error: float = 6.0   # seconds
+
+
+@dataclass
 class APIConfig:
     """Configuration for the HTTP API server."""
     port: int = 8080
@@ -188,6 +221,7 @@ class Config:
     audio: AudioConfig = AudioConfig()
     doa: DOAConfig = DOAConfig()
     sleep: SleepConfig = SleepConfig()
+    robot_state: RobotStateConfig = RobotStateConfig()
     api: APIConfig = APIConfig()
 
     _initialized = False
@@ -223,9 +257,41 @@ class Config:
         """
         # Daemon
         cls.daemon.url = os.environ.get("REACHY_DAEMON_URL", cls.daemon.url)
-        cls.daemon.check_interval = _env_float(
-            "REACHY_DAEMON_CHECK_INTERVAL",
-            cls.daemon.check_interval
+        cls.daemon.check_interval_active = _env_float(
+            "REACHY_DAEMON_CHECK_INTERVAL_ACTIVE",
+            cls.daemon.check_interval_active
+        )
+        cls.daemon.check_interval_sleep = _env_float(
+            "REACHY_DAEMON_CHECK_INTERVAL_SLEEP",
+            cls.daemon.check_interval_sleep
+        )
+        cls.daemon.check_interval_error = _env_float(
+            "REACHY_DAEMON_CHECK_INTERVAL_ERROR",
+            cls.daemon.check_interval_error
+        )
+        cls.daemon.max_backoff_interval = _env_float(
+            "REACHY_DAEMON_MAX_BACKOFF_INTERVAL",
+            cls.daemon.max_backoff_interval
+        )
+        cls.daemon.connection_timeout = _env_float(
+            "REACHY_DAEMON_CONNECTION_TIMEOUT",
+            cls.daemon.connection_timeout
+        )
+        cls.daemon.backoff_multiplier = _env_float(
+            "REACHY_DAEMON_BACKOFF_MULTIPLIER",
+            cls.daemon.backoff_multiplier
+        )
+        cls.daemon.backoff_error_threshold = _env_int(
+            "REACHY_DAEMON_BACKOFF_ERROR_THRESHOLD",
+            cls.daemon.backoff_error_threshold
+        )
+        cls.daemon.status_cache_ttl = _env_float(
+            "REACHY_DAEMON_STATUS_CACHE_TTL",
+            cls.daemon.status_cache_ttl
+        )
+        cls.daemon.volume_cache_ttl = _env_float(
+            "REACHY_DAEMON_VOLUME_CACHE_TTL",
+            cls.daemon.volume_cache_ttl
         )
 
         # ESPHome
@@ -246,10 +312,38 @@ class Config:
             cls.motion.control_rate_hz
         )
 
+        # Audio
+        cls.audio.idle_sleep_active = _env_float(
+            "REACHY_AUDIO_IDLE_SLEEP_ACTIVE",
+            cls.audio.idle_sleep_active
+        )
+        cls.audio.idle_sleep_sleeping = _env_float(
+            "REACHY_AUDIO_IDLE_SLEEP_SLEEPING",
+            cls.audio.idle_sleep_sleeping
+        )
+        cls.audio.fallback_wait_sleep = _env_float(
+            "REACHY_AUDIO_FALLBACK_WAIT_SLEEP",
+            cls.audio.fallback_wait_sleep
+        )
+
         # Sleep
         cls.sleep.resume_delay = _env_float(
             "REACHY_SLEEP_RESUME_DELAY",
             cls.sleep.resume_delay
+        )
+
+        # Robot state
+        cls.robot_state.check_interval_active = _env_float(
+            "REACHY_ROBOT_STATE_CHECK_INTERVAL_ACTIVE",
+            cls.robot_state.check_interval_active
+        )
+        cls.robot_state.check_interval_sleep = _env_float(
+            "REACHY_ROBOT_STATE_CHECK_INTERVAL_SLEEP",
+            cls.robot_state.check_interval_sleep
+        )
+        cls.robot_state.check_interval_error = _env_float(
+            "REACHY_ROBOT_STATE_CHECK_INTERVAL_ERROR",
+            cls.robot_state.check_interval_error
         )
 
         logger.debug("Loaded configuration from environment")
@@ -292,6 +386,11 @@ class Config:
                 if hasattr(cls.sleep, key):
                     setattr(cls.sleep, key, value)
 
+        if "robot_state" in data:
+            for key, value in data["robot_state"].items():
+                if hasattr(cls.robot_state, key):
+                    setattr(cls.robot_state, key, value)
+
         if "api" in data:
             for key, value in data["api"].items():
                 if hasattr(cls.api, key):
@@ -321,8 +420,15 @@ class Config:
         return {
             "daemon": {
                 "url": cls.daemon.url,
-                "check_interval": cls.daemon.check_interval,
+                "check_interval_active": cls.daemon.check_interval_active,
+                "check_interval_sleep": cls.daemon.check_interval_sleep,
+                "check_interval_error": cls.daemon.check_interval_error,
+                "max_backoff_interval": cls.daemon.max_backoff_interval,
                 "connection_timeout": cls.daemon.connection_timeout,
+                "backoff_multiplier": cls.daemon.backoff_multiplier,
+                "backoff_error_threshold": cls.daemon.backoff_error_threshold,
+                "status_cache_ttl": cls.daemon.status_cache_ttl,
+                "volume_cache_ttl": cls.daemon.volume_cache_ttl,
             },
             "esphome": {
                 "port": cls.esphome.port,
@@ -345,6 +451,9 @@ class Config:
             "audio": {
                 "sample_rate": cls.audio.sample_rate,
                 "block_size": cls.audio.block_size,
+                "idle_sleep_active": cls.audio.idle_sleep_active,
+                "idle_sleep_sleeping": cls.audio.idle_sleep_sleeping,
+                "fallback_wait_sleep": cls.audio.fallback_wait_sleep,
             },
             "doa": {
                 "enabled": cls.doa.enabled,
@@ -359,6 +468,11 @@ class Config:
             "sleep": {
                 "resume_delay": cls.sleep.resume_delay,
                 "keep_alive_services": cls.sleep.keep_alive_services,
+            },
+            "robot_state": {
+                "check_interval_active": cls.robot_state.check_interval_active,
+                "check_interval_sleep": cls.robot_state.check_interval_sleep,
+                "check_interval_error": cls.robot_state.check_interval_error,
             },
             "api": {
                 "port": cls.api.port,

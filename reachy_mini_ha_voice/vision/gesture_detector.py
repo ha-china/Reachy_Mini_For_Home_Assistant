@@ -66,8 +66,15 @@ class GestureDetector:
         self._confidence_threshold = confidence_threshold
         self._detection_threshold = detection_threshold
         models_dir = Path(__file__).parent / "models"
+        fallback_models_dir = Path(__file__).resolve().parents[1] / "models"
         self._detector_path = models_dir / "hand_detector.onnx"
         self._classifier_path = models_dir / "crops_classifier.onnx"
+        if not self._detector_path.exists() or not self._classifier_path.exists():
+            alt_detector = fallback_models_dir / "hand_detector.onnx"
+            alt_classifier = fallback_models_dir / "crops_classifier.onnx"
+            if alt_detector.exists() and alt_classifier.exists():
+                self._detector_path = alt_detector
+                self._classifier_path = alt_classifier
         self._detector = None
         self._classifier = None
         self._available = False

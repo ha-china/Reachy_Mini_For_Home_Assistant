@@ -7,9 +7,11 @@ with Home Assistant via ESPHome protocol for voice control.
 
 import asyncio
 import logging
+import os
 import socket
 import threading
 
+from .core import get_health_monitor, get_memory_monitor
 from .voice_assistant import VoiceAssistantService
 
 logger = logging.getLogger(__name__)
@@ -115,8 +117,20 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         """
         logger.info("Starting Reachy Mini for Home Assistant...")
 
+        # Optional health/memory monitors (match standalone runner behavior)
+        enable_monitors = os.environ.get("REACHY_ENABLE_FRAMEWORK_MONITORS", "1").lower() in ("1", "true", "yes", "on")
+        health_monitor = get_health_monitor() if enable_monitors else None
+        memory_monitor = get_memory_monitor() if enable_monitors else None
+
         # Create and run the HA service
         service = VoiceAssistantService(reachy_mini)
+
+        if enable_monitors:
+            health_monitor.register_checker(
+                "voice_assistant",
+                lambda: service.is_running if hasattr(service, "is_running") else True,
+                interval=30.0,
+            )
 
         # Always create a new event loop to avoid conflicts with SDK
         loop = asyncio.new_event_loop()
@@ -124,6 +138,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         logger.debug("Created new event loop for HA service")
 
         try:
+            if enable_monitors:
+                health_monitor.start()
+                memory_monitor.start()
+
             loop.run_until_complete(service.start())
 
             logger.info("=" * 50)
@@ -161,6 +179,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
                 loop.run_until_complete(service.stop())
             except Exception as e:
                 logger.error(f"Error stopping service: {e}")
+
+            if enable_monitors:
+                health_monitor.stop()
+                memory_monitor.stop()
 
             # Note: Robot connection cleanup is handled by SDK's context manager
             # in wrapped_run(). We only need to close our event loop here.

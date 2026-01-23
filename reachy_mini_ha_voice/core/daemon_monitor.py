@@ -78,20 +78,53 @@ class DaemonStateMonitor:
 
     DEFAULT_DAEMON_URL = "http://127.0.0.1:8000"
     DEFAULT_CHECK_INTERVAL = 2.0  # seconds
+    DEFAULT_SLEEP_INTERVAL = 8.0  # seconds
+    DEFAULT_ERROR_INTERVAL = 6.0  # seconds
+    DEFAULT_MAX_BACKOFF = 15.0  # seconds
+    DEFAULT_BACKOFF_MULTIPLIER = 1.5
+    DEFAULT_BACKOFF_ERROR_THRESHOLD = 2
 
     def __init__(
         self,
         daemon_url: str = DEFAULT_DAEMON_URL,
         check_interval: float = DEFAULT_CHECK_INTERVAL,
+        sleep_interval: float = DEFAULT_SLEEP_INTERVAL,
+        error_interval: float = DEFAULT_ERROR_INTERVAL,
+        max_backoff_interval: float = DEFAULT_MAX_BACKOFF,
+        backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
+        backoff_error_threshold: int = DEFAULT_BACKOFF_ERROR_THRESHOLD,
+        connection_timeout: float = 5.0,
     ):
         """Initialize the daemon state monitor.
 
         Args:
             daemon_url: Base URL of the daemon HTTP API
             check_interval: How often to poll the daemon status (seconds)
+            sleep_interval: Polling interval when daemon is sleeping
+            error_interval: Base interval when daemon is unavailable
+            max_backoff_interval: Upper bound for backoff interval
+            backoff_multiplier: Multiplier for backoff growth
+            backoff_error_threshold: Consecutive errors before backoff
+            connection_timeout: HTTP timeout for daemon polling
         """
         self._daemon_url = daemon_url
-        self._check_interval = check_interval
+        self._check_interval_active = check_interval
+        self._check_interval_sleep = sleep_interval
+        self._check_interval_error = error_interval
+        self._max_backoff_interval = max_backoff_interval
+        self._backoff_multiplier = backoff_multiplier
+        self._backoff_error_threshold = backoff_error_threshold
+        self._connection_timeout = connection_timeout
+        self._current_interval = check_interval
+        self._consecutive_errors = 0
+        logger.debug(
+            "Daemon monitor configured: active=%.2fs sleep=%.2fs error=%.2fs max_backoff=%.2fs timeout=%.2fs",
+            self._check_interval_active,
+            self._check_interval_sleep,
+            self._check_interval_error,
+            self._max_backoff_interval,
+            self._connection_timeout,
+        )
 
         # State tracking
         self._current_state = DaemonState.UNAVAILABLE
@@ -172,8 +205,10 @@ class DaemonStateMonitor:
         self._stop_event.clear()
 
         # Create HTTP session
-        timeout = aiohttp.ClientTimeout(total=5.0)
+        timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
         self._session = aiohttp.ClientSession(timeout=timeout)
+        self._current_interval = self._check_interval_active
+        self._consecutive_errors = 0
 
         # Start monitoring task
         self._monitor_task = asyncio.create_task(self._monitor_loop())
@@ -209,7 +244,7 @@ class DaemonStateMonitor:
         This can be used for one-off checks without starting the monitor loop.
         """
         if self._session is None:
-            timeout = aiohttp.ClientTimeout(total=5.0)
+            timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 return await self._fetch_status(session)
         return await self._fetch_status(self._session)
@@ -219,25 +254,49 @@ class DaemonStateMonitor:
         logger.debug("Daemon monitor loop started")
 
         while self._running and not self._stop_event.is_set():
+            logger.debug(
+                "Daemon poll interval: %.2fs (errors=%d)",
+                self._current_interval,
+                self._consecutive_errors,
+            )
             try:
                 status = await self._fetch_status(self._session)
                 self._process_status(status)
+                self._consecutive_errors = 0
+                self._current_interval = self._interval_for_state(status.state)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in daemon monitor loop: {e}")
                 self._handle_unavailable()
+                self._consecutive_errors += 1
+                self._current_interval = self._interval_for_error()
 
             try:
                 await asyncio.wait_for(
                     self._stop_event.wait(),
-                    timeout=self._check_interval
+                    timeout=self._current_interval
                 )
                 break  # Stop event was set
             except TimeoutError:
                 pass  # Continue monitoring
 
         logger.debug("Daemon monitor loop ended")
+
+    def _interval_for_state(self, state: DaemonState) -> float:
+        """Choose polling interval based on daemon state."""
+        if state in (DaemonState.STOPPED, DaemonState.STOPPING):
+            return self._check_interval_sleep
+        return self._check_interval_active
+
+    def _interval_for_error(self) -> float:
+        """Compute backoff interval for consecutive errors."""
+        if self._consecutive_errors < self._backoff_error_threshold:
+            return self._check_interval_error
+        backoff = self._check_interval_error * (
+            self._backoff_multiplier ** (self._consecutive_errors - self._backoff_error_threshold + 1)
+        )
+        return min(self._max_backoff_interval, backoff)
 
     async def _fetch_status(self, session: aiohttp.ClientSession) -> DaemonStatus:
         """Fetch the current daemon status from the API."""

@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 
 from ..audio.doa_tracker import DOAConfig, DOATracker
+from ..core.config import Config
 from .animation_player import AnimationPlayer
 from .antenna import AntennaController
 from .emotion_moves import EmotionMove, is_emotion_available
@@ -53,13 +54,19 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-# Control loop frequency - daemon now supports higher rates
-CONTROL_LOOP_FREQUENCY_HZ = 100  # 100Hz control loop (same as conversation_app)
+# Control loop frequency - align with daemon control loop
+CONTROL_LOOP_FREQUENCY_HZ = 50  # 50Hz control loop (align with daemon backend)
 TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
 
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
 ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
+
+# Skip sending nearly-identical poses to reduce daemon load
+POSE_EPS = 1e-3          # Max element delta in 4x4 pose matrix
+ANTENNA_EPS = 0.005      # Radians (~0.29 deg)
+BODY_YAW_EPS = 0.005     # Radians (~0.29 deg)
+MIN_SEND_INTERVAL_S = 0.2  # Send at most 5 Hz when unchanged
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0   # Minimum seconds between look-arounds
@@ -72,7 +79,7 @@ IDLE_INACTIVITY_THRESHOLD = 5.0       # Seconds of inactivity before look-around
 
 class MovementManager:
     """
-    Unified movement manager with 100Hz control loop.
+    Unified movement manager with 50Hz control loop.
 
     All external interactions go through the command queue,
     ensuring thread safety and preventing race conditions.
@@ -124,6 +131,16 @@ class MovementManager:
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         self._face_tracking_lock = threading.Lock()
+
+        # Last sent pose for change detection (reduce daemon load)
+        self._last_sent_head_pose: np.ndarray | None = None
+        self._last_sent_antennas: tuple[float, float] | None = None
+        self._last_sent_body_yaw: float | None = None
+        self._last_send_time = 0.0
+
+        # Body yaw smoothing state (rate-limited)
+        self._body_yaw_smoothed: float | None = None
+        self._last_body_yaw_update = 0.0
 
         # Camera server reference for face tracking
         self._camera_server = None
@@ -909,9 +926,24 @@ class MovementManager:
 
         # Calculate body_yaw to follow head yaw (using pose_composer utilities)
         final_head_yaw = extract_yaw_from_pose(final_head)
-        body_yaw = clamp_body_yaw(final_head_yaw)
+        target_body_yaw = clamp_body_yaw(final_head_yaw)
 
-        return final_head, (antenna_right, antenna_left), body_yaw
+        # Rate-limit body yaw for smooth, continuous turning
+        now = self._now()
+        if self._body_yaw_smoothed is None:
+            self._body_yaw_smoothed = target_body_yaw
+            self._last_body_yaw_update = now
+        else:
+            dt = max(1e-6, now - self._last_body_yaw_update)
+            max_rate_rad_s = math.radians(Config.motion.body_yaw_max_rate_deg_s)
+            max_step = max_rate_rad_s * dt
+            delta = target_body_yaw - self._body_yaw_smoothed
+            if abs(delta) > Config.motion.body_yaw_deadband_rad:
+                step = max(-max_step, min(max_step, delta))
+                self._body_yaw_smoothed = clamp_body_yaw(self._body_yaw_smoothed + step)
+            self._last_body_yaw_update = now
+
+        return final_head, (antenna_right, antenna_left), self._body_yaw_smoothed
 
     # =========================================================================
     # Internal: Robot control (runs in control loop)
@@ -948,6 +980,23 @@ class MovementManager:
 
         now = self._now()
 
+        # If pose hasn't changed, only send periodically to reduce daemon load
+        if self._last_sent_head_pose is not None and self._last_sent_antennas is not None and self._last_sent_body_yaw is not None:
+            pose_delta = np.max(np.abs(head_pose - self._last_sent_head_pose))
+            antenna_delta = max(
+                abs(antennas[0] - self._last_sent_antennas[0]),
+                abs(antennas[1] - self._last_sent_antennas[1]),
+            )
+            body_yaw_delta = abs(body_yaw - self._last_sent_body_yaw)
+
+            min_interval = MIN_SEND_INTERVAL_S
+            if body_yaw_delta >= Config.motion.body_yaw_deadband_rad:
+                min_interval = Config.motion.body_yaw_min_send_interval_s
+
+            if pose_delta < POSE_EPS and antenna_delta < ANTENNA_EPS and body_yaw_delta < BODY_YAW_EPS:
+                if now - self._last_send_time < min_interval:
+                    return
+
         # Check if we should skip due to connection loss (but always try periodically)
         if self._connection_lost:
             if now - self._last_reconnect_attempt < self._reconnect_attempt_interval:
@@ -969,6 +1018,12 @@ class MovementManager:
             # Command succeeded - update connection health
             self._last_successful_command = now
             self._consecutive_errors = 0  # Reset error counter
+
+            # Update last sent pose for change detection
+            self._last_sent_head_pose = head_pose.copy()
+            self._last_sent_antennas = antennas
+            self._last_sent_body_yaw = body_yaw
+            self._last_send_time = now
 
             if self._connection_lost:
                 logger.info("✓ Connection to robot restored")

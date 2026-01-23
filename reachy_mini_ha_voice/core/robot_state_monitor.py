@@ -50,6 +50,8 @@ class RobotStateMonitor:
         self,
         reachy_mini: Optional["ReachyMini"] = None,
         check_interval: float = 1.0,
+        sleep_interval: float | None = None,
+        error_interval: float | None = None,
     ):
         """Initialize the robot state monitor.
 
@@ -57,9 +59,22 @@ class RobotStateMonitor:
             reachy_mini: ReachyMini instance to monitor. If None, monitor
                 will report as always disconnected.
             check_interval: How often to check connection state (seconds).
+            sleep_interval: Polling interval when daemon is sleeping.
+            error_interval: Polling interval when daemon is unavailable.
         """
         self._robot = reachy_mini
-        self._check_interval = check_interval
+        self._check_interval_active = check_interval
+        self._check_interval_sleep = sleep_interval or check_interval
+        self._check_interval_error = error_interval or check_interval
+        self._current_interval = check_interval
+        self._sleeping = False
+        self._daemon_unavailable = False
+        logger.debug(
+            "Robot state monitor configured: active=%.2fs sleep=%.2fs error=%.2fs",
+            self._check_interval_active,
+            self._check_interval_sleep,
+            self._check_interval_error,
+        )
 
         # Current state
         self._state = RobotConnectionState.UNKNOWN
@@ -108,6 +123,26 @@ class RobotStateMonitor:
         with self._callbacks_lock:
             self._on_disconnected_callbacks.append(callback)
 
+    def set_sleeping(self, sleeping: bool) -> None:
+        """Update monitor sleep state to adjust polling interval."""
+        self._sleeping = sleeping
+        self._update_interval()
+
+    def set_daemon_unavailable(self, unavailable: bool) -> None:
+        """Update daemon availability to adjust polling interval."""
+        self._daemon_unavailable = unavailable
+        self._update_interval()
+
+    def _update_interval(self) -> None:
+        """Recompute polling interval based on current flags."""
+        if self._daemon_unavailable:
+            self._current_interval = self._check_interval_error
+        elif self._sleeping:
+            self._current_interval = self._check_interval_sleep
+        else:
+            self._current_interval = self._check_interval_active
+        logger.debug("Robot state polling interval set to %.2fs", self._current_interval)
+
     def start(self) -> None:
         """Start the state monitoring thread."""
         if self._thread is not None and self._thread.is_alive():
@@ -122,7 +157,7 @@ class RobotStateMonitor:
         )
         self._thread.start()
         logger.info("Robot state monitor started (check interval: %.1fs)",
-                    self._check_interval)
+                    self._current_interval)
 
     def stop(self) -> None:
         """Stop the state monitoring thread."""
@@ -144,6 +179,9 @@ class RobotStateMonitor:
         """
         if self._robot is None:
             return RobotConnectionState.DISCONNECTED
+
+        if self._sleeping:
+            return self._state
 
         try:
             # Check the SDK's internal _is_alive flag
@@ -243,7 +281,7 @@ class RobotStateMonitor:
                 logger.error("Error in state monitor loop: %s", e)
 
             # Wait for next check or stop signal
-            self._stop_event.wait(timeout=self._check_interval)
+            self._stop_event.wait(timeout=self._current_interval)
 
         logger.debug("Robot state monitor loop stopped")
 

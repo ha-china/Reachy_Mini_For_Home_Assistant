@@ -425,6 +425,10 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.save_preferences()
             self.state.wake_words_changed = True
 
+    @property
+    def is_streaming_audio(self) -> bool:
+        return self._is_streaming_audio
+
     def handle_audio(self, audio_chunk: bytes) -> None:
         if not self._is_streaming_audio:
             return
