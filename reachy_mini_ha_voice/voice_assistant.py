@@ -214,7 +214,7 @@ class VoiceAssistantService:
         self._audio_thread.start()
 
         # Start camera server if enabled (must be before ESPHome server)
-        if self.camera_enabled:
+        if self.camera_enabled and self._state.camera_enabled:
             self._camera_server = MJPEGCameraServer(
                 reachy_mini=self.reachy_mini,
                 host=self.host,
@@ -233,7 +233,7 @@ class VoiceAssistantService:
         loop = asyncio.get_running_loop()
         camera_server = self._camera_server  # Capture for lambda
         self._server = await loop.create_server(
-            lambda: VoiceSatelliteProtocol(self._state, camera_server=camera_server),
+            lambda: VoiceSatelliteProtocol(self._state, camera_server=camera_server, voice_assistant_service=self),
             host=self.host,
             port=self.port,
         )
@@ -278,6 +278,103 @@ class VoiceAssistantService:
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 
+    def _suspend_voice_services(self, reason: str) -> None:
+        """Suspend only voice-related services (not camera or motion).
+
+        This is used for the Mute feature - camera and motion should remain active.
+        """
+        _LOGGER.warning("Suspending voice services (%s)", reason)
+        self._robot_services_paused.set()
+        self._robot_services_resumed.clear()
+
+        # Update state
+        if self._state is not None:
+            self._state.services_suspended = True
+
+        # Clear audio buffer to avoid processing stale data
+        self._audio_buffer = np.array([], dtype=np.float32)
+
+        # Suspend satellite (stops TTS, music, wake word processing)
+        if self._state is not None and self._state.satellite is not None:
+            try:
+                self._state.satellite.suspend()
+                _LOGGER.debug("Satellite suspended")
+            except Exception as e:
+                _LOGGER.warning("Error suspending satellite: %s", e)
+
+        # Suspend audio players
+        if self._state is not None:
+            if self._state.tts_player is not None:
+                try:
+                    self._state.tts_player.suspend()
+                except Exception as e:
+                    _LOGGER.warning("Error suspending TTS player: %s", e)
+            if self._state.music_player is not None:
+                try:
+                    self._state.music_player.suspend()
+                except Exception as e:
+                    _LOGGER.warning("Error suspending music player: %s", e)
+
+        # Stop media recording to save CPU
+        if self.reachy_mini is not None:
+            try:
+                self.reachy_mini.media.stop_recording()
+                self.reachy_mini.media.stop_playing()
+                _LOGGER.debug("Media system stopped")
+            except Exception as e:
+                _LOGGER.warning("Error stopping media: %s", e)
+
+        _LOGGER.info("Voice services suspended - camera and motion remain active")
+
+    def _resume_voice_services(self, reason: str) -> None:
+        """Resume only voice-related services (not camera or motion).
+
+        This is used for the Mute feature - camera and motion remain active.
+        """
+        _LOGGER.info("Resuming voice services (%s)", reason)
+        self._robot_services_paused.clear()
+
+        # Update state
+        if self._state is not None:
+            self._state.services_suspended = False
+
+        # Restart media system first
+        if self.reachy_mini is not None:
+            try:
+                media = self.reachy_mini.media
+                if media.audio is not None:
+                    media.start_recording()
+                    media.start_playing()
+                    _LOGGER.info("Media system restarted")
+            except Exception as e:
+                _LOGGER.warning("Failed to restart media: %s", e)
+
+        # Resume satellite
+        if self._state is not None and self._state.satellite is not None:
+            try:
+                self._state.satellite.resume()
+                _LOGGER.debug("Satellite resumed")
+            except Exception as e:
+                _LOGGER.warning("Error resuming satellite: %s", e)
+
+        # Resume audio players
+        if self._state is not None:
+            if self._state.tts_player is not None:
+                try:
+                    self._state.tts_player.resume()
+                except Exception as e:
+                    _LOGGER.warning("Error resuming TTS player: %s", e)
+            if self._state.music_player is not None:
+                try:
+                    self._state.music_player.resume()
+                except Exception as e:
+                    _LOGGER.warning("Error resuming music player: %s", e)
+
+        # Signal waiting threads that services are resumed
+        self._robot_services_resumed.set()
+
+        _LOGGER.info("Voice services resumed - camera and motion remained active")
+
     def _suspend_non_esphome_services(self, reason: str, set_sleep_state: bool) -> None:
         """Suspend all non-ESPHome services to reduce load.
 
@@ -297,7 +394,8 @@ class VoiceAssistantService:
         self._audio_buffer = np.array([], dtype=np.float32)
 
         # Suspend camera server (stops thread and releases YOLO model)
-        if self._camera_server is not None:
+        # Only suspend if camera is NOT disabled (user has not manually disabled it)
+        if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.suspend()
                 _LOGGER.debug("Camera server suspended")
@@ -367,7 +465,8 @@ class VoiceAssistantService:
                 _LOGGER.warning("Failed to restart media: %s", e)
 
         # Resume camera server (reloads YOLO model and restarts capture thread)
-        if self._camera_server is not None:
+        # Only resume if camera is NOT disabled (user has not manually disabled it)
+        if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.resume_from_suspend()
                 _LOGGER.debug("Camera server resumed from suspend")
@@ -580,7 +679,8 @@ class VoiceAssistantService:
                 _LOGGER.warning("Sendspin stop did not finish in time")
 
         # 7. Stop camera server
-        if self._camera_server:
+        # Only stop if camera is NOT disabled (user has not manually disabled it)
+        if self._camera_server and self._state.camera_enabled:
             await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
             self._camera_server = None
 
@@ -822,7 +922,7 @@ class VoiceAssistantService:
 
         while self._running:
             try:
-                # Check if robot services are paused (sleep mode / disconnected)
+                # Check if robot services are paused (sleep mode / disconnected / muted)
                 if self._robot_services_paused.is_set():
                     # Wait for resume signal (event-driven, wakes immediately on resume)
                     consecutive_audio_errors = 0  # Reset on pause

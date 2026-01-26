@@ -66,12 +66,13 @@ _LOGGER = logging.getLogger(__name__)
 class VoiceSatelliteProtocol(APIServer):
     """Voice satellite protocol handler for ESPHome."""
 
-    def __init__(self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None) -> None:
+    def __init__(self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None, voice_assistant_service = None) -> None:
         _LOGGER.info("VoiceSatelliteProtocol.__init__ called - new connection")
         super().__init__(state.name)
         self.state = state
         self.state.satellite = self
         self.camera_server = camera_server
+        self._voice_assistant_service = voice_assistant_service  # Store reference for mute functionality
 
         # Initialize streaming state early (before entity setup)
         self._is_streaming_audio = False

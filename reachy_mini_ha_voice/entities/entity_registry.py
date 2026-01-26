@@ -192,7 +192,56 @@ class EntityRegistry:
             value_setter=rc.set_speaker_volume,
         ))
 
-        _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, speaker_volume")
+        # Voice assistant mute switch - suspends only voice services when enabled
+        def get_muted() -> bool:
+            return self.server.state.is_muted if hasattr(self.server, 'state') and self.server.state else False
+
+        def set_muted(muted: bool) -> None:
+            if hasattr(self.server, 'state') and self.server.state:
+                self.server.state.is_muted = muted
+                voice_assistant = getattr(self.server, '_voice_assistant_service', None)
+                if voice_assistant:
+                    if muted:
+                        voice_assistant._suspend_voice_services(reason="mute")
+                    else:
+                        voice_assistant._resume_voice_services(reason="mute")
+
+        entities.append(SwitchEntity(
+            server=self.server,
+            key=get_entity_key("mute"),
+            name="Mute",
+            object_id="mute",
+            icon="mdi:microphone-off",
+            entity_category=1,
+            value_getter=get_muted,
+            value_setter=set_muted,
+        ))
+
+        # Camera disable switch - suspends camera processing when enabled
+        def get_camera_disabled() -> bool:
+            return not self.server.state.camera_enabled if hasattr(self.server, 'state') and self.server.state else False
+
+        def set_camera_disabled(disabled: bool) -> None:
+            if hasattr(self.server, 'state') and self.server.state:
+                self.server.state.camera_enabled = not disabled
+                if self.camera_server:
+                    if disabled:
+                        self.camera_server.suspend()
+                    else:
+                        self.camera_server.resume_from_suspend()
+
+        entities.append(SwitchEntity(
+            server=self.server,
+            key=get_entity_key("camera_disabled"),
+            name="Disable Camera",
+            object_id="camera_disabled",
+            icon="mdi:camera-off",
+            entity_category=1,
+            value_getter=get_camera_disabled,
+            value_setter=set_camera_disabled,
+        ))
+
+        _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled")
 
     def _setup_phase2_entities(self, entities: list) -> None:
         """Setup Phase 2 entities: Motor control."""

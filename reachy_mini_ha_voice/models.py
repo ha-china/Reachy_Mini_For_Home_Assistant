@@ -91,6 +91,12 @@ class ServerState:
     is_sleeping: bool = False
     services_suspended: bool = False
 
+    # Mute state (controlled from Home Assistant)
+    is_muted: bool = False
+
+    # Camera state (controlled from Home Assistant)
+    camera_enabled: bool = True
+
     # Callbacks for sleep/wake from HA buttons (set by VoiceAssistant)
     on_ha_sleep: object | None = None  # Callable[[], None]
     on_ha_wake: object | None = None   # Callable[[], None]

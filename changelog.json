@@ -1,6 +1,15 @@
 [
   {
     "version": "0.9.8",
+    "date": "2026-01-26",
+    "changes": [
+      "New: Mute switch entity - suspends voice services only (not camera/motion)",
+      "New: Disable Camera switch entity - suspends camera and AI processing",
+      "Fix: Camera disable logic - corrected inverted conditions for proper operation"
+    ]
+  },
+  {
+    "version": "0.9.8",
     "date": "2026-01-23",
     "changes": [
       "Fix: Prevent daemon crash when entering idle state"
