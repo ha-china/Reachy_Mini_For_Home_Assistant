@@ -1,7 +1,7 @@
 [
   {
     "version": "0.9.8",
-    "date": "2026-01-26",
+    "date": "2026-01-27",
     "changes": [
       "New: Mute switch entity - suspends voice services only (not camera/motion)",
       "New: Disable Camera switch entity - suspends camera and AI processing",
@@ -14,7 +14,8 @@
       "Fix: Code quality improvements",
       "Remove: Temporarily disable emotion playback during TTS",
       "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition",
-      "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation"
+      "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation",
+      "Optimize: Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability"
     ]
   },
   {
