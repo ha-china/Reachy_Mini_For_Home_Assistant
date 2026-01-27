@@ -15,7 +15,11 @@
       "Remove: Temporarily disable emotion playback during TTS",
       "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition",
       "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation",
-      "Optimize: Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability"
+      "Optimize: Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability",
+      "Fix: Add GStreamer threading lock to prevent pipeline competition between audio, playback, and camera threads",
+      "Fix: Audio thread gets priority during conversations - bypasses lock when conversation is active",
+      "Simplify: Device ID now reads /etc/machine-id directly - removed uuid.getnode() and file persistence",
+      "Clean up: Removed unused config items (connection_timeout)"
     ]
   },
   {
