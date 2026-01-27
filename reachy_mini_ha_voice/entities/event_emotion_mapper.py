@@ -64,7 +64,6 @@ DEFAULT_EVENT_EMOTION_MAP: dict[str, list[EventEmotionMapping]] = {
             description="Someone at the door",
         ),
     ],
-
     # Motion sensors
     "binary_sensor.living_room_motion": [
         EventEmotionMapping(
@@ -76,7 +75,6 @@ DEFAULT_EVENT_EMOTION_MAP: dict[str, list[EventEmotionMapping]] = {
             description="Motion detected",
         ),
     ],
-
     # Time-based triggers (via input_boolean)
     "input_boolean.morning_routine": [
         EventEmotionMapping(
@@ -161,10 +159,7 @@ class EventEmotionMapper:
             if entity_id not in self._mappings:
                 self._mappings[entity_id] = []
             # Remove existing mapping for same state
-            self._mappings[entity_id] = [
-                m for m in self._mappings[entity_id]
-                if m.state_value != mapping.state_value
-            ]
+            self._mappings[entity_id] = [m for m in self._mappings[entity_id] if m.state_value != mapping.state_value]
             self._mappings[entity_id].append(mapping)
         logger.debug("Added event mapping: %s -> %s", entity_id, mapping.emotion)
 
@@ -173,10 +168,7 @@ class EventEmotionMapper:
         with self._lock:
             if entity_id in self._mappings:
                 if state_value:
-                    self._mappings[entity_id] = [
-                        m for m in self._mappings[entity_id]
-                        if m.state_value != state_value
-                    ]
+                    self._mappings[entity_id] = [m for m in self._mappings[entity_id] if m.state_value != state_value]
                 else:
                     del self._mappings[entity_id]
 
@@ -222,8 +214,7 @@ class EventEmotionMapper:
         key = f"{entity_id}:{mapping.state_value}"
         last_trigger = self._last_trigger_times.get(key, 0)
         if now - last_trigger < mapping.cooldown:
-            logger.debug("Event %s in cooldown (%.0fs remaining)",
-                        entity_id, mapping.cooldown - (now - last_trigger))
+            logger.debug("Event %s in cooldown (%.0fs remaining)", entity_id, mapping.cooldown - (now - last_trigger))
             return None
 
         # Update cooldown and trigger
@@ -292,10 +283,7 @@ class EventEmotionMapper:
                 data = json.load(f)
 
             settings = data.get("settings", {})
-            self._max_triggers_per_minute = settings.get(
-                "max_triggers_per_minute",
-                self._max_triggers_per_minute
-            )
+            self._max_triggers_per_minute = settings.get("max_triggers_per_minute", self._max_triggers_per_minute)
 
             mappings_data = data.get("mappings", {})
             for entity_id, states in mappings_data.items():
@@ -310,8 +298,7 @@ class EventEmotionMapper:
                     )
                     self.add_mapping(mapping)
 
-            logger.info("Loaded %d event mappings from %s",
-                       sum(len(v) for v in self._mappings.values()), json_path)
+            logger.info("Loaded %d event mappings from %s", sum(len(v) for v in self._mappings.values()), json_path)
             return True
 
         except Exception as e:

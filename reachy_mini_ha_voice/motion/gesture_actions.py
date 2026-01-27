@@ -16,24 +16,26 @@ logger = logging.getLogger(__name__)
 
 class GestureAction(Enum):
     """Available actions that can be triggered by gestures."""
-    EMOTION = "emotion"           # Play an emotion animation
-    SOUND = "sound"               # Play a sound
+
+    EMOTION = "emotion"  # Play an emotion animation
+    SOUND = "sound"  # Play a sound
     START_LISTENING = "start_listening"  # Trigger voice assistant
-    STOP_SPEAKING = "stop_speaking"      # Interrupt TTS
-    PAUSE_MOTION = "pause_motion"        # Pause all motion
-    HA_EVENT = "ha_event"         # Send event to Home Assistant
-    NONE = "none"                 # No action
+    STOP_SPEAKING = "stop_speaking"  # Interrupt TTS
+    PAUSE_MOTION = "pause_motion"  # Pause all motion
+    HA_EVENT = "ha_event"  # Send event to Home Assistant
+    NONE = "none"  # No action
 
 
 @dataclass
 class GestureMapping:
     """Configuration for a gesture-to-action mapping."""
+
     gesture_name: str
     action: GestureAction
-    emotion: str | None = None      # For EMOTION action
-    sound: str | None = None        # For SOUND action
+    emotion: str | None = None  # For EMOTION action
+    sound: str | None = None  # For SOUND action
     ha_event_name: str | None = None  # For HA_EVENT action
-    cooldown: float = 2.0              # Seconds before same gesture triggers again
+    cooldown: float = 2.0  # Seconds before same gesture triggers again
 
 
 # Default gesture mappings based on HaGRID gesture set
@@ -57,7 +59,6 @@ DEFAULT_GESTURE_MAPPINGS: dict[str, GestureMapping] = {
         emotion="enthusiastic1",
         ha_event_name="gesture_peace",
     ),
-
     # Negative gestures
     "dislike": GestureMapping(
         gesture_name="dislike",
@@ -71,7 +72,6 @@ DEFAULT_GESTURE_MAPPINGS: dict[str, GestureMapping] = {
         emotion="surprised1",
         ha_event_name="gesture_stop",
     ),
-
     # Interactive gestures
     "call": GestureMapping(
         gesture_name="call",
@@ -83,7 +83,6 @@ DEFAULT_GESTURE_MAPPINGS: dict[str, GestureMapping] = {
         action=GestureAction.PAUSE_MOTION,
         ha_event_name="gesture_palm",
     ),
-
     # Alerting gestures
     "fist": GestureMapping(
         gesture_name="fist",
@@ -91,7 +90,6 @@ DEFAULT_GESTURE_MAPPINGS: dict[str, GestureMapping] = {
         emotion="rage1",
         ha_event_name="gesture_fist",
     ),
-
     # Pointing gestures - just send HA events
     "one": GestureMapping(
         gesture_name="one",
@@ -160,6 +158,7 @@ class GestureActionMapper:
 
         # Time function (can be overridden for testing)
         import time
+
         self._now = time.monotonic
 
     def set_emotion_callback(self, callback: Callable[[str], None]) -> None:

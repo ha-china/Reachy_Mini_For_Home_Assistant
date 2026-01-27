@@ -53,11 +53,7 @@ class MicrophoneOptimizer:
         """
         self.defaults = defaults or MicrophoneDefaults()
 
-    def optimize(
-        self,
-        respeaker: Any,
-        preferences: MicrophonePreferences | None = None
-    ) -> bool:
+    def optimize(self, respeaker: Any, preferences: MicrophonePreferences | None = None) -> bool:
         """Apply optimized microphone settings.
 
         Args:
@@ -74,17 +70,10 @@ class MicrophoneOptimizer:
         prefs = preferences or MicrophonePreferences()
 
         # Determine actual values (preferences override defaults)
-        agc_enabled = (
-            prefs.agc_enabled if prefs.agc_enabled is not None
-            else self.defaults.agc_enabled
-        )
-        agc_max_gain = (
-            prefs.agc_max_gain if prefs.agc_max_gain is not None
-            else self.defaults.agc_max_gain
-        )
+        agc_enabled = prefs.agc_enabled if prefs.agc_enabled is not None else self.defaults.agc_enabled
+        agc_max_gain = prefs.agc_max_gain if prefs.agc_max_gain is not None else self.defaults.agc_max_gain
         noise_suppression = (
-            prefs.noise_suppression if prefs.noise_suppression is not None
-            else self.defaults.noise_suppression
+            prefs.noise_suppression if prefs.noise_suppression is not None else self.defaults.noise_suppression
         )
 
         success = True
@@ -109,7 +98,9 @@ class MicrophoneOptimizer:
 
         _LOGGER.info(
             "Microphone settings initialized (AGC=%s, MaxGain=%.0fdB, NoiseSuppression=%.0f%%)",
-            "ON" if agc_enabled else "OFF", agc_max_gain, noise_suppression
+            "ON" if agc_enabled else "OFF",
+            agc_max_gain,
+            noise_suppression,
         )
 
         return success
@@ -122,7 +113,7 @@ class MicrophoneOptimizer:
                 "AGC %s (PP_AGCONOFF=%d)%s",
                 "enabled" if enabled else "disabled",
                 1 if enabled else 0,
-                " [from preferences]" if from_prefs else " [default]"
+                " [from preferences]" if from_prefs else " [default]",
             )
             return True
         except Exception as e:
@@ -134,9 +125,7 @@ class MicrophoneOptimizer:
         try:
             respeaker.write("PP_AGCMAXGAIN", [gain])
             _LOGGER.info(
-                "AGC max gain set (PP_AGCMAXGAIN=%.1fdB)%s",
-                gain,
-                " [from preferences]" if from_prefs else " [default]"
+                "AGC max gain set (PP_AGCMAXGAIN=%.1fdB)%s", gain, " [from preferences]" if from_prefs else " [default]"
             )
             return True
         except Exception as e:
@@ -187,8 +176,9 @@ class MicrophoneOptimizer:
             respeaker.write("PP_MIN_NS", [pp_min_ns])
             _LOGGER.info(
                 "Noise suppression set to %.0f%% strength (PP_MIN_NS=%.2f)%s",
-                suppression, pp_min_ns,
-                " [from preferences]" if from_prefs else " [default]"
+                suppression,
+                pp_min_ns,
+                " [from preferences]" if from_prefs else " [default]",
             )
         except Exception as e:
             _LOGGER.debug("Could not set PP_MIN_NS: %s", e)
@@ -208,8 +198,7 @@ class MicrophoneOptimizer:
         try:
             respeaker.write("PP_ECHOONOFF", [1 if enabled else 0])
             _LOGGER.debug(
-                "Echo cancellation %s (PP_ECHOONOFF=%d)",
-                "enabled" if enabled else "disabled", 1 if enabled else 0
+                "Echo cancellation %s (PP_ECHOONOFF=%d)", "enabled" if enabled else "disabled", 1 if enabled else 0
             )
             return True
         except Exception as e:
@@ -221,8 +210,7 @@ class MicrophoneOptimizer:
         try:
             respeaker.write("AEC_HPFONOFF", [1 if enabled else 0])
             _LOGGER.debug(
-                "High-pass filter %s (AEC_HPFONOFF=%d)",
-                "enabled" if enabled else "disabled", 1 if enabled else 0
+                "High-pass filter %s (AEC_HPFONOFF=%d)", "enabled" if enabled else "disabled", 1 if enabled else 0
             )
             return True
         except Exception as e:

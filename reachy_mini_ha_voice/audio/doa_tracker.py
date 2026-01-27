@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DOAConfig:
     """Configuration for DOA tracking behavior."""
+
     # Minimum energy threshold to consider a sound significant
     energy_threshold: float = 0.3
 
@@ -108,10 +109,7 @@ class DOATracker:
         """
         self._in_conversation = in_conversation
 
-    def set_movement_callback(
-        self,
-        callback: Callable[[float, float], None]
-    ) -> None:
+    def set_movement_callback(self, callback: Callable[[float, float], None]) -> None:
         """Set the movement callback function.
 
         Args:
@@ -155,10 +153,7 @@ class DOATracker:
             return False
 
         # Clamp angle
-        clamped_angle = max(
-            -self._config.max_turn_angle_deg,
-            min(self._config.max_turn_angle_deg, doa_angle)
-        )
+        clamped_angle = max(-self._config.max_turn_angle_deg, min(self._config.max_turn_angle_deg, doa_angle))
 
         # Trigger turn
         if self._movement_callback:

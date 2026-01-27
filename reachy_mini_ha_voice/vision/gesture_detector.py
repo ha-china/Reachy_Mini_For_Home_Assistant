@@ -1,4 +1,4 @@
-﻿"""Gesture detection using HaGRID ONNX models."""
+"""Gesture detection using HaGRID ONNX models."""
 
 from __future__ import annotations
 
@@ -39,25 +39,72 @@ class Gesture(Enum):
 
 
 _GESTURE_CLASSES = [
-    'hand_down', 'hand_right', 'hand_left', 'thumb_index', 'thumb_left',
-    'thumb_right', 'thumb_down', 'half_up', 'half_left', 'half_right',
-    'half_down', 'part_hand_heart', 'part_hand_heart2', 'fist_inverted',
-    'two_left', 'two_right', 'two_down', 'grabbing', 'grip', 'point',
-    'call', 'three3', 'little_finger', 'middle_finger', 'dislike', 'fist',
-    'four', 'like', 'mute', 'ok', 'one', 'palm', 'peace', 'peace_inverted',
-    'rock', 'stop', 'stop_inverted', 'three', 'three2', 'two_up',
-    'two_up_inverted', 'three_gun', 'one_left', 'one_right', 'one_down'
+    "hand_down",
+    "hand_right",
+    "hand_left",
+    "thumb_index",
+    "thumb_left",
+    "thumb_right",
+    "thumb_down",
+    "half_up",
+    "half_left",
+    "half_right",
+    "half_down",
+    "part_hand_heart",
+    "part_hand_heart2",
+    "fist_inverted",
+    "two_left",
+    "two_right",
+    "two_down",
+    "grabbing",
+    "grip",
+    "point",
+    "call",
+    "three3",
+    "little_finger",
+    "middle_finger",
+    "dislike",
+    "fist",
+    "four",
+    "like",
+    "mute",
+    "ok",
+    "one",
+    "palm",
+    "peace",
+    "peace_inverted",
+    "rock",
+    "stop",
+    "stop_inverted",
+    "three",
+    "three2",
+    "two_up",
+    "two_up_inverted",
+    "three_gun",
+    "one_left",
+    "one_right",
+    "one_down",
 ]
 
 _NAME_TO_GESTURE = {
-    'call': Gesture.CALL, 'dislike': Gesture.DISLIKE, 'fist': Gesture.FIST,
-    'four': Gesture.FOUR, 'like': Gesture.LIKE, 'mute': Gesture.MUTE,
-    'ok': Gesture.OK, 'one': Gesture.ONE, 'palm': Gesture.PALM,
-    'peace': Gesture.PEACE, 'peace_inverted': Gesture.PEACE_INVERTED,
-    'rock': Gesture.ROCK, 'stop': Gesture.STOP,
-    'stop_inverted': Gesture.STOP_INVERTED, 'three': Gesture.THREE,
-    'three2': Gesture.THREE2, 'two_up': Gesture.TWO_UP,
-    'two_up_inverted': Gesture.TWO_UP_INVERTED,
+    "call": Gesture.CALL,
+    "dislike": Gesture.DISLIKE,
+    "fist": Gesture.FIST,
+    "four": Gesture.FOUR,
+    "like": Gesture.LIKE,
+    "mute": Gesture.MUTE,
+    "ok": Gesture.OK,
+    "one": Gesture.ONE,
+    "palm": Gesture.PALM,
+    "peace": Gesture.PEACE,
+    "peace_inverted": Gesture.PEACE_INVERTED,
+    "rock": Gesture.ROCK,
+    "stop": Gesture.STOP,
+    "stop_inverted": Gesture.STOP_INVERTED,
+    "three": Gesture.THREE,
+    "three2": Gesture.THREE2,
+    "two_up": Gesture.TWO_UP,
+    "two_up_inverted": Gesture.TWO_UP_INVERTED,
 }
 
 
@@ -94,7 +141,7 @@ class GestureDetector:
             logger.warning("Model files not found")
             return
         try:
-            providers = ['CPUExecutionProvider']
+            providers = ["CPUExecutionProvider"]
             logger.info("Loading gesture models...")
             self._detector = ort.InferenceSession(str(self._detector_path), providers=providers)
             self._classifier = ort.InferenceSession(str(self._classifier_path), providers=providers)
@@ -138,7 +185,7 @@ class GestureDetector:
         x1, y1 = int(b[0] * w), int(b[1] * h)
         x2, y2 = int(b[2] * w), int(b[3] * h)
         x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(w-1, x2), min(h-1, y2)
+        x2, y2 = min(w - 1, x2), min(h - 1, y2)
         if x2 <= x1 or y2 <= y1:
             return None
         return (x1, y1, x2, y2, best_c)
@@ -152,7 +199,7 @@ class GestureDetector:
         elif bh > bw:
             x1, x2 = x1 - (bh - bw) // 2, x1 - (bh - bw) // 2 + bh
         x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(w-1, x2), min(h-1, y2)
+        x2, y2 = min(w - 1, x2), min(h - 1, y2)
         return frame[y1:y2, x1:x2]
 
     def _classify(self, crop: NDArray) -> tuple[Gesture, float]:

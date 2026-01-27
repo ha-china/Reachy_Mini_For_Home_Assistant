@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 try:
     from reachy_mini.utils import create_head_pose
     from reachy_mini.utils.interpolation import compose_world_offset
+
     SDK_UTILS_AVAILABLE = True
 except ImportError:
     SDK_UTILS_AVAILABLE = False
@@ -29,6 +30,7 @@ except ImportError:
 # Try to import scipy for rotation handling
 try:
     from scipy.spatial.transform import Rotation as R
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -89,14 +91,19 @@ def create_head_pose_matrix(
     """
     if SDK_UTILS_AVAILABLE:
         return create_head_pose(
-            x=x, y=y, z=z,
-            roll=roll, pitch=pitch, yaw=yaw,
-            degrees=False, mm=False,
+            x=x,
+            y=y,
+            z=z,
+            roll=roll,
+            pitch=pitch,
+            yaw=yaw,
+            degrees=False,
+            mm=False,
         )
 
     # Fallback: build matrix manually
     if SCIPY_AVAILABLE:
-        rotation = R.from_euler('xyz', [roll, pitch, yaw])
+        rotation = R.from_euler("xyz", [roll, pitch, yaw])
         pose = np.eye(4, dtype=np.float64)
         pose[:3, :3] = rotation.as_matrix()
         pose[0, 3] = x
@@ -161,7 +168,7 @@ def extract_yaw_from_pose(pose: np.ndarray) -> float:
         return 0.0
 
     rotation = R.from_matrix(pose[:3, :3])
-    _, _, yaw = rotation.as_euler('xyz')
+    _, _, yaw = rotation.as_euler("xyz")
     return yaw
 
 
@@ -200,8 +207,12 @@ def compose_full_pose(
     """
     # Build primary head pose from target
     primary_head = create_head_pose_matrix(
-        x=target.x, y=target.y, z=target.z,
-        roll=target.roll, pitch=target.pitch, yaw=target.yaw,
+        x=target.x,
+        y=target.y,
+        z=target.z,
+        roll=target.roll,
+        pitch=target.pitch,
+        yaw=target.yaw,
     )
 
     # Apply animation blend factor
@@ -222,8 +233,12 @@ def compose_full_pose(
 
     # Build secondary head pose
     secondary_head = create_head_pose_matrix(
-        x=secondary_x, y=secondary_y, z=secondary_z,
-        roll=secondary_roll, pitch=secondary_pitch, yaw=secondary_yaw,
+        x=secondary_x,
+        y=secondary_y,
+        z=secondary_z,
+        roll=secondary_roll,
+        pitch=secondary_pitch,
+        yaw=secondary_yaw,
     )
 
     # Compose poses

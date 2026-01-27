@@ -69,6 +69,7 @@ class AntennaController:
             blend_duration: Duration in seconds for blend transitions
         """
         import time
+
         self._now = time_func or time.monotonic
         self._blend_duration = blend_duration
 

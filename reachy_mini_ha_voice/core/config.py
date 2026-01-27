@@ -54,12 +54,13 @@ def _env_int(key: str, default: int) -> int:
 @dataclass
 class DaemonConfig:
     """Configuration for daemon monitoring."""
+
     url: str = "http://127.0.0.1:8000"
     check_interval_active: float = 2.0  # seconds
-    check_interval_sleep: float = 8.0   # seconds
-    check_interval_error: float = 6.0   # seconds
+    check_interval_sleep: float = 8.0  # seconds
+    check_interval_error: float = 6.0  # seconds
     max_backoff_interval: float = 15.0  # seconds
-    connection_timeout: float = 5.0     # seconds
+    connection_timeout: float = 5.0  # seconds
     backoff_multiplier: float = 1.5
     backoff_error_threshold: int = 2
     status_cache_ttl: float = 2.0  # seconds
@@ -69,6 +70,7 @@ class DaemonConfig:
 @dataclass
 class ESPHomeConfig:
     """Configuration for ESPHome protocol server."""
+
     port: int = 6053
     device_name: str = "reachy-mini"
     friendly_name: str = "Reachy Mini"
@@ -77,13 +79,14 @@ class ESPHomeConfig:
 @dataclass
 class CameraConfig:
     """Configuration for camera and video streaming."""
+
     # HTTP server
     port: int = 8081
 
     # Frame capture
-    fps_high: int = 15      # Active mode: smooth face tracking
-    fps_low: int = 2        # Low power: periodic face check
-    fps_idle: float = 0.5   # Ultra-low power: minimal CPU
+    fps_high: int = 15  # Active mode: smooth face tracking
+    fps_low: int = 2  # Low power: periodic face check
+    fps_idle: float = 0.5  # Ultra-low power: minimal CPU
 
     # JPEG encoding
     quality: int = 80
@@ -91,13 +94,13 @@ class CameraConfig:
     # Face tracking
     face_tracking_enabled: bool = True
     face_confidence_threshold: float = 0.5  # Min confidence for face detection (0.3 too low, causes false positives)
-    face_lost_delay: float = 2.0         # Wait before returning to neutral
+    face_lost_delay: float = 2.0  # Wait before returning to neutral
     interpolation_duration: float = 1.0  # Time to return to neutral
-    offset_scale: float = 0.6            # Face offset multiplier
+    offset_scale: float = 0.6  # Face offset multiplier
 
     # Power management
-    low_power_threshold: float = 5.0     # Seconds without face -> low power
-    idle_threshold: float = 30.0         # Seconds without face -> idle
+    low_power_threshold: float = 5.0  # Seconds without face -> low power
+    idle_threshold: float = 30.0  # Seconds without face -> idle
 
     # Gesture detection
     gesture_detection_enabled: bool = True
@@ -107,6 +110,7 @@ class CameraConfig:
 @dataclass
 class MotionConfig:
     """Configuration for motion control."""
+
     # Control loop
     control_rate_hz: float = 100.0
     control_interval: float = 0.01  # 1 / control_rate_hz
@@ -115,9 +119,9 @@ class MotionConfig:
     face_detected_threshold: float = 0.001  # Min offset to consider face detected
 
     # Idle behavior
-    idle_look_around_min_interval: float = 8.0   # Min seconds between look-arounds
+    idle_look_around_min_interval: float = 8.0  # Min seconds between look-arounds
     idle_look_around_max_interval: float = 20.0  # Max seconds between look-arounds
-    idle_inactivity_threshold: float = 5.0       # Seconds before look-around starts
+    idle_inactivity_threshold: float = 5.0  # Seconds before look-around starts
 
     # Animation
     animation_fps: float = 30.0
@@ -132,6 +136,7 @@ class MotionConfig:
 @dataclass
 class AudioConfig:
     """Configuration for audio processing."""
+
     # Audio format
     sample_rate: int = 16000
     channels: int = 1
@@ -149,6 +154,7 @@ class AudioConfig:
 @dataclass
 class DOAConfig:
     """Configuration for Direction of Arrival (DOA) sound tracking."""
+
     # Enable/disable DOA tracking
     enabled: bool = True
 
@@ -171,19 +177,23 @@ class DOAConfig:
 @dataclass
 class SleepConfig:
     """Configuration for sleep/wake management."""
+
     # Resume delay after wake
     resume_delay: float = 30.0  # seconds
 
     # Services to keep running during sleep
-    keep_alive_services: list = field(default_factory=lambda: [
-        "esphome_server",
-        "entity_registry",
-    ])
+    keep_alive_services: list = field(
+        default_factory=lambda: [
+            "esphome_server",
+            "entity_registry",
+        ]
+    )
 
 
 @dataclass
 class ShutdownConfig:
     """Configuration for shutdown behavior."""
+
     audio_thread_join_timeout: float = 1.0  # seconds
     camera_stop_timeout: float = 3.0  # seconds
     server_close_timeout: float = 3.0  # seconds
@@ -194,14 +204,16 @@ class ShutdownConfig:
 @dataclass
 class RobotStateConfig:
     """Configuration for robot state monitoring."""
+
     check_interval_active: float = 3.0  # seconds
-    check_interval_sleep: float = 8.0   # seconds
-    check_interval_error: float = 6.0   # seconds
+    check_interval_sleep: float = 8.0  # seconds
+    check_interval_error: float = 6.0  # seconds
 
 
 @dataclass
 class APIConfig:
     """Configuration for the HTTP API server."""
+
     port: int = 8080
     host: str = "0.0.0.0"
 
@@ -222,6 +234,7 @@ class Config:
     doa: DOAConfig = DOAConfig()
     sleep: SleepConfig = SleepConfig()
     robot_state: RobotStateConfig = RobotStateConfig()
+    shutdown: ShutdownConfig = ShutdownConfig()
     api: APIConfig = APIConfig()
 
     _initialized = False
@@ -258,48 +271,28 @@ class Config:
         # Daemon
         cls.daemon.url = os.environ.get("REACHY_DAEMON_URL", cls.daemon.url)
         cls.daemon.check_interval_active = _env_float(
-            "REACHY_DAEMON_CHECK_INTERVAL_ACTIVE",
-            cls.daemon.check_interval_active
+            "REACHY_DAEMON_CHECK_INTERVAL_ACTIVE", cls.daemon.check_interval_active
         )
         cls.daemon.check_interval_sleep = _env_float(
-            "REACHY_DAEMON_CHECK_INTERVAL_SLEEP",
-            cls.daemon.check_interval_sleep
+            "REACHY_DAEMON_CHECK_INTERVAL_SLEEP", cls.daemon.check_interval_sleep
         )
         cls.daemon.check_interval_error = _env_float(
-            "REACHY_DAEMON_CHECK_INTERVAL_ERROR",
-            cls.daemon.check_interval_error
+            "REACHY_DAEMON_CHECK_INTERVAL_ERROR", cls.daemon.check_interval_error
         )
         cls.daemon.max_backoff_interval = _env_float(
-            "REACHY_DAEMON_MAX_BACKOFF_INTERVAL",
-            cls.daemon.max_backoff_interval
+            "REACHY_DAEMON_MAX_BACKOFF_INTERVAL", cls.daemon.max_backoff_interval
         )
-        cls.daemon.connection_timeout = _env_float(
-            "REACHY_DAEMON_CONNECTION_TIMEOUT",
-            cls.daemon.connection_timeout
-        )
-        cls.daemon.backoff_multiplier = _env_float(
-            "REACHY_DAEMON_BACKOFF_MULTIPLIER",
-            cls.daemon.backoff_multiplier
-        )
+        cls.daemon.connection_timeout = _env_float("REACHY_DAEMON_CONNECTION_TIMEOUT", cls.daemon.connection_timeout)
+        cls.daemon.backoff_multiplier = _env_float("REACHY_DAEMON_BACKOFF_MULTIPLIER", cls.daemon.backoff_multiplier)
         cls.daemon.backoff_error_threshold = _env_int(
-            "REACHY_DAEMON_BACKOFF_ERROR_THRESHOLD",
-            cls.daemon.backoff_error_threshold
+            "REACHY_DAEMON_BACKOFF_ERROR_THRESHOLD", cls.daemon.backoff_error_threshold
         )
-        cls.daemon.status_cache_ttl = _env_float(
-            "REACHY_DAEMON_STATUS_CACHE_TTL",
-            cls.daemon.status_cache_ttl
-        )
-        cls.daemon.volume_cache_ttl = _env_float(
-            "REACHY_DAEMON_VOLUME_CACHE_TTL",
-            cls.daemon.volume_cache_ttl
-        )
+        cls.daemon.status_cache_ttl = _env_float("REACHY_DAEMON_STATUS_CACHE_TTL", cls.daemon.status_cache_ttl)
+        cls.daemon.volume_cache_ttl = _env_float("REACHY_DAEMON_VOLUME_CACHE_TTL", cls.daemon.volume_cache_ttl)
 
         # ESPHome
         cls.esphome.port = _env_int("REACHY_ESPHOME_PORT", cls.esphome.port)
-        cls.esphome.device_name = os.environ.get(
-            "REACHY_ESPHOME_DEVICE_NAME",
-            cls.esphome.device_name
-        )
+        cls.esphome.device_name = os.environ.get("REACHY_ESPHOME_DEVICE_NAME", cls.esphome.device_name)
 
         # Camera
         cls.camera.port = _env_int("REACHY_CAMERA_PORT", cls.camera.port)
@@ -307,43 +300,25 @@ class Config:
         cls.camera.quality = _env_int("REACHY_CAMERA_QUALITY", cls.camera.quality)
 
         # Motion
-        cls.motion.control_rate_hz = _env_float(
-            "REACHY_MOTION_CONTROL_RATE",
-            cls.motion.control_rate_hz
-        )
+        cls.motion.control_rate_hz = _env_float("REACHY_MOTION_CONTROL_RATE", cls.motion.control_rate_hz)
 
         # Audio
-        cls.audio.idle_sleep_active = _env_float(
-            "REACHY_AUDIO_IDLE_SLEEP_ACTIVE",
-            cls.audio.idle_sleep_active
-        )
-        cls.audio.idle_sleep_sleeping = _env_float(
-            "REACHY_AUDIO_IDLE_SLEEP_SLEEPING",
-            cls.audio.idle_sleep_sleeping
-        )
-        cls.audio.fallback_wait_sleep = _env_float(
-            "REACHY_AUDIO_FALLBACK_WAIT_SLEEP",
-            cls.audio.fallback_wait_sleep
-        )
+        cls.audio.idle_sleep_active = _env_float("REACHY_AUDIO_IDLE_SLEEP_ACTIVE", cls.audio.idle_sleep_active)
+        cls.audio.idle_sleep_sleeping = _env_float("REACHY_AUDIO_IDLE_SLEEP_SLEEPING", cls.audio.idle_sleep_sleeping)
+        cls.audio.fallback_wait_sleep = _env_float("REACHY_AUDIO_FALLBACK_WAIT_SLEEP", cls.audio.fallback_wait_sleep)
 
         # Sleep
-        cls.sleep.resume_delay = _env_float(
-            "REACHY_SLEEP_RESUME_DELAY",
-            cls.sleep.resume_delay
-        )
+        cls.sleep.resume_delay = _env_float("REACHY_SLEEP_RESUME_DELAY", cls.sleep.resume_delay)
 
         # Robot state
         cls.robot_state.check_interval_active = _env_float(
-            "REACHY_ROBOT_STATE_CHECK_INTERVAL_ACTIVE",
-            cls.robot_state.check_interval_active
+            "REACHY_ROBOT_STATE_CHECK_INTERVAL_ACTIVE", cls.robot_state.check_interval_active
         )
         cls.robot_state.check_interval_sleep = _env_float(
-            "REACHY_ROBOT_STATE_CHECK_INTERVAL_SLEEP",
-            cls.robot_state.check_interval_sleep
+            "REACHY_ROBOT_STATE_CHECK_INTERVAL_SLEEP", cls.robot_state.check_interval_sleep
         )
         cls.robot_state.check_interval_error = _env_float(
-            "REACHY_ROBOT_STATE_CHECK_INTERVAL_ERROR",
-            cls.robot_state.check_interval_error
+            "REACHY_ROBOT_STATE_CHECK_INTERVAL_ERROR", cls.robot_state.check_interval_error
         )
 
         logger.debug("Loaded configuration from environment")

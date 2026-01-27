@@ -16,9 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Reachy Mini for Home Assistant"
-    )
+    parser = argparse.ArgumentParser(description="Reachy Mini for Home Assistant")
     parser.add_argument(
         "--name",
         default="Reachy Mini",
@@ -75,6 +73,7 @@ async def main() -> None:
     if not args.no_motion:
         try:
             from reachy_mini import ReachyMini
+
             reachy_mini = ReachyMini()
             _LOGGER.info("Reachy Mini connected")
         except ImportError:
@@ -105,7 +104,7 @@ async def main() -> None:
     # Register service health checks
     health_monitor.register_checker(
         "voice_assistant",
-        lambda: service.is_running if hasattr(service, 'is_running') else True,
+        lambda: service.is_running if hasattr(service, "is_running") else True,
         interval=30.0,
     )
 

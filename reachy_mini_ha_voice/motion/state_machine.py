@@ -11,6 +11,7 @@ from enum import Enum
 
 class RobotState(Enum):
     """Robot state machine states."""
+
     IDLE = "idle"
     LISTENING = "listening"
     THINKING = "thinking"
@@ -30,6 +31,7 @@ STATE_ANIMATION_MAP = {
 @dataclass
 class MovementState:
     """Internal movement state (only modified by control loop)."""
+
     # Current robot state
     robot_state: RobotState = RobotState.IDLE
 
@@ -80,6 +82,7 @@ class MovementState:
 @dataclass
 class PendingAction:
     """A pending motion action."""
+
     name: str
     target_pitch: float = 0.0
     target_yaw: float = 0.0

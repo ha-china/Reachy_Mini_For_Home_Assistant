@@ -15,6 +15,7 @@ Key features:
 
 try:
     from importlib.metadata import version
+
     __version__ = version("reachy_mini_ha_voice")
 except Exception:
     __version__ = "0.0.0"  # Fallback for development

@@ -63,18 +63,18 @@ FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face det
 ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
 
 # Skip sending nearly-identical poses to reduce daemon load
-POSE_EPS = 1e-3          # Max element delta in 4x4 pose matrix
-ANTENNA_EPS = 0.005      # Radians (~0.29 deg)
-BODY_YAW_EPS = 0.005     # Radians (~0.29 deg)
+POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
+ANTENNA_EPS = 0.005  # Radians (~0.29 deg)
+BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Send at most 5 Hz when unchanged
 
 # Idle look-around behavior parameters
-IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0   # Minimum seconds between look-arounds
+IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0  # Minimum seconds between look-arounds
 IDLE_LOOK_AROUND_MAX_INTERVAL = 20.0  # Maximum seconds between look-arounds
-IDLE_LOOK_AROUND_YAW_RANGE = 25.0     # Maximum yaw angle in degrees
-IDLE_LOOK_AROUND_PITCH_RANGE = 10.0   # Maximum pitch angle in degrees
-IDLE_LOOK_AROUND_DURATION = 1.2       # Duration of look-around action in seconds
-IDLE_INACTIVITY_THRESHOLD = 5.0       # Seconds of inactivity before look-around starts
+IDLE_LOOK_AROUND_YAW_RANGE = 25.0  # Maximum yaw angle in degrees
+IDLE_LOOK_AROUND_PITCH_RANGE = 10.0  # Maximum pitch angle in degrees
+IDLE_LOOK_AROUND_DURATION = 1.2  # Duration of look-around action in seconds
+IDLE_INACTIVITY_THRESHOLD = 5.0  # Seconds of inactivity before look-around starts
 
 
 class MovementManager:
@@ -340,10 +340,7 @@ class MovementManager:
         """Thread-safe: Perform a head shake gesture."""
         self._command_queue.put(("shake", (amplitude_deg, duration)))
 
-    def set_speech_sway(
-        self, x: float, y: float, z: float,
-        roll: float, pitch: float, yaw: float
-    ) -> None:
+    def set_speech_sway(self, x: float, y: float, z: float, roll: float, pitch: float, yaw: float) -> None:
         """Thread-safe: Set speech-driven sway offsets.
 
         These offsets are applied on top of the current animation
@@ -470,16 +467,21 @@ class MovementManager:
             roll, pitch, yaw: Head orientation in radians
             antenna_left, antenna_right: Antenna angles in radians
         """
-        self._command_queue.put(("set_pose", {
-            "x": x,
-            "y": y,
-            "z": z,
-            "roll": roll,
-            "pitch": pitch,
-            "yaw": yaw,
-            "antenna_left": antenna_left,
-            "antenna_right": antenna_right,
-        }))
+        self._command_queue.put(
+            (
+                "set_pose",
+                {
+                    "x": x,
+                    "y": y,
+                    "z": z,
+                    "roll": roll,
+                    "pitch": pitch,
+                    "yaw": yaw,
+                    "antenna_left": antenna_left,
+                    "antenna_right": antenna_right,
+                },
+            )
+        )
 
     # =========================================================================
     # Internal: Command processing (runs in control loop)
@@ -519,8 +521,7 @@ class MovementManager:
                 # Start unfreezing when leaving listening mode
                 self._start_antenna_unfreeze()
 
-            logger.debug("State changed: %s -> %s, animation: %s",
-                         old_state.value, payload.value, animation_name)
+            logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
 
         elif cmd == "action":
             self._start_action(payload)
@@ -575,8 +576,7 @@ class MovementManager:
         be sampled in the control loop via _update_emotion_move().
         """
         if not is_emotion_available():
-            logger.warning("Cannot play emotion '%s': emotion library not available",
-                           emotion_name)
+            logger.warning("Cannot play emotion '%s': emotion library not available", emotion_name)
             return
 
         try:
@@ -584,8 +584,7 @@ class MovementManager:
             with self._emotion_move_lock:
                 self._emotion_move = emotion_move
                 self._emotion_start_time = self._now()
-            logger.info("Started emotion move: %s (duration=%.2fs)",
-                        emotion_name, emotion_move.duration)
+            logger.info("Started emotion move: %s (duration=%.2fs)", emotion_name, emotion_move.duration)
         except Exception as e:
             logger.error("Failed to start emotion '%s': %s", emotion_name, e)
 
@@ -780,10 +779,7 @@ class MovementManager:
 
         # Schedule next look-around if not scheduled
         if self.state.next_look_around_time == 0.0:
-            interval = random.uniform(
-                IDLE_LOOK_AROUND_MIN_INTERVAL,
-                IDLE_LOOK_AROUND_MAX_INTERVAL
-            )
+            interval = random.uniform(IDLE_LOOK_AROUND_MIN_INTERVAL, IDLE_LOOK_AROUND_MAX_INTERVAL)
             self.state.next_look_around_time = now + interval
             logger.debug("Scheduled next look-around in %.1fs", interval)
             return
@@ -791,14 +787,8 @@ class MovementManager:
         # Check if it's time for look-around
         if now >= self.state.next_look_around_time and not self.state.look_around_in_progress:
             # Generate random look direction
-            target_yaw = random.uniform(
-                -IDLE_LOOK_AROUND_YAW_RANGE,
-                IDLE_LOOK_AROUND_YAW_RANGE
-            )
-            target_pitch = random.uniform(
-                -IDLE_LOOK_AROUND_PITCH_RANGE,
-                IDLE_LOOK_AROUND_PITCH_RANGE
-            )
+            target_yaw = random.uniform(-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE)
+            target_pitch = random.uniform(-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE)
 
             # Create look-around action
             action = PendingAction(
@@ -813,14 +803,10 @@ class MovementManager:
             self.state.look_around_in_progress = True
 
             # Schedule return to center and next look-around
-            interval = random.uniform(
-                IDLE_LOOK_AROUND_MIN_INTERVAL,
-                IDLE_LOOK_AROUND_MAX_INTERVAL
-            )
+            interval = random.uniform(IDLE_LOOK_AROUND_MIN_INTERVAL, IDLE_LOOK_AROUND_MAX_INTERVAL)
             self.state.next_look_around_time = now + IDLE_LOOK_AROUND_DURATION * 2 + interval
 
-            logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°",
-                         target_yaw, target_pitch)
+            logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°", target_yaw, target_pitch)
 
     def _update_emotion_move(self) -> tuple[np.ndarray, tuple[float, float], float] | None:
         """Update emotion move playback and return pose if active.
@@ -907,8 +893,12 @@ class MovementManager:
 
         # Build secondary pose and compose with primary (using pose_composer utilities)
         secondary_head = create_head_pose_matrix(
-            x=secondary_x, y=secondary_y, z=secondary_z,
-            roll=secondary_roll, pitch=secondary_pitch, yaw=secondary_yaw,
+            x=secondary_x,
+            y=secondary_y,
+            z=secondary_z,
+            roll=secondary_roll,
+            pitch=secondary_pitch,
+            yaw=secondary_yaw,
         )
         final_head = compose_poses(primary_head, secondary_head)
 
@@ -981,7 +971,11 @@ class MovementManager:
         now = self._now()
 
         # If pose hasn't changed, only send periodically to reduce daemon load
-        if self._last_sent_head_pose is not None and self._last_sent_antennas is not None and self._last_sent_body_yaw is not None:
+        if (
+            self._last_sent_head_pose is not None
+            and self._last_sent_antennas is not None
+            and self._last_sent_body_yaw is not None
+        ):
             pose_delta = np.max(np.abs(head_pose - self._last_sent_head_pose))
             antenna_delta = max(
                 abs(antennas[0] - self._last_sent_antennas[0]),
@@ -1049,8 +1043,7 @@ class MovementManager:
                         # Transient error, log but don't mark as lost yet
                         err_cnt = self._consecutive_errors
                         max_err = self._max_consecutive_errors
-                        self._log_error_throttled(
-                            f"Transient connection error ({err_cnt}/{max_err}): {error_msg}")
+                        self._log_error_throttled(f"Transient connection error ({err_cnt}/{max_err}): {error_msg}")
                 else:
                     # Already in lost state, use throttled logging
                     self._log_error_throttled(f"Connection still lost: {error_msg}")

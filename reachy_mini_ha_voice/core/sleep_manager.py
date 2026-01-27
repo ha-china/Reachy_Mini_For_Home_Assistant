@@ -21,9 +21,9 @@ import asyncio
 import logging
 from collections.abc import Callable
 
+from .config import Config
 from .daemon_monitor import DaemonState, DaemonStateMonitor
 from .service_base import ServiceManager, SleepAwareService
-from .config import Config
 
 logger = logging.getLogger(__name__)
 

@@ -277,10 +277,7 @@ class HealthMonitor:
         if not all_health:
             return HealthStatus.UNKNOWN
 
-        unhealthy_count = sum(
-            1 for h in all_health.values()
-            if h.status == HealthStatus.UNHEALTHY
-        )
+        unhealthy_count = sum(1 for h in all_health.values() if h.status == HealthStatus.UNHEALTHY)
 
         if unhealthy_count == 0:
             return HealthStatus.HEALTHY
@@ -292,10 +289,7 @@ class HealthMonitor:
     def check_all_now(self) -> dict[str, ServiceHealth]:
         """Perform immediate health check on all services."""
         with self._lock:
-            return {
-                name: checker.check_now()
-                for name, checker in self._checkers.items()
-            }
+            return {name: checker.check_now() for name, checker in self._checkers.items()}
 
 
 # Global health monitor instance

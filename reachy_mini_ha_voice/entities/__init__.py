@@ -4,12 +4,13 @@ This module handles ESPHome entity definitions:
 - ESPHomeEntity: Base class for all entities
 - EntityRegistry: Entity registration and management
 - EventEmotionMapper: HA event to robot emotion mapping
-- EmotionKeywordDetector: LLM response emotion detection
+# - EmotionKeywordDetector: LLM response emotion detection (DISABLED - moved to HA blueprint)
 - Entity keys: Consistent key management
 - Entity factory: Entity creation utilities
 """
 
-from .emotion_detector import EmotionKeywordDetector
+# DISABLED: Emotion detection moved to Home Assistant blueprint
+# from .emotion_detector import EmotionKeywordDetector
 from .entity import (
     BinarySensorEntity,
     CameraEntity,
@@ -51,8 +52,8 @@ __all__ = [
     "CameraEntity",
     # Entity base classes
     "ESPHomeEntity",
-    # Emotion detection
-    "EmotionKeywordDetector",
+    # Emotion detection (DISABLED - moved to HA blueprint)
+    # "EmotionKeywordDetector",
     # Entity registry
     "EntityRegistry",
     "EventEmotionMapper",

@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 class SensorStateClass:
     """ESPHome SensorStateClass enum values."""
+
     NONE = 0
     MEASUREMENT = 1
     TOTAL_INCREASING = 2

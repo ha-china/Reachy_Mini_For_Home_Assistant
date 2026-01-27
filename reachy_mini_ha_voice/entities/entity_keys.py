@@ -14,18 +14,15 @@ logger = logging.getLogger(__name__)
 ENTITY_KEYS: dict[str, int] = {
     # Media player (key 0 reserved)
     "reachy_mini_media_player": 0,
-
     # Phase 1: Basic status and volume (100-199)
     "daemon_state": 100,
     "backend_ready": 101,
     "speaker_volume": 103,
-
     # Phase 2: Motor control (200-299)
     "motors_enabled": 200,
     "motor_mode": 201,
     "wake_up": 202,
     "go_to_sleep": 203,
-
     # Phase 3: Pose control (300-399)
     "head_x": 300,
     "head_y": 301,
@@ -36,16 +33,13 @@ ENTITY_KEYS: dict[str, int] = {
     "body_yaw": 306,
     "antenna_left": 307,
     "antenna_right": 308,
-
     # Phase 4: Look at control (400-499)
     "look_at_x": 400,
     "look_at_y": 401,
     "look_at_z": 402,
-
     # Phase 5: DOA - Direction of Arrival (500-599)
     "doa_angle": 500,
     "speech_detected": 501,
-
     # Phase 6: Diagnostic information (600-699)
     "control_loop_frequency": 600,
     "sdk_version": 601,
@@ -54,7 +48,6 @@ ENTITY_KEYS: dict[str, int] = {
     "simulation_mode": 604,
     "wlan_ip": 605,
     "error_message": 606,
-
     # Phase 7: IMU sensors (700-799)
     "imu_accel_x": 700,
     "imu_accel_y": 701,
@@ -63,33 +56,25 @@ ENTITY_KEYS: dict[str, int] = {
     "imu_gyro_y": 704,
     "imu_gyro_z": 705,
     "imu_temperature": 706,
-
     # Phase 8: Emotion selector (800-899)
     "emotion": 800,
-
     # Phase 9: Audio controls (900-999)
     "microphone_volume": 900,
-
     # Phase 10: Camera (1000-1099)
     "camera_url": 1000,
     "camera": 1001,
-
     # Phase 12: Audio processing (1200-1299)
     "agc_enabled": 1200,
     "agc_max_gain": 1201,
     "noise_suppression": 1202,
     "echo_cancellation_converged": 1203,
-
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
-
     # Phase 22: Gesture detection (1600-1699)
     "gesture_detected": 1600,
     "gesture_confidence": 1601,
-
     # Phase 23: Face detection (1700-1799)
     "face_detected": 1700,
-
     # Phase 24: System diagnostics (1800-1899)
     "sys_cpu_percent": 1800,
     "sys_cpu_temperature": 1801,
@@ -100,11 +85,9 @@ ENTITY_KEYS: dict[str, int] = {
     "sys_uptime": 1806,
     "sys_process_cpu": 1807,
     "sys_process_memory": 1808,
-
     # Phase 25: Sleep state (1900-1999)
     "sleep_mode": 1900,
     "services_suspended": 1901,
-
     # Phase 26: DOA tracking control (2000+)
     "doa_tracking_enabled": 2000,
 }

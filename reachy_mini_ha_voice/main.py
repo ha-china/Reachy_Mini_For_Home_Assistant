@@ -29,6 +29,7 @@ def _check_zenoh_available(timeout: float = 1.0) -> bool:
 # Only import ReachyMiniApp if we're running as an app
 try:
     from reachy_mini import ReachyMini, ReachyMiniApp
+
     REACHY_MINI_AVAILABLE = True
 except ImportError:
     REACHY_MINI_AVAILABLE = False
@@ -64,7 +65,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
     def __init__(self, *args, **kwargs):
         """Initialize the app."""
         super().__init__(*args, **kwargs)
-        if not hasattr(self, 'stop_event'):
+        if not hasattr(self, "stop_event"):
             self.stop_event = threading.Event()
 
     def wrapped_run(self, *args, **kwargs) -> None:
@@ -202,6 +203,12 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+
+    # Reduce verbosity for some noisy modules
+    logging.getLogger("reachy_mini.media.media_manager").setLevel(logging.WARNING)
+    logging.getLogger("reachy_mini.media.camera_base").setLevel(logging.WARNING)
+    logging.getLogger("reachy_mini.media.audio_base").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
     app = ReachyMiniHaVoice()
     try:

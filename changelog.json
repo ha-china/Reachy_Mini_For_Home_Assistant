@@ -6,7 +6,13 @@
       "New: Mute switch entity - suspends voice services only (not camera/motion)",
       "New: Disable Camera switch entity - suspends camera and AI processing",
       "Fix: Camera disable logic - corrected inverted conditions for proper operation",
-      "Fix: Prevent daemon crash when entering idle state"
+      "Fix: Prevent daemon crash when entering idle state",
+      "New: Home Assistant connection-driven feature loading",
+      "New: Automatic suspend/resume on HA disconnect/reconnect",
+      "Fix: Camera preview in Home Assistant",
+      "Optimize: Reduce log output by 30-40%",
+      "Fix: Code quality improvements",
+      "Remove: Temporarily disable emotion playback during TTS"
     ]
   },
   {

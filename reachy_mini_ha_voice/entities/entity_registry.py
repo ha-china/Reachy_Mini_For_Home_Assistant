@@ -157,72 +157,82 @@ class EntityRegistry:
         """Setup Phase 1 entities: Basic status and volume control."""
         rc = self.reachy_controller
 
-        entities.append(TextSensorEntity(
-            server=self.server,
-            key=get_entity_key("daemon_state"),
-            name="Daemon State",
-            object_id="daemon_state",
-            icon="mdi:robot",
-            value_getter=rc.get_daemon_state,
-        ))
+        entities.append(
+            TextSensorEntity(
+                server=self.server,
+                key=get_entity_key("daemon_state"),
+                name="Daemon State",
+                object_id="daemon_state",
+                icon="mdi:robot",
+                value_getter=rc.get_daemon_state,
+            )
+        )
 
-        entities.append(BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("backend_ready"),
-            name="Backend Ready",
-            object_id="backend_ready",
-            icon="mdi:check-circle",
-            device_class="connectivity",
-            value_getter=rc.get_backend_ready,
-        ))
+        entities.append(
+            BinarySensorEntity(
+                server=self.server,
+                key=get_entity_key("backend_ready"),
+                name="Backend Ready",
+                object_id="backend_ready",
+                icon="mdi:check-circle",
+                device_class="connectivity",
+                value_getter=rc.get_backend_ready,
+            )
+        )
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("speaker_volume"),
-            name="Speaker Volume",
-            object_id="speaker_volume",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            icon="mdi:volume-high",
-            unit_of_measurement="%",
-            mode=2,  # Slider mode
-            entity_category=1,  # config
-            value_getter=rc.get_speaker_volume,
-            value_setter=rc.set_speaker_volume,
-        ))
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("speaker_volume"),
+                name="Speaker Volume",
+                object_id="speaker_volume",
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+                icon="mdi:volume-high",
+                unit_of_measurement="%",
+                mode=2,  # Slider mode
+                entity_category=1,  # config
+                value_getter=rc.get_speaker_volume,
+                value_setter=rc.set_speaker_volume,
+            )
+        )
 
         # Voice assistant mute switch - suspends only voice services when enabled
         def get_muted() -> bool:
-            return self.server.state.is_muted if hasattr(self.server, 'state') and self.server.state else False
+            return self.server.state.is_muted if hasattr(self.server, "state") and self.server.state else False
 
         def set_muted(muted: bool) -> None:
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 self.server.state.is_muted = muted
-                voice_assistant = getattr(self.server, '_voice_assistant_service', None)
+                voice_assistant = getattr(self.server, "_voice_assistant_service", None)
                 if voice_assistant:
                     if muted:
                         voice_assistant._suspend_voice_services(reason="mute")
                     else:
                         voice_assistant._resume_voice_services(reason="mute")
 
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("mute"),
-            name="Mute",
-            object_id="mute",
-            icon="mdi:microphone-off",
-            entity_category=1,
-            value_getter=get_muted,
-            value_setter=set_muted,
-        ))
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("mute"),
+                name="Mute",
+                object_id="mute",
+                icon="mdi:microphone-off",
+                entity_category=1,
+                value_getter=get_muted,
+                value_setter=set_muted,
+            )
+        )
 
         # Camera disable switch - suspends camera processing when enabled
         def get_camera_disabled() -> bool:
-            return not self.server.state.camera_enabled if hasattr(self.server, 'state') and self.server.state else False
+            return (
+                not self.server.state.camera_enabled if hasattr(self.server, "state") and self.server.state else False
+            )
 
         def set_camera_disabled(disabled: bool) -> None:
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 self.server.state.camera_enabled = not disabled
                 if self.camera_server:
                     if disabled:
@@ -230,16 +240,18 @@ class EntityRegistry:
                     else:
                         self.camera_server.resume_from_suspend()
 
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("camera_disabled"),
-            name="Disable Camera",
-            object_id="camera_disabled",
-            icon="mdi:camera-off",
-            entity_category=1,
-            value_getter=get_camera_disabled,
-            value_setter=set_camera_disabled,
-        ))
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("camera_disabled"),
+                name="Disable Camera",
+                object_id="camera_disabled",
+                icon="mdi:camera-off",
+                entity_category=1,
+                value_getter=get_camera_disabled,
+                value_setter=set_camera_disabled,
+            )
+        )
 
         _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled")
 
@@ -247,36 +259,42 @@ class EntityRegistry:
         """Setup Phase 2 entities: Motor control."""
         rc = self.reachy_controller
 
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("motors_enabled"),
-            name="Motors Enabled",
-            object_id="motors_enabled",
-            icon="mdi:engine",
-            device_class="switch",
-            value_getter=rc.get_motors_enabled,
-            value_setter=rc.set_motors_enabled,
-        ))
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("motors_enabled"),
+                name="Motors Enabled",
+                object_id="motors_enabled",
+                icon="mdi:engine",
+                device_class="switch",
+                value_getter=rc.get_motors_enabled,
+                value_setter=rc.set_motors_enabled,
+            )
+        )
 
-        entities.append(ButtonEntity(
-            server=self.server,
-            key=get_entity_key("wake_up"),
-            name="Wake Up",
-            object_id="wake_up",
-            icon="mdi:alarm",
-            device_class="restart",
-            on_press=rc.wake_up,
-        ))
+        entities.append(
+            ButtonEntity(
+                server=self.server,
+                key=get_entity_key("wake_up"),
+                name="Wake Up",
+                object_id="wake_up",
+                icon="mdi:alarm",
+                device_class="restart",
+                on_press=rc.wake_up,
+            )
+        )
 
-        entities.append(ButtonEntity(
-            server=self.server,
-            key=get_entity_key("go_to_sleep"),
-            name="Go to Sleep",
-            object_id="go_to_sleep",
-            icon="mdi:sleep",
-            device_class="restart",
-            on_press=rc.go_to_sleep,
-        ))
+        entities.append(
+            ButtonEntity(
+                server=self.server,
+                key=get_entity_key("go_to_sleep"),
+                name="Go to Sleep",
+                object_id="go_to_sleep",
+                icon="mdi:sleep",
+                device_class="restart",
+                on_press=rc.go_to_sleep,
+            )
+        )
 
         # Sleep mode sensor - reflects daemon state (STOPPED = sleeping)
         # This is read-only and updated by the SleepManager
@@ -301,7 +319,9 @@ class EntityRegistry:
         )
         entities.append(self._services_suspended_entity)
 
-        _LOGGER.debug("Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep, sleep_mode, services_suspended")
+        _LOGGER.debug(
+            "Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep, sleep_mode, services_suspended"
+        )
 
     def _setup_phase3_entities(self, entities: list) -> None:
         """Setup Phase 3 entities: Pose control."""
@@ -355,27 +375,31 @@ class EntityRegistry:
         """Setup Phase 5 entities: DOA (Direction of Arrival) for wakeup turn-to-sound."""
         rc = self.reachy_controller
 
-        entities.append(SensorEntity(
-            server=self.server,
-            key=get_entity_key("doa_angle"),
-            name="DOA Angle",
-            object_id="doa_angle",
-            icon="mdi:surround-sound",
-            unit_of_measurement="°",
-            accuracy_decimals=1,
-            state_class="measurement",
-            value_getter=rc.get_doa_angle_degrees,
-        ))
+        entities.append(
+            SensorEntity(
+                server=self.server,
+                key=get_entity_key("doa_angle"),
+                name="DOA Angle",
+                object_id="doa_angle",
+                icon="mdi:surround-sound",
+                unit_of_measurement="°",
+                accuracy_decimals=1,
+                state_class="measurement",
+                value_getter=rc.get_doa_angle_degrees,
+            )
+        )
 
-        entities.append(BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("speech_detected"),
-            name="Speech Detected",
-            object_id="speech_detected",
-            icon="mdi:account-voice",
-            device_class="sound",
-            value_getter=rc.get_speech_detected,
-        ))
+        entities.append(
+            BinarySensorEntity(
+                server=self.server,
+                key=get_entity_key("speech_detected"),
+                name="Speech Detected",
+                object_id="speech_detected",
+                icon="mdi:account-voice",
+                device_class="sound",
+                value_getter=rc.get_speech_detected,
+            )
+        )
 
         # DOA sound tracking control switch
         def get_doa_tracking_state() -> bool:
@@ -390,15 +414,17 @@ class EntityRegistry:
                 rc._movement_manager.set_doa_enabled(enabled)
             _LOGGER.info("DOA tracking %s", "enabled" if enabled else "disabled")
 
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("doa_tracking_enabled"),
-            name="DOA Sound Tracking",
-            object_id="doa_tracking_enabled",
-            icon="mdi:ear-hearing",
-            value_getter=get_doa_tracking_state,
-            value_setter=set_doa_tracking_state,
-        ))
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("doa_tracking_enabled"),
+                name="DOA Sound Tracking",
+                object_id="doa_tracking_enabled",
+                icon="mdi:ear-hearing",
+                value_getter=get_doa_tracking_state,
+                value_setter=set_doa_tracking_state,
+            )
+        )
 
         _LOGGER.debug("Phase 5 entities registered: doa_angle, speech_detected, doa_tracking_enabled")
 
@@ -463,16 +489,18 @@ class EntityRegistry:
                 # Reset to None after playing
                 self._current_emotion = "None"
 
-        entities.append(SelectEntity(
-            server=self.server,
-            key=get_entity_key("emotion"),
-            name="Emotion",
-            object_id="emotion",
-            options=list(self._emotion_map.keys()),
-            icon="mdi:emoticon",
-            value_getter=get_emotion,
-            value_setter=set_emotion,
-        ))
+        entities.append(
+            SelectEntity(
+                server=self.server,
+                key=get_entity_key("emotion"),
+                name="Emotion",
+                object_id="emotion",
+                options=list(self._emotion_map.keys()),
+                icon="mdi:emoticon",
+                value_getter=get_emotion,
+                value_setter=set_emotion,
+            )
+        )
 
         _LOGGER.debug("Phase 8 entities registered: emotion selector")
 
@@ -480,21 +508,23 @@ class EntityRegistry:
         """Setup Phase 9 entities: Audio controls."""
         rc = self.reachy_controller
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("microphone_volume"),
-            name="Microphone Volume",
-            object_id="microphone_volume",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            icon="mdi:microphone",
-            unit_of_measurement="%",
-            mode=2,  # Slider mode
-            entity_category=1,  # config
-            value_getter=rc.get_microphone_volume,
-            value_setter=rc.set_microphone_volume,
-        ))
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("microphone_volume"),
+                name="Microphone Volume",
+                object_id="microphone_volume",
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+                icon="mdi:microphone",
+                unit_of_measurement="%",
+                mode=2,  # Slider mode
+                entity_category=1,  # config
+                value_getter=rc.get_microphone_volume,
+                value_setter=rc.set_microphone_volume,
+            )
+        )
 
         _LOGGER.debug("Phase 9 entities registered: microphone_volume")
 
@@ -502,19 +532,42 @@ class EntityRegistry:
         """Setup Phase 10 entities: Camera for Home Assistant integration."""
 
         def get_camera_image() -> bytes | None:
-            """Get camera snapshot as JPEG bytes."""
-            if self.camera_server:
-                return self.camera_server.get_snapshot()
+            """Get camera snapshot as JPEG bytes.
+
+            Dynamically retrieves camera_server from server state to handle
+            the case where camera is started after entity registration.
+            """
+            # Try to get camera_server from multiple sources
+            camera_server = self.camera_server  # Direct reference
+
+            # If direct reference is None, try to get from server state
+            if camera_server is None and hasattr(self.server, 'state') and self.server.state:
+                # Check if there's a camera_server stored in state
+                if hasattr(self.server.state, '_camera_server'):
+                    camera_server = self.server.state._camera_server
+                # Or check if server has a reference
+                elif hasattr(self.server, 'camera_server'):
+                    camera_server = self.server.camera_server
+
+            if camera_server:
+                try:
+                    return camera_server.get_snapshot()
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.debug("Failed to get camera snapshot: %s", e)
             return None
 
-        entities.append(CameraEntity(
-            server=self.server,
-            key=get_entity_key("camera"),
-            name="Camera",
-            object_id="camera",
-            icon="mdi:camera",
-            image_getter=get_camera_image,
-        ))
+        entities.append(
+            CameraEntity(
+                server=self.server,
+                key=get_entity_key("camera"),
+                name="Camera",
+                object_id="camera",
+                icon="mdi:camera",
+                image_getter=get_camera_image,
+            )
+        )
 
         _LOGGER.debug("Phase 10 entities registered: camera (ESPHome Camera entity)")
 
@@ -525,7 +578,7 @@ class EntityRegistry:
         def set_agc_enabled_with_save(enabled: bool) -> None:
             """Set AGC enabled and save to preferences."""
             rc.set_agc_enabled(enabled)
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.agc_enabled = enabled
                 self.server.state.save_preferences()
                 _LOGGER.debug("AGC enabled saved to preferences: %s", enabled)
@@ -533,7 +586,7 @@ class EntityRegistry:
         def set_agc_max_gain_with_save(gain: float) -> None:
             """Set AGC max gain and save to preferences."""
             rc.set_agc_max_gain(gain)
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.agc_max_gain = gain
                 self.server.state.save_preferences()
                 _LOGGER.debug("AGC max gain saved to preferences: %.1f dB", gain)
@@ -541,69 +594,76 @@ class EntityRegistry:
         def set_noise_suppression_with_save(level: float) -> None:
             """Set noise suppression and save to preferences."""
             rc.set_noise_suppression(level)
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.noise_suppression = level
                 self.server.state.save_preferences()
                 _LOGGER.debug("Noise suppression saved to preferences: %.1f%%", level)
 
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("agc_enabled"),
-            name="AGC Enabled",
-            object_id="agc_enabled",
-            icon="mdi:tune-vertical",
-            device_class="switch",
-            entity_category=1,  # config
-            value_getter=rc.get_agc_enabled,
-            value_setter=set_agc_enabled_with_save,
-        ))
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("agc_enabled"),
+                name="AGC Enabled",
+                object_id="agc_enabled",
+                icon="mdi:tune-vertical",
+                device_class="switch",
+                entity_category=1,  # config
+                value_getter=rc.get_agc_enabled,
+                value_setter=set_agc_enabled_with_save,
+            )
+        )
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("agc_max_gain"),
-            name="AGC Max Gain",
-            object_id="agc_max_gain",
-            min_value=0.0,
-            max_value=40.0,  # XVF3800 supports up to 40dB
-            step=1.0,
-            icon="mdi:volume-plus",
-            unit_of_measurement="dB",
-            mode=2,
-            entity_category=1,  # config
-            value_getter=rc.get_agc_max_gain,
-            value_setter=set_agc_max_gain_with_save,
-        ))
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("agc_max_gain"),
+                name="AGC Max Gain",
+                object_id="agc_max_gain",
+                min_value=0.0,
+                max_value=40.0,  # XVF3800 supports up to 40dB
+                step=1.0,
+                icon="mdi:volume-plus",
+                unit_of_measurement="dB",
+                mode=2,
+                entity_category=1,  # config
+                value_getter=rc.get_agc_max_gain,
+                value_setter=set_agc_max_gain_with_save,
+            )
+        )
 
-        entities.append(NumberEntity(
-            server=self.server,
-            key=get_entity_key("noise_suppression"),
-            name="Noise Suppression",
-            object_id="noise_suppression",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            icon="mdi:volume-off",
-            unit_of_measurement="%",
-            mode=2,
-            entity_category=1,  # config
-            value_getter=rc.get_noise_suppression,
-            value_setter=set_noise_suppression_with_save,
-        ))
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("noise_suppression"),
+                name="Noise Suppression",
+                object_id="noise_suppression",
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+                icon="mdi:volume-off",
+                unit_of_measurement="%",
+                mode=2,
+                entity_category=1,  # config
+                value_getter=rc.get_noise_suppression,
+                value_setter=set_noise_suppression_with_save,
+            )
+        )
 
-        entities.append(BinarySensorEntity(
-            server=self.server,
-            key=get_entity_key("echo_cancellation_converged"),
-            name="Echo Cancellation Converged",
-            object_id="echo_cancellation_converged",
-            icon="mdi:waveform",
-            device_class="running",
-            entity_category=2,  # diagnostic
-            value_getter=rc.get_echo_cancellation_converged,
-        ))
+        entities.append(
+            BinarySensorEntity(
+                server=self.server,
+                key=get_entity_key("echo_cancellation_converged"),
+                name="Echo Cancellation Converged",
+                object_id="echo_cancellation_converged",
+                icon="mdi:waveform",
+                device_class="running",
+                entity_category=2,  # diagnostic
+                value_getter=rc.get_echo_cancellation_converged,
+            )
+        )
 
         _LOGGER.debug(
-            "Phase 12 entities registered: agc_enabled, agc_max_gain, "
-            "noise_suppression, echo_cancellation_converged"
+            "Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged"
         )
 
     def _setup_phase21_entities(self, entities: list) -> None:
@@ -611,29 +671,31 @@ class EntityRegistry:
 
         def get_continuous_conversation() -> bool:
             """Get current continuous conversation mode state."""
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 prefs = self.server.state.preferences
-                return getattr(prefs, 'continuous_conversation', False)
+                return getattr(prefs, "continuous_conversation", False)
             return False
 
         def set_continuous_conversation(enabled: bool) -> None:
             """Set continuous conversation mode and save to preferences."""
-            if hasattr(self.server, 'state') and self.server.state:
+            if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.continuous_conversation = enabled
                 self.server.state.save_preferences()
                 _LOGGER.info("Continuous conversation mode %s", "enabled" if enabled else "disabled")
 
-        entities.append(SwitchEntity(
-            server=self.server,
-            key=get_entity_key("continuous_conversation"),
-            name="Continuous Conversation",
-            object_id="continuous_conversation",
-            icon="mdi:message-reply-text",
-            device_class="switch",
-            entity_category=1,  # config
-            value_getter=get_continuous_conversation,
-            value_setter=set_continuous_conversation,
-        ))
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("continuous_conversation"),
+                name="Continuous Conversation",
+                object_id="continuous_conversation",
+                icon="mdi:message-reply-text",
+                device_class="switch",
+                entity_category=1,  # config
+                value_getter=get_continuous_conversation,
+                value_setter=set_continuous_conversation,
+            )
+        )
 
         _LOGGER.debug("Phase 21 entities registered: continuous_conversation")
 
@@ -704,14 +766,14 @@ class EntityRegistry:
 
     def update_face_detected_state(self) -> None:
         """Push face_detected state update to Home Assistant."""
-        if hasattr(self, '_face_detected_entity') and self._face_detected_entity:
+        if hasattr(self, "_face_detected_entity") and self._face_detected_entity:
             self._face_detected_entity.update_state()
 
     def update_gesture_state(self) -> None:
         """Push gesture state update to Home Assistant."""
-        if hasattr(self, '_gesture_entity') and self._gesture_entity:
+        if hasattr(self, "_gesture_entity") and self._gesture_entity:
             self._gesture_entity.update_state()
-        if hasattr(self, '_gesture_confidence_entity') and self._gesture_confidence_entity:
+        if hasattr(self, "_gesture_confidence_entity") and self._gesture_confidence_entity:
             self._gesture_confidence_entity.update_state()
 
     def set_sleep_mode(self, is_sleeping: bool) -> None:
@@ -777,7 +839,4 @@ class EntityRegistry:
             defn.value_getter = getter_map.get(defn.key_name)
             entities.append(create_entity(self.server, defn))
 
-        _LOGGER.debug(
-            "Phase 24 entities registered: %d diagnostic sensors",
-            len(definitions)
-        )
+        _LOGGER.debug("Phase 24 entities registered: %d diagnostic sensors", len(definitions))

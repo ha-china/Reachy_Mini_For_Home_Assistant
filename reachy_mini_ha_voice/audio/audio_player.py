@@ -33,6 +33,7 @@ try:
     from aiosendspin.client import PCMFormat, SendspinClient
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles
+
     SENDSPIN_AVAILABLE = True
 except ImportError:
     SENDSPIN_AVAILABLE = False
@@ -207,25 +208,13 @@ class AudioPlayer:
             player_support = ClientHelloPlayerSupport(
                 supported_formats=[
                     # Prefer 16kHz (native ReSpeaker sample rate - no resampling needed)
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=2, sample_rate=16000, bit_depth=16
-                    ),
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=1, sample_rate=16000, bit_depth=16
-                    ),
+                    SupportedAudioFormat(codec=AudioCodec.PCM, channels=2, sample_rate=16000, bit_depth=16),
+                    SupportedAudioFormat(codec=AudioCodec.PCM, channels=1, sample_rate=16000, bit_depth=16),
                     # Also support higher sample rates (will be resampled to 16kHz)
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=2, sample_rate=48000, bit_depth=16
-                    ),
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=2, sample_rate=44100, bit_depth=16
-                    ),
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=1, sample_rate=48000, bit_depth=16
-                    ),
-                    SupportedAudioFormat(
-                        codec=AudioCodec.PCM, channels=1, sample_rate=44100, bit_depth=16
-                    ),
+                    SupportedAudioFormat(codec=AudioCodec.PCM, channels=2, sample_rate=48000, bit_depth=16),
+                    SupportedAudioFormat(codec=AudioCodec.PCM, channels=2, sample_rate=44100, bit_depth=16),
+                    SupportedAudioFormat(codec=AudioCodec.PCM, channels=1, sample_rate=48000, bit_depth=16),
+                    SupportedAudioFormat(codec=AudioCodec.PCM, channels=1, sample_rate=44100, bit_depth=16),
                 ],
                 buffer_capacity=32_000_000,
                 supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
@@ -251,8 +240,7 @@ class AudioPlayer:
             self._sendspin_url = server_url
             self._sendspin_enabled = True
 
-            _LOGGER.info("Sendspin connected as PLAYER: %s (client_id=%s)",
-                         server_url, self._sendspin_client_id)
+            _LOGGER.info("Sendspin connected as PLAYER: %s (client_id=%s)", server_url, self._sendspin_client_id)
             return True
 
         except Exception as e:
@@ -298,6 +286,9 @@ class AudioPlayer:
             # Convert to float32 for playback (SDK expects float32)
             audio_float = audio_array.astype(np.float32) / max_val
 
+            # Clamp values to valid range [-1.0, 1.0] to prevent invalid values
+            audio_float = np.clip(audio_float, -1.0, 1.0)
+
             # Reshape for channels if needed
             if fmt.channels > 1:
                 # Reshape to (samples, channels)
@@ -310,14 +301,14 @@ class AudioPlayer:
             target_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
             if fmt.sample_rate != target_sample_rate and target_sample_rate > 0:
                 import scipy.signal
+
                 # Calculate new length
                 new_length = int(len(audio_float) * target_sample_rate / fmt.sample_rate)
                 if new_length > 0:
                     audio_float = scipy.signal.resample(audio_float, new_length, axis=0)
                     # Log resampling only once per stream
-                    if not hasattr(self, '_logged_resample') or not self._logged_resample:
-                        _LOGGER.debug("Resampling Sendspin audio: %d Hz -> %d Hz",
-                                      fmt.sample_rate, target_sample_rate)
+                    if not hasattr(self, "_logged_resample") or not self._logged_resample:
+                        _LOGGER.debug("Resampling Sendspin audio: %d Hz -> %d Hz", fmt.sample_rate, target_sample_rate)
                         self._logged_resample = True
 
             # Apply volume
@@ -440,12 +431,25 @@ class AudioPlayer:
             # Handle URLs - download first
             if file_path.startswith(("http://", "https://")):
                 import tempfile
-                import urllib.request
 
+                import requests
+
+                _LOGGER.debug("Downloading TTS audio from URL: %s", file_path)
+
+                # Use requests with stream=True for faster start
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    urllib.request.urlretrieve(file_path, tmp.name)
+                    response = requests.get(file_path, stream=True)
+                    response.raise_for_status()
+
+                    # Write in chunks to start faster
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            tmp.write(chunk)
+
+                    tmp.flush()
                     file_path = tmp.name
                     temp_file_path = tmp.name  # Remember for cleanup
+                    _LOGGER.debug("Downloaded TTS audio to: %s", file_path)
 
             if self._stop_flag.is_set():
                 return
@@ -455,6 +459,7 @@ class AudioPlayer:
                 try:
                     # Read audio data for duration calculation and sway analysis
                     import soundfile as sf
+
                     data, sample_rate = sf.read(file_path)
                     duration = len(data) / sample_rate
 
@@ -462,10 +467,10 @@ class AudioPlayer:
                     sway_frames = []
                     if self._sway_callback is not None:
                         from ..motion.speech_sway import SpeechSwayRT
+
                         sway = SpeechSwayRT()
                         sway_frames = sway.feed(data, sample_rate)
-                        _LOGGER.debug("Generated %d sway frames for %.2fs audio",
-                                      len(sway_frames), duration)
+                        _LOGGER.debug("Generated %d sway frames for %.2fs audio", len(sway_frames), duration)
 
                     # Start playback
                     self.reachy_mini.media.play_sound(file_path)
@@ -498,10 +503,16 @@ class AudioPlayer:
 
                     # Reset sway to zero when done
                     if self._sway_callback:
-                        self._sway_callback({
-                            "pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0,
-                            "x_m": 0.0, "y_m": 0.0, "z_m": 0.0,
-                        })
+                        self._sway_callback(
+                            {
+                                "pitch_rad": 0.0,
+                                "yaw_rad": 0.0,
+                                "roll_rad": 0.0,
+                                "x_m": 0.0,
+                                "y_m": 0.0,
+                                "z_m": 0.0,
+                            }
+                        )
 
                 except Exception as e:
                     _LOGGER.warning("Reachy Mini audio failed, falling back: %s", e)
@@ -513,9 +524,20 @@ class AudioPlayer:
             _LOGGER.error("Error playing audio: %s", e)
         finally:
             # Clean up temp file if we created one
+            if temp_file_path and temp_file_path.startswith(tempfile.gettempdir()):
+                try:
+                    import os
+                    from pathlib import Path
+
+                    if Path(temp_file_path).exists():
+                        os.unlink(temp_file_path)
+                        _LOGGER.debug("Cleaned up temp file: %s", temp_file_path)
+                except Exception as e:
+                    _LOGGER.warning("Failed to clean up temp file %s: %s", temp_file_path, e)
             if temp_file_path is not None:
                 try:
                     import os
+
                     os.unlink(temp_file_path)
                 except Exception:
                     pass  # Ignore cleanup errors

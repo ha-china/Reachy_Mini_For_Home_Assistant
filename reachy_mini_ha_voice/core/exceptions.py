@@ -7,6 +7,7 @@ error handling and debugging.
 
 class ReachyHAError(Exception):
     """Base exception for Reachy HA Voice errors."""
+
     pass
 
 

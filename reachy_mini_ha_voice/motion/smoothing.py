@@ -72,10 +72,7 @@ def lerp_angle(start: float, end: float, t: float) -> float:
 
 
 def interpolate_pose(
-    start_pose: dict[str, float],
-    end_pose: dict[str, float],
-    t: float,
-    use_easing: bool = True
+    start_pose: dict[str, float], end_pose: dict[str, float], t: float, use_easing: bool = True
 ) -> dict[str, float]:
     """Interpolate between two pose dictionaries.
 
@@ -94,7 +91,7 @@ def interpolate_pose(
     result = {}
     for key, start_value in start_pose.items():
         if key in end_pose:
-            if key in ('pitch', 'yaw', 'roll'):
+            if key in ("pitch", "yaw", "roll"):
                 result[key] = lerp_angle(start_value, end_pose[key], t)
             else:
                 result[key] = lerp(start_value, end_pose[key], t)
@@ -104,12 +101,7 @@ def interpolate_pose(
     return result
 
 
-def smooth_value(
-    current: float,
-    target: float,
-    smoothing_factor: float,
-    dt: float
-) -> float:
+def smooth_value(current: float, target: float, smoothing_factor: float, dt: float) -> float:
     """Exponentially smooth a value towards a target.
 
     Args:
@@ -178,11 +170,7 @@ def pose_distance(pose1: np.ndarray, pose2: np.ndarray) -> float:
     return pos_dist + rot_dist * 0.1  # Scale rotation to be comparable
 
 
-def blend_poses(
-    pose1: np.ndarray,
-    pose2: np.ndarray,
-    weight: float
-) -> np.ndarray:
+def blend_poses(pose1: np.ndarray, pose2: np.ndarray, weight: float) -> np.ndarray:
     """Blend two pose matrices.
 
     Args:

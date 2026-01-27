@@ -150,11 +150,11 @@ class MJPEGCameraServer:
         if self.enable_face_tracking:
             try:
                 from .head_tracker import HeadTracker
-                self._head_tracker = HeadTracker(
-                    confidence_threshold=self._face_confidence_threshold
+
+                self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
+                _LOGGER.info(
+                    "Face tracking enabled with YOLO head tracker (confidence=%.2f)", self._face_confidence_threshold
                 )
-                _LOGGER.info("Face tracking enabled with YOLO head tracker (confidence=%.2f)",
-                           self._face_confidence_threshold)
             except ImportError as e:
                 _LOGGER.error("Failed to import head tracker: %s", e)
                 self._head_tracker = None
@@ -168,6 +168,7 @@ class MJPEGCameraServer:
         if self._gesture_detection_enabled:
             try:
                 from .gesture_detector import GestureDetector
+
                 self._gesture_detector = GestureDetector()
                 if self._gesture_detector.is_available:
                     _LOGGER.info("Gesture detection enabled (18 HaGRID classes)")
@@ -182,11 +183,7 @@ class MJPEGCameraServer:
                 self._gesture_detector = None
 
         # Start frame capture thread
-        self._capture_thread = threading.Thread(
-            target=self._capture_frames,
-            daemon=True,
-            name="camera-capture"
-        )
+        self._capture_thread = threading.Thread(target=self._capture_frames, daemon=True, name="camera-capture")
         self._capture_thread.start()
 
         # Start HTTP server
@@ -257,7 +254,7 @@ class MJPEGCameraServer:
         if self._head_tracker is not None:
             try:
                 # Try to call close() if available, otherwise just delete
-                if hasattr(self._head_tracker, 'close'):
+                if hasattr(self._head_tracker, "close"):
                     self._head_tracker.close()
                 del self._head_tracker
                 self._head_tracker = None
@@ -268,7 +265,7 @@ class MJPEGCameraServer:
         # Release gesture detector model
         if self._gesture_detector is not None:
             try:
-                if hasattr(self._gesture_detector, 'close'):
+                if hasattr(self._gesture_detector, "close"):
                     self._gesture_detector.close()
                 del self._gesture_detector
                 self._gesture_detector = None
@@ -329,12 +326,10 @@ class MJPEGCameraServer:
         if self.enable_face_tracking and self._head_tracker is None:
             try:
                 from .head_tracker import HeadTracker
-                self._head_tracker = HeadTracker(
-                    confidence_threshold=self._face_confidence_threshold
-                )
+
+                self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
                 self._face_tracking_enabled = True
-                _LOGGER.info("Head tracker model reloaded (confidence=%.2f)",
-                           self._face_confidence_threshold)
+                _LOGGER.info("Head tracker model reloaded (confidence=%.2f)", self._face_confidence_threshold)
             except Exception as e:
                 _LOGGER.warning("Failed to reload head tracker: %s", e)
                 self._face_tracking_enabled = False
@@ -343,6 +338,7 @@ class MJPEGCameraServer:
         if self._gesture_detector is None:
             try:
                 from .gesture_detector import GestureDetector
+
                 self._gesture_detector = GestureDetector()
                 if self._gesture_detector.is_available:
                     self._gesture_detection_enabled = True
@@ -398,11 +394,7 @@ class MJPEGCameraServer:
         self.resume_processing()
 
         # Restart capture thread
-        self._capture_thread = threading.Thread(
-            target=self._capture_frames,
-            daemon=True,
-            name="camera-capture"
-        )
+        self._capture_thread = threading.Thread(target=self._capture_frames, daemon=True, name="camera-capture")
         self._capture_thread.start()
 
         _LOGGER.info("Camera server resumed from sleep")
@@ -434,14 +426,18 @@ class MJPEGCameraServer:
                 )
 
                 # Only get frame if needed (AI inference, gesture detection, or MJPEG streaming)
-                frame = self._get_camera_frame() if should_run_ai or should_run_gesture or self._has_stream_clients() else None
+                frame = (
+                    self._get_camera_frame()
+                    if should_run_ai or should_run_gesture or self._has_stream_clients()
+                    else None
+                )
 
                 if frame is not None:
                     frame_count += 1
 
                     # Encode frame as JPEG for streaming
                     encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
-                    success, jpeg_data = cv2.imencode('.jpg', frame, encode_params)
+                    success, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
 
                     if success:
                         with self._frame_lock:
@@ -473,9 +469,11 @@ class MJPEGCameraServer:
                         self._process_face_lost_interpolation(current_time)
 
                         # Gesture detection (using frame rate manager)
-                        if (self._gesture_detection_enabled
-                                and self._gesture_detector is not None
-                                and self._frame_rate_manager.should_run_gesture_detection()):
+                        if (
+                            self._gesture_detection_enabled
+                            and self._gesture_detector is not None
+                            and self._frame_rate_manager.should_run_gesture_detection()
+                        ):
                             self._process_gesture_detection(frame)
 
                     # Log stats every 30 seconds
@@ -485,8 +483,8 @@ class MJPEGCameraServer:
                         mode = self._frame_rate_manager.current_mode.value.upper()
                         no_face = self._frame_rate_manager.state.no_face_duration
                         _LOGGER.debug(
-                            "Camera: %.1f fps, AI: %.1f fps (%s), no_face: %.0fs",
-                            fps, detect_fps, mode, no_face)
+                            "Camera: %.1f fps, AI: %.1f fps (%s), no_face: %.0fs", fps, detect_fps, mode, no_face
+                        )
                         frame_count = 0
                         face_detect_count = 0
                         last_log_time = current_time
@@ -516,16 +514,14 @@ class MJPEGCameraServer:
             client_id = self._next_client_id
             self._next_client_id += 1
             self._active_stream_clients.add(client_id)
-            _LOGGER.debug("Stream client registered: %d (total: %d)",
-                         client_id, len(self._active_stream_clients))
+            _LOGGER.debug("Stream client registered: %d (total: %d)", client_id, len(self._active_stream_clients))
             return client_id
 
     def _unregister_stream_client(self, client_id: int) -> None:
         """Unregister a stream client."""
         with self._stream_client_lock:
             self._active_stream_clients.discard(client_id)
-            _LOGGER.debug("Stream client unregistered: %d (total: %d)",
-                         client_id, len(self._active_stream_clients))
+            _LOGGER.debug("Stream client unregistered: %d (total: %d)", client_id, len(self._active_stream_clients))
 
     @property
     def stream_client_count(self) -> int:
@@ -666,9 +662,7 @@ class MJPEGCameraServer:
                     self._gesture_confidence = confidence
                     if old_gesture != detected_gesture.value:
                         state_changed = True
-                        _LOGGER.debug(
-                            "Gesture: %s (%.0f%%)",
-                            detected_gesture.value, confidence * 100)
+                        _LOGGER.debug("Gesture: %s (%.0f%%)", detected_gesture.value, confidence * 100)
                 else:
                     if self._current_gesture != "none":
                         state_changed = True
@@ -685,10 +679,7 @@ class MJPEGCameraServer:
             # Trigger gesture actions (emotions, listening, etc.)
             if state_changed and self._gesture_action_callback:
                 try:
-                    self._gesture_action_callback(
-                        self._current_gesture,
-                        self._gesture_confidence
-                    )
+                    self._gesture_action_callback(self._current_gesture, self._gesture_confidence)
                 except Exception as e:
                     _LOGGER.debug("Gesture action callback error: %s", e)
 
@@ -802,30 +793,27 @@ class MJPEGCameraServer:
         """Handle incoming HTTP client connections."""
         try:
             # Read HTTP request
-            request_line = await asyncio.wait_for(
-                reader.readline(),
-                timeout=10.0
-            )
-            request = request_line.decode('utf-8', errors='ignore').strip()
+            request_line = await asyncio.wait_for(reader.readline(), timeout=10.0)
+            request = request_line.decode("utf-8", errors="ignore").strip()
 
             # Read headers (we don't need them but must consume them)
             while True:
                 line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-                if line in {b'\r\n', b'\n', b''}:
+                if line in {b"\r\n", b"\n", b""}:
                     break
 
             # Parse request path
-            parts = request.split(' ')
+            parts = request.split(" ")
             if len(parts) >= 2:
                 path = parts[1]
             else:
-                path = '/'
+                path = "/"
 
             _LOGGER.debug("HTTP request: %s", request)
 
-            if path == '/stream':
+            if path == "/stream":
                 await self._handle_stream(writer)
-            elif path == '/snapshot':
+            elif path == "/snapshot":
                 await self._handle_snapshot(writer)
             else:
                 await self._handle_index(writer)
@@ -883,8 +871,8 @@ class MJPEGCameraServer:
             "\r\n"
         )
 
-        writer.write(response.encode('utf-8'))
-        writer.write(html.encode('utf-8'))
+        writer.write(response.encode("utf-8"))
+        writer.write(html.encode("utf-8"))
         await writer.drain()
 
     async def _handle_snapshot(self, writer: asyncio.StreamWriter) -> None:
@@ -899,7 +887,7 @@ class MJPEGCameraServer:
                 "\r\n"
                 "No frame available"
             )
-            writer.write(response.encode('utf-8'))
+            writer.write(response.encode("utf-8"))
         else:
             response = (
                 "HTTP/1.1 200 OK\r\n"
@@ -909,7 +897,7 @@ class MJPEGCameraServer:
                 "Connection: close\r\n"
                 "\r\n"
             )
-            writer.write(response.encode('utf-8'))
+            writer.write(response.encode("utf-8"))
             writer.write(jpeg_data)
 
         await writer.drain()
@@ -927,7 +915,7 @@ class MJPEGCameraServer:
             "Connection: keep-alive\r\n"
             "\r\n"
         )
-        writer.write(response.encode('utf-8'))
+        writer.write(response.encode("utf-8"))
         await writer.drain()
 
         _LOGGER.debug("Started MJPEG stream for client %d", client_id)
@@ -945,13 +933,10 @@ class MJPEGCameraServer:
                 if jpeg_data is not None and frame_time > last_sent_time:
                     # Send MJPEG frame
                     frame_header = (
-                        f"--{MJPEG_BOUNDARY}\r\n"
-                        "Content-Type: image/jpeg\r\n"
-                        f"Content-Length: {len(jpeg_data)}\r\n"
-                        "\r\n"
+                        f"--{MJPEG_BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: {len(jpeg_data)}\r\n\r\n"
                     )
 
-                    writer.write(frame_header.encode('utf-8'))
+                    writer.write(frame_header.encode("utf-8"))
                     writer.write(jpeg_data)
                     writer.write(b"\r\n")
                     await writer.drain()

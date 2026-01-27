@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class EntityType(Enum):
     """Supported entity types."""
+
     SENSOR = "sensor"
     BINARY_SENSOR = "binary_sensor"
     TEXT_SENSOR = "text_sensor"
@@ -32,6 +33,7 @@ class EntityType(Enum):
 @dataclass
 class EntityDefinition:
     """Definition for an entity to be created."""
+
     entity_type: EntityType
     key_name: str
     name: str
@@ -198,6 +200,7 @@ def create_entities(server, definitions: list[EntityDefinition]) -> list[Any]:
 # Predefined entity definition groups
 # ============================================================================
 
+
 def get_diagnostic_sensor_definitions() -> list[EntityDefinition]:
     """Get definitions for diagnostic sensor entities."""
     return [
@@ -310,42 +313,48 @@ def get_imu_sensor_definitions() -> list[EntityDefinition]:
 
     # Accelerometer
     for axis in ["x", "y", "z"]:
-        definitions.append(EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name=f"imu_accel_{axis}",
-            name=f"IMU Accel {axis.upper()}",
-            object_id=f"imu_accel_{axis}",
-            icon=f"mdi:axis-{axis}-arrow",
-            unit_of_measurement="m/s²",
-            accuracy_decimals=3,
-            state_class="measurement",
-        ))
+        definitions.append(
+            EntityDefinition(
+                entity_type=EntityType.SENSOR,
+                key_name=f"imu_accel_{axis}",
+                name=f"IMU Accel {axis.upper()}",
+                object_id=f"imu_accel_{axis}",
+                icon=f"mdi:axis-{axis}-arrow",
+                unit_of_measurement="m/s²",
+                accuracy_decimals=3,
+                state_class="measurement",
+            )
+        )
 
     # Gyroscope
     for axis in ["x", "y", "z"]:
-        definitions.append(EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name=f"imu_gyro_{axis}",
-            name=f"IMU Gyro {axis.upper()}",
-            object_id=f"imu_gyro_{axis}",
-            icon="mdi:rotate-3d-variant",
-            unit_of_measurement="rad/s",
-            accuracy_decimals=3,
-            state_class="measurement",
-        ))
+        definitions.append(
+            EntityDefinition(
+                entity_type=EntityType.SENSOR,
+                key_name=f"imu_gyro_{axis}",
+                name=f"IMU Gyro {axis.upper()}",
+                object_id=f"imu_gyro_{axis}",
+                icon="mdi:rotate-3d-variant",
+                unit_of_measurement="rad/s",
+                accuracy_decimals=3,
+                state_class="measurement",
+            )
+        )
 
     # Temperature
-    definitions.append(EntityDefinition(
-        entity_type=EntityType.SENSOR,
-        key_name="imu_temperature",
-        name="IMU Temperature",
-        object_id="imu_temperature",
-        icon="mdi:thermometer",
-        unit_of_measurement="°C",
-        accuracy_decimals=1,
-        device_class="temperature",
-        state_class="measurement",
-    ))
+    definitions.append(
+        EntityDefinition(
+            entity_type=EntityType.SENSOR,
+            key_name="imu_temperature",
+            name="IMU Temperature",
+            object_id="imu_temperature",
+            icon="mdi:thermometer",
+            unit_of_measurement="°C",
+            accuracy_decimals=1,
+            device_class="temperature",
+            state_class="measurement",
+        )
+    )
 
     return definitions
 
@@ -422,76 +431,86 @@ def get_pose_control_definitions() -> list[EntityDefinition]:
 
     # Head position controls (X, Y, Z in mm)
     for axis in ["x", "y", "z"]:
-        definitions.append(EntityDefinition(
-            entity_type=EntityType.NUMBER,
-            key_name=f"head_{axis}",
-            name=f"Head {axis.upper()} Position",
-            object_id=f"head_{axis}",
-            icon=f"mdi:axis-{axis}-arrow",
-            min_value=-50.0,
-            max_value=50.0,
-            step=1.0,
-            unit_of_measurement="mm",
-            mode=2,  # slider
-        ))
+        definitions.append(
+            EntityDefinition(
+                entity_type=EntityType.NUMBER,
+                key_name=f"head_{axis}",
+                name=f"Head {axis.upper()} Position",
+                object_id=f"head_{axis}",
+                icon=f"mdi:axis-{axis}-arrow",
+                min_value=-50.0,
+                max_value=50.0,
+                step=1.0,
+                unit_of_measurement="mm",
+                mode=2,  # slider
+            )
+        )
 
     # Head orientation controls (Roll, Pitch in degrees)
     for orient in ["roll", "pitch"]:
-        definitions.append(EntityDefinition(
+        definitions.append(
+            EntityDefinition(
+                entity_type=EntityType.NUMBER,
+                key_name=f"head_{orient}",
+                name=f"Head {orient.capitalize()}",
+                object_id=f"head_{orient}",
+                icon="mdi:rotate-3d-variant",
+                min_value=-40.0,
+                max_value=40.0,
+                step=1.0,
+                unit_of_measurement="°",
+                mode=2,
+            )
+        )
+
+    # Head yaw (wider range)
+    definitions.append(
+        EntityDefinition(
             entity_type=EntityType.NUMBER,
-            key_name=f"head_{orient}",
-            name=f"Head {orient.capitalize()}",
-            object_id=f"head_{orient}",
+            key_name="head_yaw",
+            name="Head Yaw",
+            object_id="head_yaw",
             icon="mdi:rotate-3d-variant",
-            min_value=-40.0,
-            max_value=40.0,
+            min_value=-180.0,
+            max_value=180.0,
             step=1.0,
             unit_of_measurement="°",
             mode=2,
-        ))
-
-    # Head yaw (wider range)
-    definitions.append(EntityDefinition(
-        entity_type=EntityType.NUMBER,
-        key_name="head_yaw",
-        name="Head Yaw",
-        object_id="head_yaw",
-        icon="mdi:rotate-3d-variant",
-        min_value=-180.0,
-        max_value=180.0,
-        step=1.0,
-        unit_of_measurement="°",
-        mode=2,
-    ))
+        )
+    )
 
     # Body yaw control
-    definitions.append(EntityDefinition(
-        entity_type=EntityType.NUMBER,
-        key_name="body_yaw",
-        name="Body Yaw",
-        object_id="body_yaw",
-        icon="mdi:rotate-3d-variant",
-        min_value=-160.0,
-        max_value=160.0,
-        step=1.0,
-        unit_of_measurement="°",
-        mode=2,
-    ))
+    definitions.append(
+        EntityDefinition(
+            entity_type=EntityType.NUMBER,
+            key_name="body_yaw",
+            name="Body Yaw",
+            object_id="body_yaw",
+            icon="mdi:rotate-3d-variant",
+            min_value=-160.0,
+            max_value=160.0,
+            step=1.0,
+            unit_of_measurement="°",
+            mode=2,
+        )
+    )
 
     # Antenna controls
     for side, label in [("left", "L"), ("right", "R")]:
-        definitions.append(EntityDefinition(
-            entity_type=EntityType.NUMBER,
-            key_name=f"antenna_{side}",
-            name=f"Antenna({label})",
-            object_id=f"antenna_{side}",
-            icon="mdi:antenna",
-            min_value=-90.0,
-            max_value=90.0,
-            step=1.0,
-            unit_of_measurement="°",
-            mode=2,
-        ))
+        definitions.append(
+            EntityDefinition(
+                entity_type=EntityType.NUMBER,
+                key_name=f"antenna_{side}",
+                name=f"Antenna({label})",
+                object_id=f"antenna_{side}",
+                icon="mdi:antenna",
+                min_value=-90.0,
+                max_value=90.0,
+                step=1.0,
+                unit_of_measurement="°",
+                mode=2,
+            )
+        )
 
     return definitions
 
@@ -501,17 +520,19 @@ def get_look_at_definitions() -> list[EntityDefinition]:
     definitions = []
 
     for axis in ["x", "y", "z"]:
-        definitions.append(EntityDefinition(
-            entity_type=EntityType.NUMBER,
-            key_name=f"look_at_{axis}",
-            name=f"Look At {axis.upper()}",
-            object_id=f"look_at_{axis}",
-            icon="mdi:crosshairs-gps",
-            min_value=-2.0,
-            max_value=2.0,
-            step=0.1,
-            unit_of_measurement="m",
-            mode=1,  # Box mode for precise input
-        ))
+        definitions.append(
+            EntityDefinition(
+                entity_type=EntityType.NUMBER,
+                key_name=f"look_at_{axis}",
+                name=f"Look At {axis.upper()}",
+                object_id=f"look_at_{axis}",
+                icon="mdi:crosshairs-gps",
+                min_value=-2.0,
+                max_value=2.0,
+                step=0.1,
+                unit_of_measurement="m",
+                mode=1,  # Box mode for precise input
+            )
+        )
 
     return definitions

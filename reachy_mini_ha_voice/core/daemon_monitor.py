@@ -29,11 +29,12 @@ class DaemonState(Enum):
 
     Maps directly to the daemon's internal DaemonState enum.
     """
+
     NOT_INITIALIZED = "not_initialized"
     STARTING = "starting"  # Waking up
-    RUNNING = "running"    # Fully operational
+    RUNNING = "running"  # Fully operational
     STOPPING = "stopping"  # Going to sleep
-    STOPPED = "stopped"    # Sleeping
+    STOPPED = "stopped"  # Sleeping
     ERROR = "error"
     UNAVAILABLE = "unavailable"  # Cannot connect to daemon
 
@@ -41,6 +42,7 @@ class DaemonState(Enum):
 @dataclass
 class DaemonStatus:
     """Status information from the daemon API."""
+
     state: DaemonState
     robot_name: str = ""
     version: str | None = None
@@ -273,10 +275,7 @@ class DaemonStateMonitor:
                 self._current_interval = self._interval_for_error()
 
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._current_interval
-                )
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self._current_interval)
                 break  # Stop event was set
             except TimeoutError:
                 pass  # Continue monitoring

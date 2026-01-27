@@ -51,7 +51,9 @@ from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
 from ..core.util import call_all
-from ..entities.emotion_detector import EmotionKeywordDetector
+
+# DISABLED: Emotion detection moved to Home Assistant blueprint
+# from ..entities.emotion_detector import EmotionKeywordDetector
 from ..entities.entity import MediaPlayerEntity
 from ..entities.entity_registry import EntityRegistry, get_entity_key
 from ..entities.event_emotion_mapper import EventEmotionMapper
@@ -66,13 +68,19 @@ _LOGGER = logging.getLogger(__name__)
 class VoiceSatelliteProtocol(APIServer):
     """Voice satellite protocol handler for ESPHome."""
 
-    def __init__(self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None, voice_assistant_service = None) -> None:
+    def __init__(
+        self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None, voice_assistant_service=None
+    ) -> None:
         _LOGGER.info("VoiceSatelliteProtocol.__init__ called - new connection")
         super().__init__(state.name)
         self.state = state
         self.state.satellite = self
         self.camera_server = camera_server
         self._voice_assistant_service = voice_assistant_service  # Store reference for mute functionality
+
+        # Home Assistant connection callbacks
+        self._on_ha_connected_callback = None
+        self._on_ha_disconnected_callback = None
 
         # Initialize streaming state early (before entity setup)
         self._is_streaming_audio = False
@@ -158,6 +166,7 @@ class VoiceSatelliteProtocol(APIServer):
         self._event_emotion_mapper.set_emotion_callback(self._play_emotion)
         # Load custom mappings from JSON if available
         from pathlib import Path
+
         mappings_file = Path(__file__).parent / "animations" / "event_mappings.json"
         if mappings_file.exists():
             self._event_emotion_mapper.load_from_json(mappings_file)
@@ -167,7 +176,7 @@ class VoiceSatelliteProtocol(APIServer):
         # This prevents duplicate entity registration on reconnection
         try:
             _LOGGER.info("Checking entity initialization state...")
-            if not getattr(self.state, '_entities_initialized', False):
+            if not getattr(self.state, "_entities_initialized", False):
                 _LOGGER.info("Setting up entities for first time...")
                 if self.state.media_player_entity is None:
                     _LOGGER.info("Creating MediaPlayerEntity...")
@@ -200,20 +209,36 @@ class VoiceSatelliteProtocol(APIServer):
             raise
 
         # Initialize emotion keyword detector for auto-triggering emotions from LLM responses
-        self._emotion_detector = EmotionKeywordDetector(play_emotion_callback=self._play_emotion)
+        # DISABLED: Emotion detection moved to Home Assistant blueprint
+        # self._emotion_detector = EmotionKeywordDetector(play_emotion_callback=self._play_emotion)
         _LOGGER.info("VoiceSatelliteProtocol.__init__ completed")
+
+    def set_ha_connection_callbacks(self, on_connected, on_disconnected):
+        """Set callbacks for Home Assistant connection/disconnection."""
+        self._on_ha_connected_callback = on_connected
+        self._on_ha_disconnected_callback = on_disconnected
 
     def connection_made(self, transport) -> None:
         """Called when a client connects."""
-        peer = transport.get_extra_info('peername')
+        peer = transport.get_extra_info("peername")
         _LOGGER.info("ESPHome client connected from %s", peer)
         super().connection_made(transport)
 
+    def update_camera_server(self, camera_server):
+        """Update the camera server reference in entity registry.
+
+        Called when camera server is started after Home Assistant connection.
+        """
+        self._entity_registry.camera_server = camera_server
+        if camera_server:
+            camera_server.set_gesture_state_callback(self._entity_registry.update_gesture_state)
+            camera_server.set_face_state_callback(self._entity_registry.update_face_detected_state)
+            camera_server.set_gesture_action_callback(self.handle_detected_gesture)
+        _LOGGER.debug("Camera server reference updated in entity registry")
+
     # Note: connection_lost is defined later in the class with full cleanup logic
 
-    def handle_voice_event(
-        self, event_type: VoiceAssistantEventType, data: dict[str, str]
-    ) -> None:
+    def handle_voice_event(self, event_type: VoiceAssistantEventType, data: dict[str, str]) -> None:
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
@@ -250,9 +275,10 @@ class VoiceSatelliteProtocol(APIServer):
 
             # Auto-trigger emotion based on response text
             # TTS_START may contain the text to be spoken
-            tts_text = data.get("tts_output") or data.get("text") or ""
-            if tts_text:
-                self._emotion_detector.detect_and_play(tts_text)
+            # DISABLED: Emotion detection moved to Home Assistant blueprint
+            # tts_text = data.get("tts_output") or data.get("text") or ""
+            # if tts_text:
+            #     self._emotion_detector.detect_and_play(tts_text)
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
             self._tts_url = data.get("url")
@@ -305,9 +331,7 @@ class VoiceSatelliteProtocol(APIServer):
             self._continue_conversation = msg.start_conversation
             self.duck()
 
-            yield from self.state.media_player_entity.play(
-                urls, announcement=True, done_callback=self._tts_finished
-            )
+            yield from self.state.media_player_entity.play(urls, announcement=True, done_callback=self._tts_finished)
 
         elif isinstance(msg, VoiceAssistantTimerEventResponse):
             self.handle_timer_event(VoiceAssistantTimerEventType(msg.event_type), msg)
@@ -377,14 +401,23 @@ class VoiceSatelliteProtocol(APIServer):
             yield VoiceAssistantConfigurationResponse(
                 available_wake_words=available_wake_words,
                 active_wake_words=[
-                    ww.id
-                    for ww in self.state.wake_words.values()
-                    if ww.id in self.state.active_wake_words
+                    ww.id for ww in self.state.wake_words.values() if ww.id in self.state.active_wake_words
                 ],
                 max_active_wake_words=2,
             )
 
             _LOGGER.info("Connected to Home Assistant")
+
+            # Trigger HA connected callback (async)
+            if self._on_ha_connected_callback:
+                try:
+                    import asyncio
+
+                    loop = asyncio.get_running_loop()
+                    task = loop.create_task(self._on_ha_connected_callback())
+                    _ = task  # Prevent RUF006 warning
+                except Exception as e:
+                    _LOGGER.error("Error in HA connected callback: %s", e)
 
         elif isinstance(msg, VoiceAssistantSetConfiguration):
             # Change active wake words
@@ -441,10 +474,10 @@ class VoiceSatelliteProtocol(APIServer):
         Reuses conversation_id if within timeout period, otherwise creates new one.
         """
         now = time.time()
-        if (self._conversation_id is None or
-                now - self._last_conversation_time > self._conversation_timeout):
+        if self._conversation_id is None or now - self._last_conversation_time > self._conversation_timeout:
             # Create new conversation_id
             import uuid
+
             self._conversation_id = str(uuid.uuid4())
             _LOGGER.debug("Created new conversation_id: %s", self._conversation_id)
 
@@ -475,11 +508,13 @@ class VoiceSatelliteProtocol(APIServer):
         conv_id = self._get_or_create_conversation_id()
 
         self.send_messages(
-            [VoiceAssistantRequest(
-                start=True,
-                wake_word_phrase=wake_word_phrase,
-                conversation_id=conv_id,
-            )]
+            [
+                VoiceAssistantRequest(
+                    start=True,
+                    wake_word_phrase=wake_word_phrase,
+                    conversation_id=conv_id,
+                )
+            ]
         )
         self.duck()
         self._is_streaming_audio = True
@@ -534,18 +569,23 @@ class VoiceSatelliteProtocol(APIServer):
         should_continue = continuous_mode or self._continue_conversation
 
         if should_continue:
-            _LOGGER.debug("Continuing conversation (our_switch=%s, ha_request=%s)",
-                          continuous_mode, self._continue_conversation)
+            _LOGGER.debug(
+                "Continuing conversation (our_switch=%s, ha_request=%s)", continuous_mode, self._continue_conversation
+            )
 
             # Play prompt sound to indicate ready for next input
             self.state.tts_player.play(self.state.wakeup_sound)
 
             # Use same conversation_id for context continuity
             conv_id = self._get_or_create_conversation_id()
-            self.send_messages([VoiceAssistantRequest(
-                start=True,
-                conversation_id=conv_id,
-            )])
+            self.send_messages(
+                [
+                    VoiceAssistantRequest(
+                        start=True,
+                        conversation_id=conv_id,
+                    )
+                ]
+            )
             self._is_streaming_audio = True
 
             # Stay in listening mode
@@ -565,9 +605,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         self.state.tts_player.play(
             self.state.timer_finished_sound,
-            done_callback=lambda: call_all(
-                lambda: time.sleep(1.0), self._play_timer_finished
-            ),
+            done_callback=lambda: call_all(lambda: time.sleep(1.0), self._play_timer_finished),
         )
 
     def connection_lost(self, exc):
@@ -578,6 +616,13 @@ class VoiceSatelliteProtocol(APIServer):
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
+
+        # Trigger HA disconnected callback
+        if self._on_ha_disconnected_callback:
+            try:
+                self._on_ha_disconnected_callback()
+            except Exception as e:
+                _LOGGER.error("Error in HA disconnected callback: %s", e)
 
     def _download_external_wake_word(
         self, external_wake_word: VoiceAssistantExternalWakeWord
@@ -623,17 +668,13 @@ class VoiceSatelliteProtocol(APIServer):
         if should_download_model:
             # Download model file
             parsed_url = urlparse(external_wake_word.url)
-            parsed_url = parsed_url._replace(
-                path=posixpath.join(posixpath.dirname(parsed_url.path), model_path.name)
-            )
+            parsed_url = parsed_url._replace(path=posixpath.join(posixpath.dirname(parsed_url.path), model_path.name))
             model_url = urlunparse(parsed_url)
 
             _LOGGER.debug("Downloading %s to %s", model_url, model_path)
             with urlopen(model_url) as request:
                 if request.status != 200:
-                    _LOGGER.warning(
-                        "Failed to download: %s, status=%s", model_url, request.status
-                    )
+                    _LOGGER.warning("Failed to download: %s, status=%s", model_url, request.status)
                     return None
 
                 with open(model_path, "wb") as model_file:
@@ -680,8 +721,9 @@ class VoiceSatelliteProtocol(APIServer):
                 return
 
             angle_rad, speech_detected = doa
-            _LOGGER.debug("DOA raw: angle=%.3f rad (%.1f°), speech=%s",
-                          angle_rad, math.degrees(angle_rad), speech_detected)
+            _LOGGER.debug(
+                "DOA raw: angle=%.3f rad (%.1f°), speech=%s", angle_rad, math.degrees(angle_rad), speech_detected
+            )
 
             # Convert DOA to direction vector in head frame
             # SDK convention: p_head = [sin(doa), cos(doa), 0]
@@ -697,14 +739,12 @@ class VoiceSatelliteProtocol(APIServer):
             yaw_rad = -(angle_rad - math.pi / 2)
             yaw_deg = math.degrees(yaw_rad)
 
-            _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°",
-                          dir_x, dir_y, yaw_deg)
+            _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", dir_x, dir_y, yaw_deg)
 
             # Only turn if angle is significant (> 10°) to avoid noise
             DOA_THRESHOLD_DEG = 10.0
             if abs(yaw_deg) < DOA_THRESHOLD_DEG:
-                _LOGGER.debug("DOA angle %.1f° below threshold (%.1f°), skipping turn",
-                              yaw_deg, DOA_THRESHOLD_DEG)
+                _LOGGER.debug("DOA angle %.1f° below threshold (%.1f°), skipping turn", yaw_deg, DOA_THRESHOLD_DEG)
                 return
 
             # Apply 80% of DOA angle as conservative strategy
@@ -712,14 +752,13 @@ class VoiceSatelliteProtocol(APIServer):
             DOA_SCALE = 0.8
             target_yaw_deg = yaw_deg * DOA_SCALE
 
-            _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°",
-                         yaw_deg, target_yaw_deg)
+            _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°", yaw_deg, target_yaw_deg)
 
             # Use MovementManager to turn (non-blocking)
             if self.state.motion and self.state.motion.movement_manager:
                 self.state.motion.movement_manager.turn_to_angle(
                     target_yaw_deg,
-                    duration=0.5  # Quick turn
+                    duration=0.5,  # Quick turn
                 )
         except Exception as e:
             _LOGGER.error("Error in turn-to-sound: %s", e)
@@ -867,7 +906,7 @@ class VoiceSatelliteProtocol(APIServer):
             # The wake word detected event triggers the voice pipeline
             _LOGGER.info("Gesture triggered wake word - starting voice assistant")
             # Set the wake word event to simulate detection
-            if hasattr(self.state, 'last_wake_word'):
+            if hasattr(self.state, "last_wake_word"):
                 self.state.last_wake_word = "gesture"
             # Trigger the run_voice_assistant logic
             self.start_voice_assistant()
@@ -927,9 +966,7 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("HA state change: %s: %s -> %s", entity_id, old_state, new_state)
 
             # Let EventEmotionMapper handle the state change
-            emotion = self._event_emotion_mapper.handle_state_change(
-                entity_id, old_state, new_state
-            )
+            emotion = self._event_emotion_mapper.handle_state_change(entity_id, old_state, new_state)
             if emotion:
                 _LOGGER.info("HA event triggered emotion: %s from %s", emotion, entity_id)
 

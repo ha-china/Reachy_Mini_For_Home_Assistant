@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class RobotConnectionState(Enum):
     """Robot connection states."""
+
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
     UNKNOWN = "unknown"
@@ -156,8 +157,7 @@ class RobotStateMonitor:
             name="RobotStateMonitor",
         )
         self._thread.start()
-        logger.info("Robot state monitor started (check interval: %.1fs)",
-                    self._current_interval)
+        logger.info("Robot state monitor started (check interval: %.1fs)", self._current_interval)
 
     def stop(self) -> None:
         """Stop the state monitoring thread."""
@@ -186,20 +186,20 @@ class RobotStateMonitor:
         try:
             # Check the SDK's internal _is_alive flag
             # This is set by the background check_alive thread in ZenohClient
-            client = getattr(self._robot, 'client', None)
+            client = getattr(self._robot, "client", None)
             if client is None:
                 return RobotConnectionState.DISCONNECTED
 
-            is_alive = getattr(client, '_is_alive', False)
+            is_alive = getattr(client, "_is_alive", False)
             if not is_alive:
                 return RobotConnectionState.DISCONNECTED
 
             # Also check if we can access the media system
             # During sleep mode, the client may report alive but media is unavailable
             try:
-                media = getattr(self._robot, 'media', None)
+                media = getattr(self._robot, "media", None)
                 if media is not None:
-                    audio = getattr(media, 'audio', None)
+                    audio = getattr(media, "audio", None)
                     if audio is None:
                         return RobotConnectionState.DISCONNECTED
             except Exception:
@@ -239,8 +239,7 @@ class RobotStateMonitor:
         elif new_state == RobotConnectionState.CONNECTED:
             if old_state == RobotConnectionState.DISCONNECTED:
                 self._reconnect_count += 1
-                logger.info("Robot connection restored (reconnect #%d) - resuming services",
-                           self._reconnect_count)
+                logger.info("Robot connection restored (reconnect #%d) - resuming services", self._reconnect_count)
             else:
                 logger.info("Robot connected - starting services")
             self._invoke_connected_callbacks()

@@ -23,9 +23,8 @@ logger = logging.getLogger(__name__)
 try:
     from reachy_mini.motion.recorded_move import RecordedMoves
     from reachy_mini.utils import create_head_pose
-    RECORDED_MOVES: RecordedMoves | None = RecordedMoves(
-        "pollen-robotics/reachy-mini-emotions-library"
-    )
+
+    RECORDED_MOVES: RecordedMoves | None = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
     EMOTION_AVAILABLE = True
     logger.info("Emotion library loaded successfully")
 except ImportError as e:
@@ -79,9 +78,7 @@ class EmotionMove:
         """Duration of the emotion in seconds."""
         return float(self._emotion_move.duration)
 
-    def evaluate(
-        self, t: float
-    ) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
+    def evaluate(self, t: float) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
         """Evaluate emotion pose at time t.
 
         Args:
@@ -104,17 +101,11 @@ class EmotionMove:
             return (head_pose, antennas, body_yaw)
 
         except Exception as e:
-            logger.error(
-                f"Error evaluating emotion '{self.emotion_name}' at t={t}: {e}"
-            )
+            logger.error(f"Error evaluating emotion '{self.emotion_name}' at t={t}: {e}")
             # Return neutral pose on error
             try:
                 neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
             except Exception:
                 neutral_head_pose = np.eye(4, dtype=np.float64)
 
-            return (
-                neutral_head_pose,
-                np.array([0.0, 0.0], dtype=np.float64),
-                0.0
-            )
+            return (neutral_head_pose, np.array([0.0, 0.0], dtype=np.float64), 0.0)

@@ -53,11 +53,7 @@ class EmotionKeywordDetector:
             settings = data.get("settings", {})
             self._enabled = settings.get("enabled", True)
 
-            _LOGGER.info(
-                "Loaded %d emotion keywords (enabled=%s)",
-                len(self._keywords),
-                self._enabled
-            )
+            _LOGGER.info("Loaded %d emotion keywords (enabled=%s)", len(self._keywords), self._enabled)
         except Exception as e:
             _LOGGER.error("Failed to load emotion keywords: %s", e)
 
@@ -92,10 +88,7 @@ class EmotionKeywordDetector:
         # Check each keyword pattern
         for keyword, emotion_name in self._keywords.items():
             if keyword.lower() in text_lower:
-                _LOGGER.info(
-                    "Auto-detected emotion '%s' from keyword '%s' in response",
-                    emotion_name, keyword
-                )
+                _LOGGER.info("Auto-detected emotion '%s' from keyword '%s' in response", emotion_name, keyword)
                 if self._play_emotion_callback:
                     self._play_emotion_callback(emotion_name)
                 return emotion_name

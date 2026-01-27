@@ -81,18 +81,14 @@ class MediaPlayerEntity(ESPHomeEntity):
                 self.music_player.pause()
                 self.announce_player.play(
                     url,
-                    done_callback=lambda: call_all(
-                        self.music_player.resume, done_callback
-                    ),
+                    done_callback=lambda: call_all(self.music_player.resume, done_callback),
                 )
             else:
                 # Announce, idle
                 self.announce_player.play(
                     url,
                     done_callback=lambda: call_all(
-                        lambda: self.server.send_messages(
-                            [self._update_state(MediaPlayerState.IDLE)]
-                        ),
+                        lambda: self.server.send_messages([self._update_state(MediaPlayerState.IDLE)]),
                         done_callback,
                     ),
                 )
@@ -101,9 +97,7 @@ class MediaPlayerEntity(ESPHomeEntity):
             self.music_player.play(
                 url,
                 done_callback=lambda: call_all(
-                    lambda: self.server.send_messages(
-                        [self._update_state(MediaPlayerState.IDLE)]
-                    ),
+                    lambda: self.server.send_messages([self._update_state(MediaPlayerState.IDLE)]),
                     done_callback,
                 ),
             )

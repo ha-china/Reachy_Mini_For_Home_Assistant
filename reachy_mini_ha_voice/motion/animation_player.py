@@ -27,6 +27,7 @@ _ANIMATIONS_FILE = _PACKAGE_DIR / "animations" / "conversation_animations.json"
 @dataclass
 class AnimationParams:
     """Parameters for a single animation with per-axis frequencies."""
+
     name: str
     description: str
     # Position amplitudes (meters)
@@ -93,14 +94,24 @@ class AnimationPlayer:
         self._in_interpolation: bool = False
         self._interpolation_start_time: float = 0.0
         self._interpolation_start_offsets: dict[str, float] = {
-            "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
-            "x": 0.0, "y": 0.0, "z": 0.0,
-            "antenna_left": 0.0, "antenna_right": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0,
+            "roll": 0.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "antenna_left": 0.0,
+            "antenna_right": 0.0,
         }
         self._last_offsets: dict[str, float] = {
-            "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
-            "x": 0.0, "y": 0.0, "z": 0.0,
-            "antenna_left": 0.0, "antenna_right": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0,
+            "roll": 0.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "antenna_left": 0.0,
+            "antenna_right": 0.0,
         }
         self._load_config()
 
@@ -221,9 +232,14 @@ class AnimationPlayer:
             # No animation
             if self._current_animation is None:
                 result = {
-                    "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
-                    "x": 0.0, "y": 0.0, "z": 0.0,
-                    "antenna_left": 0.0, "antenna_right": 0.0,
+                    "pitch": 0.0,
+                    "yaw": 0.0,
+                    "roll": 0.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "antenna_left": 0.0,
+                    "antenna_right": 0.0,
                 }
                 self._last_offsets = result.copy()
                 return result
@@ -231,9 +247,14 @@ class AnimationPlayer:
             params = self._animations.get(self._current_animation)
             if params is None:
                 result = {
-                    "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
-                    "x": 0.0, "y": 0.0, "z": 0.0,
-                    "antenna_left": 0.0, "antenna_right": 0.0,
+                    "pitch": 0.0,
+                    "yaw": 0.0,
+                    "roll": 0.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "antenna_left": 0.0,
+                    "antenna_right": 0.0,
                 }
                 self._last_offsets = result.copy()
                 return result
@@ -280,29 +301,23 @@ class AnimationPlayer:
             z_freq = params.z_frequency_hz if params.z_frequency_hz > 0 else base_freq
 
             # Calculate oscillations with per-axis frequencies and random phases
-            pitch = (params.pitch_offset_rad +
-                     params.pitch_amplitude_rad *
-                     math.sin(2 * math.pi * pitch_freq * elapsed + self._phase_pitch))
+            pitch = params.pitch_offset_rad + params.pitch_amplitude_rad * math.sin(
+                2 * math.pi * pitch_freq * elapsed + self._phase_pitch
+            )
 
-            yaw = (params.yaw_offset_rad +
-                   params.yaw_amplitude_rad *
-                   math.sin(2 * math.pi * yaw_freq * elapsed + self._phase_yaw))
+            yaw = params.yaw_offset_rad + params.yaw_amplitude_rad * math.sin(
+                2 * math.pi * yaw_freq * elapsed + self._phase_yaw
+            )
 
-            roll = (params.roll_offset_rad +
-                    params.roll_amplitude_rad *
-                    math.sin(2 * math.pi * roll_freq * elapsed + self._phase_roll))
+            roll = params.roll_offset_rad + params.roll_amplitude_rad * math.sin(
+                2 * math.pi * roll_freq * elapsed + self._phase_roll
+            )
 
-            x = (params.x_offset_m +
-                 params.x_amplitude_m *
-                 math.sin(2 * math.pi * x_freq * elapsed + self._phase_x))
+            x = params.x_offset_m + params.x_amplitude_m * math.sin(2 * math.pi * x_freq * elapsed + self._phase_x)
 
-            y = (params.y_offset_m +
-                 params.y_amplitude_m *
-                 math.sin(2 * math.pi * y_freq * elapsed + self._phase_y))
+            y = params.y_offset_m + params.y_amplitude_m * math.sin(2 * math.pi * y_freq * elapsed + self._phase_y)
 
-            z = (params.z_offset_m +
-                 params.z_amplitude_m *
-                 math.sin(2 * math.pi * z_freq * elapsed + self._phase_z))
+            z = params.z_offset_m + params.z_amplitude_m * math.sin(2 * math.pi * z_freq * elapsed + self._phase_z)
 
             # Antenna movement with its own frequency
             antenna_freq = params.antenna_frequency_hz if params.antenna_frequency_hz > 0 else base_freq

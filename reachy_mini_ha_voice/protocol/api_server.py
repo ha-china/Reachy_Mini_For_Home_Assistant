@@ -80,17 +80,14 @@ class APIServer(asyncio.Protocol):
         if self._writelines is None:
             return
 
-        packets = [
-            (PROTO_TO_MESSAGE_TYPE[msg.__class__], msg.SerializeToString())
-            for msg in msgs
-        ]
+        packets = [(PROTO_TO_MESSAGE_TYPE[msg.__class__], msg.SerializeToString()) for msg in msgs]
         packet_bytes = make_plain_text_packets(packets)
         self._writelines(packet_bytes)
 
     def connection_made(self, transport) -> None:
         self._transport = transport
         self._writelines = transport.writelines
-        _LOGGER.info("ESPHome client connected from %s", transport.get_extra_info('peername'))
+        _LOGGER.info("ESPHome client connected from %s", transport.get_extra_info("peername"))
 
     def data_received(self, data: bytes):
         if self._buffer is None:
@@ -180,4 +177,4 @@ class APIServer(asyncio.Protocol):
             assert self._buffer is not None, "Buffer should be set"
 
         cstr = self._buffer
-        self._buffer = cstr[end_of_frame_pos: self._buffer_len + end_of_frame_pos]
+        self._buffer = cstr[end_of_frame_pos : self._buffer_len + end_of_frame_pos]

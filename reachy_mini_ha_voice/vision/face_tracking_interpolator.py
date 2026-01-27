@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation as R
 # Import SDK interpolation utilities (same as conversation_app)
 try:
     from reachy_mini.utils.interpolation import linear_pose_interpolation
+
     SDK_INTERPOLATION_AVAILABLE = True
 except ImportError:
     SDK_INTERPOLATION_AVAILABLE = False
@@ -134,9 +135,7 @@ class FaceTrackingInterpolator:
         # Interpolate to neutral (identity matrix)
         if self._interpolation_start_pose is not None:
             neutral_pose = np.eye(4, dtype=np.float32)
-            interpolated_pose = self._linear_pose_interpolation(
-                self._interpolation_start_pose, neutral_pose, t
-            )
+            interpolated_pose = self._linear_pose_interpolation(self._interpolation_start_pose, neutral_pose, t)
 
             # Extract translation and rotation
             translation = interpolated_pose[:3, 3]
@@ -157,9 +156,7 @@ class FaceTrackingInterpolator:
             self._interpolation_start_time = None
             self._interpolation_start_pose = None
 
-    def _linear_pose_interpolation(
-        self, start: np.ndarray, end: np.ndarray, t: float
-    ) -> np.ndarray:
+    def _linear_pose_interpolation(self, start: np.ndarray, end: np.ndarray, t: float) -> np.ndarray:
         """Linear interpolation between two 4x4 pose matrices.
 
         Uses SDK's linear_pose_interpolation if available, otherwise falls back
@@ -180,6 +177,7 @@ class FaceTrackingInterpolator:
 
         # Use scipy's slerp
         from scipy.spatial.transform import Slerp
+
         key_rots = R.from_quat(np.array([start_rot.as_quat(), end_rot.as_quat()]))
         slerp = Slerp([0, 1], key_rots)
         interp_rot = slerp(t)

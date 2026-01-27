@@ -36,10 +36,12 @@ class AvailableWakeWord:
     def load(self) -> "MicroWakeWord | OpenWakeWord":
         if self.type == WakeWordType.MICRO_WAKE_WORD:
             from pymicro_wakeword import MicroWakeWord
+
             return MicroWakeWord.from_config(config_path=self.wake_word_path)
 
         if self.type == WakeWordType.OPEN_WAKE_WORD:
             from pyopen_wakeword import OpenWakeWord
+
             oww_model = OpenWakeWord.from_model(model_path=self.wake_word_path)
             oww_model.wake_word = self.wake_word
             return oww_model
@@ -61,6 +63,7 @@ class Preferences:
 @dataclass
 class ServerState:
     """Global server state."""
+
     name: str
     mac_address: str
     audio_queue: "Queue[bytes | None]"
@@ -99,13 +102,11 @@ class ServerState:
 
     # Callbacks for sleep/wake from HA buttons (set by VoiceAssistant)
     on_ha_sleep: object | None = None  # Callable[[], None]
-    on_ha_wake: object | None = None   # Callable[[], None]
+    on_ha_wake: object | None = None  # Callable[[], None]
 
     def save_preferences(self) -> None:
         """Save preferences as JSON."""
         _LOGGER.debug("Saving preferences: %s", self.preferences_path)
         self.preferences_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.preferences_path, "w", encoding="utf-8") as preferences_file:
-            json.dump(
-                asdict(self.preferences), preferences_file, ensure_ascii=False, indent=4
-            )
+            json.dump(asdict(self.preferences), preferences_file, ensure_ascii=False, indent=4)

@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 class FrameRateMode(Enum):
     """Frame rate modes for adaptive processing."""
 
-    HIGH = "high"      # Normal tracking (15fps)
-    LOW = "low"        # Low power (2fps)
-    IDLE = "idle"      # Minimal CPU (0.5fps)
+    HIGH = "high"  # Normal tracking (15fps)
+    LOW = "low"  # Low power (2fps)
+    IDLE = "idle"  # Minimal CPU (0.5fps)
     SUSPENDED = "suspended"  # AI disabled
 
 
@@ -36,8 +36,8 @@ class FrameRateConfig:
     fps_idle: float = 0.5
 
     # Thresholds for mode switching
-    low_power_threshold: float = 5.0   # Switch to low after 5s without face
-    idle_threshold: float = 30.0       # Switch to idle after 30s without face
+    low_power_threshold: float = 5.0  # Switch to low after 5s without face
+    idle_threshold: float = 30.0  # Switch to idle after 30s without face
 
     # Gesture detection interval (every N frames)
     gesture_detection_interval: int = 3
@@ -147,16 +147,14 @@ class AdaptiveFrameRateManager:
     def _switch_to_low(self) -> None:
         """Switch to low frame rate mode."""
         if self.state.mode != FrameRateMode.LOW:
-            logger.debug("Switching to LOW frame rate mode (no face for %.1fs)",
-                        self.state.no_face_duration)
+            logger.debug("Switching to LOW frame rate mode (no face for %.1fs)", self.state.no_face_duration)
         self.state.mode = FrameRateMode.LOW
         self.state.current_fps = self.config.fps_low
 
     def _switch_to_idle(self) -> None:
         """Switch to idle frame rate mode."""
         if self.state.mode != FrameRateMode.IDLE:
-            logger.debug("Switching to IDLE frame rate mode (no face for %.1fs)",
-                        self.state.no_face_duration)
+            logger.debug("Switching to IDLE frame rate mode (no face for %.1fs)", self.state.no_face_duration)
         self.state.mode = FrameRateMode.IDLE
         self.state.current_fps = self.config.fps_idle
 

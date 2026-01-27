@@ -44,6 +44,7 @@ _LOCAL_DIR = _MODULE_DIR.parent / "local"
 @dataclass
 class AudioProcessingContext:
     """Context for audio processing, holding mutable state."""
+
     wake_words: list = field(default_factory=list)
     micro_features: object | None = None
     micro_inputs: list = field(default_factory=list)
@@ -106,6 +107,10 @@ class VoiceAssistantService:
         # Sleep manager for sleep/wake handling
         self._sleep_manager: SleepManager | None = None
 
+        # Home Assistant connection state
+        self._ha_connected = False  # Track whether HA is connected
+        self._ha_connection_established = False  # Track if HA connection was ever established
+
     async def start(self) -> None:
         """Start the voice assistant service."""
         _LOGGER.info("Initializing voice assistant service...")
@@ -127,9 +132,7 @@ class VoiceAssistantService:
         preferences = self._load_preferences(preferences_path)
 
         # Load wake word models
-        wake_models, active_wake_words = self._load_wake_models(
-            available_wake_words, preferences
-        )
+        wake_models, active_wake_words = self._load_wake_models(available_wake_words, preferences)
 
         # Load stop model
         stop_model = self._load_stop_model()
@@ -160,6 +163,12 @@ class VoiceAssistantService:
             motion_enabled=self.reachy_mini is not None,
         )
 
+        # Log stop word status
+        if self._state.stop_word:
+            _LOGGER.info("Stop word initialized with ID: %s", self._state.stop_word.id)
+        else:
+            _LOGGER.error("Stop word is None! Stop command will not work")
+
         # Set motion controller reference in state
         self._state.motion = self._motion
 
@@ -174,7 +183,7 @@ class VoiceAssistantService:
                 media = self.reachy_mini.media
                 if media.audio is not None:
                     # Check recording state
-                    is_recording = getattr(media, '_recording', False)
+                    is_recording = getattr(media, "_recording", False)
                     if not is_recording:
                         media.start_recording()
                         _LOGGER.info("Started Reachy Mini recording")
@@ -182,7 +191,7 @@ class VoiceAssistantService:
                         _LOGGER.debug("Reachy Mini recording already active")
 
                     # Check playback state
-                    is_playing = getattr(media, '_playing', False)
+                    is_playing = getattr(media, "_playing", False)
                     if not is_playing:
                         media.start_playing()
                         _LOGGER.info("Started Reachy Mini playback")
@@ -213,27 +222,20 @@ class VoiceAssistantService:
         )
         self._audio_thread.start()
 
-        # Start camera server if enabled (must be before ESPHome server)
-        if self.camera_enabled and self._state.camera_enabled:
-            self._camera_server = MJPEGCameraServer(
-                reachy_mini=self.reachy_mini,
-                host=self.host,
-                port=self.camera_port,
-                fps=15,
-                quality=80,
-                enable_face_tracking=True,
-            )
-            await self._camera_server.start()
-
-            # Connect camera server to motion controller for face tracking
-            if self._motion is not None:
-                self._motion.set_camera_server(self._camera_server)
-
         # Create ESPHome server (pass camera_server for camera entity)
         loop = asyncio.get_running_loop()
         camera_server = self._camera_server  # Capture for lambda
+
+        def protocol_factory():
+            protocol = VoiceSatelliteProtocol(self._state, camera_server=camera_server, voice_assistant_service=self)
+            # Set HA connection callbacks
+            protocol.set_ha_connection_callbacks(
+                on_connected=self._on_ha_connected, on_disconnected=self._on_ha_disconnected
+            )
+            return protocol
+
         self._server = await loop.create_server(
-            lambda: VoiceSatelliteProtocol(self._state, camera_server=camera_server, voice_assistant_service=self),
+            protocol_factory,
             host=self.host,
             port=self.port,
         )
@@ -395,6 +397,7 @@ class VoiceAssistantService:
 
         # Suspend camera server (stops thread and releases YOLO model)
         # Only suspend if camera is NOT disabled (user has not manually disabled it)
+        # AND camera server has been started (not None)
         if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.suspend()
@@ -466,6 +469,7 @@ class VoiceAssistantService:
 
         # Resume camera server (reloads YOLO model and restarts capture thread)
         # Only resume if camera is NOT disabled (user has not manually disabled it)
+        # AND camera server has been started (not None)
         if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.resume_from_suspend()
@@ -580,6 +584,65 @@ class VoiceAssistantService:
         # Call the pre-resume handler to resume all services
         self._on_pre_resume()
 
+    async def _on_ha_connected(self) -> None:
+        """Called when Home Assistant connects.
+
+        At this point, we should:
+        1. Load and start camera server if not already started
+        2. Ensure voice models are loaded
+        3. Resume any suspended services
+        """
+        _LOGGER.info("Home Assistant connected - initializing camera and voice services")
+        self._ha_connected = True
+        self._ha_connection_established = True
+
+        # Start camera server if enabled and not already started
+        if self.camera_enabled and self._state.camera_enabled and self._camera_server is None:
+            try:
+                self._camera_server = MJPEGCameraServer(
+                    reachy_mini=self.reachy_mini,
+                    host=self.host,
+                    port=self.camera_port,
+                    fps=15,
+                    quality=80,
+                    enable_face_tracking=True,
+                )
+                await self._camera_server.start()
+
+                # Store camera_server reference in state for entity registry access
+                self._state._camera_server = self._camera_server
+
+                # Update entity registry with the new camera_server reference
+                if self._state.satellite:
+                    self._state.satellite.update_camera_server(self._camera_server)
+
+                # Connect camera server to motion controller for face tracking
+                if self._motion is not None:
+                    self._motion.set_camera_server(self._camera_server)
+
+                _LOGGER.info("Camera server started on %s:%s", self.host, self.camera_port)
+            except Exception as e:
+                _LOGGER.error("Failed to start camera server: %s", e)
+
+        # Resume services if they were suspended due to HA disconnection
+        if self._state.services_suspended and not self._state.is_sleeping:
+            self._resume_non_esphome_services(reason="ha_connected", clear_sleep_state=False)
+
+    def _on_ha_disconnected(self) -> None:
+        """Called when Home Assistant disconnects.
+
+        At this point, we should:
+        1. Suspend camera server to save resources
+        2. Keep ESPHome server running for reconnection
+        3. Ensure voice services are suspended
+        """
+        _LOGGER.warning("Home Assistant disconnected - suspending camera and voice services")
+        self._ha_connected = False
+
+        # Suspend non-ESPHome services including camera
+        # Keep ESPHome server running so HA can reconnect
+        self._suspend_non_esphome_services(reason="ha_disconnected", set_sleep_state=False)
+
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
 
@@ -592,7 +655,7 @@ class VoiceAssistantService:
         try:
             # Access ReSpeaker through the media audio system
             audio = self.reachy_mini.media.audio
-            if audio is None or not hasattr(audio, '_respeaker'):
+            if audio is None or not hasattr(audio, "_respeaker"):
                 _LOGGER.debug("ReSpeaker not available for optimization")
                 return
 
@@ -731,10 +794,7 @@ class VoiceAssistantService:
                 missing_wakewords.append(filename)
 
         if missing_wakewords:
-            _LOGGER.warning(
-                "Missing wake word files: %s. These should be bundled with the package.",
-                missing_wakewords
-            )
+            _LOGGER.warning("Missing wake word files: %s. These should be bundled with the package.", missing_wakewords)
 
         # Verify sound files
         missing_sounds = []
@@ -744,10 +804,7 @@ class VoiceAssistantService:
                 missing_sounds.append(filename)
 
         if missing_sounds:
-            _LOGGER.warning(
-                "Missing sound files: %s. These should be bundled with the package.",
-                missing_sounds
-            )
+            _LOGGER.warning("Missing sound files: %s. These should be bundled with the package.", missing_sounds)
 
         if not missing_wakewords and not missing_sounds:
             _LOGGER.info("All required files verified successfully.")
@@ -860,19 +917,17 @@ class VoiceAssistantService:
         if stop_config.exists():
             try:
                 model = MicroWakeWord.from_config(stop_config)
-                model.id = 'stop'
+                # Don't override the model ID - use the one from config
+                _LOGGER.info("Loaded stop model with ID: %s, config: %s", model.id, stop_config)
                 return model
             except Exception as e:
-                _LOGGER.warning("Failed to load stop model: %s", e)
+                _LOGGER.error("Failed to load stop model from %s: %s", stop_config, e)
+                import traceback
 
-        # Return a dummy model if stop model not available
-        _LOGGER.warning("Stop model not available, using fallback")
-        okay_nabu_config = _WAKEWORDS_DIR / "okay_nabu.json"
-        if okay_nabu_config.exists():
-            model = MicroWakeWord.from_config(okay_nabu_config)
-            model.id = 'stop'
-            return model
+                traceback.print_exc()
 
+        # Stop model not available - disable stop functionality
+        _LOGGER.error("Stop model not available at %s - stop functionality will be disabled", stop_config)
         return None
 
     def _process_audio(self) -> None:
@@ -937,7 +992,11 @@ class VoiceAssistantService:
                 # Get audio from Reachy Mini
                 audio_chunk = self._get_reachy_audio_chunk()
                 if audio_chunk is None:
-                    idle_sleep = Config.audio.idle_sleep_sleeping if self._robot_services_paused.is_set() else Config.audio.idle_sleep_active
+                    idle_sleep = (
+                        Config.audio.idle_sleep_sleeping
+                        if self._robot_services_paused.is_set()
+                        else Config.audio.idle_sleep_active
+                    )
                     time.sleep(idle_sleep)
                     continue
 
@@ -953,9 +1012,7 @@ class VoiceAssistantService:
                     consecutive_audio_errors += 1
                     if consecutive_audio_errors >= max_consecutive_errors:
                         if not self._robot_services_paused.is_set():
-                            _LOGGER.warning(
-                                "Audio errors indicate robot may be asleep - pausing audio processing"
-                            )
+                            _LOGGER.warning("Audio errors indicate robot may be asleep - pausing audio processing")
                             self._robot_services_paused.set()
                             self._robot_services_resumed.clear()
                             # Clear audio buffer
@@ -1050,7 +1107,7 @@ class VoiceAssistantService:
             for ww_id, ww_model in self._state.wake_words.items():
                 if ww_id in self._state.active_wake_words:
                     # Ensure the model has an 'id' attribute for later use
-                    if not hasattr(ww_model, 'id'):
+                    if not hasattr(ww_model, "id"):
                         ww_model.id = ww_id
                     ctx.wake_words.append(ww_model)
 
@@ -1074,19 +1131,21 @@ class VoiceAssistantService:
 
         # Debug: Log SDK audio data statistics and sample rate (once at startup)
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
-            if not hasattr(self, '_audio_sample_rate_logged'):
+            if not hasattr(self, "_audio_sample_rate_logged"):
                 self._audio_sample_rate_logged = True
                 try:
                     input_rate = self.reachy_mini.media.get_input_audio_samplerate()
                     _LOGGER.info(
                         "Audio input: sample_rate=%d Hz, shape=%s, dtype=%s (expected 16000 Hz)",
-                        input_rate, audio_data.shape, audio_data.dtype
+                        input_rate,
+                        audio_data.shape,
+                        audio_data.dtype,
                     )
                     if input_rate != 16000:
                         _LOGGER.warning(
                             "Audio sample rate mismatch! Got %d Hz, expected 16000 Hz. "
                             "STT may be slow or inaccurate. Consider resampling.",
-                            input_rate
+                            input_rate,
                         )
                 except Exception as e:
                     _LOGGER.warning("Could not get audio sample rate: %s", e)
@@ -1094,7 +1153,7 @@ class VoiceAssistantService:
         # Append new data to buffer if valid
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
             try:
-                if audio_data.dtype.kind not in ('S', 'U', 'O', 'V', 'b'):
+                if audio_data.dtype.kind not in ("S", "U", "O", "V", "b"):
                     if audio_data.dtype != np.float32:
                         audio_data = np.asarray(audio_data, dtype=np.float32)
 
@@ -1108,10 +1167,9 @@ class VoiceAssistantService:
                     elif audio_data.ndim == 2:
                         audio_data = audio_data[:, 0].copy()
 
-
                     # Resample if needed (SDK may return non-16kHz audio)
                     if audio_data.ndim == 1:
-                        if not hasattr(self, '_input_sample_rate'):
+                        if not hasattr(self, "_input_sample_rate"):
                             try:
                                 self._input_sample_rate = self.reachy_mini.media.get_input_audio_samplerate()
                             except Exception:
@@ -1120,6 +1178,7 @@ class VoiceAssistantService:
                         # Resample to 16kHz if needed
                         if self._input_sample_rate != 16000 and self._input_sample_rate > 0:
                             from scipy.signal import resample
+
                             new_length = int(len(audio_data) * 16000 / self._input_sample_rate)
                             if new_length > 0:
                                 audio_data = resample(audio_data, new_length)
@@ -1150,11 +1209,7 @@ class VoiceAssistantService:
         """Convert float32 audio array to 16-bit PCM bytes."""
         # Replace NaN/Inf with 0 to avoid casting errors
         audio_clean = np.nan_to_num(audio_chunk_array, nan=0.0, posinf=1.0, neginf=-1.0)
-        return (
-            (np.clip(audio_clean, -1.0, 1.0) * 32767.0)
-            .astype("<i2")
-            .tobytes()
-        )
+        return (np.clip(audio_clean, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
 
     def _process_audio_chunk(self, ctx: AudioProcessingContext, audio_chunk: bytes) -> None:
         """Process an audio chunk for wake word detection.
@@ -1213,9 +1268,7 @@ class VoiceAssistantService:
             if activated:
                 # Check refractory period to prevent duplicate triggers
                 now = time.monotonic()
-                if (ctx.last_active is None) or (
-                    (now - ctx.last_active) > self._state.refractory_seconds
-                ):
+                if (ctx.last_active is None) or ((now - ctx.last_active) > self._state.refractory_seconds):
                     _LOGGER.info("Wake word detected: %s", wake_word.id)
                     self._state.satellite.wakeup(wake_word)
                     # Face tracking will handle looking at user automatically
@@ -1225,13 +1278,15 @@ class VoiceAssistantService:
     def _detect_stop_word(self, ctx: AudioProcessingContext) -> None:
         """Detect stop word in the processed audio features."""
         if not self._state.stop_word:
+            _LOGGER.warning("Stop word model not loaded")
             return
 
         stopped = False
         for micro_input in ctx.micro_inputs:
             if self._state.stop_word.process_streaming(micro_input):
                 stopped = True
+                break  # Stop at first detection
 
         if stopped and (self._state.stop_word.id in self._state.active_wake_words):
-            _LOGGER.info("Stop word detected")
+            _LOGGER.info("Stop word detected - stopping playback")
             self._state.satellite.stop()

@@ -74,7 +74,7 @@ class ReachyController:
         self._last_status_query = 0.0
 
         # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
-        self._respeaker_lock = __import__('threading').Lock()
+        self._respeaker_lock = __import__("threading").Lock()
 
     def set_sleep_callback(self, callback) -> None:
         """Set callback to be called when go_to_sleep is triggered."""
@@ -109,40 +109,40 @@ class ReachyController:
         """
         now = time.time()
         if now - self._last_status_query < self._cache_ttl:
-            return self._state_cache.get('status')
+            return self._state_cache.get("status")
 
         if not self.is_available:
             return None
 
         try:
             status = self.reachy.client.get_status(wait=False)
-            self._state_cache['status'] = status
+            self._state_cache["status"] = status
             self._last_status_query = now
             return status
         except Exception as e:
             logger.error(f"Error getting status: {e}")
-            return self._state_cache.get('status')  # Return stale cache on error
+            return self._state_cache.get("status")  # Return stale cache on error
 
     def get_daemon_state(self) -> str:
         """Get daemon state with caching."""
         status = self._get_cached_status()
         if status is None:
             return "not_available"
-        return status.get('state', 'unknown')
+        return status.get("state", "unknown")
 
     def get_backend_ready(self) -> bool:
         """Check if backend is ready with caching."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return status.get('state') == 'running'
+        return status.get("state") == "running"
 
     def get_error_message(self) -> str:
         """Get current error message with caching."""
         status = self._get_cached_status()
         if status is None:
             return "Robot not available"
-        return status.get('error') or ""
+        return status.get("error") or ""
 
     def get_speaker_volume(self) -> float:
         """Get speaker volume (0-100) with caching."""
@@ -158,14 +158,14 @@ class ReachyController:
             status = self._get_cached_status()
             if status is None:
                 return self._speaker_volume
-            wlan_ip = status.get('wlan_ip', 'localhost')
+            wlan_ip = status.get("wlan_ip", "localhost")
             response = self._http_session.get(
                 f"http://{wlan_ip}:8000/api/volume/current",
                 timeout=self._http_timeout,
             )
             if response.status_code == 200:
                 data = response.json()
-                self._speaker_volume = float(data.get('volume', self._speaker_volume))
+                self._speaker_volume = float(data.get("volume", self._speaker_volume))
                 self._speaker_volume_cache_ts = now
         except Exception as e:
             logger.debug(f"Could not get volume from API: {e}")
@@ -191,7 +191,7 @@ class ReachyController:
             if status is None:
                 logger.error("Cannot get daemon status for volume control")
                 return
-            wlan_ip = status.get('wlan_ip', 'localhost')
+            wlan_ip = status.get("wlan_ip", "localhost")
             response = self._http_session.post(
                 f"http://{wlan_ip}:8000/api/volume/set",
                 json={"volume": int(volume)},
@@ -218,7 +218,7 @@ class ReachyController:
             status = self._get_cached_status()
             if status is None:
                 return self._microphone_volume
-            wlan_ip = status.get('wlan_ip', 'localhost')
+            wlan_ip = status.get("wlan_ip", "localhost")
 
             # Call the daemon API to get microphone volume
             response = self._http_session.get(
@@ -227,7 +227,7 @@ class ReachyController:
             )
             if response.status_code == 200:
                 data = response.json()
-                self._microphone_volume = float(data.get('volume', self._microphone_volume))
+                self._microphone_volume = float(data.get("volume", self._microphone_volume))
                 self._microphone_volume_cache_ts = now
                 return self._microphone_volume
         except Exception as e:
@@ -255,7 +255,7 @@ class ReachyController:
             if status is None:
                 logger.error("Cannot get daemon status for microphone volume control")
                 return
-            wlan_ip = status.get('wlan_ip', 'localhost')
+            wlan_ip = status.get("wlan_ip", "localhost")
 
             # Call the daemon API to set microphone volume
             response = self._http_session.post(
@@ -278,11 +278,11 @@ class ReachyController:
         if status is None:
             return False
         try:
-            backend_status = status.get('backend_status')
+            backend_status = status.get("backend_status")
             if backend_status and isinstance(backend_status, dict):
-                motor_mode = backend_status.get('motor_control_mode', 'disabled')
-                return motor_mode == 'enabled'
-            return status.get('state') == 'running'
+                motor_mode = backend_status.get("motor_control_mode", "disabled")
+                return motor_mode == "enabled"
+            return status.get("state") == "running"
         except Exception as e:
             logger.error(f"Error getting motor state: {e}")
             return False
@@ -314,11 +314,11 @@ class ReachyController:
         if status is None:
             return "disabled"
         try:
-            backend_status = status.get('backend_status')
+            backend_status = status.get("backend_status")
             if backend_status and isinstance(backend_status, dict):
-                motor_mode = backend_status.get('motor_control_mode', 'disabled')
+                motor_mode = backend_status.get("motor_control_mode", "disabled")
                 return motor_mode
-            if status.get('state') == 'running':
+            if status.get("state") == "running":
                 return "enabled"
             return "disabled"
         except Exception as e:
@@ -437,7 +437,7 @@ class ReachyController:
         rotation_matrix = pose_matrix[:3, :3]
         rotation = R.from_matrix(rotation_matrix)
         # Use 'xyz' convention for roll, pitch, yaw
-        roll, pitch, yaw = rotation.as_euler('xyz')
+        roll, pitch, yaw = rotation.as_euler("xyz")
 
         return x, y, z, roll, pitch, yaw
 
@@ -456,12 +456,12 @@ class ReachyController:
         try:
             x, y, z, roll, pitch, yaw = self._extract_pose_from_matrix(pose)
             components = {
-                'x': x * 1000,  # m to mm
-                'y': y * 1000,
-                'z': z * 1000,
-                'roll': math.degrees(roll),
-                'pitch': math.degrees(pitch),
-                'yaw': math.degrees(yaw),
+                "x": x * 1000,  # m to mm
+                "y": y * 1000,
+                "z": z * 1000,
+                "roll": math.degrees(roll),
+                "pitch": math.degrees(pitch),
+                "yaw": math.degrees(yaw),
             }
             return components.get(component, 0.0)
         except Exception as e:
@@ -485,58 +485,58 @@ class ReachyController:
     # Head position getters and setters
     def get_head_x(self) -> float:
         """Get head X position in mm."""
-        return self._get_head_pose_component('x')
+        return self._get_head_pose_component("x")
 
     def set_head_x(self, x_mm: float) -> None:
         """Set head X position in mm via MovementManager."""
         if not self._set_pose_via_manager(x=x_mm / 1000.0):  # mm to m
-            self._disabled_pose_setter('head_x')
+            self._disabled_pose_setter("head_x")
 
     def get_head_y(self) -> float:
         """Get head Y position in mm."""
-        return self._get_head_pose_component('y')
+        return self._get_head_pose_component("y")
 
     def set_head_y(self, y_mm: float) -> None:
         """Set head Y position in mm via MovementManager."""
         if not self._set_pose_via_manager(y=y_mm / 1000.0):  # mm to m
-            self._disabled_pose_setter('head_y')
+            self._disabled_pose_setter("head_y")
 
     def get_head_z(self) -> float:
         """Get head Z position in mm."""
-        return self._get_head_pose_component('z')
+        return self._get_head_pose_component("z")
 
     def set_head_z(self, z_mm: float) -> None:
         """Set head Z position in mm via MovementManager."""
         if not self._set_pose_via_manager(z=z_mm / 1000.0):  # mm to m
-            self._disabled_pose_setter('head_z')
+            self._disabled_pose_setter("head_z")
 
     # Head orientation getters and setters
     def get_head_roll(self) -> float:
         """Get head roll angle in degrees."""
-        return self._get_head_pose_component('roll')
+        return self._get_head_pose_component("roll")
 
     def set_head_roll(self, roll_deg: float) -> None:
         """Set head roll angle in degrees via MovementManager."""
         if not self._set_pose_via_manager(roll=math.radians(roll_deg)):
-            self._disabled_pose_setter('head_roll')
+            self._disabled_pose_setter("head_roll")
 
     def get_head_pitch(self) -> float:
         """Get head pitch angle in degrees."""
-        return self._get_head_pose_component('pitch')
+        return self._get_head_pose_component("pitch")
 
     def set_head_pitch(self, pitch_deg: float) -> None:
         """Set head pitch angle in degrees via MovementManager."""
         if not self._set_pose_via_manager(pitch=math.radians(pitch_deg)):
-            self._disabled_pose_setter('head_pitch')
+            self._disabled_pose_setter("head_pitch")
 
     def get_head_yaw(self) -> float:
         """Get head yaw angle in degrees."""
-        return self._get_head_pose_component('yaw')
+        return self._get_head_pose_component("yaw")
 
     def set_head_yaw(self, yaw_deg: float) -> None:
         """Set head yaw angle in degrees via MovementManager."""
         if not self._set_pose_via_manager(yaw=math.radians(yaw_deg)):
-            self._disabled_pose_setter('head_yaw')
+            self._disabled_pose_setter("head_yaw")
 
     def get_body_yaw(self) -> float:
         """Get body yaw angle in degrees."""
@@ -557,7 +557,7 @@ class ReachyController:
         is enabled. Manual control will temporarily override automatic mode.
         """
         if self.reachy is None:
-            self._disabled_pose_setter('body_yaw')
+            self._disabled_pose_setter("body_yaw")
             return
         try:
             self.reachy.set_target_body_yaw(math.radians(yaw_deg))
@@ -579,7 +579,7 @@ class ReachyController:
     def set_antenna_left(self, angle_deg: float) -> None:
         """Set left antenna angle in degrees via MovementManager."""
         if not self._set_pose_via_manager(antenna_left=math.radians(angle_deg)):
-            self._disabled_pose_setter('antenna_left')
+            self._disabled_pose_setter("antenna_left")
 
     def get_antenna_right(self) -> float:
         """Get right antenna angle in degrees."""
@@ -596,7 +596,7 @@ class ReachyController:
     def set_antenna_right(self, angle_deg: float) -> None:
         """Set right antenna angle in degrees via MovementManager."""
         if not self._set_pose_via_manager(antenna_right=math.radians(angle_deg)):
-            self._disabled_pose_setter('antenna_right')
+            self._disabled_pose_setter("antenna_right")
 
     # ========== Phase 4: Look At Control ==========
 
@@ -604,7 +604,7 @@ class ReachyController:
         """Get look at target X coordinate in world frame (meters)."""
         # This is a target position, not a current state
         # We'll store it internally
-        return getattr(self, '_look_at_x', 0.0)
+        return getattr(self, "_look_at_x", 0.0)
 
     def set_look_at_x(self, x: float) -> None:
         """Set look at target X coordinate."""
@@ -613,7 +613,7 @@ class ReachyController:
 
     def get_look_at_y(self) -> float:
         """Get look at target Y coordinate in world frame (meters)."""
-        return getattr(self, '_look_at_y', 0.0)
+        return getattr(self, "_look_at_y", 0.0)
 
     def set_look_at_y(self, y: float) -> None:
         """Set look at target Y coordinate."""
@@ -622,7 +622,7 @@ class ReachyController:
 
     def get_look_at_z(self) -> float:
         """Get look at target Z coordinate in world frame (meters)."""
-        return getattr(self, '_look_at_z', 0.0)
+        return getattr(self, "_look_at_z", 0.0)
 
     def set_look_at_z(self, z: float) -> None:
         """Set look at target Z coordinate."""
@@ -654,10 +654,10 @@ class ReachyController:
         if status is None:
             return 0.0
         try:
-            backend_status = status.get('backend_status')
+            backend_status = status.get("backend_status")
             if backend_status and isinstance(backend_status, dict):
-                control_loop_stats = backend_status.get('control_loop_stats', {})
-                return control_loop_stats.get('mean_control_loop_frequency', 0.0)
+                control_loop_stats = backend_status.get("control_loop_stats", {})
+                return control_loop_stats.get("mean_control_loop_frequency", 0.0)
             return 0.0
         except Exception as e:
             logger.error(f"Error getting control loop frequency: {e}")
@@ -668,35 +668,35 @@ class ReachyController:
         status = self._get_cached_status()
         if status is None:
             return "N/A"
-        return status.get('version') or "unknown"
+        return status.get("version") or "unknown"
 
     def get_robot_name(self) -> str:
         """Get robot name with caching."""
         status = self._get_cached_status()
         if status is None:
             return "N/A"
-        return status.get('robot_name') or "unknown"
+        return status.get("robot_name") or "unknown"
 
     def get_wireless_version(self) -> bool:
         """Check if this is a wireless version with caching."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return status.get('wireless_version', False)
+        return status.get("wireless_version", False)
 
     def get_simulation_mode(self) -> bool:
         """Check if simulation mode is enabled with caching."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return status.get('simulation_enabled', False)
+        return status.get("simulation_enabled", False)
 
     def get_wlan_ip(self) -> str:
         """Get WLAN IP address with caching."""
         status = self._get_cached_status()
         if status is None:
             return "N/A"
-        return status.get('wlan_ip') or "N/A"
+        return status.get("wlan_ip") or "N/A"
 
     # ========== Phase 7: IMU Sensors (Wireless only) ==========
 
@@ -724,31 +724,31 @@ class ReachyController:
 
     def get_imu_accel_x(self) -> float:
         """Get IMU X-axis acceleration in m/s²."""
-        return self._get_imu_value('accelerometer', 0)
+        return self._get_imu_value("accelerometer", 0)
 
     def get_imu_accel_y(self) -> float:
         """Get IMU Y-axis acceleration in m/s²."""
-        return self._get_imu_value('accelerometer', 1)
+        return self._get_imu_value("accelerometer", 1)
 
     def get_imu_accel_z(self) -> float:
         """Get IMU Z-axis acceleration in m/s²."""
-        return self._get_imu_value('accelerometer', 2)
+        return self._get_imu_value("accelerometer", 2)
 
     def get_imu_gyro_x(self) -> float:
         """Get IMU X-axis angular velocity in rad/s."""
-        return self._get_imu_value('gyroscope', 0)
+        return self._get_imu_value("gyroscope", 0)
 
     def get_imu_gyro_y(self) -> float:
         """Get IMU Y-axis angular velocity in rad/s."""
-        return self._get_imu_value('gyroscope', 1)
+        return self._get_imu_value("gyroscope", 1)
 
     def get_imu_gyro_z(self) -> float:
         """Get IMU Z-axis angular velocity in rad/s."""
-        return self._get_imu_value('gyroscope', 2)
+        return self._get_imu_value("gyroscope", 2)
 
     def get_imu_temperature(self) -> float:
         """Get IMU temperature in °C."""
-        return self._get_imu_value('temperature', -1)
+        return self._get_imu_value("temperature", -1)
 
     # ========== Phase 11: LED Control (DISABLED) ==========
     # LED control is disabled because LEDs are hidden inside the robot.
@@ -779,7 +779,7 @@ class ReachyController:
         """Get AGC (Automatic Gain Control) enabled status."""
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_agc_enabled', True)  # Default to enabled
+                return getattr(self, "_agc_enabled", True)  # Default to enabled
             try:
                 result = respeaker.read("PP_AGCONOFF")
                 if result is not None:
@@ -787,7 +787,7 @@ class ReachyController:
                     return self._agc_enabled
             except Exception as e:
                 logger.debug(f"Error getting AGC status: {e}")
-        return getattr(self, '_agc_enabled', True)
+        return getattr(self, "_agc_enabled", True)
 
     def set_agc_enabled(self, enabled: bool) -> None:
         """Set AGC (Automatic Gain Control) enabled status."""
@@ -805,7 +805,7 @@ class ReachyController:
         """Get AGC maximum gain in dB (0-40 dB range)."""
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_agc_max_gain', 30.0)  # Default matches MicrophoneDefaults
+                return getattr(self, "_agc_max_gain", 30.0)  # Default matches MicrophoneDefaults
             try:
                 result = respeaker.read("PP_AGCMAXGAIN")
                 if result is not None:
@@ -813,7 +813,7 @@ class ReachyController:
                     return self._agc_max_gain
             except Exception as e:
                 logger.debug(f"Error getting AGC max gain: {e}")
-        return getattr(self, '_agc_max_gain', 30.0)
+        return getattr(self, "_agc_max_gain", 30.0)
 
     def set_agc_max_gain(self, gain: float) -> None:
         """Set AGC maximum gain in dB (0-40 dB range)."""
@@ -840,7 +840,7 @@ class ReachyController:
         """
         with self._get_respeaker() as respeaker:
             if respeaker is None:
-                return getattr(self, '_noise_suppression', 15.0)
+                return getattr(self, "_noise_suppression", 15.0)
             try:
                 result = respeaker.read("PP_MIN_NS")
                 if result is not None:
@@ -851,7 +851,7 @@ class ReachyController:
                     return self._noise_suppression
             except Exception as e:
                 logger.debug(f"Error getting noise suppression: {e}")
-        return getattr(self, '_noise_suppression', 15.0)
+        return getattr(self, "_noise_suppression", 15.0)
 
     def set_noise_suppression(self, level: float) -> None:
         """Set noise suppression level (0-100%)."""

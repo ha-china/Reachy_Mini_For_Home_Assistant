@@ -105,7 +105,10 @@ class HeadTracker:
                     if attempt < max_retries - 1:
                         logger.warning(
                             "Model download failed (attempt %d/%d): %s. Retrying in %ds...",
-                            attempt + 1, max_retries, e, retry_delay
+                            attempt + 1,
+                            max_retries,
+                            e,
+                            retry_delay,
                         )
                         time.sleep(retry_delay)
 
@@ -161,9 +164,7 @@ class HeadTracker:
         best_idx = valid_indices[np.argmax(scores)]
         return int(best_idx)
 
-    def _bbox_to_normalized_coords(
-        self, bbox: NDArray[np.float32], w: int, h: int
-    ) -> NDArray[np.float32]:
+    def _bbox_to_normalized_coords(self, bbox: NDArray[np.float32], w: int, h: int) -> NDArray[np.float32]:
         """Convert bounding box center to normalized coordinates [-1, 1].
 
         Args:
@@ -183,9 +184,7 @@ class HeadTracker:
 
         return np.array([norm_x, norm_y], dtype=np.float32)
 
-    def get_head_position(
-        self, img: NDArray[np.uint8]
-    ) -> tuple[NDArray[np.float32] | None, float | None]:
+    def get_head_position(self, img: NDArray[np.uint8]) -> tuple[NDArray[np.float32] | None, float | None]:
         """Get head position from face detection.
 
         Args:
@@ -200,9 +199,11 @@ class HeadTracker:
         h, w = img.shape[:2]
 
         # Frame skip optimization: return last detection if within skip limit
-        if (self._max_skip_frames > 0 and
-                self._last_detection is not None and
-                self._frames_since_detection < self._max_skip_frames):
+        if (
+            self._max_skip_frames > 0
+            and self._last_detection is not None
+            and self._frames_since_detection < self._max_skip_frames
+        ):
             self._frames_since_detection += 1
             return self._last_detection
 
@@ -210,6 +211,7 @@ class HeadTracker:
             # Downscale image for faster inference if scale < 1.0
             if self._inference_scale < 1.0:
                 import cv2
+
                 new_w = int(w * self._inference_scale)
                 new_h = int(h * self._inference_scale)
                 inference_img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)

@@ -12,6 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 try:
     from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZeroconf
+
     ZEROCONF_AVAILABLE = True
 except ImportError:
     _LOGGER.fatal("pip install zeroconf")
@@ -40,9 +41,7 @@ def get_local_ip() -> str:
 class HomeAssistantZeroconf:
     """Zeroconf service for Home Assistant discovery."""
 
-    def __init__(
-        self, port: int, name: str | None = None, host: str | None = None
-    ) -> None:
+    def __init__(self, port: int, name: str | None = None, host: str | None = None) -> None:
         self.port = port
         self.name = name or f"reachy-mini-{get_mac()[:6]}"
 

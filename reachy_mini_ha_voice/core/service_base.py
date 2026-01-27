@@ -201,14 +201,15 @@ class RobustOperationMixin:
 
 class ServiceState(Enum):
     """Represents the state of a sleep-aware service."""
-    STOPPED = "stopped"        # Service not started
-    STARTING = "starting"      # Service is starting up
-    ACTIVE = "active"          # Service is fully operational
+
+    STOPPED = "stopped"  # Service not started
+    STARTING = "starting"  # Service is starting up
+    ACTIVE = "active"  # Service is fully operational
     SUSPENDING = "suspending"  # Service is being suspended (sleep)
-    SUSPENDED = "suspended"    # Service is suspended (sleeping)
-    RESUMING = "resuming"      # Service is resuming from sleep
-    STOPPING = "stopping"      # Service is shutting down
-    ERROR = "error"            # Service encountered an error
+    SUSPENDED = "suspended"  # Service is suspended (sleeping)
+    RESUMING = "resuming"  # Service is resuming from sleep
+    STOPPING = "stopping"  # Service is shutting down
+    ERROR = "error"  # Service encountered an error
 
 
 class SleepAwareService(ABC):
@@ -286,9 +287,7 @@ class SleepAwareService(ABC):
         """
         async with self._state_lock:
             if self._state != ServiceState.STOPPED:
-                self._logger.warning(
-                    f"Cannot start service in state {self._state.value}"
-                )
+                self._logger.warning(f"Cannot start service in state {self._state.value}")
                 return
 
             self._state = ServiceState.STARTING
@@ -340,9 +339,7 @@ class SleepAwareService(ABC):
         """
         async with self._state_lock:
             if self._state != ServiceState.ACTIVE:
-                self._logger.warning(
-                    f"Cannot suspend service in state {self._state.value}"
-                )
+                self._logger.warning(f"Cannot suspend service in state {self._state.value}")
                 return
 
             self._state = ServiceState.SUSPENDING
@@ -367,9 +364,7 @@ class SleepAwareService(ABC):
         """
         async with self._state_lock:
             if self._state != ServiceState.SUSPENDED:
-                self._logger.warning(
-                    f"Cannot resume service in state {self._state.value}"
-                )
+                self._logger.warning(f"Cannot resume service in state {self._state.value}")
                 return
 
             self._state = ServiceState.RESUMING
@@ -500,9 +495,7 @@ class ServiceManager:
             try:
                 await service.start()
             except Exception as e:
-                self._logger.error(
-                    f"Failed to start {service.service_name}: {e}"
-                )
+                self._logger.error(f"Failed to start {service.service_name}: {e}")
 
     async def stop_all(self) -> None:
         """Stop all registered services."""
@@ -512,9 +505,7 @@ class ServiceManager:
             try:
                 await service.stop()
             except Exception as e:
-                self._logger.error(
-                    f"Failed to stop {service.service_name}: {e}"
-                )
+                self._logger.error(f"Failed to stop {service.service_name}: {e}")
 
     async def suspend_all(self) -> None:
         """Suspend all active services."""
@@ -528,9 +519,7 @@ class ServiceManager:
                 try:
                     await service.suspend()
                 except Exception as e:
-                    self._logger.error(
-                        f"Failed to suspend {service.service_name}: {e}"
-                    )
+                    self._logger.error(f"Failed to suspend {service.service_name}: {e}")
 
         self._is_suspended = True
         self._logger.info("All services suspended")
@@ -547,9 +536,7 @@ class ServiceManager:
 
         actual_delay = delay if delay is not None else self._resume_delay
         if actual_delay > 0:
-            self._logger.info(
-                f"Waiting {actual_delay}s before resuming services..."
-            )
+            self._logger.info(f"Waiting {actual_delay}s before resuming services...")
             await asyncio.sleep(actual_delay)
 
         self._logger.info("Resuming all services after wake...")
@@ -558,9 +545,7 @@ class ServiceManager:
                 try:
                     await service.resume()
                 except Exception as e:
-                    self._logger.error(
-                        f"Failed to resume {service.service_name}: {e}"
-                    )
+                    self._logger.error(f"Failed to resume {service.service_name}: {e}")
 
         self._is_suspended = False
         self._logger.info("All services resumed")

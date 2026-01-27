@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Try to import psutil for detailed memory info
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -133,9 +134,9 @@ class MemoryMonitor:
         else:
             # Fallback: try to read from /proc on Linux
             try:
-                with open('/proc/self/statm') as f:
+                with open("/proc/self/statm") as f:
                     parts = f.read().split()
-                    page_size = os.sysconf('SC_PAGE_SIZE')
+                    page_size = os.sysconf("SC_PAGE_SIZE")
                     stats.rss_bytes = int(parts[1]) * page_size
                     stats.rss_mb = stats.rss_bytes / (1024 * 1024)
                     stats.vms_bytes = int(parts[0]) * page_size
@@ -193,8 +194,11 @@ class MemoryMonitor:
             name="memory-monitor",
         )
         self._thread.start()
-        logger.info("Memory monitor started (warning: %.0f MB, critical: %.0f MB)",
-                   self._warning_threshold, self._critical_threshold)
+        logger.info(
+            "Memory monitor started (warning: %.0f MB, critical: %.0f MB)",
+            self._warning_threshold,
+            self._critical_threshold,
+        )
 
     def stop(self) -> None:
         """Stop memory monitoring."""
@@ -218,8 +222,9 @@ class MemoryMonitor:
             is_warning = self.is_warning()
 
             if is_critical and not was_critical:
-                logger.warning("CRITICAL: Memory usage at %.1f MB (threshold: %.1f MB)",
-                             stats.rss_mb, self._critical_threshold)
+                logger.warning(
+                    "CRITICAL: Memory usage at %.1f MB (threshold: %.1f MB)", stats.rss_mb, self._critical_threshold
+                )
                 if self._on_critical:
                     try:
                         self._on_critical(stats)
@@ -227,8 +232,9 @@ class MemoryMonitor:
                         logger.error("Error in critical callback: %s", e)
 
             elif is_warning and not was_warning:
-                logger.warning("WARNING: Memory usage at %.1f MB (threshold: %.1f MB)",
-                             stats.rss_mb, self._warning_threshold)
+                logger.warning(
+                    "WARNING: Memory usage at %.1f MB (threshold: %.1f MB)", stats.rss_mb, self._warning_threshold
+                )
                 if self._on_warning:
                     try:
                         self._on_warning(stats)
@@ -242,8 +248,9 @@ class MemoryMonitor:
             if is_warning and len(self._history) % 10 == 0:
                 trend = self.get_trend()
                 trend_str = f"+{trend:.1f}" if trend > 0 else f"{trend:.1f}"
-                logger.info("Memory: %.1f MB (trend: %s MB/min, system: %.1f%%)",
-                          stats.rss_mb, trend_str, stats.system_percent)
+                logger.info(
+                    "Memory: %.1f MB (trend: %s MB/min, system: %.1f%%)", stats.rss_mb, trend_str, stats.system_percent
+                )
 
             # Wait for interval or stop
             if self._stop_event.wait(timeout=self._check_interval):

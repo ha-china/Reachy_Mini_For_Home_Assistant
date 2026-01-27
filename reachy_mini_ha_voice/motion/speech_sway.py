@@ -65,7 +65,7 @@ def _loudness_gain(db: float, offset: float = SENS_DB_OFFSET) -> float:
     """Normalize dB into [0,1] with gamma; clipped to [0,1]."""
     t = (db + offset - SWAY_DB_LOW) / (SWAY_DB_HIGH - SWAY_DB_LOW)
     t = max(0.0, min(1.0, t))
-    return t ** LOUDNESS_GAMMA if LOUDNESS_GAMMA != 1.0 else t
+    return t**LOUDNESS_GAMMA if LOUDNESS_GAMMA != 1.0 else t
 
 
 def _to_float32_mono(x: NDArray[Any]) -> NDArray[np.float32]:
@@ -216,27 +216,35 @@ class SpeechSwayRT:
             self.t += HOP_MS / 1000.0
 
             # Oscillators
-            pitch = (math.radians(SWAY_A_PITCH_DEG) * loud * env *
-                     math.sin(2 * math.pi * SWAY_F_PITCH * self.t + self.phase_pitch))
-            yaw = (math.radians(SWAY_A_YAW_DEG) * loud * env *
-                   math.sin(2 * math.pi * SWAY_F_YAW * self.t + self.phase_yaw))
-            roll = (math.radians(SWAY_A_ROLL_DEG) * loud * env *
-                    math.sin(2 * math.pi * SWAY_F_ROLL * self.t + self.phase_roll))
-            x_m = (SWAY_A_X_MM / 1000.0) * loud * env * math.sin(
-                2 * math.pi * SWAY_F_X * self.t + self.phase_x)
-            y_m = (SWAY_A_Y_MM / 1000.0) * loud * env * math.sin(
-                2 * math.pi * SWAY_F_Y * self.t + self.phase_y)
-            z_m = (SWAY_A_Z_MM / 1000.0) * loud * env * math.sin(
-                2 * math.pi * SWAY_F_Z * self.t + self.phase_z)
+            pitch = (
+                math.radians(SWAY_A_PITCH_DEG)
+                * loud
+                * env
+                * math.sin(2 * math.pi * SWAY_F_PITCH * self.t + self.phase_pitch)
+            )
+            yaw = (
+                math.radians(SWAY_A_YAW_DEG) * loud * env * math.sin(2 * math.pi * SWAY_F_YAW * self.t + self.phase_yaw)
+            )
+            roll = (
+                math.radians(SWAY_A_ROLL_DEG)
+                * loud
+                * env
+                * math.sin(2 * math.pi * SWAY_F_ROLL * self.t + self.phase_roll)
+            )
+            x_m = (SWAY_A_X_MM / 1000.0) * loud * env * math.sin(2 * math.pi * SWAY_F_X * self.t + self.phase_x)
+            y_m = (SWAY_A_Y_MM / 1000.0) * loud * env * math.sin(2 * math.pi * SWAY_F_Y * self.t + self.phase_y)
+            z_m = (SWAY_A_Z_MM / 1000.0) * loud * env * math.sin(2 * math.pi * SWAY_F_Z * self.t + self.phase_z)
 
-            out.append({
-                "pitch_rad": pitch,
-                "yaw_rad": yaw,
-                "roll_rad": roll,
-                "x_m": x_m,
-                "y_m": y_m,
-                "z_m": z_m,
-            })
+            out.append(
+                {
+                    "pitch_rad": pitch,
+                    "yaw_rad": yaw,
+                    "roll_rad": roll,
+                    "x_m": x_m,
+                    "y_m": y_m,
+                    "z_m": z_m,
+                }
+            )
 
         return out
 
