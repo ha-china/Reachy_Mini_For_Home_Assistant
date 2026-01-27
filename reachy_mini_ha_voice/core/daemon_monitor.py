@@ -18,7 +18,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ class DaemonStateMonitor:
         max_backoff_interval: float = DEFAULT_MAX_BACKOFF,
         backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
         backoff_error_threshold: int = DEFAULT_BACKOFF_ERROR_THRESHOLD,
-        reachy_mini: Optional[Any] = None,  # Added for Zenoth access
+        reachy_mini: Any | None = None,  # Added for Zenoth access
     ) -> None:
         """Initialize the daemon state monitor.
 

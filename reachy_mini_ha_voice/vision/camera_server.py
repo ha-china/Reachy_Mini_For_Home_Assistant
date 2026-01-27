@@ -58,7 +58,7 @@ class MJPEGCameraServer:
         quality: int = 80,
         enable_face_tracking: bool = True,
         face_confidence_threshold: float = 0.5,  # Min confidence for face detection
-        gstreamer_lock: Optional[threading.Lock] = None,
+        gstreamer_lock: threading.Lock | None = None,
     ):
         """
         Initialize the MJPEG camera server.

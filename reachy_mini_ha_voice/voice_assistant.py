@@ -995,8 +995,8 @@ class VoiceAssistantService:
 
                 # Optimization: If not streaming audio, skip Reachy audio processing
                 # This prevents unnecessary get_frame() calls when idle, reducing GStreamer competition
-                if (self._state is not None and 
-                    self._state.satellite is not None and 
+                if (self._state is not None and
+                    self._state.satellite is not None and
                     not self._state.satellite.is_streaming_audio):
                     time.sleep(1.0)
                     continue
@@ -1146,7 +1146,7 @@ class VoiceAssistantService:
 
         # Check if in conversation mode - audio thread has highest priority
         in_conversation = self._state is not None and self._state.is_conversation_active
-        
+
         if in_conversation:
             # In conversation: audio thread gets priority, skip lock to avoid blocking
             # Other threads (camera, playback) should back off during conversation
