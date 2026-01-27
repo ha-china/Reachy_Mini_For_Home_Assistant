@@ -20,8 +20,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
 
-import aiohttp
-
 logger = logging.getLogger(__name__)
 
 
@@ -96,7 +94,6 @@ class DaemonStateMonitor:
         max_backoff_interval: float = DEFAULT_MAX_BACKOFF,
         backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
         backoff_error_threshold: int = DEFAULT_BACKOFF_ERROR_THRESHOLD,
-        connection_timeout: float = 5.0,
         reachy_mini: Optional[Any] = None,  # Added for Zenoth access
     ) -> None:
         """Initialize the daemon state monitor.
@@ -109,7 +106,6 @@ class DaemonStateMonitor:
             max_backoff_interval: Upper bound for backoff interval
             backoff_multiplier: Multiplier for backoff growth
             backoff_error_threshold: Consecutive errors before backoff
-            connection_timeout: HTTP timeout for daemon polling
         """
         self._daemon_url = daemon_url
         self._check_interval_active = check_interval
@@ -118,19 +114,17 @@ class DaemonStateMonitor:
         self._max_backoff_interval = max_backoff_interval
         self._backoff_multiplier = backoff_multiplier
         self._backoff_error_threshold = backoff_error_threshold
-        self._connection_timeout = connection_timeout
         self._current_interval = check_interval
         self._consecutive_errors = 0
 
         # Store ReachyMini instance for Zenoth access
         self._reachy_mini = reachy_mini
         logger.debug(
-            "Daemon monitor configured: active=%.2fs sleep=%.2fs error=%.2fs max_backoff=%.2fs timeout=%.2fs",
+            "Daemon monitor configured: active=%.2fs sleep=%.2fs error=%.2fs max_backoff=%.2fs",
             self._check_interval_active,
             self._check_interval_sleep,
             self._check_interval_error,
             self._max_backoff_interval,
-            self._connection_timeout,
         )
 
         # State tracking
@@ -148,9 +142,6 @@ class DaemonStateMonitor:
         self._running = False
         self._stop_event = asyncio.Event()
         self._monitor_task: asyncio.Task | None = None
-
-        # Session management
-        self._session: aiohttp.ClientSession | None = None
 
     @property
     def current_state(self) -> DaemonState:
@@ -211,9 +202,6 @@ class DaemonStateMonitor:
         self._running = True
         self._stop_event.clear()
 
-        # Create HTTP session
-        timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
-        self._session = aiohttp.ClientSession(timeout=timeout)
         self._current_interval = self._check_interval_active
         self._consecutive_errors = 0
 
@@ -238,11 +226,6 @@ class DaemonStateMonitor:
                 pass
             self._monitor_task = None
 
-        # Close HTTP session
-        if self._session:
-            await self._session.close()
-            self._session = None
-
         logger.info("DaemonStateMonitor stopped")
 
     async def check_once(self) -> DaemonStatus:
@@ -250,11 +233,7 @@ class DaemonStateMonitor:
 
         This can be used for one-off checks without starting the monitor loop.
         """
-        if self._session is None:
-            timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                return await self._fetch_status(session)
-        return await self._fetch_status(self._session)
+        return await self._fetch_status()
 
     async def _monitor_loop(self) -> None:
         """Main monitoring loop that polls daemon status."""
@@ -267,7 +246,7 @@ class DaemonStateMonitor:
                 self._consecutive_errors,
             )
             try:
-                status = await self._fetch_status(self._session)
+                status = await self._fetch_status()
                 self._process_status(status)
                 self._consecutive_errors = 0
                 self._current_interval = self._interval_for_state(status.state)
@@ -302,7 +281,7 @@ class DaemonStateMonitor:
         )
         return min(self._max_backoff_interval, backoff)
 
-    async def _fetch_status(self, session: aiohttp.ClientSession) -> DaemonStatus:
+    async def _fetch_status(self) -> DaemonStatus:
         """Fetch the current daemon status from the SDK (not HTTP API).
 
         Uses Zenoth to get status instead of HTTP API to avoid blocking uvicorn.
