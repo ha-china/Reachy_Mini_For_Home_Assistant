@@ -72,54 +72,42 @@ class HeadTracker:
         self._load_model()
 
     def _load_model(self) -> None:
-        """Load YOLO model with retry logic."""
+        """Load YOLO model for face detection."""
         if self._model_load_attempted:
             return
 
         self._model_load_attempted = True
 
         try:
-            import time
+            from pathlib import Path
 
-            from huggingface_hub import hf_hub_download
             from supervision import Detections
             from ultralytics import YOLO
 
             self._detections_class = Detections
 
-            # Download with retries
-            max_retries = 3
-            retry_delay = 5
-            model_path = None
-            last_error = None
+            # Load local model from models directory
+            models_dir = Path(__file__).resolve().parents[1] / "models"
+            local_model_path = models_dir / self._model_filename
 
-            for attempt in range(max_retries):
-                try:
-                    model_path = hf_hub_download(
-                        repo_id=self._model_repo,
-                        filename=self._model_filename,
-                    )
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < max_retries - 1:
-                        logger.warning(
-                            "Model download failed (attempt %d/%d): %s. Retrying in %ds...",
-                            attempt + 1,
-                            max_retries,
-                            e,
-                            retry_delay,
-                        )
-                        time.sleep(retry_delay)
+            if not local_model_path.exists():
+                raise FileNotFoundError(
+                    f"Model file not found: {local_model_path}. "
+                    f"Please place {self._model_filename} in the models directory."
+                )
 
-            if model_path is None:
-                raise last_error
+            model_path = str(local_model_path)
+            logger.info("Loading local YOLO model: %s", model_path)
 
             self.model = YOLO(model_path).to(self._device)
-            logger.info("YOLO face detection model loaded")
+            logger.info("YOLO face detection model loaded successfully")
         except ImportError as e:
             self._model_load_error = f"Missing dependencies: {e}"
             logger.warning("Face tracking disabled - missing dependencies: %s", e)
+            self.model = None
+        except FileNotFoundError as e:
+            self._model_load_error = str(e)
+            logger.error("Failed to load YOLO model: %s", e)
             self.model = None
         except Exception as e:
             self._model_load_error = str(e)

@@ -13,7 +13,8 @@
       "Optimize: Reduce log output by 30-40%",
       "Fix: Code quality improvements",
       "Remove: Temporarily disable emotion playback during TTS",
-      "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition"
+      "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition",
+      "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation"
     ]
   },
   {
