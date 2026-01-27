@@ -18,6 +18,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Optional
 
 import aiohttp
 
@@ -96,7 +97,8 @@ class DaemonStateMonitor:
         backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
         backoff_error_threshold: int = DEFAULT_BACKOFF_ERROR_THRESHOLD,
         connection_timeout: float = 5.0,
-    ):
+        reachy_mini: Optional[Any] = None,  # Added for Zenoth access
+    ) -> None:
         """Initialize the daemon state monitor.
 
         Args:
@@ -119,6 +121,9 @@ class DaemonStateMonitor:
         self._connection_timeout = connection_timeout
         self._current_interval = check_interval
         self._consecutive_errors = 0
+
+        # Store ReachyMini instance for Zenoth access
+        self._reachy_mini = reachy_mini
         logger.debug(
             "Daemon monitor configured: active=%.2fs sleep=%.2fs error=%.2fs max_backoff=%.2fs timeout=%.2fs",
             self._check_interval_active,
@@ -298,34 +303,35 @@ class DaemonStateMonitor:
         return min(self._max_backoff_interval, backoff)
 
     async def _fetch_status(self, session: aiohttp.ClientSession) -> DaemonStatus:
-        """Fetch the current daemon status from the API."""
-        url = f"{self._daemon_url}/api/daemon/status"
+        """Fetch the current daemon status from the SDK (not HTTP API).
+
+        Uses Zenoth to get status instead of HTTP API to avoid blocking uvicorn.
+        """
+        # Use SDK's get_status() instead of HTTP API
+        if not hasattr(self, '_reachy_mini') or self._reachy_mini is None:
+            logger.debug("ReachyMini not available")
+            return DaemonStatus(state=DaemonState.UNAVAILABLE)
 
         try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    state_str = data.get("state", "unavailable")
-                    try:
-                        state = DaemonState(state_str)
-                    except ValueError:
-                        logger.warning(f"Unknown daemon state: {state_str}")
-                        state = DaemonState.UNAVAILABLE
+            status = self._reachy_mini.client.get_status(wait=False, timeout=0.1)
+            if status is None:
+                return DaemonStatus(state=DaemonState.UNAVAILABLE)
 
-                    return DaemonStatus(
-                        state=state,
-                        robot_name=data.get("robot_name", ""),
-                        version=data.get("version"),
-                        error=data.get("error"),
-                    )
-                else:
-                    logger.warning(f"Daemon status API returned {response.status}")
-                    return DaemonStatus(state=DaemonState.UNAVAILABLE)
-        except aiohttp.ClientError as e:
-            logger.debug(f"Cannot connect to daemon: {e}")
-            return DaemonStatus(state=DaemonState.UNAVAILABLE)
+            state_str = status.get("state", "unavailable")
+            try:
+                state = DaemonState(state_str)
+            except ValueError:
+                logger.warning(f"Unknown daemon state: {state_str}")
+                state = DaemonState.UNAVAILABLE
+
+            return DaemonStatus(
+                state=state,
+                robot_name=status.get("robot_name", ""),
+                version=status.get("version"),
+                error=status.get("error"),
+            )
         except Exception as e:
-            logger.error(f"Error fetching daemon status: {e}")
+            logger.debug(f"Error getting status from SDK: {e}")
             return DaemonStatus(state=DaemonState.UNAVAILABLE)
 
     def _process_status(self, status: DaemonStatus) -> None:
