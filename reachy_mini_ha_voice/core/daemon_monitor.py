@@ -12,13 +12,17 @@ The daemon exposes /api/daemon/status which returns DaemonStatus with states:
 - error: Daemon encountered an error
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

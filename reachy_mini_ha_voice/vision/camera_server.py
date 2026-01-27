@@ -8,11 +8,13 @@ Also provides face tracking for head movement control.
 Reference: reachy_mini_conversation_app/src/reachy_mini_conversation_app/camera_worker.py
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -51,7 +53,7 @@ class MJPEGCameraServer:
 
     def __init__(
         self,
-        reachy_mini: Optional["ReachyMini"] = None,
+        reachy_mini: ReachyMini | None = None,
         host: str = "0.0.0.0",
         port: int = 8081,
         fps: int = 15,  # 15fps for smooth face tracking
@@ -276,7 +278,7 @@ class MJPEGCameraServer:
             except Exception as e:
                 _LOGGER.warning("Error releasing gesture detector: %s", e)
 
-    async def __aenter__(self) -> "MJPEGCameraServer":
+    async def __aenter__(self) -> MJPEGCameraServer:
         """Context manager entry - start the server."""
         await self.start()
         return self
