@@ -58,6 +58,7 @@ class MJPEGCameraServer:
         quality: int = 80,
         enable_face_tracking: bool = True,
         face_confidence_threshold: float = 0.5,  # Min confidence for face detection
+        gstreamer_lock: Optional[threading.Lock] = None,
     ):
         """
         Initialize the MJPEG camera server.
@@ -70,8 +71,10 @@ class MJPEGCameraServer:
             quality: JPEG quality (1-100)
             enable_face_tracking: Enable face tracking for head movement
             face_confidence_threshold: Minimum confidence for face detection (0-1)
+            gstreamer_lock: Threading lock for GStreamer media access (shared across all media operations).
         """
         self.reachy_mini = reachy_mini
+        self._gstreamer_lock = gstreamer_lock if gstreamer_lock is not None else threading.Lock()
         self.host = host
         self.port = port
         self.fps = fps
@@ -735,8 +738,17 @@ class MJPEGCameraServer:
             return self._generate_test_frame()
 
         try:
-            frame = self.reachy_mini.media.get_frame()
-            return frame
+            # Use GStreamer lock to prevent concurrent access conflicts
+            acquired = self._gstreamer_lock.acquire(timeout=0.01)
+            if acquired:
+                try:
+                    frame = self.reachy_mini.media.get_frame()
+                    return frame
+                finally:
+                    self._gstreamer_lock.release()
+            else:
+                _LOGGER.debug("GStreamer lock busy, skipping camera frame")
+                return None
         except Exception as e:
             _LOGGER.debug("Failed to get camera frame: %s", e)
             return None

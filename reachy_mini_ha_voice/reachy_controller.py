@@ -60,7 +60,7 @@ class ReachyController:
 
         # Shared session to reduce per-request overhead
         self._http_session = requests.Session()
-        self._http_timeout = Config.daemon.connection_timeout
+        self._http_timeout = 5.0  # seconds
         self._cache_ttl = Config.daemon.status_cache_ttl
 
         # Callback for sleep/wake to notify VoiceAssistant

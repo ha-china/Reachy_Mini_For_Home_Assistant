@@ -66,13 +66,15 @@ class AudioPlayer:
     from Home Assistant or other controllers for synchronized playback.
     """
 
-    def __init__(self, reachy_mini=None) -> None:
+    def __init__(self, reachy_mini=None, gstreamer_lock=None) -> None:
         """Initialize audio player.
 
         Args:
             reachy_mini: Reachy Mini SDK instance.
+            gstreamer_lock: Threading lock for GStreamer media access (shared across all media operations).
         """
         self.reachy_mini = reachy_mini
+        self._gstreamer_lock = gstreamer_lock if gstreamer_lock is not None else threading.Lock()
         self.is_playing = False
         self._playlist: list[str] = []
         self._done_callback: Callable[[], None] | None = None
@@ -324,7 +326,15 @@ class AudioPlayer:
                     _LOGGER.warning("Failed to start media playback: %s", e)
 
             # Play through Reachy Mini's media system using push_audio_sample
-            self.reachy_mini.media.push_audio_sample(audio_float)
+            # Use GStreamer lock to prevent concurrent access conflicts
+            acquired = self._gstreamer_lock.acquire(timeout=0.01)
+            if acquired:
+                try:
+                    self.reachy_mini.media.push_audio_sample(audio_float)
+                finally:
+                    self._gstreamer_lock.release()
+            else:
+                _LOGGER.debug("GStreamer lock busy, skipping audio sample")
 
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)

@@ -1,9 +1,7 @@
 """Utility functions."""
 
-import hashlib
-import uuid
+import os
 from collections.abc import Callable
-from pathlib import Path
 
 
 def call_all(*funcs: Callable[[], None] | None) -> None:
@@ -14,33 +12,16 @@ def call_all(*funcs: Callable[[], None] | None) -> None:
 
 
 def get_mac() -> str:
-    """Return a stable MAC address for device identification.
-
-    Uses a cached device ID stored in a file to ensure the same ID
-    is used across restarts, preventing Home Assistant from seeing
-    the device as new each time.
+    """Return the machine ID as device ID.
+    
+    Reads /etc/machine-id and returns first 12 characters.
     """
-    # Store device ID in a persistent location
-    # Note: After refactoring util.py moved from root to core/, so we need
-    # parent.parent.parent to get to the same location as before (outside the package)
-    local_dir = Path(__file__).parent.parent.parent / "local"
-    local_dir.mkdir(parents=True, exist_ok=True)
-    device_id_file = local_dir / ".device_id"
-
-    if device_id_file.exists():
-        try:
-            return device_id_file.read_text().strip()
-        except Exception:
-            pass
-
-    # Generate a stable device ID based on machine UUID
-    machine_id = uuid.getnode()
-    # Create a hash to ensure consistent format
-    device_id = hashlib.md5(str(machine_id).encode()).hexdigest()[:12]
-
+    machine_id = "00000000000000000000000000000000"
     try:
-        device_id_file.write_text(device_id)
+        with open("/etc/machine-id") as f:
+            machine_id = f.read().strip()
     except Exception:
         pass
-
-    return device_id
+    
+    # Return first 12 characters
+    return machine_id[:12]

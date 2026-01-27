@@ -60,7 +60,6 @@ class DaemonConfig:
     check_interval_sleep: float = 8.0  # seconds
     check_interval_error: float = 6.0  # seconds
     max_backoff_interval: float = 15.0  # seconds
-    connection_timeout: float = 5.0  # seconds
     backoff_multiplier: float = 1.5
     backoff_error_threshold: int = 2
     status_cache_ttl: float = 2.0  # seconds
@@ -282,7 +281,6 @@ class Config:
         cls.daemon.max_backoff_interval = _env_float(
             "REACHY_DAEMON_MAX_BACKOFF_INTERVAL", cls.daemon.max_backoff_interval
         )
-        cls.daemon.connection_timeout = _env_float("REACHY_DAEMON_CONNECTION_TIMEOUT", cls.daemon.connection_timeout)
         cls.daemon.backoff_multiplier = _env_float("REACHY_DAEMON_BACKOFF_MULTIPLIER", cls.daemon.backoff_multiplier)
         cls.daemon.backoff_error_threshold = _env_int(
             "REACHY_DAEMON_BACKOFF_ERROR_THRESHOLD", cls.daemon.backoff_error_threshold
@@ -399,7 +397,6 @@ class Config:
                 "check_interval_sleep": cls.daemon.check_interval_sleep,
                 "check_interval_error": cls.daemon.check_interval_error,
                 "max_backoff_interval": cls.daemon.max_backoff_interval,
-                "connection_timeout": cls.daemon.connection_timeout,
                 "backoff_multiplier": cls.daemon.backoff_multiplier,
                 "backoff_error_threshold": cls.daemon.backoff_error_threshold,
                 "status_cache_ttl": cls.daemon.status_cache_ttl,

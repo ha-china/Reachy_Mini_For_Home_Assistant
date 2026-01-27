@@ -104,6 +104,10 @@ class VoiceAssistantService:
         self._robot_services_resumed = threading.Event()  # Event-driven resume signaling
         self._robot_services_resumed.set()  # Start in resumed state
 
+        # GStreamer access lock - prevents concurrent access to media pipeline
+        # This prevents crashes when multiple threads access get_audio_sample(), push_audio_sample(), get_frame()
+        self._gstreamer_lock = threading.Lock()
+
         # Sleep manager for sleep/wake handling
         self._sleep_manager: SleepManager | None = None
 
@@ -137,9 +141,9 @@ class VoiceAssistantService:
         # Load stop model
         stop_model = self._load_stop_model()
 
-        # Create audio players with Reachy Mini reference
-        music_player = AudioPlayer(self.reachy_mini)
-        tts_player = AudioPlayer(self.reachy_mini)
+        # Create audio players with Reachy Mini reference and GStreamer lock
+        music_player = AudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
+        tts_player = AudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
 
         # Create server state
         self._state = ServerState(
@@ -606,6 +610,7 @@ class VoiceAssistantService:
                     fps=15,
                     quality=80,
                     enable_face_tracking=True,
+                    gstreamer_lock=self._gstreamer_lock,
                 )
                 await self._camera_server.start()
 
@@ -1135,8 +1140,30 @@ class VoiceAssistantService:
         Returns:
             PCM audio bytes of fixed size, or None if not enough data.
         """
-        # Get new audio data from SDK
-        audio_data = self.reachy_mini.media.get_audio_sample()
+        # Check if services are paused (e.g., during sleep/disconnect)
+        if self._robot_services_paused.is_set():
+            return None
+
+        # Check if in conversation mode - audio thread has highest priority
+        in_conversation = self._state is not None and self._state.is_conversation_active
+        
+        if in_conversation:
+            # In conversation: audio thread gets priority, skip lock to avoid blocking
+            # Other threads (camera, playback) should back off during conversation
+            audio_data = self.reachy_mini.media.get_audio_sample()
+        else:
+            # Idle mode: use lock to prevent GStreamer competition
+            # Try to acquire GStreamer lock with timeout to avoid blocking other threads
+            acquired = self._gstreamer_lock.acquire(timeout=0.01)
+            if not acquired:
+                _LOGGER.debug("GStreamer lock busy, skipping audio chunk")
+                return None
+
+            try:
+                # Get new audio data from SDK
+                audio_data = self.reachy_mini.media.get_audio_sample()
+            finally:
+                self._gstreamer_lock.release()
 
         # Debug: Log SDK audio data statistics and sample rate (once at startup)
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:

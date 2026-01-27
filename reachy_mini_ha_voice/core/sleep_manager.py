@@ -72,7 +72,6 @@ class SleepManager:
             max_backoff_interval=Config.daemon.max_backoff_interval,
             backoff_multiplier=Config.daemon.backoff_multiplier,
             backoff_error_threshold=Config.daemon.backoff_error_threshold,
-            connection_timeout=Config.daemon.connection_timeout,
         )
         self._service_manager = ServiceManager(resume_delay=resume_delay)
         self._resume_delay = resume_delay
