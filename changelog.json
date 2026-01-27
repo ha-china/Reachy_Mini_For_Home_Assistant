@@ -12,7 +12,8 @@
       "Fix: Camera preview in Home Assistant",
       "Optimize: Reduce log output by 30-40%",
       "Fix: Code quality improvements",
-      "Remove: Temporarily disable emotion playback during TTS"
+      "Remove: Temporarily disable emotion playback during TTS",
+      "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition"
     ]
   },
   {

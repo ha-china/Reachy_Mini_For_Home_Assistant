@@ -984,7 +984,16 @@ class VoiceAssistantService:
                     self._robot_services_resumed.wait(timeout=1.0)
                     continue
 
+                # Check if Home Assistant is streaming audio
                 if not self._wait_for_satellite():
+                    continue
+
+                # Optimization: If not streaming audio, skip Reachy audio processing
+                # This prevents unnecessary get_frame() calls when idle, reducing GStreamer competition
+                if (self._state is not None and 
+                    self._state.satellite is not None and 
+                    not self._state.satellite.is_streaming_audio):
+                    time.sleep(1.0)
                     continue
 
                 self._update_wake_words_list(ctx)
