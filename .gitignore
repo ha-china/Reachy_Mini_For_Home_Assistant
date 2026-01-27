@@ -65,12 +65,13 @@ htmlcov/
 !reachy_mini_ha_voice/sounds/*.flac
 
 # Models (exclude package bundled files)
+# models/ - ignore external models directory
 models/
-# *.tflite - bundled in package
-!reachy_mini_ha_voice/wakewords/*.tflite
-!reachy_mini_ha_voice/wakewords/**/*.tflite
-*.onnx
-!reachy_mini_ha_voice/models/*.onnx
+# Package bundled models
+!reachy_mini_ha_voice/models/
+reachy_mini_ha_voice/models/*.tflite
+reachy_mini_ha_voice/models/*.onnx
+reachy_mini_ha_voice/models/*.pt
 
 # SDK Reference (local development only)
 reference/
