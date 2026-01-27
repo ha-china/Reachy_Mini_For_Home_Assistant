@@ -59,7 +59,6 @@ blueprint:
       description: 选择Voice Assistant的pipeline实体(状态会变为responding)/ Select Voice Assistant pipeline entity (state becomes responding)
       selector:
         entity:
-          domain: conversation
     reachy_mini_emotion:
       name: Reachy Mini表情选择器 / Reachy Mini Emotion Selector
       description: Reachy Mini机器人的表情选择器实体 / Reachy Mini robot's emotion selector entity
