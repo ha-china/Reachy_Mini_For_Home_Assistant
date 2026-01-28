@@ -759,6 +759,13 @@ class VoiceAssistantService:
         if self._camera_server and self._state.camera_enabled:
             await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
             self._camera_server = None
+        # Close SDK media resources to prevent memory leaks (even if camera is disabled)
+        if self.reachy_mini is not None and self.reachy_mini.media is not None:
+            try:
+                self.reachy_mini.media.close()
+                _LOGGER.info("SDK media resources closed")
+            except Exception as e:
+                _LOGGER.debug("Failed to close SDK media: %s", e)
 
         # 8. Shutdown motion executor
         if self._motion:
@@ -1146,10 +1153,13 @@ class VoiceAssistantService:
                                     neginf=-1.0,
                                 ).astype(np.float32)
 
+                        # Check buffer size BEFORE appending to prevent race condition overflow
+                        if len(self._audio_buffer) + len(audio_data) > MAX_AUDIO_BUFFER_SIZE:
+                            # Drop oldest data to maintain size limit
+                            drop_size = len(self._audio_buffer) + len(audio_data) - MAX_AUDIO_BUFFER_SIZE
+                            self._audio_buffer = self._audio_buffer[drop_size:]
+
                         self._audio_buffer = np.concatenate([self._audio_buffer, audio_data])
-                        # Prevent unbounded buffer growth - keep only recent audio
-                        if len(self._audio_buffer) > MAX_AUDIO_BUFFER_SIZE:
-                            self._audio_buffer = self._audio_buffer[-MAX_AUDIO_BUFFER_SIZE:]
 
             except (TypeError, ValueError):
                 pass

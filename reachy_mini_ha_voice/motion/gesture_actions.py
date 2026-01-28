@@ -218,11 +218,25 @@ class GestureActionMapper:
             logger.debug(f"Gesture {gesture_name} in cooldown")
             return False
 
+        # Periodic cleanup of old cooldowns (1% chance per call to avoid performance impact)
+        if len(self._last_trigger_times) > 100:
+            import random
+            if random.random() < 0.01:
+                self._cleanup_old_cooldowns()
+
         # Update cooldown
         self._last_trigger_times[gesture_lower] = now
 
         # Execute action
         return self._execute_action(mapping)
+
+    def _cleanup_old_cooldowns(self) -> None:
+        """Remove cooldowns older than max_cooldown to prevent memory leak."""
+        now = self._now()
+        max_cooldown = max((m.cooldown for m in self._mappings.values()), default=5.0)
+        for gesture, last_time in list(self._last_trigger_times.items()):
+            if now - last_time > max_cooldown:
+                del self._last_trigger_times[gesture]
 
     def _execute_action(self, mapping: GestureMapping) -> bool:
         """Execute the action for a gesture mapping."""

@@ -89,8 +89,8 @@ class MovementManager:
         self.robot = reachy_mini
         self._now = time.monotonic
 
-        # Command queue - all external threads communicate through this
-        self._command_queue: Queue[tuple[str, Any]] = Queue()
+        # Command queue - all external threads communicate through this (size limit 100)
+        self._command_queue: Queue[tuple[str, Any]] = Queue(maxsize=100)
 
         # Internal state (only modified by control loop)
         self.state = MovementState()
@@ -175,21 +175,33 @@ class MovementManager:
 
     def set_state(self, new_state: RobotState) -> None:
         """Thread-safe: Set robot state."""
-        self._command_queue.put(("set_state", new_state))
+        try:
+            self._command_queue.put(("set_state", new_state), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_state command")
 
     def set_listening(self, listening: bool) -> None:
         """Thread-safe: Set listening state."""
         state = RobotState.LISTENING if listening else RobotState.IDLE
-        self._command_queue.put(("set_state", state))
+        try:
+            self._command_queue.put(("set_state", state), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_listening command")
 
     def set_thinking(self) -> None:
         """Thread-safe: Set thinking state."""
-        self._command_queue.put(("set_state", RobotState.THINKING))
+        try:
+            self._command_queue.put(("set_state", RobotState.THINKING), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_thinking command")
 
     def set_speaking(self, speaking: bool) -> None:
         """Thread-safe: Set speaking state."""
         state = RobotState.SPEAKING if speaking else RobotState.IDLE
-        self._command_queue.put(("set_state", state))
+        try:
+            self._command_queue.put(("set_state", state), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_speaking command")
 
     def set_idle(self) -> None:
         """Thread-safe: Return to idle state."""
@@ -316,12 +328,19 @@ class MovementManager:
         Returns:
             True if emotion was queued successfully, False otherwise
         """
-        self._command_queue.put(("emotion_move", emotion_name))
-        return True
+        try:
+            self._command_queue.put(("emotion_move", emotion_name), timeout=0.1)
+            return True
+        except Exception:
+            logger.warning("Command queue full, dropping emotion_move command")
+            return False
 
     def queue_action(self, action: PendingAction) -> None:
         """Thread-safe: Queue a motion action."""
-        self._command_queue.put(("action", action))
+        try:
+            self._command_queue.put(("action", action), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping action command")
 
     def turn_to_angle(self, yaw_deg: float, duration: float = 0.8) -> None:
         """Thread-safe: Turn head to face a direction."""
@@ -330,15 +349,24 @@ class MovementManager:
             target_yaw=math.radians(yaw_deg),
             duration=duration,
         )
-        self._command_queue.put(("action", action))
+        try:
+            self._command_queue.put(("action", action), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping turn_to command")
 
     def nod(self, amplitude_deg: float = 15, duration: float = 0.5) -> None:
         """Thread-safe: Perform a nod gesture."""
-        self._command_queue.put(("nod", (amplitude_deg, duration)))
+        try:
+            self._command_queue.put(("nod", (amplitude_deg, duration)), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping nod command")
 
     def shake(self, amplitude_deg: float = 20, duration: float = 0.5) -> None:
         """Thread-safe: Perform a head shake gesture."""
-        self._command_queue.put(("shake", (amplitude_deg, duration)))
+        try:
+            self._command_queue.put(("shake", (amplitude_deg, duration)), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping shake command")
 
     def set_speech_sway(self, x: float, y: float, z: float, roll: float, pitch: float, yaw: float) -> None:
         """Thread-safe: Set speech-driven sway offsets.
@@ -350,7 +378,10 @@ class MovementManager:
             x, y, z: Position offsets in meters
             roll, pitch, yaw: Orientation offsets in radians
         """
-        self._command_queue.put(("speech_sway", (x, y, z, roll, pitch, yaw)))
+        try:
+            self._command_queue.put(("speech_sway", (x, y, z, roll, pitch, yaw)), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping speech_sway command")
 
     def reset_to_neutral(self, duration: float = 0.5) -> None:
         """Thread-safe: Reset to neutral position."""
@@ -432,8 +463,11 @@ class MovementManager:
             target_pitch=0.0,  # Keep pitch neutral for DOA turns
             duration=duration,
         )
-        self._command_queue.put(("action", action))
-        logger.debug("DOA turn queued: %.1f° over %.1fs", yaw_degrees, duration)
+        try:
+            self._command_queue.put(("action", action), timeout=0.1)
+            logger.debug("DOA turn queued: %.1f° over %.1fs", yaw_degrees, duration)
+        except Exception:
+            logger.warning("Command queue full, dropping doa_turn command")
 
     def set_face_tracking_offsets(self, offsets: tuple[float, float, float, float, float, float]) -> None:
         """Thread-safe: Update face tracking offsets manually.
@@ -467,21 +501,25 @@ class MovementManager:
             roll, pitch, yaw: Head orientation in radians
             antenna_left, antenna_right: Antenna angles in radians
         """
-        self._command_queue.put(
-            (
-                "set_pose",
-                {
-                    "x": x,
-                    "y": y,
-                    "z": z,
-                    "roll": roll,
-                    "pitch": pitch,
-                    "yaw": yaw,
-                    "antenna_left": antenna_left,
-                    "antenna_right": antenna_right,
-                },
+        try:
+            self._command_queue.put(
+                (
+                    "set_pose",
+                    {
+                        "x": x,
+                        "y": y,
+                        "z": z,
+                        "roll": roll,
+                        "pitch": pitch,
+                        "yaw": yaw,
+                        "antenna_left": antenna_left,
+                        "antenna_right": antenna_right,
+                    },
+                ),
+                timeout=0.1,
             )
-        )
+        except Exception:
+            logger.warning("Command queue full, dropping set_pose command")
 
     # =========================================================================
     # Internal: Command processing (runs in control loop)

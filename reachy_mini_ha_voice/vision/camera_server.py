@@ -543,7 +543,8 @@ class MJPEGCameraServer:
     def _register_stream_client(self) -> int:
         """Register a new stream client and return its ID."""
         with self._stream_client_lock:
-            client_id = self._next_client_id
+            # Use rolling client IDs to prevent integer overflow after ~4 billion connections
+            client_id = self._next_client_id % 1000000  # Roll over after 1M
             self._next_client_id += 1
             self._active_stream_clients.add(client_id)
             _LOGGER.debug("Stream client registered: %d (total: %d)", client_id, len(self._active_stream_clients))

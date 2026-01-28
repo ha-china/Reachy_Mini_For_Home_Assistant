@@ -389,7 +389,7 @@ class AudioPlayer:
         self._sendspin_url = None
         self._sendspin_audio_format = None
 
-    async def stop_sendspin(self) -> None:
+async def stop_sendspin(self) -> None:
         """Stop Sendspin discovery and disconnect from server."""
         # Stop discovery
         if self._sendspin_discovery is not None:
@@ -398,6 +398,12 @@ class AudioPlayer:
 
         # Disconnect from server
         await self._disconnect_sendspin()
+
+        # Clear all references to prevent memory leaks
+        self._sendspin_client = None
+        self._sendspin_url = None
+        self._sendspin_audio_format = None
+        self._sendspin_enabled = False
 
         _LOGGER.info("Sendspin stopped")
 
@@ -541,8 +547,8 @@ class AudioPlayer:
         except Exception as e:
             _LOGGER.error("Error playing audio: %s", e)
         finally:
-            # Clean up temp file if we created one
-            if temp_file_path and temp_file_path.startswith(tempfile.gettempdir()):
+            # Clean up temp file if we created one (single cleanup attempt)
+            if temp_file_path is not None:
                 try:
                     import os
                     from pathlib import Path
@@ -552,13 +558,6 @@ class AudioPlayer:
                         _LOGGER.debug("Cleaned up temp file: %s", temp_file_path)
                 except Exception as e:
                     _LOGGER.warning("Failed to clean up temp file %s: %s", temp_file_path, e)
-            if temp_file_path is not None:
-                try:
-                    import os
-
-                    os.unlink(temp_file_path)
-                except Exception:
-                    pass  # Ignore cleanup errors
 
             self.is_playing = False
             if self._playlist and not self._stop_flag.is_set():
@@ -623,6 +622,20 @@ class AudioPlayer:
                 pass
         self._playlist.clear()
         self.is_playing = False
+
+    def __del__(self) -> None:
+        """Cleanup on garbage collection to prevent listener leaks."""
+        try:
+            # Force cleanup of Sendspin listeners to prevent memory leaks
+            for unsub in self._sendspin_unsubscribers:
+                try:
+                    unsub()
+                except Exception:
+                    pass
+            self._sendspin_unsubscribers.clear()
+            self._sendspin_client = None
+        except Exception:
+            pass
 
     def duck(self) -> None:
         """Reduce volume for announcements."""
