@@ -1157,6 +1157,14 @@ class VoiceAssistantService:
             acquired = self._gstreamer_lock.acquire(timeout=0.01)
             if not acquired:
                 _LOGGER.debug("GStreamer lock busy, skipping audio chunk")
+                # Flush SDK audio buffer to prevent buffer overflow during lock contention
+                try:
+                    if hasattr(self.reachy_mini.media, 'flush_audio'):
+                        self.reachy_mini.media.flush_audio()
+                    elif hasattr(self.reachy_mini.media, 'flush'):
+                        self.reachy_mini.media.flush()
+                except Exception:
+                    pass
                 return None
 
             try:

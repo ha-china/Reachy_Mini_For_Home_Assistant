@@ -335,6 +335,14 @@ class AudioPlayer:
                     self._gstreamer_lock.release()
             else:
                 _LOGGER.debug("GStreamer lock busy, skipping audio sample")
+                # Flush SDK playback buffer to prevent buffer overflow during lock contention
+                try:
+                    if hasattr(self.reachy_mini.media, 'flush'):
+                        self.reachy_mini.media.flush()
+                    elif hasattr(self.reachy_mini.media, 'flush_audio'):
+                        self.reachy_mini.media.flush_audio()
+                except Exception:
+                    pass
 
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)

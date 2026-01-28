@@ -750,6 +750,14 @@ class MJPEGCameraServer:
                     self._gstreamer_lock.release()
             else:
                 _LOGGER.debug("GStreamer lock busy, skipping camera frame")
+                # Flush SDK video buffer to prevent buffer overflow during lock contention
+                try:
+                    if hasattr(self.reachy_mini.media, 'flush'):
+                        self.reachy_mini.media.flush()
+                    elif hasattr(self.reachy_mini.media, 'flush_video'):
+                        self.reachy_mini.media.flush_video()
+                except Exception:
+                    pass
                 return None
         except Exception as e:
             _LOGGER.debug("Failed to get camera frame: %s", e)
