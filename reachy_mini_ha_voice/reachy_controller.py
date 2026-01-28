@@ -762,12 +762,18 @@ class ReachyController:
             with self._get_respeaker() as respeaker:
                 if respeaker:
                     respeaker.read("...")
+
+        Note: This accesses the private _respeaker attribute from the SDK.
+        TODO: Check if SDK provides a public API for ReSpeaker access in future versions.
+        This is a known compatibility risk and should be reviewed on SDK updates.
         """
         if not self.is_available:
             return _ReSpeakerContext(None, self._respeaker_lock)
         try:
             if not self.reachy.media or not self.reachy.media.audio:
                 return _ReSpeakerContext(None, self._respeaker_lock)
+            # WARNING: Accessing private attribute _respeaker
+            # TODO: Replace with public API when available
             respeaker = self.reachy.media.audio._respeaker
             return _ReSpeakerContext(respeaker, self._respeaker_lock)
         except Exception:
