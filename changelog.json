@@ -3,7 +3,7 @@
     "version": "0.9.9",
     "date": "2026-01-28",
     "changes": [
-      "Fix: Audio buffer overflow - drain input buffer without interrupting TTS playback",
+      "Fix: Audio buffer overflow - simplify audio loop to match reference project pattern",
       "Optimize: Gesture detection sensitivity - remove all confidence filtering, return all detections to Home Assistant",
       "Optimize: Gesture detection now runs at 1 frame interval for maximum responsiveness",
       "Refactor: Simplify GestureSmoother to frequency-based confirmation (1 frame)",
