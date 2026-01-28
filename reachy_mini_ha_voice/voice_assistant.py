@@ -75,6 +75,14 @@ class VoiceAssistantService:
         camera_port: int = 8081,
         camera_enabled: bool = True,
     ):
+        # Reachy Mini is required - this is a Reachy Mini voice assistant
+        if reachy_mini is None:
+            raise RuntimeError(
+                "Reachy Mini is required. "
+                "This application is designed to run on Reachy Mini hardware. "
+                "Please run it on a Reachy Mini device with proper SDK installation."
+            )
+
         self.reachy_mini = reachy_mini
         self.name = name
         self.host = host
@@ -936,25 +944,15 @@ class VoiceAssistantService:
         return None
 
     def _process_audio(self) -> None:
-        """Process audio from microphone (Reachy Mini or system fallback)."""
+        """Process audio from Reachy Mini's microphone."""
         from pymicro_wakeword import MicroWakeWordFeatures
 
         ctx = AudioProcessingContext()
         ctx.micro_features = MicroWakeWordFeatures()
 
         try:
-            _LOGGER.info("Starting audio processing...")
-
-            # Always use Reachy Mini's microphone if available
-            # Only fallback to system microphone if Reachy Mini is not available
-            use_reachy = self.reachy_mini is not None
-
-            if use_reachy:
-                _LOGGER.info("Using Reachy Mini's microphone")
-                self._audio_loop_reachy(ctx)
-            else:
-                _LOGGER.info("Using system microphone (fallback)")
-                self._audio_loop_fallback(ctx)
+            _LOGGER.info("Starting audio processing using Reachy Mini's microphone...")
+            self._audio_loop_reachy(ctx)
 
         except Exception:
             _LOGGER.exception("Error processing audio")
@@ -1019,55 +1017,6 @@ class VoiceAssistantService:
                     if consecutive_audio_errors <= 3:
                         _LOGGER.error("Error in Reachy audio processing: %s", e)
                     time.sleep(Config.audio.idle_sleep_sleeping)
-
-    def _audio_loop_fallback(self, ctx: AudioProcessingContext) -> None:
-        """Audio loop using system microphone (fallback)."""
-        import sounddevice as sd
-
-        block_size = 1024
-
-        with sd.InputStream(
-            samplerate=16000,
-            channels=1,
-            blocksize=block_size,
-            dtype="float32",
-        ) as stream:
-            while self._running:
-                # Always drain the input stream to avoid buffer overflow
-                audio_chunk_array, overflowed = stream.read(block_size)
-                if overflowed:
-                    now = time.monotonic()
-                    if now - self._last_audio_overflow_log >= 5.0:
-                        if self._suppressed_audio_overflows > 0:
-                            _LOGGER.warning(
-                                "Audio buffer overflow (suppressed %d repeats)",
-                                self._suppressed_audio_overflows,
-                            )
-                            self._suppressed_audio_overflows = 0
-                        else:
-                            _LOGGER.warning("Audio buffer overflow")
-                        self._last_audio_overflow_log = now
-                    else:
-                        self._suppressed_audio_overflows += 1
-
-                if not self._wait_for_satellite():
-                    continue
-
-                self._update_wake_words_list(ctx)
-
-                audio_chunk_array = audio_chunk_array.reshape(-1)
-                audio_chunk = self._convert_to_pcm(audio_chunk_array)
-
-                self._process_audio_chunk(ctx, audio_chunk)
-
-                time.sleep(0.05)  # 50ms sleep to avoid busy loop (same as reference project)
-
-    def _wait_for_satellite(self) -> bool:
-        """Wait for satellite connection. Returns True if connected."""
-        if self._state is None or self._state.satellite is None:
-            time.sleep(Config.audio.fallback_wait_sleep)
-            return False
-        return True
 
     def _update_wake_words_list(self, ctx: AudioProcessingContext) -> None:
         """Update wake words list if changed."""
