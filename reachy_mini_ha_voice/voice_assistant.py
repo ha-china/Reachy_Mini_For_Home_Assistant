@@ -1146,14 +1146,16 @@ class VoiceAssistantService:
             # Other threads (camera, playback) should back off during conversation
             audio_data = self.reachy_mini.media.get_audio_sample()
 
-            # If audio sample is None, flush SDK buffer to prevent overflow
-            # This can happen when GStreamer is busy with other threads
+            # If audio sample is None, clear playback buffer to prevent overflow
+            # This happens when TTS is playing and GStreamer is busy with output
             if audio_data is None:
                 try:
-                    if hasattr(self.reachy_mini.media, "flush_audio"):
-                        self.reachy_mini.media.flush_audio()
-                    elif hasattr(self.reachy_mini.media, "flush"):
-                        self.reachy_mini.media.flush()
+                    # Use clear_player() to reset playback pipeline (helps free audio device)
+                    if hasattr(self.reachy_mini.media.audio, "clear_player"):
+                        self.reachy_mini.media.audio.clear_player()
+                    # Also drain input buffer by calling get_audio_sample() multiple times
+                    for _ in range(5):  # Drain up to 5 samples
+                        self.reachy_mini.media.get_audio_sample()
                 except Exception:
                     pass
         else:
@@ -1162,12 +1164,13 @@ class VoiceAssistantService:
             acquired = self._gstreamer_lock.acquire(timeout=0.01)
             if not acquired:
                 _LOGGER.debug("GStreamer lock busy, skipping audio chunk")
-                # Flush SDK audio buffer to prevent buffer overflow during lock contention
+                # Clear playback buffer to prevent buffer overflow during lock contention
                 try:
-                    if hasattr(self.reachy_mini.media, "flush_audio"):
-                        self.reachy_mini.media.flush_audio()
-                    elif hasattr(self.reachy_mini.media, "flush"):
-                        self.reachy_mini.media.flush()
+                    if hasattr(self.reachy_mini.media.audio, "clear_player"):
+                        self.reachy_mini.media.audio.clear_player()
+                    # Drain input buffer by calling get_audio_sample() multiple times
+                    for _ in range(5):  # Drain up to 5 samples
+                        self.reachy_mini.media.get_audio_sample()
                 except Exception:
                     pass
                 return None
