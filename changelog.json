@@ -3,19 +3,14 @@
     "version": "0.9.9",
     "date": "2026-01-28",
     "changes": [
-      "Fix: Add SDK buffer flush on GStreamer lock timeout - prevents buffer overflow during long idle periods when lock contention prevents buffer drainage",
-      "Fix: Audio thread flushes SDK audio buffer when lock acquisition times out",
-      "Fix: Camera thread flushes SDK video buffer when lock acquisition times out",
-      "Fix: Audio playback flushes SDK playback buffer when lock acquisition times out",
-      "Fix: Resolves SDK crashes during extended wake-up idle periods without conversation",
-      "Change: Remove all confidence filtering from gesture detection pipeline - all detected gestures (including low confidence) are now passed to Home Assistant",
-      "Change: Return original detection confidence instead of aggregated confidence for Home Assistant automation decisions",
-      "Change: GestureSmoother now only applies 3-frame confirmation logic - no confidence threshold filtering",
-      "Fix: Gesture detection now returns all detected hands instead of only the highest confidence one - improves detection rate and matches reference implementation",
-      "Fix: Remove double filtering in classification stage - all classified gestures are returned with their confidence values",
-      "Fix: Remove confidence filtering in selection stage - low confidence gestures can now compete for best gesture selection",
-      "Fix: Gesture detection now runs at 1 frame interval for maximum sensitivity",
-      "Change: Confidence threshold parameters retained for backward compatibility only - no longer used for any filtering"
+      "Fix: SDK buffer overflow during idle - flush buffers on GStreamer lock timeout",
+      "Optimize: Gesture detection sensitivity - remove all confidence filtering, return all detections to Home Assistant",
+      "Optimize: Gesture detection now runs at 1 frame interval for maximum responsiveness",
+      "Refactor: Simplify GestureSmoother to frequency-based confirmation (1 frame)",
+      "Refactor: Remove unused parameters (confidence_threshold, detection_threshold, GestureConfig)",
+      "Fix: Remove duplicate empty check in gesture detection",
+      "Optimize: SDK integration - add MediaBackend detection and proper resource cleanup",
+      "Document: ReSpeaker private attribute access risk with TODO comments"
     ]
   },
   {
