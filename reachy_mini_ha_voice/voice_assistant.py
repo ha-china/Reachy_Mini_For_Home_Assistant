@@ -1000,12 +1000,8 @@ class VoiceAssistantService:
                 # Audio data is always consumed to prevent buffer overflow
                 audio_chunk = self._get_reachy_audio_chunk()
                 if audio_chunk is None:
-                    idle_sleep = (
-                        Config.audio.idle_sleep_sleeping
-                        if self._robot_services_paused.is_set()
-                        else Config.audio.idle_sleep_active
-                    )
-                    time.sleep(idle_sleep)
+                    # Audio read failed (likely TTS playing), increase sleep to reduce buffer accumulation
+                    time.sleep(0.1)  # 100ms sleep when audio device busy
                     continue
 
                 # Audio successfully obtained, reset error counter
@@ -1145,30 +1141,12 @@ class VoiceAssistantService:
             # In conversation: audio thread gets priority, skip lock to avoid blocking
             # Other threads (camera, playback) should back off during conversation
             audio_data = self.reachy_mini.media.get_audio_sample()
-
-            # If audio sample is None, drain input buffer to prevent overflow
-            # This happens when TTS is playing and GStreamer is busy with output
-            # Don't clear playback buffer - it would interrupt TTS playback
-            if audio_data is None:
-                try:
-                    # Only drain input buffer by calling get_audio_sample() multiple times
-                    for _ in range(10):  # Drain up to 10 samples
-                        self.reachy_mini.media.get_audio_sample()
-                except Exception:
-                    pass
         else:
             # Idle mode: use lock to prevent GStreamer competition
             # Try to acquire GStreamer lock with timeout to avoid blocking other threads
             acquired = self._gstreamer_lock.acquire(timeout=0.01)
             if not acquired:
                 _LOGGER.debug("GStreamer lock busy, skipping audio chunk")
-                # Drain input buffer to prevent buffer overflow during lock contention
-                try:
-                    # Only drain input buffer by calling get_audio_sample() multiple times
-                    for _ in range(10):  # Drain up to 10 samples
-                        self.reachy_mini.media.get_audio_sample()
-                except Exception:
-                    pass
                 return None
 
             try:
