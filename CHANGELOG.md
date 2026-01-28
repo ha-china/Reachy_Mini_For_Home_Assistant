@@ -4,6 +4,19 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 
 ## [Unreleased]
 
+### Optimized
+- **Gesture Detection Sensitivity (v0.9.9)**
+  - Simplify GestureSmoother to frequency-based confirmation (1 frame)
+  - Remove all confidence filtering - return all detections to Home Assistant
+  - Remove unused parameters (confidence_threshold, detection_threshold, GestureConfig)
+  - Remove duplicate empty check in gesture detection
+
+### Fixed
+- **SDK Integration (v0.9.9)**
+  - Add MediaBackend detection for better compatibility
+  - Properly release SDK media resources on shutdown
+  - Document ReSpeaker private attribute access risk
+
 ## [0.9.9] - 2026-01-28
 
 ### Fixed
