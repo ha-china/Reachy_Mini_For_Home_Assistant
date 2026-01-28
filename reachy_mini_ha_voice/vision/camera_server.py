@@ -668,10 +668,11 @@ class MJPEGCameraServer:
                     self._gesture_confidence = confidence
                     if old_gesture != detected_gesture.value:
                         state_changed = True
-                        _LOGGER.debug("Gesture: %s (%.0f%%)", detected_gesture.value, confidence * 100)
+                        _LOGGER.info("Gesture detected: %s (%.1f%%)", detected_gesture.value, confidence * 100)
                 else:
                     if self._current_gesture != "none":
                         state_changed = True
+                        _LOGGER.info("Gesture cleared (no gesture detected)")
                     self._current_gesture = "none"
                     self._gesture_confidence = 0.0
 

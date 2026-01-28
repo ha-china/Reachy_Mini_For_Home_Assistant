@@ -140,13 +140,13 @@ class GestureDetector:
 
             self._smoother = GestureSmoother(
                 config=GestureConfig(
-                    history_size=5,
-                    min_confirm_frames=2,  # Faster confirmation (2 frames)
+                    history_size=3,  # Smaller history for faster response
+                    min_confirm_frames=1,  # Immediate confirmation (1 frame)
                     confidence_threshold=confidence_threshold,
                     confidence_method="max",
                 )
             )
-            logger.info("Gesture smoother enabled (2-frame confirmation)")
+            logger.info("Gesture smoother enabled (1-frame confirmation for max sensitivity)")
         except ImportError:
             self._smoother = None
             logger.warning("Gesture smoother not available")
