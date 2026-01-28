@@ -83,9 +83,9 @@ class CameraConfig:
     port: int = 8081
 
     # Frame capture
-    fps_high: int = 15  # Active mode: smooth face tracking
-    fps_low: int = 2  # Low power: periodic face check
-    fps_idle: float = 0.5  # Ultra-low power: minimal CPU
+    fps_high: int = 25  # Active mode: smooth face tracking
+    fps_low: int = 10  # Low power: periodic face check
+    fps_idle: float = 5  # Ultra-low power: minimal CPU
 
     # JPEG encoding
     quality: int = 80
@@ -103,7 +103,7 @@ class CameraConfig:
 
     # Gesture detection
     gesture_detection_enabled: bool = True
-    gesture_detection_interval: int = 3  # Run every N frames
+    gesture_detection_interval: int = 2  # Run every N frames
 
 
 @dataclass
