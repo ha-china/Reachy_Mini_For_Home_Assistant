@@ -1075,6 +1075,8 @@ class VoiceAssistantService:
 
                 self._process_audio_chunk(ctx, audio_chunk)
 
+                time.sleep(0.05)  # 50ms sleep to avoid busy loop (same as reference project)
+
     def _wait_for_satellite(self) -> bool:
         """Wait for satellite connection. Returns True if connected."""
         if self._state is None or self._state.satellite is None:
