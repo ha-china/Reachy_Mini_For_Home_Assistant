@@ -997,16 +997,12 @@ class VoiceAssistantService:
                 self._update_wake_words_list(ctx)
 
                 # Get audio from Reachy Mini for wake word detection
-                # Audio data is always consumed to prevent buffer overflow
                 audio_chunk = self._get_reachy_audio_chunk()
-                if audio_chunk is None:
-                    # Audio read failed (likely TTS playing), increase sleep to reduce buffer accumulation
-                    time.sleep(0.1)  # 100ms sleep when audio device busy
-                    continue
+                if audio_chunk is not None:
+                    consecutive_audio_errors = 0
+                    self._process_audio_chunk(ctx, audio_chunk)
 
-                # Audio successfully obtained, reset error counter
-                consecutive_audio_errors = 0
-                self._process_audio_chunk(ctx, audio_chunk)
+                time.sleep(0.05)  # 50ms sleep to avoid busy loop (same as reference project)
 
             except Exception as e:
                 error_msg = str(e)
