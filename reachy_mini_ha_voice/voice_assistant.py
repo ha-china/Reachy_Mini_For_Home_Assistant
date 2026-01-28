@@ -949,21 +949,22 @@ class VoiceAssistantService:
             # Post-wake: use Reachy mic for streaming to HA.
             last_source = None
             while self._running:
+                # Always use Reachy Mini's microphone if available
+                # Audio data is consumed for wake word detection even when idle
                 use_reachy = (
                     self.reachy_mini is not None
                     and self._state is not None
                     and self._state.satellite is not None
-                    and self._state.satellite.is_streaming_audio
                 )
 
                 if use_reachy:
                     if last_source != "reachy":
-                        _LOGGER.info("Using Reachy Mini's microphone (streaming)")
+                        _LOGGER.info("Using Reachy Mini's microphone")
                         last_source = "reachy"
                     self._audio_loop_reachy(ctx)
                 else:
                     if last_source != "system":
-                        _LOGGER.info("Using system microphone (pre-wake, no SDK audio)")
+                        _LOGGER.info("Using system microphone (fallback)")
                         last_source = "system"
                     self._audio_loop_fallback(ctx)
 
@@ -993,19 +994,10 @@ class VoiceAssistantService:
                 if not self._wait_for_satellite():
                     continue
 
-                # Optimization: If not streaming audio, skip Reachy audio processing
-                # This prevents unnecessary get_frame() calls when idle, reducing GStreamer competition
-                if (
-                    self._state is not None
-                    and self._state.satellite is not None
-                    and not self._state.satellite.is_streaming_audio
-                ):
-                    time.sleep(1.0)
-                    continue
-
                 self._update_wake_words_list(ctx)
 
-                # Get audio from Reachy Mini
+                # Get audio from Reachy Mini for wake word detection
+                # Audio data is always consumed to prevent buffer overflow
                 audio_chunk = self._get_reachy_audio_chunk()
                 if audio_chunk is None:
                     idle_sleep = (
