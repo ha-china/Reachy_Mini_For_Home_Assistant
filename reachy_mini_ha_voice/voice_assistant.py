@@ -1145,6 +1145,17 @@ class VoiceAssistantService:
             # In conversation: audio thread gets priority, skip lock to avoid blocking
             # Other threads (camera, playback) should back off during conversation
             audio_data = self.reachy_mini.media.get_audio_sample()
+
+            # If audio sample is None, flush SDK buffer to prevent overflow
+            # This can happen when GStreamer is busy with other threads
+            if audio_data is None:
+                try:
+                    if hasattr(self.reachy_mini.media, "flush_audio"):
+                        self.reachy_mini.media.flush_audio()
+                    elif hasattr(self.reachy_mini.media, "flush"):
+                        self.reachy_mini.media.flush()
+                except Exception:
+                    pass
         else:
             # Idle mode: use lock to prevent GStreamer competition
             # Try to acquire GStreamer lock with timeout to avoid blocking other threads
