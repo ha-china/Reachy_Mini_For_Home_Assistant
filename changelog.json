@@ -17,23 +17,15 @@
     "version": "0.9.8",
     "date": "2026-01-27",
     "changes": [
-      "New: Mute switch entity - suspends voice services only (not camera/motion)",
-      "New: Disable Camera switch entity - suspends camera and AI processing",
-      "Fix: Camera disable logic - corrected inverted conditions for proper operation",
-      "Fix: Prevent daemon crash when entering idle state",
-      "New: Home Assistant connection-driven feature loading",
-      "New: Automatic suspend/resume on HA disconnect/reconnect",
-      "Fix: Camera preview in Home Assistant",
+      "New: Mute switch and Disable Camera entities for granular control",
+      "Fix: Camera disable logic and daemon crash prevention",
+      "New: Home Assistant connection-driven feature loading with auto suspend/resume",
       "Optimize: Reduce log output by 30-40%",
       "Fix: Code quality improvements",
-      "Remove: Temporarily disable emotion playback during TTS",
-      "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition",
-      "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation",
-      "Optimize: Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability",
-      "Fix: Add GStreamer threading lock to prevent pipeline competition between audio, playback, and camera threads",
-      "Fix: Audio thread gets priority during conversations - bypasses lock when conversation is active",
-      "Simplify: Device ID now reads /etc/machine-id directly - removed uuid.getnode() and file persistence",
-      "Clean up: Removed unused config items (connection_timeout)"
+      "Fix: SDK crash during idle - optimize audio processing and add GStreamer threading lock",
+      "Optimize: Bundle face tracking model, use SDK Zenoh for daemon monitoring",
+      "Simplify: Device ID reads /etc/machine-id directly",
+      "Clean up: Remove unused config items"
     ]
   },
   {
