@@ -109,12 +109,7 @@ _NAME_TO_GESTURE = {
 
 
 class GestureDetector:
-    def __init__(self, confidence_threshold: float = 0.2, detection_threshold: float = 0.2):
-        # Note: These thresholds are NOT used for filtering
-        # All detections are passed to Home Assistant with their confidence values
-        # Parameters are retained for backward compatibility and potential future use
-        self._confidence_threshold = confidence_threshold
-        self._detection_threshold = detection_threshold
+    def __init__(self):
         models_dir = Path(__file__).parent / "models"
         fallback_models_dir = Path(__file__).resolve().parents[1] / "models"
         self._detector_path = models_dir / "hand_detector.onnx"
@@ -134,19 +129,13 @@ class GestureDetector:
         self._classifier_size = (128, 128)
         self._load_models()
 
-        # Initialize gesture smoother for improved sensitivity
+        # Initialize gesture smoother - follows reference implementation
+        # Uses history tracking without confidence filtering
         try:
-            from .gesture_smoother import GestureConfig, GestureSmoother
+            from .gesture_smoother import GestureSmoother
 
-            self._smoother = GestureSmoother(
-                config=GestureConfig(
-                    history_size=3,  # Smaller history for faster response
-                    min_confirm_frames=1,  # Immediate confirmation (1 frame)
-                    confidence_threshold=confidence_threshold,
-                    confidence_method="max",
-                )
-            )
-            logger.info("Gesture smoother enabled (1-frame confirmation for max sensitivity)")
+            self._smoother = GestureSmoother(history_size=5)
+            logger.info("Gesture smoother enabled (5-frame history, no confidence filtering)")
         except ImportError:
             self._smoother = None
             logger.warning("Gesture smoother not available")
@@ -197,8 +186,6 @@ class GestureDetector:
         outs = self._detector.run(self._det_outputs, {self._det_input: inp})
         boxes = outs[0]
         scores = outs[2]
-        if len(boxes) == 0:
-            return np.empty((0, 4)), np.empty((0,))
 
         # Return all detections (no threshold filtering - let downstream handle it)
         if len(boxes) == 0:
@@ -342,14 +329,9 @@ class GestureDetector:
                 gesture_name = best_gesture.value if best_gesture != Gesture.NONE else "none"
                 confirmed_gesture_name = self._smoother.update(gesture_name, best_confidence)
                 confirmed_gesture = _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE)
-                # Return original detection confidence (not aggregated) for Home Assistant
-                # This allows HA to make decisions based on actual detection quality
-                if confirmed_gesture != Gesture.NONE:
-                    # Get the most recent confidence for this gesture from history
-                    recent_confidences = [c for g, c in self._smoother._history if g == confirmed_gesture_name]
-                    original_conf = recent_confidences[-1] if recent_confidences else best_confidence
-                    return confirmed_gesture, original_conf
-                return confirmed_gesture, 0.0
+                # Return current detection confidence (not aggregated)
+                # This follows reference implementation which returns real-time detection
+                return confirmed_gesture, best_confidence
 
             return best_gesture, best_confidence
         except Exception as e:
