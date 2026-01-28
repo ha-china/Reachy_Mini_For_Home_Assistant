@@ -389,7 +389,7 @@ class AudioPlayer:
         self._sendspin_url = None
         self._sendspin_audio_format = None
 
-async def stop_sendspin(self) -> None:
+    async def stop_sendspin(self) -> None:
         """Stop Sendspin discovery and disconnect from server."""
         # Stop discovery
         if self._sendspin_discovery is not None:
