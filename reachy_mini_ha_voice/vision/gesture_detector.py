@@ -181,63 +181,119 @@ class GestureDetector:
         img = np.transpose(img, [2, 0, 1])
         return np.expand_dims(img, axis=0)
 
-    def _detect_hand(self, frame: NDArray) -> tuple[int, int, int, int, float] | None:
+    def _detect_hand(self, frame: NDArray) -> tuple[NDArray, NDArray]:
+        """Detect all hands in frame.
+
+        Returns:
+            Tuple of (boxes, scores) where boxes is (N, 4) array and scores is (N,) array
+        """
         if self._detector is None:
-            return None
+            return np.empty((0, 4)), np.empty((0,))
         h, w = frame.shape[:2]
         inp = self._preprocess(frame, self._detector_size)
         outs = self._detector.run(self._det_outputs, {self._det_input: inp})
         boxes = outs[0]
         scores = outs[2]
         if len(boxes) == 0:
-            return None
-        best_i, best_c = -1, self._detection_threshold
-        for i, c in enumerate(scores):
-            if c > best_c:
-                best_c, best_i = float(c), i
-        if best_i < 0:
-            return None
-        b = boxes[best_i]
-        # Model outputs normalized coordinates (0-1), scale to original frame size
-        x1, y1 = int(b[0] * w), int(b[1] * h)
-        x2, y2 = int(b[2] * w), int(b[3] * h)
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(w - 1, x2), min(h - 1, y2)
-        if x2 <= x1 or y2 <= y1:
-            return None
-        return (x1, y1, x2, y2, best_c)
+            return np.empty((0, 4)), np.empty((0,))
 
-    def _get_square_crop(self, frame: NDArray, box: tuple[int, int, int, int]) -> NDArray:
+        # Filter by detection threshold
+        valid_mask = scores >= self._detection_threshold
+        boxes = boxes[valid_mask]
+        scores = scores[valid_mask]
+
+        if len(boxes) == 0:
+            return np.empty((0, 4)), np.empty((0,))
+
+        # Scale normalized coordinates to original frame size
+        boxes[:, 0] *= w  # x1
+        boxes[:, 1] *= h  # y1
+        boxes[:, 2] *= w  # x2
+        boxes[:, 3] *= h  # y2
+
+        # Clip to image boundaries
+        boxes[:, 0] = np.clip(boxes[:, 0], 0, w - 1).astype(np.int32)
+        boxes[:, 1] = np.clip(boxes[:, 1], 0, h - 1).astype(np.int32)
+        boxes[:, 2] = np.clip(boxes[:, 2], 0, w - 1).astype(np.int32)
+        boxes[:, 3] = np.clip(boxes[:, 3], 0, h - 1).astype(np.int32)
+
+        # Filter out invalid boxes (x2 <= x1 or y2 <= y1)
+        valid_boxes = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
+        boxes = boxes[valid_boxes]
+        scores = scores[valid_boxes]
+
+        return boxes, scores
+
+    def _get_square_crop(self, frame: NDArray, boxes: NDArray) -> list[NDArray]:
+        """Get square crops from frame for multiple boxes.
+
+        Args:
+            frame: Input image
+            boxes: Array of bounding boxes with shape (N, 4) as [x1, y1, x2, y2]
+
+        Returns:
+            List of cropped images
+        """
         h, w = frame.shape[:2]
-        x1, y1, x2, y2 = box
-        bw, bh = x2 - x1, y2 - y1
-        if bh < bw:
-            y1, y2 = y1 - (bw - bh) // 2, y1 - (bw - bh) // 2 + bw
-        elif bh > bw:
-            x1, x2 = x1 - (bh - bw) // 2, x1 - (bh - bw) // 2 + bh
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(w - 1, x2), min(h - 1, y2)
-        return frame[y1:y2, x1:x2]
+        crops = []
+        for box in boxes:
+            x1, y1, x2, y2 = box
+            bw, bh = x2 - x1, y2 - y1
+            if bh < bw:
+                y1 = y1 - (bw - bh) // 2
+                y2 = y1 + bw
+            elif bh > bw:
+                x1 = x1 - (bh - bw) // 2
+                x2 = x1 + bh
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w - 1, x2), min(h - 1, y2)
+            crops.append(frame[y1:y2, x1:x2])
+        return crops
 
-    def _classify(self, crop: NDArray) -> tuple[Gesture, float]:
-        if self._classifier is None or crop.size == 0:
-            return Gesture.NONE, 0.0
-        inp = self._preprocess(crop, self._classifier_size)
-        logits = self._classifier.run(None, {self._cls_input: inp})[0][0]
-        idx = int(np.argmax(logits))
-        exp_l = np.exp(logits - np.max(logits))
-        conf = float(exp_l[idx] / np.sum(exp_l))
-        if idx >= len(_GESTURE_CLASSES) or conf < self._confidence_threshold:
-            return Gesture.NONE, conf
-        name = _GESTURE_CLASSES[idx]
-        return _NAME_TO_GESTURE.get(name, Gesture.NONE), conf
+    def _classify(self, crops: list[NDArray]) -> tuple[list[Gesture], list[float]]:
+        """Classify multiple hand crops.
+
+        Args:
+            crops: List of cropped hand images
+
+        Returns:
+            Tuple of (gestures, confidences) lists
+        """
+        if self._classifier is None or len(crops) == 0:
+            return [], []
+
+        # Preprocess all crops and batch classify
+        processed_crops = [self._preprocess(crop, self._classifier_size) for crop in crops if crop.size > 0]
+        if len(processed_crops) == 0:
+            return [], []
+
+        # Concatenate along batch dimension
+        batch_input = np.concatenate(processed_crops, axis=0)
+        logits = self._classifier.run(None, {self._cls_input: batch_input})[0]
+
+        gestures = []
+        confidences = []
+        for logit in logits:
+            idx = int(np.argmax(logit))
+            exp_l = np.exp(logit - np.max(logit))
+            conf = float(exp_l[idx] / np.sum(exp_l))
+            if idx >= len(_GESTURE_CLASSES) or conf < self._confidence_threshold:
+                gestures.append(Gesture.NONE)
+                confidences.append(conf)
+            else:
+                name = _GESTURE_CLASSES[idx]
+                gestures.append(_NAME_TO_GESTURE.get(name, Gesture.NONE))
+                confidences.append(conf)
+
+        return gestures, confidences
 
     def detect(self, frame: NDArray) -> tuple[Gesture, float]:
         if not self._available:
             return Gesture.NONE, 0.0
         try:
-            det = self._detect_hand(frame)
-            if det is None:
+            # Detect all hands
+            boxes, det_scores = self._detect_hand(frame)
+            if len(boxes) == 0:
                 # Update smoother with no gesture
                 if self._smoother:
                     confirmed_gesture_name = self._smoother.update("none", 0.0)
@@ -247,10 +303,12 @@ class GestureDetector:
                     )
                 return Gesture.NONE, 0.0
 
-            x1, y1, x2, y2, det_c = det
-            logger.debug("Hand: box=(%d,%d,%d,%d) conf=%.2f", x1, y1, x2, y2, det_c)
-            crop = self._get_square_crop(frame, (x1, y1, x2, y2))
-            if crop.size == 0:
+            logger.debug("Detected %d hand(s)", len(boxes))
+
+            # Get crops for all detected hands
+            crops = self._get_square_crop(frame, boxes)
+            valid_crops = [crop for crop in crops if crop.size > 0]
+            if len(valid_crops) == 0:
                 if self._smoother:
                     confirmed_gesture_name = self._smoother.update("none", 0.0)
                     return (
@@ -259,22 +317,35 @@ class GestureDetector:
                     )
                 return Gesture.NONE, 0.0
 
-            gest, cls_c = self._classify(crop)
-            combined_confidence = det_c * cls_c
+            # Classify all crops
+            gestures, cls_scores = self._classify(valid_crops)
 
-            if gest != Gesture.NONE:
-                logger.debug("Gesture: %s (det=%.2f cls=%.2f)", gest.value, det_c, cls_c)
+            # Find the gesture with highest combined confidence
+            best_gesture = Gesture.NONE
+            best_confidence = 0.0
+            for gest, cls_c, det_c in zip(gestures, cls_scores, det_scores, strict=True):
+                combined_conf = det_c * cls_c
+                if gest != Gesture.NONE and combined_conf > best_confidence:
+                    best_gesture = gest
+                    best_confidence = combined_conf
+                    logger.debug(
+                        "Gesture: %s (det=%.2f cls=%.2f combined=%.2f)",
+                        gest.value,
+                        det_c,
+                        cls_c,
+                        combined_conf,
+                    )
 
             # Use gesture smoother if available
             if self._smoother:
-                gesture_name = gest.value if gest != Gesture.NONE else "none"
-                confirmed_gesture_name = self._smoother.update(gesture_name, combined_confidence)
+                gesture_name = best_gesture.value if best_gesture != Gesture.NONE else "none"
+                confirmed_gesture_name = self._smoother.update(gesture_name, best_confidence)
                 confirmed_gesture = _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE)
                 # Return aggregated confidence from smoother
                 aggregated_conf = self._smoother.get_aggregated_confidence(confirmed_gesture_name)
                 return confirmed_gesture, aggregated_conf if confirmed_gesture != Gesture.NONE else 0.0
 
-            return gest, combined_confidence
+            return best_gesture, best_confidence
         except Exception as e:
             logger.warning("Gesture error: %s", e)
             return Gesture.NONE, 0.0

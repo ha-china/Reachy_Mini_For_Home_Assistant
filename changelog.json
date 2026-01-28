@@ -8,7 +8,7 @@
       "Fix: Camera thread flushes SDK video buffer when lock acquisition times out",
       "Fix: Audio playback flushes SDK playback buffer when lock acquisition times out",
       "Fix: Resolves SDK crashes during extended wake-up idle periods without conversation",
-      "Optimize: Gesture recognition sensitivity - added gesture smoother with 2-frame confirmation, reduced detection interval to 1 frame, lowered confidence threshold to 0.2 for improved responsiveness"
+      "Fix: Gesture detection now returns all detected hands instead of only the highest confidence one - improves detection rate and matches reference implementation`n      `Optimize: Gesture recognition sensitivity - added gesture smoother with 2-frame confirmation, reduced detection interval to 1 frame, lowered confidence threshold to 0.2 for improved responsiveness"
     ]
   },
   {
@@ -61,7 +61,7 @@
     "changes": [
       "Refactor: Modularize codebase - new core/motion/vision/audio/entities module structure",
       "New: Direct callbacks for HA sleep/wake buttons to suspend/resume services",
-      "Optimize: Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms â†’ 16ms)",
+      "Optimize: Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms â†?16ms)",
       "Optimize: Audio loop delay reduced from 10ms to 1ms for faster VAD response",
       "Optimize: Stereo to mono conversion uses first channel instead of mean for cleaner signal",
       "Improve: Camera resume_from_suspend now synchronous for reliable wake from sleep",
@@ -547,3 +547,4 @@
     ]
   }
 ]
+
