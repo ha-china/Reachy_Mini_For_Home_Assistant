@@ -2,6 +2,10 @@
 
 This module provides gesture history tracking and confirmation logic
 to improve gesture detection sensitivity and reduce false positives.
+
+Note: Confidence filtering is intentionally removed to allow Home Assistant
+to make decisions based on both gesture type and confidence level in automations.
+Only smoothing and confirmation logic is applied for stability.
 """
 
 import logging
@@ -22,6 +26,8 @@ class GestureConfig:
     min_confirm_frames: int = 3
 
     # Minimum confidence threshold for detection
+    # Note: This is NOT used for filtering (removed to allow HA to see all detections)
+    # Confidence values are still passed to Home Assistant for automation decisions
     confidence_threshold: float = 0.3
 
     # Confidence aggregation method: "max", "avg", "recent"
@@ -66,9 +72,8 @@ class GestureSmoother:
         # Add to history
         self._history.append((gesture, confidence))
 
-        # Filter out low-confidence detections
-        if gesture != "none" and confidence < self.config.confidence_threshold:
-            gesture = "none"
+        # Note: No confidence filtering - pass all detections to Home Assistant
+        # Smoothing and confirmation are still applied for stability
 
         # Check if we have a consistent gesture
         if gesture == "none":

@@ -338,9 +338,14 @@ class GestureDetector:
                 gesture_name = best_gesture.value if best_gesture != Gesture.NONE else "none"
                 confirmed_gesture_name = self._smoother.update(gesture_name, best_confidence)
                 confirmed_gesture = _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE)
-                # Return aggregated confidence from smoother
-                aggregated_conf = self._smoother.get_aggregated_confidence(confirmed_gesture_name)
-                return confirmed_gesture, aggregated_conf if confirmed_gesture != Gesture.NONE else 0.0
+                # Return original detection confidence (not aggregated) for Home Assistant
+                # This allows HA to make decisions based on actual detection quality
+                if confirmed_gesture != Gesture.NONE:
+                    # Get the most recent confidence for this gesture from history
+                    recent_confidences = [c for g, c in self._smoother._history if g == confirmed_gesture_name]
+                    original_conf = recent_confidences[-1] if recent_confidences else best_confidence
+                    return confirmed_gesture, original_conf
+                return confirmed_gesture, 0.0
 
             return best_gesture, best_confidence
         except Exception as e:
