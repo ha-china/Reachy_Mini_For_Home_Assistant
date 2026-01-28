@@ -976,25 +976,26 @@ class VoiceAssistantService:
                     self._robot_services_resumed.wait(timeout=1.0)
                     continue
 
-                # Check if Home Assistant is connected (required for wake word detection)
                 if not self._wait_for_satellite():
                     continue
 
                 # Update wake words list
                 self._update_wake_words_list(ctx)
 
-                # Get audio from Reachy Mini for wake word detection
+                # Get audio from Reachy Mini
                 audio_chunk = self._get_reachy_audio_chunk()
-                if audio_chunk is not None:
-                    consecutive_audio_errors = 0
-                    self._process_audio_chunk(ctx, audio_chunk)
-                else:
-                    # Log when audio is None to help diagnose wake word issues (only once)
-                    if consecutive_audio_errors == 0:
-                        _LOGGER.warning("No audio data from Reachy Mini - check microphone connection")
-                    consecutive_audio_errors += 1
+                if audio_chunk is None:
+                    idle_sleep = (
+                        Config.audio.idle_sleep_sleeping
+                        if self._robot_services_paused.is_set()
+                        else Config.audio.idle_sleep_active
+                    )
+                    time.sleep(idle_sleep)
+                    continue
 
-                time.sleep(0.05)  # 50ms sleep to avoid busy loop (same as reference project)
+                # Audio successfully obtained, reset error counter
+                consecutive_audio_errors = 0
+                self._process_audio_chunk(ctx, audio_chunk)
 
             except Exception as e:
                 error_msg = str(e)
@@ -1082,26 +1083,8 @@ class VoiceAssistantService:
         if self._robot_services_paused.is_set():
             return None
 
-        # Check if in conversation mode - audio thread has highest priority
-        in_conversation = self._state is not None and self._state.is_conversation_active
-
-        if in_conversation:
-            # In conversation: audio thread gets priority, skip lock to avoid blocking
-            # Other threads (camera, playback) should back off during conversation
-            audio_data = self.reachy_mini.media.get_audio_sample()
-        else:
-            # Idle mode: use lock to prevent GStreamer competition
-            # Try to acquire GStreamer lock with timeout to avoid blocking other threads
-            acquired = self._gstreamer_lock.acquire(timeout=0.01)
-            if not acquired:
-                _LOGGER.debug("GStreamer lock busy, skipping audio chunk")
-                return None
-
-            try:
-                # Get new audio data from SDK
-                audio_data = self.reachy_mini.media.get_audio_sample()
-            finally:
-                self._gstreamer_lock.release()
+        # Get new audio data from SDK
+        audio_data = self.reachy_mini.media.get_audio_sample()
 
         # Debug: Log SDK audio data statistics and sample rate (once at startup)
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
