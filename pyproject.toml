@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_ha_voice"
-version = "0.9.8"
-description = "Home Assistant Voice Assistant for Reachy Mini"
+version = "0.9.9"
+description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "Apache-2.0"}

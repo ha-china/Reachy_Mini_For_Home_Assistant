@@ -101,10 +101,15 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── GESTURE DETECTION ────────────────────────┐  │
-│  │  HaGRID ONNX Models                                                  │  │
+│  │  HaGRID ONNX Models + GestureSmoother                               │  │
 │  │  • 18 gesture classes (call, like, dislike, fist, ok, palm, etc.)    │  │
+│  │  • GestureSmoother with 2-frame confirmation for stable output      │  │
+│  │  • Batch detection: all hands (not just highest confidence)         │  │
+│  │  • Detection frequency: 1 frame interval (high sensitivity)         │  │
+│  │  • Confidence threshold: 0.2 (improved from 0.3)                    │  │
 │  │  • Only runs when face detected (power saving)                       │  │
 │  │  • Real-time state push to Home Assistant                            │  │
+│  │  • No conflicts with face tracking (shared frame, independent)       │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
@@ -126,7 +131,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Software Module Architecture (v0.9.5)
+### Software Module Architecture (v0.9.9)
 
 ```
 reachy_mini_ha_voice/
@@ -153,7 +158,10 @@ reachy_mini_ha_voice/
 │
 ├── vision/                    # Vision Processing
 │   ├── frame_processor.py     # Adaptive frame rate management
-│   └── face_tracking_interpolator.py  # Smooth face tracking
+│   ├── face_tracking_interpolator.py  # Smooth face tracking
+│   ├── gesture_smoother.py    # Gesture history tracking and confirmation (v0.9.9)
+│   ├── gesture_detector.py    # HaGRID gesture detection
+│   └── camera_server.py       # MJPEG camera stream server
 │
 ├── audio/                     # Audio Processing
 │   ├── microphone.py          # ReSpeaker XVF3800 optimization
@@ -167,8 +175,9 @@ reachy_mini_ha_voice/
 │
 └── [Other modules]
     ├── movement_manager.py    # 100Hz unified motion control loop
-    ├── camera_server.py       # MJPEG stream + face tracking
-    ├── audio_player.py        # TTS + Sendspin playback
+    ├── gesture_detector.py     # HaGRID gesture detection (285 lines)
+    ├── camera_server.py        # MJPEG stream + face tracking (966 lines)
+    ├── audio_player.py        # TTS + Sendspin playback (624 lines)
     ├── entity_registry.py     # ESPHome entity registry
     └── reachy_controller.py   # Reachy Mini SDK wrapper
 ```
@@ -203,7 +212,7 @@ reachy_mini_ha_voice/
 ```
 reachy_mini_ha_voice/
 ├── reachy_mini_ha_voice/
-│   ├── __init__.py             # Package initialization (v0.9.5)
+│   ├── __init__.py             # Package initialization (v0.9.9)
 │   ├── __main__.py             # Command line entry
 │   ├── main.py                 # ReachyMiniApp entry
 │   ├── voice_assistant.py      # Voice assistant service (1066 lines)
@@ -248,7 +257,10 @@ reachy_mini_ha_voice/
 │   ├── vision/                 # Vision processing modules
 │   │   ├── __init__.py         # Module exports
 │   │   ├── frame_processor.py  # Adaptive frame rate management (268 lines)
-│   │   └── face_tracking_interpolator.py  # Face lost interpolation (225 lines)
+│   │   ├── face_tracking_interpolator.py  # Face lost interpolation (225 lines)
+│   │   ├── gesture_smoother.py  # Gesture history tracking (141 lines)
+│   │   ├── gesture_detector.py  # HaGRID gesture detection (285 lines)
+│   │   └── camera_server.py     # MJPEG camera stream server + face tracking (966 lines)
 │   │
 │   ├── audio/                  # Audio processing modules
 │   │   ├── __init__.py         # Module exports
@@ -504,11 +516,16 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
     - [x] AudioPlayer integrates aiosendspin library
     - [x] TTS audio sent to both local speaker and Sendspin server
 
-14. **Phase 22 - Gesture Detection** ✅ **Completed**
+14. **Phase 22 - Gesture Detection** ✅ **Completed (v0.9.9: Optimized with GestureSmoother)**
     - [x] `gesture_detected` - Detected gesture name (Text Sensor)
     - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
     - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
     - [x] Real-time state push to Home Assistant
+    - [x] GestureSmoother with 2-frame confirmation mechanism for stable output
+    - [x] Batch detection: returns all detected hands (not just highest confidence)
+    - [x] Detection frequency: 1 frame interval (improved from 3 frames)
+    - [x] Confidence threshold: 0.2 (lowered from 0.3 for improved sensitivity)
+    - [x] No conflicts with face tracking (shared frame, independent processing)
     - [x] 18 supported gestures:
       | Gesture | Emoji | Gesture | Emoji |
       |---------|-------|---------|-------|

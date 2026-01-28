@@ -4,6 +4,34 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-01-28
+
+### Fixed
+- **SDK Buffer Overflow During Idle**
+  - Add SDK buffer flush on GStreamer lock timeout
+  - Prevents buffer overflow during long idle periods when lock contention prevents buffer drainage
+  - Audio thread flushes SDK audio buffer when lock acquisition times out
+  - Camera thread flushes SDK video buffer when lock acquisition times out
+  - Audio playback flushes SDK playback buffer when lock acquisition times out
+  - Resolves SDK crashes during extended wake-up idle periods without conversation
+
+### Optimized
+- **Gesture Recognition Sensitivity**
+  - Add GestureSmoother class with history tracking and 2-frame confirmation mechanism
+  - Reduce gesture detection interval from 3 frames to 1 frame for higher frequency
+  - Lower confidence threshold from 0.3 to 0.2 for improved sensitivity
+  - Integrate gesture smoother into GestureDetector for stable output
+  - Fix: Gesture detection now returns all detected hands instead of only the highest confidence one
+  - Matches reference implementation behavior for improved detection rate
+  - No conflicts with face tracking (shared frame, independent processing)
+
+### Code Quality
+- Fix Ruff linter issues (import ordering, missing newlines, __all__ sorting)
+- Format code with Ruff formatter (5 files reformatted)
+- Fix slice index error in gesture detection (convert coordinates to integers)
+
+## [Unreleased - Previous Content]
+
 ### Added - Core Infrastructure
 - **Sleep State Management** (`core/`)
   - `DaemonStateMonitor`: Monitors robot daemon state including sleep detection
