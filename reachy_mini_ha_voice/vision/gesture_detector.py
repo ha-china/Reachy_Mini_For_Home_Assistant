@@ -197,11 +197,7 @@ class GestureDetector:
         if len(boxes) == 0:
             return np.empty((0, 4)), np.empty((0,))
 
-        # Filter by detection threshold
-        valid_mask = scores >= self._detection_threshold
-        boxes = boxes[valid_mask]
-        scores = scores[valid_mask]
-
+        # Return all detections (no threshold filtering - let downstream handle it)
         if len(boxes) == 0:
             return np.empty((0, 4)), np.empty((0,))
 
@@ -325,7 +321,8 @@ class GestureDetector:
             best_confidence = 0.0
             for gest, cls_c, det_c in zip(gestures, cls_scores, det_scores, strict=True):
                 combined_conf = det_c * cls_c
-                if gest != Gesture.NONE and combined_conf > best_confidence:
+                # Allow all gestures including low confidence ones (reference behavior)
+                if combined_conf > best_confidence:
                     best_gesture = gest
                     best_confidence = combined_conf
                     logger.debug(
