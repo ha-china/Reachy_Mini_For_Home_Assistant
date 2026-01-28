@@ -237,7 +237,7 @@ class GestureDetector:
         h, w = frame.shape[:2]
         crops = []
         for box in boxes:
-            x1, y1, x2, y2 = box
+            x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
             bw, bh = x2 - x1, y2 - y1
             if bh < bw:
                 y1 = y1 - (bw - bh) // 2
