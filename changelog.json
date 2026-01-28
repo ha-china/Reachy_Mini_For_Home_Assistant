@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.9.9",
+    "date": "2026-01-28",
+    "changes": [
+      "Fix: Add SDK buffer flush on GStreamer lock timeout - prevents buffer overflow during long idle periods when lock contention prevents buffer drainage",
+      "Fix: Audio thread flushes SDK audio buffer when lock acquisition times out",
+      "Fix: Camera thread flushes SDK video buffer when lock acquisition times out",
+      "Fix: Audio playback flushes SDK playback buffer when lock acquisition times out",
+      "Fix: Resolves SDK crashes during extended wake-up idle periods without conversation"
+    ]
+  },
+  {
     "version": "0.9.8",
     "date": "2026-01-27",
     "changes": [
