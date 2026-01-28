@@ -976,6 +976,10 @@ class VoiceAssistantService:
                     self._robot_services_resumed.wait(timeout=1.0)
                     continue
 
+                # Check if Home Assistant is connected (required for wake word detection)
+                if not self._wait_for_satellite():
+                    continue
+
                 # Update wake words list
                 self._update_wake_words_list(ctx)
 
@@ -1017,6 +1021,13 @@ class VoiceAssistantService:
                     if consecutive_audio_errors <= 3:
                         _LOGGER.error("Error in Reachy audio processing: %s", e)
                     time.sleep(Config.audio.idle_sleep_sleeping)
+
+    def _wait_for_satellite(self) -> bool:
+        """Wait for satellite connection. Returns True if connected."""
+        if self._state is None or self._state.satellite is None:
+            time.sleep(Config.audio.fallback_wait_sleep)
+            return False
+        return True
 
     def _update_wake_words_list(self, ctx: AudioProcessingContext) -> None:
         """Update wake words list if changed."""
