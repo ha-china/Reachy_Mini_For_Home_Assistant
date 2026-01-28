@@ -337,9 +337,9 @@ class AudioPlayer:
                 _LOGGER.debug("GStreamer lock busy, skipping audio sample")
                 # Flush SDK playback buffer to prevent buffer overflow during lock contention
                 try:
-                    if hasattr(self.reachy_mini.media, 'flush'):
+                    if hasattr(self.reachy_mini.media, "flush"):
                         self.reachy_mini.media.flush()
-                    elif hasattr(self.reachy_mini.media, 'flush_audio'):
+                    elif hasattr(self.reachy_mini.media, "flush_audio"):
                         self.reachy_mini.media.flush_audio()
                 except Exception:
                     pass

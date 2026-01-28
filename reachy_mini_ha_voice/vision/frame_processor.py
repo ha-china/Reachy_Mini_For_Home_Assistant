@@ -40,7 +40,8 @@ class FrameRateConfig:
     idle_threshold: float = 30.0  # Switch to idle after 30s without face
 
     # Gesture detection interval (every N frames)
-    gesture_detection_interval: int = 3
+    # Reduced from 3 to 1 for higher sensitivity (gesture smoother handles confirmation)
+    gesture_detection_interval: int = 1
 
 
 @dataclass

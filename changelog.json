@@ -7,7 +7,8 @@
       "Fix: Audio thread flushes SDK audio buffer when lock acquisition times out",
       "Fix: Camera thread flushes SDK video buffer when lock acquisition times out",
       "Fix: Audio playback flushes SDK playback buffer when lock acquisition times out",
-      "Fix: Resolves SDK crashes during extended wake-up idle periods without conversation"
+      "Fix: Resolves SDK crashes during extended wake-up idle periods without conversation",
+      "Optimize: Gesture recognition sensitivity - added gesture smoother with 2-frame confirmation, reduced detection interval to 1 frame, lowered confidence threshold to 0.2 for improved responsiveness"
     ]
   },
   {

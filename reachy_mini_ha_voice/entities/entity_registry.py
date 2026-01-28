@@ -541,12 +541,12 @@ class EntityRegistry:
             camera_server = self.camera_server  # Direct reference
 
             # If direct reference is None, try to get from server state
-            if camera_server is None and hasattr(self.server, 'state') and self.server.state:
+            if camera_server is None and hasattr(self.server, "state") and self.server.state:
                 # Check if there's a camera_server stored in state
-                if hasattr(self.server.state, '_camera_server'):
+                if hasattr(self.server.state, "_camera_server"):
                     camera_server = self.server.state._camera_server
                 # Or check if server has a reference
-                elif hasattr(self.server, 'camera_server'):
+                elif hasattr(self.server, "camera_server"):
                     camera_server = self.server.camera_server
 
             if camera_server:
@@ -554,6 +554,7 @@ class EntityRegistry:
                     return camera_server.get_snapshot()
                 except Exception as e:
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.debug("Failed to get camera snapshot: %s", e)
             return None

@@ -752,9 +752,9 @@ class MJPEGCameraServer:
                 _LOGGER.debug("GStreamer lock busy, skipping camera frame")
                 # Flush SDK video buffer to prevent buffer overflow during lock contention
                 try:
-                    if hasattr(self.reachy_mini.media, 'flush'):
+                    if hasattr(self.reachy_mini.media, "flush"):
                         self.reachy_mini.media.flush()
-                    elif hasattr(self.reachy_mini.media, 'flush_video'):
+                    elif hasattr(self.reachy_mini.media, "flush_video"):
                         self.reachy_mini.media.flush_video()
                 except Exception:
                     pass

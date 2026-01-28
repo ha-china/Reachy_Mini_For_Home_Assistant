@@ -995,9 +995,11 @@ class VoiceAssistantService:
 
                 # Optimization: If not streaming audio, skip Reachy audio processing
                 # This prevents unnecessary get_frame() calls when idle, reducing GStreamer competition
-                if (self._state is not None and
-                    self._state.satellite is not None and
-                    not self._state.satellite.is_streaming_audio):
+                if (
+                    self._state is not None
+                    and self._state.satellite is not None
+                    and not self._state.satellite.is_streaming_audio
+                ):
                     time.sleep(1.0)
                     continue
 
@@ -1159,9 +1161,9 @@ class VoiceAssistantService:
                 _LOGGER.debug("GStreamer lock busy, skipping audio chunk")
                 # Flush SDK audio buffer to prevent buffer overflow during lock contention
                 try:
-                    if hasattr(self.reachy_mini.media, 'flush_audio'):
+                    if hasattr(self.reachy_mini.media, "flush_audio"):
                         self.reachy_mini.media.flush_audio()
-                    elif hasattr(self.reachy_mini.media, 'flush'):
+                    elif hasattr(self.reachy_mini.media, "flush"):
                         self.reachy_mini.media.flush()
                 except Exception:
                     pass

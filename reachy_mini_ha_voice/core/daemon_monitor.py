@@ -291,7 +291,7 @@ class DaemonStateMonitor:
         Uses Zenoth to get status instead of HTTP API to avoid blocking uvicorn.
         """
         # Use SDK's get_status() instead of HTTP API
-        if not hasattr(self, '_reachy_mini') or self._reachy_mini is None:
+        if not hasattr(self, "_reachy_mini") or self._reachy_mini is None:
             logger.debug("ReachyMini not available")
             return DaemonStatus(state=DaemonState.UNAVAILABLE)
 

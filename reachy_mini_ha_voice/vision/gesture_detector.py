@@ -109,7 +109,7 @@ _NAME_TO_GESTURE = {
 
 
 class GestureDetector:
-    def __init__(self, confidence_threshold: float = 0.3, detection_threshold: float = 0.3):
+    def __init__(self, confidence_threshold: float = 0.2, detection_threshold: float = 0.2):
         self._confidence_threshold = confidence_threshold
         self._detection_threshold = detection_threshold
         models_dir = Path(__file__).parent / "models"
@@ -130,6 +130,23 @@ class GestureDetector:
         self._detector_size = (320, 240)
         self._classifier_size = (128, 128)
         self._load_models()
+
+        # Initialize gesture smoother for improved sensitivity
+        try:
+            from .gesture_smoother import GestureConfig, GestureSmoother
+
+            self._smoother = GestureSmoother(
+                config=GestureConfig(
+                    history_size=5,
+                    min_confirm_frames=2,  # Faster confirmation (2 frames)
+                    confidence_threshold=confidence_threshold,
+                    confidence_method="max",
+                )
+            )
+            logger.info("Gesture smoother enabled (2-frame confirmation)")
+        except ImportError:
+            self._smoother = None
+            logger.warning("Gesture smoother not available")
 
     def _load_models(self) -> None:
         try:
@@ -221,16 +238,43 @@ class GestureDetector:
         try:
             det = self._detect_hand(frame)
             if det is None:
+                # Update smoother with no gesture
+                if self._smoother:
+                    confirmed_gesture_name = self._smoother.update("none", 0.0)
+                    return (
+                        _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE),
+                        0.0,
+                    )
                 return Gesture.NONE, 0.0
+
             x1, y1, x2, y2, det_c = det
             logger.debug("Hand: box=(%d,%d,%d,%d) conf=%.2f", x1, y1, x2, y2, det_c)
             crop = self._get_square_crop(frame, (x1, y1, x2, y2))
             if crop.size == 0:
+                if self._smoother:
+                    confirmed_gesture_name = self._smoother.update("none", 0.0)
+                    return (
+                        _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE),
+                        0.0,
+                    )
                 return Gesture.NONE, 0.0
+
             gest, cls_c = self._classify(crop)
+            combined_confidence = det_c * cls_c
+
             if gest != Gesture.NONE:
                 logger.debug("Gesture: %s (det=%.2f cls=%.2f)", gest.value, det_c, cls_c)
-            return gest, det_c * cls_c
+
+            # Use gesture smoother if available
+            if self._smoother:
+                gesture_name = gest.value if gest != Gesture.NONE else "none"
+                confirmed_gesture_name = self._smoother.update(gesture_name, combined_confidence)
+                confirmed_gesture = _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE)
+                # Return aggregated confidence from smoother
+                aggregated_conf = self._smoother.get_aggregated_confidence(confirmed_gesture_name)
+                return confirmed_gesture, aggregated_conf if confirmed_gesture != Gesture.NONE else 0.0
+
+            return gest, combined_confidence
         except Exception as e:
             logger.warning("Gesture error: %s", e)
             return Gesture.NONE, 0.0

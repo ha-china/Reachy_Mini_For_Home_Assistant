@@ -21,22 +21,20 @@ from .frame_processor import (
     calculate_frame_interval,
 )
 from .gesture_detector import Gesture, GestureDetector
+from .gesture_smoother import GestureConfig, GestureSmoother
 from .head_tracker import HeadTracker
 
 __all__ = [
     "AdaptiveFrameRateManager",
     "FaceTrackingInterpolator",
     "FrameRateConfig",
-    # Frame processing
     "FrameRateMode",
     "Gesture",
-    # Gesture detection
+    "GestureConfig",
     "GestureDetector",
-    # Face detection
+    "GestureSmoother",
     "HeadTracker",
-    # Face tracking interpolation
     "InterpolationConfig",
-    # Camera server
     "MJPEGCameraServer",
     "ProcessingState",
     "calculate_frame_interval",
