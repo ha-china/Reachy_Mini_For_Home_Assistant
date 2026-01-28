@@ -945,28 +945,16 @@ class VoiceAssistantService:
         try:
             _LOGGER.info("Starting audio processing...")
 
-            # Pre-wake: avoid SDK audio calls by using system mic for wake-word detection.
-            # Post-wake: use Reachy mic for streaming to HA.
-            last_source = None
-            while self._running:
-                # Always use Reachy Mini's microphone if available
-                # Audio data is consumed for wake word detection even when idle
-                use_reachy = (
-                    self.reachy_mini is not None
-                    and self._state is not None
-                    and self._state.satellite is not None
-                )
+            # Always use Reachy Mini's microphone if available
+            # Only fallback to system microphone if Reachy Mini is not available
+            use_reachy = self.reachy_mini is not None
 
-                if use_reachy:
-                    if last_source != "reachy":
-                        _LOGGER.info("Using Reachy Mini's microphone")
-                        last_source = "reachy"
-                    self._audio_loop_reachy(ctx)
-                else:
-                    if last_source != "system":
-                        _LOGGER.info("Using system microphone (fallback)")
-                        last_source = "system"
-                    self._audio_loop_fallback(ctx)
+            if use_reachy:
+                _LOGGER.info("Using Reachy Mini's microphone")
+                self._audio_loop_reachy(ctx)
+            else:
+                _LOGGER.info("Using system microphone (fallback)")
+                self._audio_loop_fallback(ctx)
 
         except Exception:
             _LOGGER.exception("Error processing audio")
@@ -990,10 +978,7 @@ class VoiceAssistantService:
                     self._robot_services_resumed.wait(timeout=1.0)
                     continue
 
-                # Check if Home Assistant is streaming audio
-                if not self._wait_for_satellite():
-                    continue
-
+                # Update wake words list
                 self._update_wake_words_list(ctx)
 
                 # Get audio from Reachy Mini for wake word detection
