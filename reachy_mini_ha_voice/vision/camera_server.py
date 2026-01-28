@@ -473,13 +473,14 @@ class MJPEGCameraServer:
                         # Handle smooth interpolation when face lost
                         self._process_face_lost_interpolation(current_time)
 
-                        # Gesture detection (using frame rate manager)
-                        if (
-                            self._gesture_detection_enabled
-                            and self._gesture_detector is not None
-                            and self._frame_rate_manager.should_run_gesture_detection()
-                        ):
-                            self._process_gesture_detection(frame)
+                    # Gesture detection (runs independently of face detection)
+                    # Uses its own frame rate control via should_run_gesture_detection()
+                    if (
+                        self._gesture_detection_enabled
+                        and self._gesture_detector is not None
+                        and self._frame_rate_manager.should_run_gesture_detection()
+                    ):
+                        self._process_gesture_detection(frame)
 
                     # Log stats every 30 seconds
                     if current_time - last_log_time >= 30.0:
