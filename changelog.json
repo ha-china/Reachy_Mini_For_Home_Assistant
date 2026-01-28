@@ -8,7 +8,14 @@
       "Fix: Camera thread flushes SDK video buffer when lock acquisition times out",
       "Fix: Audio playback flushes SDK playback buffer when lock acquisition times out",
       "Fix: Resolves SDK crashes during extended wake-up idle periods without conversation",
-      "Fix: Gesture detection now returns all detected hands instead of only the highest confidence one - improves detection rate and matches reference implementation`n      `Optimize: Gesture recognition sensitivity - added gesture smoother with 2-frame confirmation, reduced detection interval to 1 frame, lowered confidence threshold to 0.2 for improved responsiveness"
+      "Change: Remove all confidence filtering from gesture detection pipeline - all detected gestures (including low confidence) are now passed to Home Assistant",
+      "Change: Return original detection confidence instead of aggregated confidence for Home Assistant automation decisions",
+      "Change: GestureSmoother now only applies 3-frame confirmation logic - no confidence threshold filtering",
+      "Fix: Gesture detection now returns all detected hands instead of only the highest confidence one - improves detection rate and matches reference implementation",
+      "Fix: Remove double filtering in classification stage - all classified gestures are returned with their confidence values",
+      "Fix: Remove confidence filtering in selection stage - low confidence gestures can now compete for best gesture selection",
+      "Fix: Gesture detection now runs at 1 frame interval for maximum sensitivity",
+      "Change: Confidence threshold parameters retained for backward compatibility only - no longer used for any filtering"
     ]
   },
   {
@@ -61,7 +68,7 @@
     "changes": [
       "Refactor: Modularize codebase - new core/motion/vision/audio/entities module structure",
       "New: Direct callbacks for HA sleep/wake buttons to suspend/resume services",
-      "Optimize: Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms â†?16ms)",
+      "Optimize: Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms ï¿½?16ms)",
       "Optimize: Audio loop delay reduced from 10ms to 1ms for faster VAD response",
       "Optimize: Stereo to mono conversion uses first channel instead of mean for cleaner signal",
       "Improve: Camera resume_from_suspend now synchronous for reliable wake from sleep",
