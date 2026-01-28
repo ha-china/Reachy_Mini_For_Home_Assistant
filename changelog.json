@@ -1,1 +1,39 @@
-[{"version": "0.9.9", "date": "2026-01-28", "changes": ["Fix: SDK buffer overflow during idle - flush buffers on GStreamer lock timeout to prevent crashes", "Optimize: Gesture detection sensitivity - remove all confidence filtering, return all detections to Home Assistant", "Optimize: Gesture detection now runs at 1 frame interval for maximum responsiveness", "Refactor: Simplify GestureSmoother to frequency-based confirmation (1 frame)", "Refactor: Remove unused parameters (confidence_threshold, detection_threshold, GestureConfig)", "Fix: Remove duplicate empty check in gesture detection", "Optimize: SDK integration - add MediaBackend detection and proper resource cleanup", "Document: ReSpeaker private attribute access risk with TODO comments"]}, {"version": "0.9.8", "date": "2026-01-27", "changes": ["New: Mute switch entity - suspends voice services only (not camera/motion)", "New: Disable Camera switch entity - suspends camera and AI processing", "Fix: Camera disable logic - corrected inverted conditions for proper operation", "Fix: Prevent daemon crash when entering idle state", "New: Home Assistant connection-driven feature loading", "New: Automatic suspend/resume on HA disconnect/reconnect", "Fix: Camera preview in Home Assistant", "Optimize: Reduce log output by 30-40%", "Fix: Code quality improvements", "Remove: Temporarily disable emotion playback during TTS", "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition", "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation", "Optimize: Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability", "Fix: Add GStreamer threading lock to prevent pipeline competition between audio, playback, and camera threads", "Fix: Audio thread gets priority during conversations - bypasses lock when conversation is active", "Simplify: Device ID now reads /etc/machine-id directly - removed uuid.getnode() and file persistence", "Clean up: Removed unused config items (connection_timeout)"]}]
+﻿[
+  {
+    "version": "0.9.9",
+    "date": "2026-01-28",
+    "changes": [
+      "Fix: SDK buffer overflow during idle - flush buffers on GStreamer lock timeout to prevent crashes",
+      "Optimize: Gesture detection sensitivity - remove all confidence filtering, return all detections to Home Assistant",
+      "Optimize: Gesture detection now runs at 1 frame interval for maximum responsiveness",
+      "Refactor: Simplify GestureSmoother to frequency-based confirmation (1 frame)",
+      "Refactor: Remove unused parameters (confidence_threshold, detection_threshold, GestureConfig)",
+      "Fix: Remove duplicate empty check in gesture detection",
+      "Optimize: SDK integration - add MediaBackend detection and proper resource cleanup",
+      "Document: ReSpeaker private attribute access risk with TODO comments"
+    ]
+  },
+  {
+    "version": "0.9.8",
+    "date": "2026-01-27",
+    "changes": [
+      "New: Mute switch entity - suspends voice services only (not camera/motion)",
+      "New: Disable Camera switch entity - suspends camera and AI processing",
+      "Fix: Camera disable logic - corrected inverted conditions for proper operation",
+      "Fix: Prevent daemon crash when entering idle state",
+      "New: Home Assistant connection-driven feature loading",
+      "New: Automatic suspend/resume on HA disconnect/reconnect",
+      "Fix: Camera preview in Home Assistant",
+      "Optimize: Reduce log output by 30-40%",
+      "Fix: Code quality improvements",
+      "Remove: Temporarily disable emotion playback during TTS",
+      "Fix: SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition",
+      "Optimize: Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation",
+      "Optimize: Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability",
+      "Fix: Add GStreamer threading lock to prevent pipeline competition between audio, playback, and camera threads",
+      "Fix: Audio thread gets priority during conversations - bypasses lock when conversation is active",
+      "Simplify: Device ID now reads /etc/machine-id directly - removed uuid.getnode() and file persistence",
+      "Clean up: Removed unused config items (connection_timeout)"
+    ]
+  }
+]
