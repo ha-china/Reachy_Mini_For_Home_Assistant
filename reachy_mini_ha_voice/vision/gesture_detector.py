@@ -110,6 +110,9 @@ _NAME_TO_GESTURE = {
 
 class GestureDetector:
     def __init__(self, confidence_threshold: float = 0.2, detection_threshold: float = 0.2):
+        # Note: These thresholds are NOT used for filtering
+        # All detections are passed to Home Assistant with their confidence values
+        # Parameters are retained for backward compatibility and potential future use
         self._confidence_threshold = confidence_threshold
         self._detection_threshold = detection_threshold
         models_dir = Path(__file__).parent / "models"
@@ -273,13 +276,14 @@ class GestureDetector:
             idx = int(np.argmax(logit))
             exp_l = np.exp(logit - np.max(logit))
             conf = float(exp_l[idx] / np.sum(exp_l))
-            if idx >= len(_GESTURE_CLASSES) or conf < self._confidence_threshold:
+            # No confidence filtering - return all classifications
+            # This allows Home Assistant to see all detected gestures with their confidence levels
+            if idx >= len(_GESTURE_CLASSES):
                 gestures.append(Gesture.NONE)
-                confidences.append(conf)
             else:
                 name = _GESTURE_CLASSES[idx]
                 gestures.append(_NAME_TO_GESTURE.get(name, Gesture.NONE))
-                confidences.append(conf)
+            confidences.append(conf)
 
         return gestures, confidences
 

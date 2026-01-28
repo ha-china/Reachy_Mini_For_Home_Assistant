@@ -25,9 +25,9 @@ class GestureConfig:
     # Minimum consecutive frames to confirm gesture
     min_confirm_frames: int = 3
 
-    # Minimum confidence threshold for detection
-    # Note: This is NOT used for filtering (removed to allow HA to see all detections)
-    # Confidence values are still passed to Home Assistant for automation decisions
+    # Confidence threshold (retained for backward compatibility, NOT used for filtering)
+    # Note: All gestures are passed to Home Assistant with their confidence values
+    # This parameter is unused and kept only for future potential use
     confidence_threshold: float = 0.3
 
     # Confidence aggregation method: "max", "avg", "recent"
