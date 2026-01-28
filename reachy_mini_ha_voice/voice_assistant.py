@@ -988,6 +988,11 @@ class VoiceAssistantService:
                 if audio_chunk is not None:
                     consecutive_audio_errors = 0
                     self._process_audio_chunk(ctx, audio_chunk)
+                else:
+                    # Log when audio is None to help diagnose wake word issues (only once)
+                    if consecutive_audio_errors == 0:
+                        _LOGGER.warning("No audio data from Reachy Mini - check microphone connection")
+                    consecutive_audio_errors += 1
 
                 time.sleep(0.05)  # 50ms sleep to avoid busy loop (same as reference project)
 
