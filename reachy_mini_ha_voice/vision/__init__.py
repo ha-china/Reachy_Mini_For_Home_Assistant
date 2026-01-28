@@ -21,7 +21,7 @@ from .frame_processor import (
     calculate_frame_interval,
 )
 from .gesture_detector import Gesture, GestureDetector
-from .gesture_smoother import GestureConfig, GestureSmoother
+from .gesture_smoother import GestureSmoother
 from .head_tracker import HeadTracker
 
 __all__ = [
@@ -30,7 +30,6 @@ __all__ = [
     "FrameRateConfig",
     "FrameRateMode",
     "Gesture",
-    "GestureConfig",
     "GestureDetector",
     "GestureSmoother",
     "HeadTracker",
