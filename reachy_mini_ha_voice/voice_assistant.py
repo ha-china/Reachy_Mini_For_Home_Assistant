@@ -1118,8 +1118,9 @@ class VoiceAssistantService:
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
             try:
                 if audio_data.dtype.kind not in ("S", "U", "O", "V", "b"):
+                    # Convert to float32 only if needed (SDK already returns float32)
                     if audio_data.dtype != np.float32:
-                        audio_data = np.asarray(audio_data, dtype=np.float32)
+                        audio_data = audio_data.astype(np.float32, copy=False)
 
                     # Clean NaN/Inf values early to prevent downstream errors
                     audio_data = np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0)
@@ -1127,9 +1128,11 @@ class VoiceAssistantService:
                     # Convert stereo to mono (use first channel for better quality)
                     if audio_data.ndim == 2 and audio_data.shape[1] >= 2:
                         # Use first channel instead of mean - cleaner signal
-                        audio_data = audio_data[:, 0].copy()
+                        # Remove .copy() to avoid unnecessary array duplication
+                        audio_data = audio_data[:, 0]
                     elif audio_data.ndim == 2:
-                        audio_data = audio_data[:, 0].copy()
+                        # Remove .copy() to avoid unnecessary array duplication
+                        audio_data = audio_data[:, 0]
 
                     # Resample if needed (SDK may return non-16kHz audio)
                     if audio_data.ndim == 1:
@@ -1151,7 +1154,7 @@ class VoiceAssistantService:
                                     nan=0.0,
                                     posinf=1.0,
                                     neginf=-1.0,
-                                ).astype(np.float32)
+                                ).astype(np.float32, copy=False)
 
                         # Check buffer size BEFORE appending to prevent race condition overflow
                         if len(self._audio_buffer) + len(audio_data) > MAX_AUDIO_BUFFER_SIZE:
