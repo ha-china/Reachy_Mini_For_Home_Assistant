@@ -2,6 +2,7 @@
 
 import logging
 import math
+import platform
 import subprocess
 import time
 from typing import TYPE_CHECKING, Any, Optional
@@ -16,6 +17,43 @@ if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
+
+# Audio device card names for amixer commands (from SDK)
+DEVICE_CARD_NAMES = {
+    "reachy_mini_audio": "reachy_mini_audio",
+    "respeaker": "respeaker",
+    "default": "Audio",  # Default to Reachy Mini Audio
+}
+
+
+def _detect_audio_device() -> str:
+    """Detect the current audio output device (from SDK)."""
+    system = platform.system()
+
+    if system == "Linux":
+        # Try to detect if Reachy Mini Audio or legacy Respeaker is available
+        try:
+            result = subprocess.run(
+                ["aplay", "-l"],
+                capture_output=True,
+                text=True,
+                timeout=1.0,
+            )
+            output_lower = result.stdout.lower()
+            if "reachy mini audio" in output_lower:
+                return "reachy_mini_audio"
+            elif "respeaker" in output_lower:
+                return "respeaker"
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return "default"
+    return "unknown"
+
+
+def _get_amixer_card_name() -> str:
+    """Get the appropriate card name for Linux amixer commands (from SDK)."""
+    device = _detect_audio_device()
+    return DEVICE_CARD_NAMES.get(device, DEVICE_CARD_NAMES["default"])
 
 
 class _ReSpeakerContext:
@@ -145,15 +183,15 @@ class ReachyController:
             return "Robot not available"
         return status.get("error") or ""
 
-    def get_speaker_volume(self) -> float:
-        """Get speaker volume (0-100) using amixer directly (no HTTP request).
-
-        This avoids blocking on SDK port 8000 by reading directly from the hardware.
-        """
+def get_speaker_volume(self) -> float:
+        """Get speaker volume (0-100) using amixer directly (no HTTP request)."""
         try:
-            # Try to get volume from amixer directly (bypass SDK HTTP)
+            # Get the correct card name (from SDK detection logic)
+            card_name = _get_amixer_card_name()
+            
+            # Try to get speaker volume from amixer directly
             result = subprocess.run(
-                ["amixer", "-c", "reachy", "sget", "PCM"],
+                ["amixer", "-c", card_name, "sget", "PCM"],
                 capture_output=True,
                 text=True,
                 timeout=1.0,
@@ -165,14 +203,15 @@ class ReachyController:
                         for part in parts:
                             if "%" in part:
                                 volume_str = part.split("%")[0]
-                                return float(volume_str)
+                                self._speaker_volume = float(volume_str)
+                                return self._speaker_volume
         except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
-            logger.debug(f"Could not get volume from amixer: {e}")
+            logger.debug(f"Could not get speaker volume from amixer: {e}")
 
         # Fallback to cached value
         return self._speaker_volume
 
-    def set_speaker_volume(self, volume: float) -> None:
+def set_speaker_volume(self, volume: float) -> None:
         """
         Set speaker volume (0-100) using amixer directly (no HTTP request).
 
@@ -183,30 +222,35 @@ class ReachyController:
         self._speaker_volume = volume
 
         try:
-            # Set volume using amixer directly (bypass SDK HTTP)
+            # Get the correct card name (from SDK detection logic)
+            card_name = _get_amixer_card_name()
+            
+            # Set speaker volume using amixer directly
             subprocess.run(
-                ["amixer", "-c", "reachy", "sset", "PCM", f"{int(volume)}%"],
+                ["amixer", "-c", card_name, "sset", "PCM", f"{int(volume)}%"],
                 capture_output=True,
                 timeout=2.0,
                 check=True,
             )
-            # Also set the PCM,1 channel to 100% (SDK pattern)
             subprocess.run(
-                ["amixer", "-c", "reachy", "sset", "PCM,1", "100%"],
+                ["amixer", "-c", card_name, "sset", "PCM,1", "100%"],
                 capture_output=True,
                 timeout=2.0,
                 check=True,
             )
-            logger.info(f"Speaker volume set to {volume}% via amixer")
+            logger.info(f"Speaker volume set to {volume}% via amixer (card={card_name})")
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to set volume via amixer: {e}")
+            logger.error(f"Failed to set speaker volume via amixer: {e}")
 
     def get_microphone_volume(self) -> float:
         """Get microphone volume (0-100) using amixer directly (no HTTP request)."""
         try:
+            # Get the correct card name (from SDK detection logic)
+            card_name = _get_amixer_card_name()
+            
             # Try to get microphone volume from amixer directly
             result = subprocess.run(
-                ["amixer", "-c", "reachy", "sget", "Headset"],
+                ["amixer", "-c", card_name, "sget", "Headset"],
                 capture_output=True,
                 text=True,
                 timeout=1.0,
@@ -237,14 +281,17 @@ class ReachyController:
         self._microphone_volume = volume
 
         try:
+            # Get the correct card name (from SDK detection logic)
+            card_name = _get_amixer_card_name()
+            
             # Set microphone volume using amixer directly
             subprocess.run(
-                ["amixer", "-c", "reachy", "sset", "Headset", f"{int(volume)}%"],
+                ["amixer", "-c", card_name, "sset", "Headset", f"{int(volume)}%"],
                 capture_output=True,
                 timeout=2.0,
                 check=True,
             )
-            logger.info(f"Microphone volume set to {volume}% via amixer")
+            logger.info(f"Microphone volume set to {volume}% via amixer (card={card_name})")
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
             logger.error(f"Failed to set microphone volume via amixer: {e}")
 
