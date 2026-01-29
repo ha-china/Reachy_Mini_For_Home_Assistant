@@ -100,7 +100,9 @@ class VoiceAssistantService:
         self._camera_server: MJPEGCameraServer | None = None
 
         # Audio buffer for fixed-size chunk output
-        self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
+        # Use deque with maxlen to avoid creating new arrays on every operation
+        # This prevents memory leak from repeated array creation (2-3 arrays per chunk)
+        self._audio_buffer: deque[float] = deque(maxlen=MAX_AUDIO_BUFFER_SIZE)
 
         # Audio overflow log throttling
         self._last_audio_overflow_log = 0.0
@@ -306,7 +308,7 @@ class VoiceAssistantService:
             self._state.services_suspended = True
 
         # Clear audio buffer to avoid processing stale data
-        self._audio_buffer = np.array([], dtype=np.float32)
+        self._audio_buffer.clear()
 
         # Suspend satellite (stops TTS, music, wake word processing)
         if self._state is not None and self._state.satellite is not None:
@@ -405,7 +407,7 @@ class VoiceAssistantService:
             self._state.services_suspended = True
 
         # Clear audio buffer to avoid processing stale data
-        self._audio_buffer = np.array([], dtype=np.float32)
+        self._audio_buffer.clear()
 
         # Suspend camera server (stops thread and releases YOLO model)
         # Only suspend if camera is NOT disabled (user has not manually disabled it)
@@ -1016,7 +1018,7 @@ class VoiceAssistantService:
                             self._robot_services_paused.set()
                             self._robot_services_resumed.clear()
                             # Clear audio buffer
-                            self._audio_buffer = np.array([], dtype=np.float32)
+                            self._audio_buffer.clear()
                     # Wait for resume signal instead of polling
                     self._robot_services_resumed.wait(timeout=0.5)
                     continue
@@ -1156,22 +1158,26 @@ class VoiceAssistantService:
                                     neginf=-1.0,
                                 ).astype(np.float32, copy=False)
 
-                        # Check buffer size BEFORE appending to prevent race condition overflow
-                        if len(self._audio_buffer) + len(audio_data) > MAX_AUDIO_BUFFER_SIZE:
-                            # Drop oldest data to maintain size limit
-                            drop_size = len(self._audio_buffer) + len(audio_data) - MAX_AUDIO_BUFFER_SIZE
-                            self._audio_buffer = self._audio_buffer[drop_size:]
-
-                        self._audio_buffer = np.concatenate([self._audio_buffer, audio_data])
+                        # Extend deque (deque automatically handles overflow with maxlen)
+                        # This avoids creating new arrays like np.concatenate does
+                        self._audio_buffer.extend(audio_data)
 
             except (TypeError, ValueError):
                 pass
 
         # Return fixed-size chunk if we have enough data
         if len(self._audio_buffer) >= AUDIO_BLOCK_SIZE:
-            chunk = self._audio_buffer[:AUDIO_BLOCK_SIZE]
-            self._audio_buffer = self._audio_buffer[AUDIO_BLOCK_SIZE:]
-            return self._convert_to_pcm(chunk)
+            # Extract chunk and remove from buffer
+            chunk = [self._audio_buffer.popleft() for _ in range(AUDIO_BLOCK_SIZE)]
+
+            # Convert to PCM bytes (16-bit signed, little-endian)
+            chunk_array = np.array(chunk, dtype=np.float32)
+            pcm_bytes = (
+                (np.clip(chunk_array, -1.0, 1.0) * 32767.0)
+                .astype("<i2")
+                .tobytes()
+            )
+            return pcm_bytes
 
         return None
 
