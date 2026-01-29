@@ -2,6 +2,7 @@
 
 import logging
 import math
+import subprocess
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -145,35 +146,35 @@ class ReachyController:
         return status.get("error") or ""
 
     def get_speaker_volume(self) -> float:
-        """Get speaker volume (0-100) with caching."""
-        if not self.is_available:
-            return self._speaker_volume
+        """Get speaker volume (0-100) using amixer directly (no HTTP request).
 
-        now = time.monotonic()
-        if now - self._speaker_volume_cache_ts < self._volume_cache_ttl:
-            return self._speaker_volume
-
+        This avoids blocking on SDK port 8000 by reading directly from the hardware.
+        """
         try:
-            # Get volume from daemon API (use cached status for IP)
-            status = self._get_cached_status()
-            if status is None:
-                return self._speaker_volume
-            wlan_ip = status.get("wlan_ip", "localhost")
-            response = self._http_session.get(
-                f"http://{wlan_ip}:8000/api/volume/current",
-                timeout=self._http_timeout,
+            # Try to get volume from amixer directly (bypass SDK HTTP)
+            result = subprocess.run(
+                ["amixer", "-c", "reachy", "sget", "PCM"],
+                capture_output=True,
+                text=True,
+                timeout=1.0,
             )
-            if response.status_code == 200:
-                data = response.json()
-                self._speaker_volume = float(data.get("volume", self._speaker_volume))
-                self._speaker_volume_cache_ts = now
-        except Exception as e:
-            logger.debug(f"Could not get volume from API: {e}")
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    if "Left:" in line and "[" in line:
+                        parts = line.split("[")
+                        for part in parts:
+                            if "%" in part:
+                                volume_str = part.split("%")[0]
+                                return float(volume_str)
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
+            logger.debug(f"Could not get volume from amixer: {e}")
+
+        # Fallback to cached value
         return self._speaker_volume
 
     def set_speaker_volume(self, volume: float) -> None:
         """
-        Set speaker volume (0-100) with cached status.
+        Set speaker volume (0-100) using amixer directly (no HTTP request).
 
         Args:
             volume: Volume level 0-100
@@ -181,63 +182,53 @@ class ReachyController:
         volume = max(0.0, min(100.0, volume))
         self._speaker_volume = volume
 
-        if not self.is_available:
-            logger.warning("Cannot set volume: robot not available")
-            return
-
         try:
-            # Set volume via daemon API (use cached status for IP)
-            status = self._get_cached_status()
-            if status is None:
-                logger.error("Cannot get daemon status for volume control")
-                return
-            wlan_ip = status.get("wlan_ip", "localhost")
-            response = self._http_session.post(
-                f"http://{wlan_ip}:8000/api/volume/set",
-                json={"volume": int(volume)},
-                timeout=self._http_timeout,
+            # Set volume using amixer directly (bypass SDK HTTP)
+            subprocess.run(
+                ["amixer", "-c", "reachy", "sset", "PCM", f"{int(volume)}%"],
+                capture_output=True,
+                timeout=2.0,
+                check=True,
             )
-            if response.status_code == 200:
-                logger.info(f"Speaker volume set to {volume}%")
-            else:
-                logger.error(f"Failed to set volume: {response.status_code} {response.text}")
-        except Exception as e:
-            logger.error(f"Error setting speaker volume: {e}")
+            # Also set the PCM,1 channel to 100% (SDK pattern)
+            subprocess.run(
+                ["amixer", "-c", "reachy", "sset", "PCM,1", "100%"],
+                capture_output=True,
+                timeout=2.0,
+                check=True,
+            )
+            logger.info(f"Speaker volume set to {volume}% via amixer")
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+            logger.error(f"Failed to set volume via amixer: {e}")
 
     def get_microphone_volume(self) -> float:
-        """Get microphone volume (0-100) using daemon HTTP API."""
-        if not self.is_available:
-            return self._microphone_volume
-
-        now = time.monotonic()
-        if now - self._microphone_volume_cache_ts < self._volume_cache_ttl:
-            return self._microphone_volume
-
+        """Get microphone volume (0-100) using amixer directly (no HTTP request)."""
         try:
-            # Get WLAN IP from cached daemon status
-            status = self._get_cached_status()
-            if status is None:
-                return self._microphone_volume
-            wlan_ip = status.get("wlan_ip", "localhost")
-
-            # Call the daemon API to get microphone volume
-            response = self._http_session.get(
-                f"http://{wlan_ip}:8000/api/volume/microphone/current",
-                timeout=self._http_timeout,
+            # Try to get microphone volume from amixer directly
+            result = subprocess.run(
+                ["amixer", "-c", "reachy", "sget", "Headset"],
+                capture_output=True,
+                text=True,
+                timeout=1.0,
             )
-            if response.status_code == 200:
-                data = response.json()
-                self._microphone_volume = float(data.get("volume", self._microphone_volume))
-                self._microphone_volume_cache_ts = now
-                return self._microphone_volume
-        except Exception as e:
-            logger.debug(f"Could not get microphone volume from API: {e}")
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    if "Left:" in line and "[" in line:
+                        parts = line.split("[")
+                        for part in parts:
+                            if "%" in part:
+                                volume_str = part.split("%")[0]
+                                self._microphone_volume = float(volume_str)
+                                return self._microphone_volume
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
+            logger.debug(f"Could not get microphone volume from amixer: {e}")
 
+        # Fallback to cached value
         return self._microphone_volume
 
     def set_microphone_volume(self, volume: float) -> None:
         """
-        Set microphone volume (0-100) using daemon HTTP API.
+        Set microphone volume (0-100) using amixer directly (no HTTP request).
 
         Args:
             volume: Volume level 0-100
@@ -245,30 +236,17 @@ class ReachyController:
         volume = max(0.0, min(100.0, volume))
         self._microphone_volume = volume
 
-        if not self.is_available:
-            logger.warning("Cannot set microphone volume: robot not available")
-            return
-
         try:
-            # Get WLAN IP from cached daemon status
-            status = self._get_cached_status()
-            if status is None:
-                logger.error("Cannot get daemon status for microphone volume control")
-                return
-            wlan_ip = status.get("wlan_ip", "localhost")
-
-            # Call the daemon API to set microphone volume
-            response = self._http_session.post(
-                f"http://{wlan_ip}:8000/api/volume/microphone/set",
-                json={"volume": int(volume)},
-                timeout=self._http_timeout,
+            # Set microphone volume using amixer directly
+            subprocess.run(
+                ["amixer", "-c", "reachy", "sset", "Headset", f"{int(volume)}%"],
+                capture_output=True,
+                timeout=2.0,
+                check=True,
             )
-            if response.status_code == 200:
-                logger.info(f"Microphone volume set to {volume}%")
-            else:
-                logger.error(f"Failed to set microphone volume: {response.status_code} {response.text}")
-        except Exception as e:
-            logger.error(f"Error setting microphone volume: {e}")
+            logger.info(f"Microphone volume set to {volume}% via amixer")
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+            logger.error(f"Failed to set microphone volume via amixer: {e}")
 
     # ========== Phase 2: Motor Control ==========
 
