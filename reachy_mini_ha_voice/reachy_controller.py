@@ -183,7 +183,7 @@ class ReachyController:
             return "Robot not available"
         return status.get("error") or ""
 
-def get_speaker_volume(self) -> float:
+    def get_speaker_volume(self) -> float:
         """Get speaker volume (0-100) using amixer directly (no HTTP request)."""
         try:
             # Get the correct card name (from SDK detection logic)
@@ -211,7 +211,7 @@ def get_speaker_volume(self) -> float:
         # Fallback to cached value
         return self._speaker_volume
 
-def set_speaker_volume(self, volume: float) -> None:
+    def set_speaker_volume(self, volume: float) -> None:
         """
         Set speaker volume (0-100) using amixer directly (no HTTP request).
 
