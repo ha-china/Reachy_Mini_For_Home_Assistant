@@ -83,6 +83,7 @@ class AudioPlayer:
         self._unduck_volume: float = 1.0
         self._current_volume: float = 1.0
         self._stop_flag = threading.Event()
+        self._playback_thread: threading.Thread | None = None  # Track active playback thread
 
         # Speech sway callback for audio-driven head motion
         self._sway_callback: Callable[[dict], None] | None = None
@@ -432,6 +433,12 @@ class AudioPlayer:
 
         self._done_callback = done_callback
         self._stop_flag.clear()
+        
+        # Limit active playback threads to prevent resource exhaustion
+        if hasattr(self, '_playback_thread') and self._playback_thread and self._playback_thread.is_alive():
+            _LOGGER.warning("Previous playback still active, stopping it")
+            self.stop()
+        
         self._play_next()
 
     def _play_next(self) -> None:
@@ -445,8 +452,8 @@ class AudioPlayer:
         self.is_playing = True
 
         # Start playback in a thread
-        thread = threading.Thread(target=self._play_file, args=(next_url,), daemon=True)
-        thread.start()
+        self._playback_thread = threading.Thread(target=self._play_file, args=(next_url,), daemon=True)
+        self._playback_thread.start()
 
     def _play_file(self, file_path: str) -> None:
         """Play an audio file with optional speech-driven sway animation."""
@@ -615,11 +622,24 @@ class AudioPlayer:
     def stop(self) -> None:
         """Stop playback and clear playlist."""
         self._stop_flag.set()
+        
+        # Stop Reachy Mini playback
         if self.reachy_mini is not None:
             try:
                 self.reachy_mini.media.stop_playing()
             except Exception:
                 pass
+        
+        # Wait for playback thread to finish (with timeout)
+        if self._playback_thread and self._playback_thread.is_alive():
+            try:
+                self._playback_thread.join(timeout=2.0)
+                if self._playback_thread.is_alive():
+                    _LOGGER.warning("Playback thread did not stop in time")
+            except Exception:
+                pass
+            self._playback_thread = None
+        
         self._playlist.clear()
         self.is_playing = False
 

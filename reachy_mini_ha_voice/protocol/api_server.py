@@ -80,9 +80,17 @@ class APIServer(asyncio.Protocol):
         if self._writelines is None:
             return
 
-        packets = [(PROTO_TO_MESSAGE_TYPE[msg.__class__], msg.SerializeToString()) for msg in msgs]
-        packet_bytes = make_plain_text_packets(packets)
-        self._writelines(packet_bytes)
+        try:
+            packets = [(PROTO_TO_MESSAGE_TYPE[msg.__class__], msg.SerializeToString()) for msg in msgs]
+            packet_bytes = make_plain_text_packets(packets)
+            self._writelines(packet_bytes)
+        except (IndexError, OSError, BrokenPipeError, ConnectionResetError) as e:
+            _LOGGER.warning("Error sending message: %s - connection may be lost", e)
+            # Mark transport as invalid to prevent further writes
+            self._writelines = None
+            if self._transport:
+                self._transport.close()
+                self._transport = None
 
     def connection_made(self, transport) -> None:
         self._transport = transport
@@ -144,6 +152,10 @@ class APIServer(asyncio.Protocol):
         _LOGGER.info("ESPHome client disconnected: %s", exc)
         self._transport = None
         self._writelines = None
+        # Clear buffer to prevent memory leak
+        self._buffer = None
+        self._buffer_len = 0
+        self._pos = 0
 
     def _read_varuint(self) -> int:
         """Read a varuint from the buffer or -1 if the buffer runs out of bytes."""
