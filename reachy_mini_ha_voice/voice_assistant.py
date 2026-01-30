@@ -22,7 +22,6 @@ from reachy_mini import ReachyMini
 from .audio.audio_player import AudioPlayer
 from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
 from .core import Config, SleepManager
-from .core.robot_state_monitor import RobotStateMonitor
 from .core.util import get_mac
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
@@ -109,8 +108,7 @@ class VoiceAssistantService:
         self._last_audio_overflow_log = 0.0
         self._suppressed_audio_overflows = 0
 
-        # Robot state monitor - tracks connection to daemon
-        self._robot_state_monitor: RobotStateMonitor | None = None
+        # Robot services pause/resume tracking (without RobotStateMonitor)
         self._robot_services_paused = threading.Event()  # Set when services should pause
         self._robot_services_resumed = threading.Event()  # Event-driven resume signaling
         self._robot_services_resumed.set()  # Start in resumed state
@@ -279,19 +277,6 @@ class VoiceAssistantService:
         # Start the sleep manager
         await self._sleep_manager.start()
         _LOGGER.info("Sleep manager started")
-
-        # Start robot state monitor for connection tracking
-        if self.reachy_mini is not None:
-            self._robot_state_monitor = RobotStateMonitor(
-                self.reachy_mini,
-                check_interval=Config.robot_state.check_interval_active,
-                sleep_interval=Config.robot_state.check_interval_sleep,
-                error_interval=Config.robot_state.check_interval_error,
-            )
-            self._robot_state_monitor.on_disconnected(self._on_robot_disconnected)
-            self._robot_state_monitor.on_connected(self._on_robot_connected)
-            self._robot_state_monitor.start()
-            _LOGGER.info("Robot state monitor started")
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
 
@@ -531,8 +516,7 @@ class VoiceAssistantService:
 
         Suspends all non-ESPHome services to keep HA wake control available.
         """
-        if self._robot_state_monitor is not None:
-            self._robot_state_monitor.set_daemon_unavailable(True)
+        # RobotStateMonitor removed - connection tracking is handled by DaemonStateMonitor
         self._suspend_non_esphome_services(reason="robot_disconnected", set_sleep_state=False)
 
     def _on_robot_connected(self) -> None:
@@ -540,8 +524,7 @@ class VoiceAssistantService:
 
         Resumes non-ESPHome services unless the system is in sleep mode.
         """
-        if self._robot_state_monitor is not None:
-            self._robot_state_monitor.set_daemon_unavailable(False)
+        # RobotStateMonitor removed - connection tracking is handled by DaemonStateMonitor
 
         if self._state is not None and self._state.is_sleeping:
             _LOGGER.info("Robot connected but system is sleeping; deferring resume")
@@ -558,8 +541,7 @@ class VoiceAssistantService:
         2. Release ML models from memory
         3. Keep only ESPHome server running for HA control
         """
-        if self._robot_state_monitor is not None:
-            self._robot_state_monitor.set_sleeping(True)
+        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
         self._suspend_non_esphome_services(reason="sleep", set_sleep_state=True)
 
     def _on_wake(self) -> None:
@@ -577,8 +559,7 @@ class VoiceAssistantService:
         At this point, the daemon should be fully ready.
         """
         _LOGGER.info("Resuming services after wake delay...")
-        if self._robot_state_monitor is not None:
-            self._robot_state_monitor.set_sleeping(False)
+        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
         self._resume_non_esphome_services(reason="wake_pre_resume", clear_sleep_state=True)
 
     async def _on_wake_from_ha(self) -> None:
@@ -592,9 +573,7 @@ class VoiceAssistantService:
         # Wait for robot to wake up (shorter than the normal 30s resume delay)
         await asyncio.sleep(5.0)
 
-        if self._robot_state_monitor is not None:
-            self._robot_state_monitor.set_sleeping(False)
-            self._robot_state_monitor.set_daemon_unavailable(False)
+        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
 
         # Call the pre-resume handler to resume all services
         self._on_pre_resume()
@@ -774,12 +753,7 @@ class VoiceAssistantService:
         if self._motion:
             self._motion.shutdown()
 
-        # 9. Stop robot state monitor
-        if self._robot_state_monitor:
-            self._robot_state_monitor.stop()
-            self._robot_state_monitor = None
-
-        # 10. Stop sleep manager
+        # 9. Stop sleep manager
         if self._sleep_manager:
             try:
                 await asyncio.wait_for(
