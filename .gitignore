@@ -77,3 +77,6 @@ reachy_mini_ha_voice/models/*.pt
 reference/
 # ha/ - temporarily commented out for path fixes
 # ha/ will be moved to separate repository soon
+
+# Temporary check scripts
+temp_check_scripts/

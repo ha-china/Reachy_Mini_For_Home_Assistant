@@ -2,20 +2,18 @@
 
 All notable changes to the Reachy Mini HA Voice project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [Unreleased]
 
-### Optimized
-- **Gesture Detection Sensitivity (v0.9.9)**
-  - Simplify GestureSmoother to frequency-based confirmation (1 frame)
-  - Remove all confidence filtering - return all detections to Home Assistant
-  - Remove unused parameters (confidence_threshold, detection_threshold, GestureConfig)
-  - Remove duplicate empty check in gesture detection
-
 ### Fixed
-- **SDK Integration (v0.9.9)**
-  - Add MediaBackend detection for better compatibility
-  - Properly release SDK media resources on shutdown
-  - Document ReSpeaker private attribute access risk
+- **NameError** - Add missing deque import in gesture smoother
+- **Syntax Error** - Add missing class indentation for volume methods in audio_player.py
+- **Audio Card Name Detection** - Use SDK's detection logic instead of hardcoded values
+- **SDK Port 8000 Blocking** - Use amixer directly for volume control to avoid SDK HTTP API blocking
+- **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
+- **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
 ## [0.9.9] - 2026-01-28
 
@@ -27,13 +25,24 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
   - Camera thread flushes SDK video buffer when lock acquisition times out
   - Audio playback flushes SDK playback buffer when lock acquisition times out
   - Resolves SDK crashes during extended wake-up idle periods without conversation
+  - Requires Reachy Mini hardware (not applicable to simulation mode)
+
+### Fixed
+- **Memory Leaks**
+  - Audio buffer memory leak - added size limit to prevent unbounded growth
+  - Temp file leak - downloaded audio files now cleaned up after playback
+  - Multiple memory leak and resource leak issues fixed
+  - Thread-safe draining flag using threading.Event
+  - Silent failures now logged for debugging
 
 ### Optimized
 - **Gesture Recognition Sensitivity**
-  - Add GestureSmoother class with history tracking and 2-frame confirmation mechanism
+  - Simplify GestureSmoother to frequency-based confirmation (1 frame)
+  - Remove all confidence filtering - return all detections to Home Assistant
+  - Remove unused parameters (confidence_threshold, detection_threshold, GestureConfig)
+  - Remove duplicate empty check in gesture detection
+  - Add GestureSmoother class with history tracking for stable output
   - Reduce gesture detection interval from 3 frames to 1 frame for higher frequency
-  - Lower confidence threshold from 0.3 to 0.2 for improved sensitivity
-  - Integrate gesture smoother into GestureDetector for stable output
   - Fix: Gesture detection now returns all detected hands instead of only the highest confidence one
   - Matches reference implementation behavior for improved detection rate
   - No conflicts with face tracking (shared frame, independent processing)
@@ -42,6 +51,7 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 - Fix Ruff linter issues (import ordering, missing newlines, __all__ sorting)
 - Format code with Ruff formatter (5 files reformatted)
 - Fix slice index error in gesture detection (convert coordinates to integers)
+- Fix Python 3.12 type annotation compatibility
 
 ## [0.9.8] - 2026-01-27
 
@@ -58,12 +68,15 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 - SDK crash during idle - optimized audio processing to skip get_frame() when not streaming to Home Assistant, reducing GStreamer resource competition
 - Add GStreamer threading lock to prevent pipeline competition between audio, playback, and camera threads
 - Audio thread gets priority during conversations - bypasses lock when conversation is active
+- Remove GStreamer lock to fix wake word detection in idle state (lock was preventing wake word detection)
 
 ### Optimized
 - Reduce log output by 30-40%
 - Bundle face tracking model with package - eliminated HuggingFace download dependency, removed huggingface_hub from requirements, models now load from local package directory for offline operation
 - Replace HTTP API polling with SDK Zenoh for daemon status monitoring to reduce uvicorn blocking and improve stability
 - Device ID now reads /etc/machine-id directly - removed uuid.getnode() and file persistence
+- Implement high-priority SDK improvements
+- Remove aiohttp dependency from daemon_monitor - fully migrated to SDK Zenoh
 
 ### Removed
 - Temporarily disable emotion playback during TTS
@@ -97,6 +110,8 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 
 ### Refactored
 - Modularize codebase - new core/motion/vision/audio/entities module structure
+- Remove legacy/compatibility code
+- Remove audio diagnostics debug code
 
 ### New
 - Direct callbacks for HA sleep/wake buttons to suspend/resume services
@@ -109,6 +124,8 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 ### Improved
 - Camera resume_from_suspend now synchronous for reliable wake from sleep
 - Rotation clamping in face tracking to prevent IK collisions
+- Audio gain boosted for faster VAD detection
+- Audio NaN/Inf values causing STT issues fixed
 
 ## [0.9.0] - 2026-01-18
 
@@ -165,7 +182,7 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 ## [0.8.2] - 2026-01-18
 
 ### Fixed
-- Body now follows head rotation during face tracking - body_yaw syncs with head_yaw
+- Body follows head rotation during face tracking - body_yaw syncs with head_yaw
 - Matches reference project sweep_look behavior for natural body movement
 
 ## [0.8.1] - 2026-01-18
@@ -523,5 +540,42 @@ All notable changes to the Reachy Mini HA Voice project will be documented in th
 - Basic motion feedback (nod, shake)
 
 ---
+
+## Version History Summary
+
+| Version | Date | Major Changes |
+|---------|------|--------------|
+| 0.9.9 | 2026-01-28 | SDK buffer overflow fixes, memory leak fixes, gesture detection optimization |
+| 0.9.8 | 2026-01-27 | Mute/Disable entities, HA connection-driven features, log reduction |
+| 0.9.7 | 2026-01-20 | Device ID path fix, animation path fix |
+| 0.9.6 | 2026-01-20 | Code quality tools (ruff, mypy, pre-commit) |
+| 0.9.5 | 2026-01-19 | Modular architecture refactoring, audio latency optimization |
+| 0.9.0 | 2026-01-18 | Robot state monitor, system diagnostics entities |
+| 0.8.7 | 2026-01-18 | Body yaw clamping, face tracking smoothness |
+| 0.8.0 | 2026-01-17 | Emotion keyword mapping (280+ keywords, 35 categories) |
+| 0.7.0 | 2026-01-12 | Gesture detection with HaGRID ONNX models (18 gestures) |
+| 0.6.0 | 2026-01-11 | Real-time audio-driven speech animation, JSON animation system |
+| 0.5.0 | 2026-01-07 | Face tracking, Sendspin multi-room audio |
+| 0.4.0 | 2026-01-07 | Daemon stability, microphone optimization |
+| 0.3.0 | 2026-01-06 | Tap sensitivity slider |
+| 0.2.0 | 2026-01-05 | Emotion playback integration |
+| 0.1.0 | 2026-01-01 | Initial release |
+
+## Project Statistics
+
+- **Total Versions**: 29 (from 0.1.0 to 0.9.9)
+- **Development Period**: ~30 days (2026-01-01 to 2026-01-28)
+- **Average Release Rate**: ~1 version per day
+- **Lines of Code**: ~18,000 lines across 52 Python files
+- **ESPHome Entities**: 54 entities implemented
+- **Supported Features**:
+  - Voice assistant pipeline integration
+  - Local wake word detection (multiple models)
+  - Face tracking with YOLO
+  - Gesture detection (18 classes)
+  - Multi-room audio (Sendspin)
+  - Real-time speech animation
+  - Emotion keyword detection (280+ keywords)
+  - System diagnostics
 
 For detailed implementation notes, see [PROJECT_PLAN.md](./PROJECT_PLAN.md).
