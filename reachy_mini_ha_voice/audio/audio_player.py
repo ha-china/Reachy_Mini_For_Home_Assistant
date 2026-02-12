@@ -358,12 +358,11 @@ class AudioPlayer:
         """Handle stream clear from Sendspin server."""
         if roles is None or Roles.PLAYER in roles:
             _LOGGER.debug("Sendspin stream cleared")
-            if self.reachy_mini is not None:
-                try:
-                    self.reachy_mini.media.stop_playing()
-                    self._sendspin_playback_started = False
-                except Exception:
-                    pass
+            try:
+                self.reachy_mini.media.stop_playing()
+                self._sendspin_playback_started = False
+            except Exception:
+                pass
 
     async def _disconnect_sendspin(self) -> None:
         """Disconnect from current Sendspin server."""
@@ -465,7 +464,7 @@ class AudioPlayer:
 
                 # Use requests with stream=True for faster start
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    response = requests.get(file_path, stream=True)
+                    response = requests.get(file_path, stream=True, timeout=30.0)
                     response.raise_for_status()
 
                     # Write in chunks to start faster
@@ -482,68 +481,82 @@ class AudioPlayer:
                 return
 
             # Play locally using Reachy Mini's media system
-            if self.reachy_mini is not None:
-                try:
-                    # Read audio data for duration calculation and sway analysis
-                    import soundfile as sf
+            try:
+                # Read audio data for duration calculation and sway analysis
+                import soundfile as sf
 
-                    data, sample_rate = sf.read(file_path)
-                    duration = len(data) / sample_rate
+                data, sample_rate = sf.read(file_path)
+                duration = len(data) / sample_rate
 
-                    # Pre-analyze audio for speech sway if callback is set
-                    sway_frames = []
-                    if self._sway_callback is not None:
-                        from ..motion.speech_sway import SpeechSwayRT
+                # Pre-analyze audio for speech sway if callback is set
+                sway_frames = []
+                if self._sway_callback is not None:
+                    from ..motion.speech_sway import SpeechSwayRT
 
-                        sway = SpeechSwayRT()
-                        sway_frames = sway.feed(data, sample_rate)
-                        _LOGGER.debug("Generated %d sway frames for %.2fs audio", len(sway_frames), duration)
+                    sway = SpeechSwayRT()
+                    sway_frames = sway.feed(data, sample_rate)
+                    _LOGGER.debug("Generated %d sway frames for %.2fs audio", len(sway_frames), duration)
 
-                    # Start playback
-                    self.reachy_mini.media.play_sound(file_path)
+                # Start playback
+                self.reachy_mini.media.play_sound(file_path)
 
-                    # Playback loop with sway animation
-                    # Apply MOVEMENT_LATENCY_S delay to sync head motion with audio
-                    # (audio playback has hardware buffer latency)
-                    start_time = time.time()
-                    frame_duration = 0.05  # 50ms per sway frame (HOP_MS)
-                    frame_idx = 0
+                # Playback loop with sway animation
+                # Apply MOVEMENT_LATENCY_S delay to sync head motion with audio
+                # (audio playback has hardware buffer latency)
+                start_time = time.time()
+                frame_duration = 0.05  # 50ms per sway frame (HOP_MS)
+                frame_idx = 0
 
-                    while time.time() - start_time < duration:
-                        if self._stop_flag.is_set():
-                            self.reachy_mini.media.stop_playing()
-                            break
+                # Playback loop with sway animation and timeout protection
+                # Apply MOVEMENT_LATENCY_S delay to sync head motion with audio
+                # (audio playback has hardware buffer latency)
+                start_time = time.time()
+                frame_duration = 0.05  # 50ms per sway frame (HOP_MS)
+                frame_idx = 0
+                max_duration = duration * 1.5  # Allow 50% extra for timing variations
+                playback_timeout = start_time + max_duration
 
-                        # Apply sway frame if available, with 200ms delay
-                        if self._sway_callback and frame_idx < len(sway_frames):
-                            elapsed = time.time() - start_time
-                            # Apply latency: head motion starts MOVEMENT_LATENCY_S after audio
-                            effective_elapsed = max(0, elapsed - MOVEMENT_LATENCY_S)
-                            target_frame = int(effective_elapsed / frame_duration)
+                while time.time() - start_time < duration:
+                    # Check for timeout (safety guard)
+                    if time.time() > playback_timeout:
+                        _LOGGER.warning("Audio playback timeout (%.1fs), stopping", max_duration)
+                        self.reachy_mini.media.stop_playing()
+                        break
 
-                            # Skip frames if falling behind (lag compensation)
-                            while frame_idx <= target_frame and frame_idx < len(sway_frames):
-                                self._sway_callback(sway_frames[frame_idx])
-                                frame_idx += 1
+                    if self._stop_flag.is_set():
+                        self.reachy_mini.media.stop_playing()
+                        break
 
-                        time.sleep(0.02)  # 20ms sleep for responsive sway
+                    # Apply sway frame if available, with 200ms delay
+                    if self._sway_callback and frame_idx < len(sway_frames):
+                        elapsed = time.time() - start_time
+                        # Apply latency: head motion starts MOVEMENT_LATENCY_S after audio
+                        effective_elapsed = max(0, elapsed - MOVEMENT_LATENCY_S)
+                        target_frame = int(effective_elapsed / frame_duration)
 
-                    # Reset sway to zero when done
-                    if self._sway_callback:
-                        self._sway_callback(
-                            {
-                                "pitch_rad": 0.0,
-                                "yaw_rad": 0.0,
-                                "roll_rad": 0.0,
-                                "x_m": 0.0,
-                                "y_m": 0.0,
-                                "z_m": 0.0,
-                            }
-                        )
+                        # Skip frames if falling behind (lag compensation)
+                        while frame_idx <= target_frame and frame_idx < len(sway_frames):
+                            self._sway_callback(sway_frames[frame_idx])
+                            frame_idx += 1
 
-                except Exception as e:
-                    _LOGGER.error("Reachy Mini audio failed: %s", e)
-                    raise
+                    time.sleep(0.02)  # 20ms sleep for responsive sway
+
+                # Reset sway to zero when done
+                if self._sway_callback:
+                    self._sway_callback(
+                        {
+                            "pitch_rad": 0.0,
+                            "yaw_rad": 0.0,
+                            "roll_rad": 0.0,
+                            "x_m": 0.0,
+                            "y_m": 0.0,
+                            "z_m": 0.0,
+                        }
+                    )
+
+            except Exception as e:
+                _LOGGER.error("Reachy Mini audio failed: %s", e)
+                raise
 
         except Exception as e:
             _LOGGER.error("Error playing audio: %s", e)
@@ -588,11 +601,10 @@ class AudioPlayer:
         Stops current audio output but preserves playlist for resume.
         """
         self._stop_flag.set()
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_playing()
-            except Exception:
-                pass
+        try:
+            self.reachy_mini.media.stop_playing()
+        except Exception:
+            pass
         self.is_playing = False
 
     def resume_playback(self) -> None:
@@ -606,11 +618,10 @@ class AudioPlayer:
         self._stop_flag.set()
 
         # Stop Reachy Mini playback
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_playing()
-            except Exception:
-                pass
+        try:
+            self.reachy_mini.media.stop_playing()
+        except Exception:
+            pass
 
         # Wait for playback thread to finish (with timeout)
         if self._playback_thread and self._playback_thread.is_alive():

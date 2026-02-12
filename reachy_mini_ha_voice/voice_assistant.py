@@ -165,7 +165,7 @@ class VoiceAssistantService:
             refractory_seconds=2.0,
             download_dir=_LOCAL_DIR,
             reachy_mini=self.reachy_mini,
-            motion_enabled=self.reachy_mini is not None,
+            motion_enabled=True,
         )
 
         # Log stop word status
@@ -181,43 +181,39 @@ class VoiceAssistantService:
         self._state.on_ha_sleep = self._on_sleep
         self._state.on_ha_wake = lambda: asyncio.create_task(self._on_wake_from_ha())
 
-        # Start Reachy Mini media system if available
-        if self.reachy_mini is not None:
-            try:
-                # Check if media system is already running to avoid conflicts
-                media = self.reachy_mini.media
-                if media.audio is not None:
-                    # Check recording state
-                    is_recording = getattr(media, "_recording", False)
-                    if not is_recording:
-                        media.start_recording()
-                        _LOGGER.info("Started Reachy Mini recording")
-                    else:
-                        _LOGGER.debug("Reachy Mini recording already active")
-
-                    # Check playback state
-                    is_playing = getattr(media, "_playing", False)
-                    if not is_playing:
-                        media.start_playing()
-                        _LOGGER.info("Started Reachy Mini playback")
-                    else:
-                        _LOGGER.debug("Reachy Mini playback already active")
-
-                    _LOGGER.info("Reachy Mini media system initialized")
-
-                    # Body yaw now follows head yaw in movement_manager.py
-                    # This enables natural body rotation when tracking faces
-
-                    # Optimize microphone settings for voice recognition
-                    self._optimize_microphone_settings()
+        # Start Reachy Mini media system
+        try:
+            # Check if media system is already running to avoid conflicts
+            media = self.reachy_mini.media
+            if media.audio is not None:
+                # Check recording state
+                is_recording = getattr(media, "_recording", False)
+                if not is_recording:
+                    media.start_recording()
+                    _LOGGER.info("Started Reachy Mini recording")
                 else:
-                    _LOGGER.warning("Reachy Mini audio system not available")
-            except Exception as e:
-                _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
+                    _LOGGER.debug("Reachy Mini recording already active")
+
+                # Check playback state
+                is_playing = getattr(media, "_playing", False)
+                if not is_playing:
+                    media.start_playing()
+                    _LOGGER.info("Started Reachy Mini playback")
+                else:
+                    _LOGGER.debug("Reachy Mini playback already active")
+
+                _LOGGER.info("Reachy Mini media system initialized")
+
+                # Body yaw now follows head yaw in movement_manager.py
+                # This enables natural body rotation when tracking faces
+
+                # Optimize microphone settings for voice recognition
+                self._optimize_microphone_settings()
+        except Exception as e:
+            _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
         # Start motion controller (5Hz control loop)
-        if self._motion is not None:
-            self._motion.start()
+        self._motion.start()
 
         # Start audio processing thread (non-daemon for proper cleanup)
         self._running = True
@@ -311,13 +307,12 @@ class VoiceAssistantService:
                     _LOGGER.warning("Error suspending music player: %s", e)
 
         # Stop media recording to save CPU
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_recording()
-                self.reachy_mini.media.stop_playing()
-                _LOGGER.debug("Media system stopped")
-            except Exception as e:
-                _LOGGER.warning("Error stopping media: %s", e)
+        try:
+            self.reachy_mini.media.stop_recording()
+            self.reachy_mini.media.stop_playing()
+            _LOGGER.debug("Media system stopped")
+        except Exception as e:
+            _LOGGER.warning("Error stopping media: %s", e)
 
         _LOGGER.info("Voice services suspended - camera and motion remain active")
 
@@ -334,15 +329,14 @@ class VoiceAssistantService:
             self._state.services_suspended = False
 
         # Restart media system first
-        if self.reachy_mini is not None:
-            try:
-                media = self.reachy_mini.media
-                if media.audio is not None:
-                    media.start_recording()
-                    media.start_playing()
-                    _LOGGER.info("Media system restarted")
-            except Exception as e:
-                _LOGGER.warning("Failed to restart media: %s", e)
+        try:
+            media = self.reachy_mini.media
+            if media.audio is not None:
+                media.start_recording()
+                media.start_playing()
+                _LOGGER.info("Media system restarted")
+        except Exception as e:
+            _LOGGER.warning("Failed to restart media: %s", e)
 
         # Resume satellite
         if self._state is not None and self._state.satellite is not None:
@@ -428,13 +422,12 @@ class VoiceAssistantService:
                     _LOGGER.warning("Error suspending music player: %s", e)
 
         # Stop media recording to save CPU
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_recording()
-                self.reachy_mini.media.stop_playing()
-                _LOGGER.debug("Media system stopped")
-            except Exception as e:
-                _LOGGER.warning("Error stopping media: %s", e)
+        try:
+            self.reachy_mini.media.stop_recording()
+            self.reachy_mini.media.stop_playing()
+            _LOGGER.debug("Media system stopped")
+        except Exception as e:
+            _LOGGER.warning("Error stopping media: %s", e)
 
         _LOGGER.info("Services suspended - ESPHome only")
 
@@ -450,15 +443,14 @@ class VoiceAssistantService:
             self._state.services_suspended = False
 
         # Restart media system first
-        if self.reachy_mini is not None:
-            try:
-                media = self.reachy_mini.media
-                if media.audio is not None:
-                    media.start_recording()
-                    media.start_playing()
-                    _LOGGER.info("Media system restarted")
-            except Exception as e:
-                _LOGGER.warning("Failed to restart media: %s", e)
+        try:
+            media = self.reachy_mini.media
+            if media.audio is not None:
+                media.start_recording()
+                media.start_playing()
+                _LOGGER.info("Media system restarted")
+        except Exception as e:
+            _LOGGER.warning("Failed to restart media: %s", e)
 
         # Resume camera server (reloads YOLO model and restarts capture thread)
         # Only resume if camera is NOT disabled (user has not manually disabled it)
@@ -669,12 +661,11 @@ class VoiceAssistantService:
         _LOGGER.info("Stopping voice assistant service...")
 
         # 1. First stop audio recording to prevent new data from coming in
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_recording()
-                _LOGGER.debug("Reachy Mini recording stopped")
-            except Exception as e:
-                _LOGGER.warning("Error stopping Reachy Mini recording: %s", e)
+        try:
+            self.reachy_mini.media.stop_recording()
+            _LOGGER.debug("Reachy Mini recording stopped")
+        except Exception as e:
+            _LOGGER.warning("Error stopping Reachy Mini recording: %s", e)
 
         # 2. Set stop flag
         self._running = False
@@ -688,12 +679,11 @@ class VoiceAssistantService:
                 _LOGGER.warning("Audio thread did not stop in time")
 
         # 4. Stop playback
-        if self.reachy_mini is not None:
-            try:
-                self.reachy_mini.media.stop_playing()
-                _LOGGER.debug("Reachy Mini playback stopped")
-            except Exception as e:
-                _LOGGER.warning("Error stopping Reachy Mini playback: %s", e)
+        try:
+            self.reachy_mini.media.stop_playing()
+            _LOGGER.debug("Reachy Mini playback stopped")
+        except Exception as e:
+            _LOGGER.warning("Error stopping Reachy Mini playback: %s", e)
 
         # 5. Stop ESPHome server
         if self._server:
@@ -732,12 +722,11 @@ class VoiceAssistantService:
             await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
             self._camera_server = None
         # Close SDK media resources to prevent memory leaks (even if camera is disabled)
-        if self.reachy_mini is not None and self.reachy_mini.media is not None:
-            try:
-                self.reachy_mini.media.close()
-                _LOGGER.info("SDK media resources closed")
-            except Exception as e:
-                _LOGGER.debug("Failed to close SDK media: %s", e)
+        try:
+            self.reachy_mini.media.close()
+            _LOGGER.info("SDK media resources closed")
+        except Exception as e:
+            _LOGGER.debug("Failed to close SDK media: %s", e)
 
         # 8. Shutdown motion executor
         if self._motion:

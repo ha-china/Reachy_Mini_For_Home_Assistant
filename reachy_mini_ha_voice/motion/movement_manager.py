@@ -988,9 +988,6 @@ class MovementManager:
             antennas: Tuple of (right_angle, left_angle) in radians
             body_yaw: Body yaw angle (follows head yaw for natural tracking)
         """
-        if self.robot is None:
-            return
-
         # Skip sending commands during graceful shutdown drain phase
         # This prevents partial command transmission that can crash daemon
         if self._draining_event.is_set():
@@ -1238,9 +1235,6 @@ class MovementManager:
 
     def _reset_to_neutral_blocking(self) -> None:
         """Reset robot to neutral position (blocking)."""
-        if self.robot is None:
-            return
-
         try:
             neutral_pose = np.eye(4)
             self.robot.goto_target(

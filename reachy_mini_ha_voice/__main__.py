@@ -109,7 +109,7 @@ async def main() -> None:
         _LOGGER.info("Name: %s", args.name)
         _LOGGER.info("ESPHome Server: %s:%s", args.host, args.port)
         _LOGGER.info("Camera Server: %s:%s", args.host, args.camera_port)
-        _LOGGER.info("Motion control: %s", "enabled" if reachy_mini else "disabled")
+        _LOGGER.info("Motion control: enabled")
         _LOGGER.info("=" * 50)
         _LOGGER.info("Add this device in Home Assistant:")
         _LOGGER.info("  Settings -> Devices & Services -> Add Integration -> ESPHome")

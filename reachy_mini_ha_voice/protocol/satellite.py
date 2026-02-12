@@ -715,8 +715,8 @@ class VoiceSatelliteProtocol(APIServer):
         Note: We don't check speech_detected because by the time wake word
         detection completes, the user may have stopped speaking.
         """
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            _LOGGER.info("DOA turn-to-sound: motion disabled or no robot")
+        if not self.state.motion_enabled:
+            _LOGGER.info("DOA turn-to-sound: motion disabled")
             return
 
         try:
@@ -781,7 +781,7 @@ class VoiceSatelliteProtocol(APIServer):
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
 
-        if not self.state.motion_enabled or not self.state.reachy_mini:
+        if not self.state.motion_enabled:
             return
         try:
             _LOGGER.debug("Reachy Mini: Listening animation")
@@ -820,9 +820,6 @@ class VoiceSatelliteProtocol(APIServer):
 
         if not self.state.motion_enabled:
             _LOGGER.warning("Motion disabled, skipping speaking animation")
-            return
-        if not self.state.reachy_mini:
-            _LOGGER.warning("No reachy_mini instance, skipping speaking animation")
             return
         if not self.state.motion:
             _LOGGER.warning("No motion controller, skipping speaking animation")

@@ -177,9 +177,6 @@ class RobotStateMonitor:
         Returns:
             Current connection state based on SDK status.
         """
-        if self._robot is None:
-            return RobotConnectionState.DISCONNECTED
-
         if self._sleeping:
             return self._state
 

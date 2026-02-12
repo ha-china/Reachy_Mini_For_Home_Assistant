@@ -152,21 +152,20 @@ class MJPEGCameraServer:
         self._running = True
 
         # Detect media backend type for compatibility handling
-        if self.reachy_mini is not None and self.reachy_mini.media is not None:
-            try:
-                from reachy_mini.media.media_manager import MediaBackend
+        try:
+            from reachy_mini.media.media_manager import MediaBackend
 
-                backend = self.reachy_mini.media.backend
-                backend_name = {
-                    MediaBackend.GSTREAMER: "GStreamer",
-                    MediaBackend.DEFAULT: "Default",
-                    MediaBackend.DEFAULT_NO_VIDEO: "Default (No Video)",
-                }.get(backend, str(backend))
-                _LOGGER.info("Detected media backend: %s", backend_name)
-            except ImportError:
-                _LOGGER.debug("MediaBackend enum not available")
-            except Exception as e:
-                _LOGGER.debug("Failed to detect media backend: %s", e)
+            backend = self.reachy_mini.media.backend
+            backend_name = {
+                MediaBackend.GSTREAMER: "GStreamer",
+                MediaBackend.DEFAULT: "Default",
+                MediaBackend.DEFAULT_NO_VIDEO: "Default (No Video)",
+            }.get(backend, str(backend))
+            _LOGGER.info("Detected media backend: %s", backend_name)
+        except ImportError:
+            _LOGGER.debug("MediaBackend enum not available")
+        except Exception as e:
+            _LOGGER.debug("Failed to detect media backend: %s", e)
 
         # Initialize head tracker if face tracking enabled
         if self.enable_face_tracking:
@@ -233,12 +232,11 @@ class MJPEGCameraServer:
         self._running = False
 
         # 0. Close SDK media resources to prevent leaks
-        if self.reachy_mini is not None and self.reachy_mini.media is not None:
-            try:
-                self.reachy_mini.media.close()
-                _LOGGER.info("SDK media resources closed")
-            except Exception as e:
-                _LOGGER.debug("Failed to close SDK media: %s", e)
+        try:
+            self.reachy_mini.media.close()
+            _LOGGER.info("SDK media resources closed")
+        except Exception as e:
+            _LOGGER.debug("Failed to close SDK media: %s", e)
 
         # 1. Stop capture thread
         if self._capture_thread:
