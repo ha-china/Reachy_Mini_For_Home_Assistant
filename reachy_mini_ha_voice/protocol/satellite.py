@@ -535,6 +535,9 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
         else:
             _LOGGER.debug("TTS response stopped manually")
+            # Reset TTS state to prevent double-finished
+            self._tts_url = None
+            self._tts_played = True
             self._tts_finished()
 
     def play_tts(self) -> None:
