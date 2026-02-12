@@ -324,7 +324,7 @@ class AudioPlayer:
 
             # Play through Reachy Mini's media system using push_audio_sample
             # Use GStreamer lock to prevent concurrent access conflicts
-            acquired = self._gstreamer_lock.acquire(timeout=0.01)
+            acquired = self._gstreamer_lock.acquire(timeout=0.05)
             if acquired:
                 try:
                     self.reachy_mini.media.push_audio_sample(audio_float)

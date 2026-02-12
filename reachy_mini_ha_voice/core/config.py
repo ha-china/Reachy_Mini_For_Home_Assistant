@@ -147,7 +147,6 @@ class AudioConfig:
     # Idle pacing
     idle_sleep_active: float = 0.01  # seconds
     idle_sleep_sleeping: float = 0.1  # seconds
-    fallback_wait_sleep: float = 0.1  # seconds
 
 
 @dataclass
@@ -303,7 +302,6 @@ class Config:
         # Audio
         cls.audio.idle_sleep_active = _env_float("REACHY_AUDIO_IDLE_SLEEP_ACTIVE", cls.audio.idle_sleep_active)
         cls.audio.idle_sleep_sleeping = _env_float("REACHY_AUDIO_IDLE_SLEEP_SLEEPING", cls.audio.idle_sleep_sleeping)
-        cls.audio.fallback_wait_sleep = _env_float("REACHY_AUDIO_FALLBACK_WAIT_SLEEP", cls.audio.fallback_wait_sleep)
 
         # Sleep
         cls.sleep.resume_delay = _env_float("REACHY_SLEEP_RESUME_DELAY", cls.sleep.resume_delay)
@@ -425,7 +423,6 @@ class Config:
                 "block_size": cls.audio.block_size,
                 "idle_sleep_active": cls.audio.idle_sleep_active,
                 "idle_sleep_sleeping": cls.audio.idle_sleep_sleeping,
-                "fallback_wait_sleep": cls.audio.fallback_wait_sleep,
             },
             "doa": {
                 "enabled": cls.doa.enabled,

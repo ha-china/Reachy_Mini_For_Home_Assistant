@@ -764,7 +764,7 @@ class MJPEGCameraServer:
         """Get a frame from Reachy Mini's camera."""
         try:
             # Use GStreamer lock to prevent concurrent access conflicts
-            acquired = self._gstreamer_lock.acquire(timeout=0.01)
+            acquired = self._gstreamer_lock.acquire(timeout=0.05)
             if acquired:
                 try:
                     frame = self.reachy_mini.media.get_frame()

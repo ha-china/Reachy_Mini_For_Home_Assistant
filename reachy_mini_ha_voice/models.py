@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import threading
     from queue import Queue
 
     from pymicro_wakeword import MicroWakeWord
@@ -90,19 +91,96 @@ class ServerState:
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
 
-    # Sleep state (updated by SleepManager)
-    is_sleeping: bool = False
-    services_suspended: bool = False
+    # Sleep state (updated by SleepManager) - thread-safe via properties
+    _is_sleeping: bool = False
+    _services_suspended: bool = False
 
-    # Mute state (controlled from Home Assistant)
-    is_muted: bool = False
+    # Mute state (controlled from Home Assistant) - thread-safe via properties
+    _is_muted: bool = False
 
-    # Camera state (controlled from Home Assistant)
-    camera_enabled: bool = True
+    # Camera state (controlled from Home Assistant) - thread-safe via properties
+    _camera_enabled: bool = True
 
     # Callbacks for sleep/wake from HA buttons (set by VoiceAssistant)
     on_ha_sleep: object | None = None  # Callable[[], None]
     on_ha_wake: object | None = None  # Callable[[], None]
+
+    # Thread safety
+    _state_lock: "threading.Lock | None" = None
+
+    def __post_init__(self):
+        """Initialize state lock after dataclass creation."""
+        import threading
+
+        object.__setattr__(self, "_state_lock", threading.Lock())
+
+    @property
+    def is_sleeping(self) -> bool:
+        """Thread-safe getter for is_sleeping."""
+        if self._state_lock is None:
+            return self._is_sleeping
+        with self._state_lock:
+            return self._is_sleeping
+
+    @is_sleeping.setter
+    def is_sleeping(self, value: bool) -> None:
+        """Thread-safe setter for is_sleeping."""
+        if self._state_lock is None:
+            object.__setattr__(self, "_is_sleeping", value)
+        else:
+            with self._state_lock:
+                object.__setattr__(self, "_is_sleeping", value)
+
+    @property
+    def services_suspended(self) -> bool:
+        """Thread-safe getter for services_suspended."""
+        if self._state_lock is None:
+            return self._services_suspended
+        with self._state_lock:
+            return self._services_suspended
+
+    @services_suspended.setter
+    def services_suspended(self, value: bool) -> None:
+        """Thread-safe setter for services_suspended."""
+        if self._state_lock is None:
+            object.__setattr__(self, "_services_suspended", value)
+        else:
+            with self._state_lock:
+                object.__setattr__(self, "_services_suspended", value)
+
+    @property
+    def is_muted(self) -> bool:
+        """Thread-safe getter for is_muted."""
+        if self._state_lock is None:
+            return self._is_muted
+        with self._state_lock:
+            return self._is_muted
+
+    @is_muted.setter
+    def is_muted(self, value: bool) -> None:
+        """Thread-safe setter for is_muted."""
+        if self._state_lock is None:
+            object.__setattr__(self, "_is_muted", value)
+        else:
+            with self._state_lock:
+                object.__setattr__(self, "_is_muted", value)
+
+    @property
+    def camera_enabled(self) -> bool:
+        """Thread-safe getter for camera_enabled."""
+        if self._state_lock is None:
+            return self._camera_enabled
+        with self._state_lock:
+            return self._camera_enabled
+
+    @camera_enabled.setter
+    def camera_enabled(self, value: bool) -> None:
+        """Thread-safe setter for camera_enabled."""
+        if self._state_lock is None:
+            object.__setattr__(self, "_camera_enabled", value)
+        else:
+            with self._state_lock:
+                object.__setattr__(self, "_camera_enabled", value)
 
     def save_preferences(self) -> None:
         """Save preferences as JSON."""

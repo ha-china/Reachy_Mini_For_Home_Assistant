@@ -994,7 +994,7 @@ class VoiceAssistantService:
     def _wait_for_satellite(self) -> bool:
         """Wait for satellite connection. Returns True if connected."""
         if self._state is None or self._state.satellite is None:
-            time.sleep(Config.audio.fallback_wait_sleep)
+            time.sleep(0.1)
             return False
         return True
 
