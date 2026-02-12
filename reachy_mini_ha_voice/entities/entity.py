@@ -116,6 +116,9 @@ class MediaPlayerEntity(ESPHomeEntity):
                 elif msg.command == MediaPlayerCommand.PLAY:
                     self.music_player.resume()
                     yield self._update_state(MediaPlayerState.PLAYING)
+                elif msg.command == MediaPlayerCommand.STOP:
+                    self.music_player.stop()
+                    yield self._update_state(MediaPlayerState.IDLE)
             elif msg.has_volume:
                 volume = int(msg.volume * 100)
                 self.music_player.set_volume(volume)

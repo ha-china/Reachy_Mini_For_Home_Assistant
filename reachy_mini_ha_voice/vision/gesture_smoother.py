@@ -8,10 +8,6 @@ Reference: @reference/dynamic_gestures/main_controller.py
 
 import logging
 from collections import deque
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +58,7 @@ class GestureSmoother:
         self._history.append((gesture, confidence))
 
         # Count occurrences of each gesture in history
-        gesture_counts = {}
+        gesture_counts: dict[str, int] = {}
         for g, _ in self._history:
             gesture_counts[g] = gesture_counts.get(g, 0) + 1
 

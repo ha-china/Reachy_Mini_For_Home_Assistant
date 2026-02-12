@@ -9,7 +9,10 @@ import asyncio
 import logging
 import os
 import socket
+import sys
 import threading
+
+from reachy_mini import ReachyMiniApp
 
 from .core import get_health_monitor, get_memory_monitor
 from .voice_assistant import VoiceAssistantService
@@ -24,30 +27,6 @@ def _check_zenoh_available(timeout: float = 1.0) -> bool:
             return True
     except (TimeoutError, ConnectionRefusedError, OSError):
         return False
-
-
-# Only import ReachyMiniApp if we're running as an app
-try:
-    from reachy_mini import ReachyMini, ReachyMiniApp
-
-    REACHY_MINI_AVAILABLE = True
-except ImportError:
-    REACHY_MINI_AVAILABLE = False
-
-    # Create a dummy base class
-    class ReachyMiniApp:
-        custom_app_url = None
-
-        def __init__(self):
-            self.stop_event = threading.Event()
-
-        def wrapped_run(self, *args, **kwargs):
-            pass
-
-        def stop(self):
-            self.stop_event.set()
-
-    ReachyMini = None
 
 
 class ReachyMiniHaVoice(ReachyMiniApp):
@@ -70,55 +49,43 @@ class ReachyMiniHaVoice(ReachyMiniApp):
 
     def wrapped_run(self, *args, **kwargs) -> None:
         """
-        Override wrapped_run to handle Zenoh connection failures gracefully.
+        Override wrapped_run to handle Zenoh connection failures.
 
-        If Zenoh is not available, run in standalone mode without robot control.
+        If Zenoh is not available, exit with error message.
         """
         logger.info("Starting Reachy Mini HA Voice App...")
 
         # Check if Zenoh is available before trying to connect
         if not _check_zenoh_available():
-            logger.warning("Zenoh service not available (port 7447)")
-            logger.info("Running in standalone mode without robot control")
-            self._run_standalone()
-            return
+            logger.error("Zenoh service not available on port 7447")
+            sys.exit(1)
 
-        # Zenoh is available, try normal startup with ReachyMini
-        if REACHY_MINI_AVAILABLE:
-            try:
-                logger.info("Attempting to connect to Reachy Mini...")
-                super().wrapped_run(*args, **kwargs)
-            except TimeoutError as e:
-                logger.warning(f"Timeout connecting to Reachy Mini: {e}")
-                logger.info("Falling back to standalone mode")
-                self._run_standalone()
-            except Exception as e:
-                error_str = str(e)
-                if "Unable to connect" in error_str or "ZError" in error_str or "Timeout" in error_str:
-                    logger.warning(f"Failed to connect to Reachy Mini: {e}")
-                    logger.info("Falling back to standalone mode")
-                    self._run_standalone()
-                else:
-                    raise
-        else:
-            logger.info("Reachy Mini SDK not available, running standalone")
-            self._run_standalone()
-
-    def _run_standalone(self) -> None:
-        """Run in standalone mode without robot."""
-        self.run(None, self.stop_event)
+        # Zenoh is available, connect to ReachyMini
+        try:
+            logger.info("Attempting to connect to Reachy Mini...")
+            super().wrapped_run(*args, **kwargs)
+        except TimeoutError as e:
+            logger.error(f"Timeout connecting to Reachy Mini: {e}")
+            sys.exit(1)
+        except Exception as e:
+            error_str = str(e)
+            if "Unable to connect" in error_str or "ZError" in error_str or "Timeout" in error_str:
+                logger.error(f"Failed to connect to Reachy Mini: {e}")
+                sys.exit(1)
+            else:
+                raise
 
     def run(self, reachy_mini, stop_event: threading.Event) -> None:
         """
         Main application entry point.
 
         Args:
-            reachy_mini: The Reachy Mini robot instance (can be None)
+            reachy_mini: The Reachy Mini robot instance (required, cannot be None)
             stop_event: Event to signal graceful shutdown
         """
         logger.info("Starting Reachy Mini for Home Assistant...")
 
-        # Optional health/memory monitors (match standalone runner behavior)
+        # Optional health/memory monitors
         enable_monitors = os.environ.get("REACHY_ENABLE_FRAMEWORK_MONITORS", "1").lower() in ("1", "true", "yes", "on")
         health_monitor = get_health_monitor() if enable_monitors else None
         memory_monitor = get_memory_monitor() if enable_monitors else None
@@ -151,12 +118,8 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             logger.info("ESPHome Server: 0.0.0.0:6053")
             logger.info("Camera Server: 0.0.0.0:8081")
             logger.info("Wake word: Okay Nabu")
-            if reachy_mini:
-                logger.info("Motion control: enabled")
-                logger.info("Camera: enabled (Reachy Mini)")
-            else:
-                logger.info("Motion control: disabled (no robot)")
-                logger.info("Camera: test pattern (no robot)")
+            logger.info("Motion control: enabled")
+            logger.info("Camera: enabled (Reachy Mini)")
             logger.info("=" * 50)
             logger.info("To connect from Home Assistant:")
             logger.info("  Settings -> Devices & Services -> Add Integration")

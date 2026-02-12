@@ -2,7 +2,7 @@
 """Main entry point for Reachy Mini for Home Assistant.
 
 This module provides a command-line interface for running the voice assistant
-in standalone mode (without the ReachyMini App framework).
+without the ReachyMini App framework.
 """
 
 import argparse
@@ -50,11 +50,6 @@ async def main() -> None:
         help="Disable camera server",
     )
     parser.add_argument(
-        "--no-motion",
-        action="store_true",
-        help="Disable Reachy Mini motion control",
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="Print DEBUG messages to console",
@@ -68,18 +63,11 @@ async def main() -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Initialize Reachy Mini (if available)
-    reachy_mini = None
-    if not args.no_motion:
-        try:
-            from reachy_mini import ReachyMini
+    # Initialize Reachy Mini (required)
+    from reachy_mini import ReachyMini
 
-            reachy_mini = ReachyMini()
-            _LOGGER.info("Reachy Mini connected")
-        except ImportError:
-            _LOGGER.warning("reachy-mini not installed, motion control disabled")
-        except Exception as e:
-            _LOGGER.warning("Failed to connect to Reachy Mini: %s", e)
+    reachy_mini = ReachyMini()
+    _LOGGER.info("Reachy Mini connected")
 
     # Import and create VoiceAssistantService
     from .voice_assistant import VoiceAssistantService

@@ -81,7 +81,7 @@ class ServerState:
     download_dir: Path
 
     # Reachy Mini specific
-    reachy_mini: object | None = None
+    reachy_mini: object
     motion_enabled: bool = True
     motion: object | None = None  # ReachyMiniMotion instance
 

@@ -593,6 +593,7 @@ class VoiceSatelliteProtocol(APIServer):
         else:
             self._clear_conversation()
             self.unduck()
+            self._is_streaming_audio = False
             _LOGGER.debug("Conversation finished")
 
             # Reachy Mini: Return to idle

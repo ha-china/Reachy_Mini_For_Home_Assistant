@@ -53,7 +53,7 @@ class MJPEGCameraServer:
 
     def __init__(
         self,
-        reachy_mini: ReachyMini | None = None,
+        reachy_mini: ReachyMini,
         host: str = "0.0.0.0",
         port: int = 8081,
         fps: int = 15,  # 15fps for smooth face tracking
@@ -568,7 +568,7 @@ class MJPEGCameraServer:
         Returns:
             True if face was detected, False otherwise
         """
-        if self._head_tracker is None or self.reachy_mini is None:
+        if self._head_tracker is None:
             return False
 
         try:
@@ -764,10 +764,6 @@ class MJPEGCameraServer:
 
     def _get_camera_frame(self) -> np.ndarray | None:
         """Get a frame from Reachy Mini's camera."""
-        if self.reachy_mini is None:
-            # Return a test pattern if no robot connected
-            return self._generate_test_frame()
-
         try:
             # Use GStreamer lock to prevent concurrent access conflicts
             acquired = self._gstreamer_lock.acquire(timeout=0.01)
@@ -791,45 +787,6 @@ class MJPEGCameraServer:
         except Exception as e:
             _LOGGER.debug("Failed to get camera frame: %s", e)
             return None
-
-    def _generate_test_frame(self) -> np.ndarray:
-        """Generate a test pattern frame when no camera is available."""
-        # Create a simple test pattern
-        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Add some visual elements
-        cv2.putText(
-            frame,
-            "Reachy Mini Camera",
-            (150, 200),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            (255, 255, 255),
-            2,
-        )
-        cv2.putText(
-            frame,
-            "No camera connected",
-            (180, 280),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (128, 128, 128),
-            1,
-        )
-
-        # Add timestamp
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        cv2.putText(
-            frame,
-            timestamp,
-            (220, 350),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            1,
-        )
-
-        return frame
 
     def get_snapshot(self) -> bytes | None:
         """Get the latest frame as JPEG bytes."""

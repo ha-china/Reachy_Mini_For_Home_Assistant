@@ -18,7 +18,7 @@ class ReachyMiniMotion:
     to the MovementManager which handles them in its 5Hz control loop.
     """
 
-    def __init__(self, reachy_mini=None):
+    def __init__(self, reachy_mini):
         self.reachy_mini = reachy_mini
         self._movement_manager: MovementManager | None = None
         self._camera_server = None  # Reference to camera server for face tracking control
@@ -26,23 +26,20 @@ class ReachyMiniMotion:
 
         _LOGGER.debug("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
 
-        # Initialize movement manager if robot is available
-        if reachy_mini is not None:
-            try:
-                self._movement_manager = MovementManager(reachy_mini)
-                _LOGGER.debug("MovementManager created successfully")
-            except Exception as e:
-                _LOGGER.error("Failed to create MovementManager: %s", e, exc_info=True)
-                self._movement_manager = None
-        else:
-            _LOGGER.debug("reachy_mini is None, MovementManager not created")
+        # Initialize movement manager
+        try:
+            self._movement_manager = MovementManager(reachy_mini)
+            _LOGGER.debug("MovementManager created successfully")
+        except Exception as e:
+            _LOGGER.error("Failed to create MovementManager: %s", e, exc_info=True)
+            self._movement_manager = None
 
     def set_reachy_mini(self, reachy_mini):
         """Set the Reachy Mini instance."""
         self.reachy_mini = reachy_mini
-        if reachy_mini is not None and self._movement_manager is None:
+        if self._movement_manager is None:
             self._movement_manager = MovementManager(reachy_mini)
-        elif reachy_mini is not None and self._movement_manager is not None:
+        else:
             self._movement_manager.robot = reachy_mini
 
     def set_camera_server(self, camera_server):

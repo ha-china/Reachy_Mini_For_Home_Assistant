@@ -60,7 +60,6 @@ class AudioPlayer:
     Supports audio playback modes:
     1. Reachy Mini's built-in media system (default)
     2. Sendspin synchronized multi-room playback (as PLAYER - receives audio)
-    3. Sounddevice fallback (when Reachy Mini not available)
 
     When connected to Sendspin as a PLAYER, Reachy Mini receives audio streams
     from Home Assistant or other controllers for synchronized playback.
@@ -260,9 +259,6 @@ class AudioPlayer:
 
         Note: Audio is dropped when Sendspin is paused (e.g., during voice assistant interaction).
         """
-        if self.reachy_mini is None:
-            return
-
         # Drop audio when paused (voice assistant is active)
         if self._sendspin_paused:
             return
@@ -433,12 +429,12 @@ class AudioPlayer:
 
         self._done_callback = done_callback
         self._stop_flag.clear()
-        
+
         # Limit active playback threads to prevent resource exhaustion
         if hasattr(self, '_playback_thread') and self._playback_thread and self._playback_thread.is_alive():
             _LOGGER.warning("Previous playback still active, stopping it")
             self.stop()
-        
+
         self._play_next()
 
     def _play_next(self) -> None:
@@ -546,10 +542,8 @@ class AudioPlayer:
                         )
 
                 except Exception as e:
-                    _LOGGER.warning("Reachy Mini audio failed, falling back: %s", e)
-                    self._play_file_fallback(file_path)
-            else:
-                self._play_file_fallback(file_path)
+                    _LOGGER.error("Reachy Mini audio failed: %s", e)
+                    raise
 
         except Exception as e:
             _LOGGER.error("Error playing audio: %s", e)
@@ -571,18 +565,6 @@ class AudioPlayer:
                 self._play_next()
             else:
                 self._on_playback_finished()
-
-    def _play_file_fallback(self, file_path: str) -> None:
-        """Fallback to sounddevice for audio playback."""
-        import sounddevice as sd
-        import soundfile as sf
-
-        data, samplerate = sf.read(file_path)
-        data = data * self._current_volume
-
-        if not self._stop_flag.is_set():
-            sd.play(data, samplerate)
-            sd.wait()
 
     def _on_playback_finished(self) -> None:
         """Called when playback is finished."""
@@ -622,14 +604,14 @@ class AudioPlayer:
     def stop(self) -> None:
         """Stop playback and clear playlist."""
         self._stop_flag.set()
-        
+
         # Stop Reachy Mini playback
         if self.reachy_mini is not None:
             try:
                 self.reachy_mini.media.stop_playing()
             except Exception:
                 pass
-        
+
         # Wait for playback thread to finish (with timeout)
         if self._playback_thread and self._playback_thread.is_alive():
             try:
@@ -639,7 +621,7 @@ class AudioPlayer:
             except Exception:
                 pass
             self._playback_thread = None
-        
+
         self._playlist.clear()
         self.is_playing = False
 

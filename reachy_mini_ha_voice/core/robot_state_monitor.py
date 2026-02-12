@@ -17,7 +17,7 @@ import threading
 import time
 from collections.abc import Callable
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
@@ -49,7 +49,7 @@ class RobotStateMonitor:
 
     def __init__(
         self,
-        reachy_mini: Optional["ReachyMini"] = None,
+        reachy_mini: "ReachyMini",
         check_interval: float = 1.0,
         sleep_interval: float | None = None,
         error_interval: float | None = None,

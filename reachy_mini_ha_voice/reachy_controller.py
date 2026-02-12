@@ -5,7 +5,7 @@ import math
 import platform
 import subprocess
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import requests
@@ -37,6 +37,7 @@ def _detect_audio_device() -> str:
                 ["aplay", "-l"],
                 capture_output=True,
                 text=True,
+                check=False,
                 timeout=1.0,
             )
             output_lower = result.stdout.lower()
@@ -76,16 +77,15 @@ class ReachyController:
     """
     Wrapper class for Reachy Mini control operations.
 
-    Provides safe access to Reachy Mini SDK functions with error handling
-    and fallback for standalone mode (when robot is not available).
+    Provides safe access to Reachy Mini SDK functions with error handling.
     """
 
-    def __init__(self, reachy_mini: Optional["ReachyMini"] = None):
+    def __init__(self, reachy_mini: "ReachyMini"):
         """
         Initialize the controller.
 
         Args:
-            reachy_mini: ReachyMini instance, or None for standalone mode
+            reachy_mini: ReachyMini instance (required)
         """
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
@@ -188,12 +188,13 @@ class ReachyController:
         try:
             # Get the correct card name (from SDK detection logic)
             card_name = _get_amixer_card_name()
-            
+
             # Try to get speaker volume from amixer directly
             result = subprocess.run(
                 ["amixer", "-c", card_name, "sget", "PCM"],
                 capture_output=True,
                 text=True,
+                check=False,
                 timeout=1.0,
             )
             if result.returncode == 0:
@@ -224,7 +225,7 @@ class ReachyController:
         try:
             # Get the correct card name (from SDK detection logic)
             card_name = _get_amixer_card_name()
-            
+
             # Set speaker volume using amixer directly
             subprocess.run(
                 ["amixer", "-c", card_name, "sset", "PCM", f"{int(volume)}%"],
@@ -247,12 +248,13 @@ class ReachyController:
         try:
             # Get the correct card name (from SDK detection logic)
             card_name = _get_amixer_card_name()
-            
+
             # Try to get microphone volume from amixer directly
             result = subprocess.run(
                 ["amixer", "-c", card_name, "sget", "Headset"],
                 capture_output=True,
                 text=True,
+                check=False,
                 timeout=1.0,
             )
             if result.returncode == 0:
@@ -283,7 +285,7 @@ class ReachyController:
         try:
             # Get the correct card name (from SDK detection logic)
             card_name = _get_amixer_card_name()
-            
+
             # Set microphone volume using amixer directly
             subprocess.run(
                 ["amixer", "-c", card_name, "sset", "Headset", f"{int(volume)}%"],

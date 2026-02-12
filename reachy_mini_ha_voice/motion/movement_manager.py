@@ -22,7 +22,7 @@ import random
 import threading
 import time
 from queue import Empty, Queue
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -85,7 +85,7 @@ class MovementManager:
     ensuring thread safety and preventing race conditions.
     """
 
-    def __init__(self, reachy_mini: Optional["ReachyMini"] = None):
+    def __init__(self, reachy_mini: "ReachyMini"):
         self.robot = reachy_mini
         self._now = time.monotonic
 

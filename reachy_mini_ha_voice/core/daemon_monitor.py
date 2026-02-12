@@ -91,6 +91,7 @@ class DaemonStateMonitor:
 
     def __init__(
         self,
+        reachy_mini: Any,  # Added for Zenoth access
         daemon_url: str = DEFAULT_DAEMON_URL,
         check_interval: float = DEFAULT_CHECK_INTERVAL,
         sleep_interval: float = DEFAULT_SLEEP_INTERVAL,
@@ -98,7 +99,6 @@ class DaemonStateMonitor:
         max_backoff_interval: float = DEFAULT_MAX_BACKOFF,
         backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
         backoff_error_threshold: int = DEFAULT_BACKOFF_ERROR_THRESHOLD,
-        reachy_mini: Any | None = None,  # Added for Zenoth access
     ) -> None:
         """Initialize the daemon state monitor.
 
@@ -291,10 +291,6 @@ class DaemonStateMonitor:
         Uses Zenoth to get status instead of HTTP API to avoid blocking uvicorn.
         """
         # Use SDK's get_status() instead of HTTP API
-        if not hasattr(self, "_reachy_mini") or self._reachy_mini is None:
-            logger.debug("ReachyMini not available")
-            return DaemonStatus(state=DaemonState.UNAVAILABLE)
-
         try:
             status = self._reachy_mini.client.get_status(wait=False, timeout=0.1)
             if status is None:

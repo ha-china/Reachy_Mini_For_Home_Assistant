@@ -67,7 +67,7 @@ class VoiceAssistantService:
 
     def __init__(
         self,
-        reachy_mini: ReachyMini | None = None,
+        reachy_mini: ReachyMini,
         name: str = "Reachy Mini",
         host: str = "0.0.0.0",
         port: int = 6053,
@@ -75,14 +75,6 @@ class VoiceAssistantService:
         camera_port: int = 8081,
         camera_enabled: bool = True,
     ):
-        # Reachy Mini is required - this is a Reachy Mini voice assistant
-        if reachy_mini is None:
-            raise RuntimeError(
-                "Reachy Mini is required. "
-                "This application is designed to run on Reachy Mini hardware. "
-                "Please run it on a Reachy Mini device with proper SDK installation."
-            )
-
         self.reachy_mini = reachy_mini
         self.name = name
         self.host = host
@@ -644,9 +636,6 @@ class VoiceAssistantService:
         Delegates to MicrophoneOptimizer for actual settings configuration.
         User preferences from Home Assistant override defaults when available.
         """
-        if self.reachy_mini is None:
-            return
-
         try:
             # Access ReSpeaker through the media audio system
             audio = self.reachy_mini.media.audio
@@ -1113,11 +1102,20 @@ class VoiceAssistantService:
 
                     # Resample if needed (SDK may return non-16kHz audio)
                     if audio_data.ndim == 1:
-                        if not hasattr(self, "_input_sample_rate"):
+                        # Initialize sample rate once (not every chunk)
+                        if not hasattr(self, "_input_sample_rate_fixed"):
                             try:
                                 self._input_sample_rate = self.reachy_mini.media.get_input_audio_samplerate()
+                                if self._input_sample_rate != 16000:
+                                    _LOGGER.warning(
+                                        f"Sample rate {self._input_sample_rate} != 16000 Hz. "
+                                        "Performance may be degraded. "
+                                        "Consider forcing 16kHz in hardware config."
+                                    )
                             except Exception:
-                                self._input_sample_rate = 16000  # Assume 16kHz if can't get
+                                self._input_sample_rate = 16000
+
+                            self._input_sample_rate_fixed = True  # Mark as fixed
 
                         # Resample to 16kHz if needed
                         if self._input_sample_rate != 16000 and self._input_sample_rate > 0:
