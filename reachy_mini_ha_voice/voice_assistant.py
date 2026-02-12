@@ -256,6 +256,7 @@ class VoiceAssistantService:
         # Start sleep manager for proper sleep/wake handling
         # This monitors the daemon state and coordinates service suspend/resume
         self._sleep_manager = SleepManager(
+            reachy_mini=self.reachy_mini,
             daemon_url=Config.daemon.url,
             check_interval=Config.daemon.check_interval_active,
             resume_delay=Config.sleep.resume_delay,

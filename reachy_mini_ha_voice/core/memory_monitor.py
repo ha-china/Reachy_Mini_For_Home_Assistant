@@ -52,8 +52,8 @@ class MemoryMonitor:
 
     Usage:
         monitor = MemoryMonitor(
-            warning_threshold_mb=500,
-            critical_threshold_mb=800,
+            warning_threshold_mb=750,
+            critical_threshold_mb=1000,
         )
         monitor.start()
         # ...
@@ -64,8 +64,8 @@ class MemoryMonitor:
 
     def __init__(
         self,
-        warning_threshold_mb: float = 500.0,
-        critical_threshold_mb: float = 800.0,
+        warning_threshold_mb: float = 750.0,
+        critical_threshold_mb: float = 1000.0,
         check_interval: float = 60.0,
         on_warning: Callable[[MemoryStats], None] | None = None,
         on_critical: Callable[[MemoryStats], None] | None = None,

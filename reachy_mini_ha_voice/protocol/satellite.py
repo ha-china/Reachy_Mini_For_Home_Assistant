@@ -466,6 +466,11 @@ class VoiceSatelliteProtocol(APIServer):
     def handle_audio(self, audio_chunk: bytes) -> None:
         if not self._is_streaming_audio:
             return
+        # Check if transport is still valid before sending
+        if self._writelines is None:
+            _LOGGER.warning("Cannot send audio: transport not available, stopping stream")
+            self._is_streaming_audio = False
+            return
         self.send_messages([VoiceAssistantAudio(data=audio_chunk)])
 
     def _get_or_create_conversation_id(self) -> str:
