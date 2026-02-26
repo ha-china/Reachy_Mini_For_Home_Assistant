@@ -15,19 +15,12 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - name: Remove .github directory
-        run: rm -rf .github
-
       - name: Push to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          
-          # Commit the removal of .github
-          git add -A
-          git commit -m "Remove .github directory before sync" || echo "No changes to commit"
           
           # Add Hugging Face remote
           git remote add hf https://djhui5710:$HF_TOKEN@huggingface.co/spaces/djhui5710/reachy_mini_home_assistant
