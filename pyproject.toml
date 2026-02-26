@@ -44,8 +44,8 @@ dependencies = [
     "onnxruntime>=1.18.0",
 
     # PyTorch (for vision models)
-    "torch>=2.1",
-    "torchvision",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
