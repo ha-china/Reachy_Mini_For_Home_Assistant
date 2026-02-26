@@ -12,6 +12,7 @@ license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK (provides audio via media system)
     "reachy-mini>=1.3.0",
+    "reachy-mini-motor-controller>=1.5.5",
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
