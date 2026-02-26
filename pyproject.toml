@@ -44,7 +44,7 @@ dependencies = [
     "onnxruntime>=1.18.0",
 
     # PyTorch (for vision models)
-    "torch==2.5.1",
+    "torch==2.8.0",
     "torchvision==0.20.1",
 
     # Compatibility with system packages (gradio, etc.)
