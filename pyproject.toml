@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reachy_mini_ha_voice"
+name = "reachy_mini_home_assistant"
 version = "0.9.9"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
@@ -54,7 +54,7 @@ dependencies = [
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
 [project.entry-points."reachy_mini_apps"]
-reachy_mini_ha_voice = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"
+reachy_mini_home_assistant = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"
 
 [tool.setuptools]
 package-dir = { "" = "." }
