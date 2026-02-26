@@ -46,6 +46,10 @@ dependencies = [
     # PyTorch (for vision models)
     "torch==2.5.1",
     "torchvision==0.20.1",
+
+    # Compatibility with system packages (gradio, etc.)
+    "pillow<12.0",
+    "pydantic<=2.12.3",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
