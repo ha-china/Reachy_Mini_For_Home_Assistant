@@ -15,7 +15,7 @@
 ## Installation
 
 ### Step 1: Install the App
-Install `reachy_mini_ha_voice` from the Reachy Mini App Store.
+Install `reachy_mini_home_assistant` from the Reachy Mini App Store.
 
 ### Step 2: Start the App
 The app will automatically:

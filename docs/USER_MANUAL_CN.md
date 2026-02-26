@@ -15,7 +15,7 @@
 ## 安装步骤
 
 ### 第一步：安装应用
-从 Reachy Mini 应用商店安装 `reachy_mini_ha_voice`。
+从 Reachy Mini 应用商店安装 `reachy_mini_home_assistant`。
 
 ### 第二步：启动应用
 应用将自动：
