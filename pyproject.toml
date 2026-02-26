@@ -16,7 +16,7 @@ dependencies = [
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
-    "numpy>=2.0.0,<2.4",
+    "numpy>=2.0.0,<=2.2.5",
 
     # Camera streaming
     "opencv-python>=4.12.0.88",
@@ -46,6 +46,10 @@ dependencies = [
     # PyTorch (for vision models)
     "torch==2.5.1",
     "torchvision==0.20.1",
+
+    # Compatibility with system packages (gradio, etc.)
+    "pillow<12.0",
+    "pydantic<=2.12.3",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
