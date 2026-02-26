@@ -20,7 +20,7 @@ from pathlib import Path
 _LOGGER = logging.getLogger(__name__)
 
 _MODULE_DIR = Path(__file__).parent
-_PACKAGE_DIR = _MODULE_DIR.parent  # reachy_mini_ha_voice/
+_PACKAGE_DIR = _MODULE_DIR.parent  # reachy_mini_home_assistant/
 _ANIMATIONS_FILE = _PACKAGE_DIR / "animations" / "conversation_animations.json"
 
 

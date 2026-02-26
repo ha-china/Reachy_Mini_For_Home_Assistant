@@ -54,7 +54,7 @@ dependencies = [
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
 [project.entry-points."reachy_mini_apps"]
-reachy_mini_home_assistant = "reachy_mini_ha_voice.main:ReachyMiniHaVoice"
+reachy_mini_home_assistant = "reachy_mini_home_assistant.main:ReachyMiniHaVoice"
 
 [tool.setuptools]
 package-dir = { "" = "." }
@@ -72,7 +72,7 @@ where = ["."]
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-src = ["reachy_mini_ha_voice"]
+src = ["reachy_mini_home_assistant"]
 
 # Exclude reference code and generated files
 exclude = [
@@ -127,7 +127,7 @@ ignore = [
 "__init__.py" = ["F401"]  # unused imports in __init__ are intentional
 
 [tool.ruff.lint.isort]
-known-first-party = ["reachy_mini_ha_voice"]
+known-first-party = ["reachy_mini_home_assistant"]
 
 # ============================================================================
 # Mypy - Static type checker
@@ -164,9 +164,9 @@ exclude = [
 # Stricter checking for core modules (can enable gradually)
 [[tool.mypy.overrides]]
 module = [
-    "reachy_mini_ha_voice.core.*",
-    "reachy_mini_ha_voice.motion.smoothing",
-    "reachy_mini_ha_voice.motion.pose_composer",
+    "reachy_mini_home_assistant.core.*",
+    "reachy_mini_home_assistant.motion.smoothing",
+    "reachy_mini_home_assistant.motion.pose_composer",
 ]
 disallow_untyped_defs = true
 warn_unreachable = true

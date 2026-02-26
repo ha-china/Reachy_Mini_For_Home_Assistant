@@ -1,5 +1,0 @@
-M  reachy_mini_ha_voice/animation_player.py
-M  reachy_mini_ha_voice/animations/conversation_animations.json
-M  reachy_mini_ha_voice/movement_manager.py
-M  reachy_mini_ha_voice/reachy_controller.py
-?? status.txt
