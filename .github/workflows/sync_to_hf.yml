@@ -12,21 +12,25 @@ jobs:
       - name: Checkout GitHub repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           lfs: true
 
-      - name: Push to Hugging Face
+      - name: Create fresh commit and push to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           
+          # Create a new orphan branch with no history
+          git checkout --orphan hf-sync
+          git add -A
+          git commit -m "Fresh sync: $(date +%Y-%m-%d\ %H:%M:%S)"
+          
           # Add Hugging Face remote
           git remote add hf https://djhui5710:$HF_TOKEN@huggingface.co/spaces/djhui5710/reachy_mini_home_assistant
           
           # Push LFS objects first
-          git lfs push hf main --all
+          git lfs push hf hf-sync --all
           
-          # Push main branch to Hugging Face
-          git push hf main --force
+          # Force push as main to HF (overwrites all history)
+          git push hf hf-sync:main --force
