@@ -1180,6 +1180,11 @@ class MovementManager:
 
         self._stop_event.clear()
 
+        # Reset to neutral position first (handles restart after crash/disconnect)
+        # This ensures head returns to center on app startup
+        self.reset_to_neutral(duration=0.5)
+        logger.info("Reset to neutral position on startup")
+
         # Initialize idle animation immediately so breathing starts on launch
         # This matches the reference project's behavior where BreathingMove
         # starts after idle_inactivity_delay (0.3s)
