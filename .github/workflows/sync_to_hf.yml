@@ -25,5 +25,8 @@ jobs:
           # Add Hugging Face remote
           git remote add hf https://djhui5710:$HF_TOKEN@huggingface.co/spaces/djhui5710/reachy_mini_home_assistant
           
+          # Push LFS objects first
+          git lfs push hf main --all
+          
           # Push main branch to Hugging Face
           git push hf main --force
