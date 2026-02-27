@@ -419,7 +419,6 @@ class ReachyController:
                     logger.error(f"Error in sleep callback: {e}")
 
             # Give services time to fully suspend
-            import time
             time.sleep(0.5)
 
             # Now send the robot to sleep
