@@ -396,20 +396,36 @@ class ReachyController:
             logger.error(f"Error executing wake up: {e}")
 
     def go_to_sleep(self) -> None:
-        """Execute sleep animation."""
+        """Execute sleep animation.
+
+        The order is important:
+        1. First suspend all services via callback (so they release robot resources)
+        2. Then send the robot to sleep
+
+        This prevents errors from services trying to access a sleeping robot.
+        """
         if not self.is_available:
             logger.warning("Cannot sleep: robot not available")
             return
 
         try:
-            self.reachy.goto_sleep()
-            logger.info("Sleep animation executed")
-            # Notify callback (VoiceAssistant will suspend services)
+            # First, notify callback to suspend all services
+            # This must happen BEFORE the robot goes to sleep
+            logger.info("Suspending services before sleep...")
             if self._on_sleep_callback is not None:
                 try:
                     self._on_sleep_callback()
                 except Exception as e:
                     logger.error(f"Error in sleep callback: {e}")
+
+            # Give services time to fully suspend
+            import time
+            time.sleep(0.5)
+
+            # Now send the robot to sleep
+            self.reachy.goto_sleep()
+            logger.info("Sleep animation executed")
+
         except Exception as e:
             logger.error(f"Error executing sleep: {e}")
 
