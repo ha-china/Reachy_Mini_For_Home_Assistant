@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Enable version updates for pip
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Ignore PyTorch updates - locked version required for compatibility
+    ignore:
+      - dependency-name: "torch"
+        versions: [">2.5.1"]
+      - dependency-name: "torchvision"
+        versions: [">0.20.1"]
