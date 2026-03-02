@@ -85,7 +85,7 @@ exclude = [
 [dependency-groups]
 dev = [
     "ruff==0.15.4",
-    "mypy==1.18.2",
+    "mypy==1.19.1",
 ]
 
 [tool.ruff.lint]
