@@ -5,7 +5,7 @@ This module provides a centralized control system for robot movements,
 inspired by the reachy_mini_conversation_app architecture.
 
 Key features:
-- Single 100Hz control loop (same as reachy_mini_conversation_app)
+- Configurable control loop frequency (default 50Hz)
 - Command queue pattern (thread-safe external API)
 - Error throttling (prevents log explosion)
 - JSON-driven animation system (conversation state animations)
@@ -54,9 +54,8 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-# Control loop frequency - align with daemon control loop
-CONTROL_LOOP_FREQUENCY_HZ = 50  # 50Hz control loop (align with daemon backend)
-TARGET_PERIOD = 1.0 / CONTROL_LOOP_FREQUENCY_HZ
+# Control loop defaults (actual values come from Config.motion)
+DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 50
 
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
@@ -66,7 +65,7 @@ ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
 POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
 ANTENNA_EPS = 0.005  # Radians (~0.29 deg)
 BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
-MIN_SEND_INTERVAL_S = 0.2  # Send at most 5 Hz when unchanged
+MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0  # Minimum seconds between look-arounds
@@ -79,7 +78,7 @@ IDLE_INACTIVITY_THRESHOLD = 5.0  # Seconds of inactivity before look-around star
 
 class MovementManager:
     """
-    Unified movement manager with 50Hz control loop.
+    Unified movement manager with configurable control loop.
 
     All external interactions go through the command queue,
     ensuring thread safety and preventing race conditions.
@@ -118,7 +117,10 @@ class MovementManager:
         self._connection_lost = False
         self._last_successful_command = self._now()
         self._connection_timeout = 3.0
-        self._reconnect_attempt_interval = 2.0
+        self._reconnect_backoff_initial = max(0.2, float(Config.motion.reconnect_backoff_initial_s))
+        self._reconnect_backoff_max = max(self._reconnect_backoff_initial, float(Config.motion.reconnect_backoff_max_s))
+        self._reconnect_backoff_multiplier = max(1.0, float(Config.motion.reconnect_backoff_multiplier))
+        self._reconnect_attempt_interval = self._reconnect_backoff_initial
         self._last_reconnect_attempt = 0.0
         self._consecutive_errors = 0
         self._max_consecutive_errors = 5
@@ -137,6 +139,14 @@ class MovementManager:
         self._last_sent_antennas: tuple[float, float] | None = None
         self._last_sent_body_yaw: float | None = None
         self._last_send_time = 0.0
+
+        # Command send pacing (separate from control loop frequency)
+        control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
+        self._control_loop_hz = control_rate
+        self._target_period = 1.0 / control_rate
+        max_send_rate_hz = max(0.5, float(Config.motion.max_send_rate_hz))
+        self._min_send_interval = 1.0 / max_send_rate_hz
+        self._idle_heartbeat_interval = max(self._min_send_interval, float(Config.motion.idle_heartbeat_interval_s))
 
         # Body yaw smoothing state (rate-limited)
         self._body_yaw_smoothed: float | None = None
@@ -163,6 +173,10 @@ class MovementManager:
             config=DOAConfig(),
         )
         self._doa_enabled = True  # Can be disabled via entity
+
+        # Idle look-around behavior toggle (exposed via ESPHome switch)
+        # Default OFF to prioritize long-running stability.
+        self._idle_motion_enabled = False
 
         # Antenna controller (handles freeze/unfreeze for listening mode)
         self._antenna_controller = AntennaController(time_func=self._now)
@@ -420,6 +434,17 @@ class MovementManager:
         self._doa_tracker.enabled = enabled
         logger.info("DOA tracking %s", "enabled" if enabled else "disabled")
 
+    def get_idle_motion_enabled(self) -> bool:
+        """Get whether idle look-around behavior is enabled."""
+        return self._idle_motion_enabled
+
+    def set_idle_motion_enabled(self, enabled: bool) -> None:
+        """Thread-safe: Enable or disable idle look-around behavior."""
+        try:
+            self._command_queue.put(("set_idle_motion", enabled), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_idle_motion command")
+
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
 
@@ -543,8 +568,12 @@ class MovementManager:
             self.state.last_activity_time = self._now()
 
             # Update animation based on state
-            animation_name = STATE_ANIMATION_MAP.get(payload.value, "idle")
-            self._animation_player.set_animation(animation_name)
+            if payload == RobotState.IDLE and not self._idle_motion_enabled:
+                animation_name = "none"
+                self._animation_player.stop()
+            else:
+                animation_name = STATE_ANIMATION_MAP.get(payload.value, "idle")
+                self._animation_player.set_animation(animation_name)
 
             # State transition logic
             if payload == RobotState.IDLE and old_state != RobotState.IDLE:
@@ -606,6 +635,26 @@ class MovementManager:
         elif cmd == "emotion_move":
             # Start playing an emotion move
             self._start_emotion_move(payload)
+
+        elif cmd == "set_idle_motion":
+            enabled = bool(payload)
+            self._idle_motion_enabled = enabled
+            if not enabled:
+                self.state.next_look_around_time = 0.0
+                self.state.look_around_in_progress = False
+                if self.state.robot_state == RobotState.IDLE:
+                    self._animation_player.stop()
+                    self.state.anim_pitch = 0.0
+                    self.state.anim_yaw = 0.0
+                    self.state.anim_roll = 0.0
+                    self.state.anim_x = 0.0
+                    self.state.anim_y = 0.0
+                    self.state.anim_z = 0.0
+                    self.state.anim_antenna_left = 0.0
+                    self.state.anim_antenna_right = 0.0
+            elif self.state.robot_state == RobotState.IDLE:
+                self._animation_player.set_animation("idle")
+            logger.info("Idle motion %s", "enabled" if enabled else "disabled")
 
     def _start_emotion_move(self, emotion_name: str) -> None:
         """Start playing an emotion move.
@@ -707,6 +756,17 @@ class MovementManager:
 
     def _update_animation(self, dt: float) -> None:
         """Update animation offsets from AnimationPlayer."""
+        if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
+            self.state.anim_pitch = 0.0
+            self.state.anim_yaw = 0.0
+            self.state.anim_roll = 0.0
+            self.state.anim_x = 0.0
+            self.state.anim_y = 0.0
+            self.state.anim_z = 0.0
+            self.state.anim_antenna_left = 0.0
+            self.state.anim_antenna_right = 0.0
+            return
+
         offsets = self._animation_player.get_offsets(dt)
 
         self.state.anim_pitch = offsets["pitch"]
@@ -768,8 +828,14 @@ class MovementManager:
                 # Get offsets directly - no EMA smoothing (matches reference project)
                 raw_offsets = self._camera_server.get_face_tracking_offsets()
 
+                # In true static idle mode, keep vision detection active but
+                # do not apply tracking offsets to motion.
+                offsets_for_motion = raw_offsets
+                if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
+                    offsets_for_motion = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
                 with self._face_tracking_lock:
-                    self._face_tracking_offsets = raw_offsets
+                    self._face_tracking_offsets = offsets_for_motion
 
                 # Check if face is detected (any offset is non-zero)
                 offset_magnitude = sum(abs(o) for o in raw_offsets)
@@ -797,6 +863,11 @@ class MovementManager:
         This adds life-like behavior to the robot by occasionally looking around
         when not engaged in conversation. Similar to conversation_app's idle behaviors.
         """
+        if not self._idle_motion_enabled:
+            self.state.next_look_around_time = 0.0
+            self.state.look_around_in_progress = False
+            return
+
         # Only trigger when in IDLE state
         if self.state.robot_state != RobotState.IDLE:
             # Reset timing when not idle
@@ -1005,7 +1076,12 @@ class MovementManager:
 
         now = self._now()
 
+        # Global hard limit for SDK writes (protect daemon/zenoh from bursts)
+        if now - self._last_send_time < self._min_send_interval:
+            return
+
         # If pose hasn't changed, only send periodically to reduce daemon load
+        pose_unchanged = False
         if (
             self._last_sent_head_pose is not None
             and self._last_sent_antennas is not None
@@ -1023,6 +1099,8 @@ class MovementManager:
                 min_interval = Config.motion.body_yaw_min_send_interval_s
 
             if pose_delta < POSE_EPS and antenna_delta < ANTENNA_EPS and body_yaw_delta < BODY_YAW_EPS:
+                pose_unchanged = True
+                min_interval = max(min_interval, self._idle_heartbeat_interval)
                 if now - self._last_send_time < min_interval:
                     return
 
@@ -1057,7 +1135,11 @@ class MovementManager:
             if self._connection_lost:
                 logger.info("✓ Connection to robot restored")
                 self._connection_lost = False
+                self._reconnect_attempt_interval = self._reconnect_backoff_initial
                 self._suppressed_errors = 0
+
+            if pose_unchanged:
+                logger.debug("Sent idle heartbeat command")
 
         except Exception as e:
             error_msg = str(e)
@@ -1082,6 +1164,10 @@ class MovementManager:
                 else:
                     # Already in lost state, use throttled logging
                     self._log_error_throttled(f"Connection still lost: {error_msg}")
+                    self._reconnect_attempt_interval = min(
+                        self._reconnect_backoff_max,
+                        self._reconnect_attempt_interval * self._reconnect_backoff_multiplier,
+                    )
             else:
                 # Non-connection error - log but don't affect connection state
                 self._log_error_throttled(f"Failed to set robot target: {error_msg}")
@@ -1103,8 +1189,8 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main 100Hz control loop."""
-        logger.info("Movement manager control loop started (%.0f Hz)", CONTROL_LOOP_FREQUENCY_HZ)
+        """Main control loop."""
+        logger.info("Movement manager control loop started (%.1f Hz)", self._control_loop_hz)
 
         last_time = self._now()
 
@@ -1162,7 +1248,7 @@ class MovementManager:
 
             # Adaptive sleep
             elapsed = self._now() - loop_start
-            sleep_time = max(0.0, TARGET_PERIOD - elapsed)
+            sleep_time = max(0.0, self._target_period - elapsed)
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
@@ -1220,7 +1306,7 @@ class MovementManager:
         self._draining_event.set()
 
         # Give the control loop time to finish any in-flight command
-        # At 100Hz, one cycle is 10ms, so 50ms (5 cycles) is plenty
+        # 50ms is enough for multiple control cycles at default rates
         time.sleep(0.05)
 
         # Phase 2: Signal stop

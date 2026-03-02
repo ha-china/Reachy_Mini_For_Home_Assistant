@@ -11,7 +11,7 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from queue import Queue
 from typing import TYPE_CHECKING
@@ -176,6 +176,9 @@ class VoiceAssistantService:
 
         # Set motion controller reference in state
         self._state.motion = self._motion
+        if self._motion and self._motion.movement_manager:
+            self._motion.movement_manager.set_idle_motion_enabled(preferences.idle_motion_enabled)
+            _LOGGER.info("Idle motion restored from preferences: %s", preferences.idle_motion_enabled)
 
         # Set sleep/wake callbacks for HA button triggers
         self._state.on_ha_sleep = self._on_sleep
@@ -835,7 +838,9 @@ class VoiceAssistantService:
             try:
                 with open(preferences_path, encoding="utf-8") as f:
                     data = json.load(f)
-                return Preferences(**data)
+                valid_keys = {f.name for f in fields(Preferences)}
+                filtered = {k: v for k, v in data.items() if k in valid_keys}
+                return Preferences(**filtered)
             except Exception as e:
                 _LOGGER.warning("Failed to load preferences: %s", e)
 
@@ -1135,11 +1140,7 @@ class VoiceAssistantService:
 
             # Convert to PCM bytes (16-bit signed, little-endian)
             chunk_array = np.array(chunk, dtype=np.float32)
-            pcm_bytes = (
-                (np.clip(chunk_array, -1.0, 1.0) * 32767.0)
-                .astype("<i2")
-                .tobytes()
-            )
+            pcm_bytes = (np.clip(chunk_array, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
             return pcm_bytes
 
         return None

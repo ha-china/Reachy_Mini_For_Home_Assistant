@@ -59,6 +59,8 @@ class Preferences:
     noise_suppression: float | None = None  # None = use hardware default
     # Continuous conversation mode (controlled from Home Assistant)
     continuous_conversation: bool = False
+    # Idle motion behavior toggle (controlled from Home Assistant)
+    idle_motion_enabled: bool = False
 
 
 @dataclass

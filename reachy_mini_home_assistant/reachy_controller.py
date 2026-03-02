@@ -137,6 +137,23 @@ class ReachyController:
         """Check if robot is available."""
         return self.reachy is not None
 
+    def get_idle_motion_enabled(self) -> bool:
+        """Get whether idle look-around behavior is enabled."""
+        if self._movement_manager is None:
+            return False
+        try:
+            return bool(self._movement_manager.get_idle_motion_enabled())
+        except Exception as e:
+            logger.debug("Error getting idle motion state: %s", e)
+            return False
+
+    def set_idle_motion_enabled(self, enabled: bool) -> None:
+        """Enable or disable idle look-around behavior."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_motion_enabled failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_motion_enabled(enabled)
+
     # ========== Phase 1: Basic Status & Volume ==========
 
     def _get_cached_status(self) -> dict | None:
