@@ -253,7 +253,34 @@ class EntityRegistry:
             )
         )
 
-        _LOGGER.debug("Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled")
+        def get_idle_motion_enabled() -> bool:
+            if hasattr(self.server, "state") and self.server.state:
+                prefs = self.server.state.preferences
+                return bool(getattr(prefs, "idle_motion_enabled", False))
+            return False
+
+        def set_idle_motion_enabled(enabled: bool) -> None:
+            rc.set_idle_motion_enabled(enabled)
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.idle_motion_enabled = enabled
+                self.server.state.save_preferences()
+
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("idle_motion_enabled"),
+                name="Idle Motion",
+                object_id="idle_motion_enabled",
+                icon="mdi:motion-play",
+                entity_category=1,
+                value_getter=get_idle_motion_enabled,
+                value_setter=set_idle_motion_enabled,
+            )
+        )
+
+        _LOGGER.debug(
+            "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, idle_motion_enabled"
+        )
 
     def _setup_phase2_entities(self, entities: list) -> None:
         """Setup Phase 2 entities: Motor control."""

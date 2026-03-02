@@ -111,8 +111,10 @@ class MotionConfig:
     """Configuration for motion control."""
 
     # Control loop
-    control_rate_hz: float = 100.0
+    control_rate_hz: float = 50.0
     control_interval: float = 0.01  # 1 / control_rate_hz
+    max_send_rate_hz: float = 15.0  # Hard cap for set_target send rate
+    idle_heartbeat_interval_s: float = 1.0  # Keepalive interval when pose unchanged
 
     # Face tracking
     face_detected_threshold: float = 0.001  # Min offset to consider face detected
@@ -130,6 +132,11 @@ class MotionConfig:
     body_yaw_max_rate_deg_s: float = 60.0  # Max body yaw speed when tracking
     body_yaw_deadband_rad: float = 0.003  # Ignore tiny yaw changes (~0.17°)
     body_yaw_min_send_interval_s: float = 0.05  # Min interval for yaw updates
+
+    # Connection recovery backoff for set_target
+    reconnect_backoff_initial_s: float = 2.0
+    reconnect_backoff_max_s: float = 60.0
+    reconnect_backoff_multiplier: float = 2.0
 
 
 @dataclass
@@ -298,6 +305,19 @@ class Config:
 
         # Motion
         cls.motion.control_rate_hz = _env_float("REACHY_MOTION_CONTROL_RATE", cls.motion.control_rate_hz)
+        cls.motion.max_send_rate_hz = _env_float("REACHY_MOTION_MAX_SEND_RATE", cls.motion.max_send_rate_hz)
+        cls.motion.idle_heartbeat_interval_s = _env_float(
+            "REACHY_MOTION_IDLE_HEARTBEAT_INTERVAL", cls.motion.idle_heartbeat_interval_s
+        )
+        cls.motion.reconnect_backoff_initial_s = _env_float(
+            "REACHY_MOTION_RECONNECT_BACKOFF_INITIAL", cls.motion.reconnect_backoff_initial_s
+        )
+        cls.motion.reconnect_backoff_max_s = _env_float(
+            "REACHY_MOTION_RECONNECT_BACKOFF_MAX", cls.motion.reconnect_backoff_max_s
+        )
+        cls.motion.reconnect_backoff_multiplier = _env_float(
+            "REACHY_MOTION_RECONNECT_BACKOFF_MULTIPLIER", cls.motion.reconnect_backoff_multiplier
+        )
 
         # Audio
         cls.audio.idle_sleep_active = _env_float("REACHY_AUDIO_IDLE_SLEEP_ACTIVE", cls.audio.idle_sleep_active)
@@ -417,6 +437,11 @@ class Config:
             "motion": {
                 "control_rate_hz": cls.motion.control_rate_hz,
                 "animation_fps": cls.motion.animation_fps,
+                "max_send_rate_hz": cls.motion.max_send_rate_hz,
+                "idle_heartbeat_interval_s": cls.motion.idle_heartbeat_interval_s,
+                "reconnect_backoff_initial_s": cls.motion.reconnect_backoff_initial_s,
+                "reconnect_backoff_max_s": cls.motion.reconnect_backoff_max_s,
+                "reconnect_backoff_multiplier": cls.motion.reconnect_backoff_multiplier,
             },
             "audio": {
                 "sample_rate": cls.audio.sample_rate,
