@@ -49,7 +49,7 @@ dependencies = [
 
     # Compatibility with system packages (gradio, etc.)
     "pillow<12.0",
-    "pydantic<=2.12.3",
+    "pydantic<=2.12.5",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
