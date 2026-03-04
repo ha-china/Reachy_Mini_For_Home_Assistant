@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
-GESTURE_MIN_FPS = 8.0
+GESTURE_MIN_FPS = 12.0
 
 
 class MJPEGCameraServer:

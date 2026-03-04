@@ -125,7 +125,7 @@ class GestureDetector:
         self._available = False
         self._mean = np.array([127, 127, 127], dtype=np.float32)
         self._std = np.array([128, 128, 128], dtype=np.float32)
-        self._detector_size = (320, 240)
+        self._detector_size = (416, 320)
         self._classifier_size = (128, 128)
         self._load_models()
 
@@ -134,8 +134,8 @@ class GestureDetector:
         try:
             from .gesture_smoother import GestureSmoother
 
-            self._smoother = GestureSmoother(history_size=3)
-            logger.info("Gesture smoother enabled (3-frame history, no confidence filtering)")
+            self._smoother = GestureSmoother(history_size=3, clear_grace_updates=3)
+            logger.info("Gesture smoother enabled (3-frame history, 3-frame clear grace)")
         except ImportError:
             self._smoother = None
             logger.warning("Gesture smoother not available")

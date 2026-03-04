@@ -278,8 +278,37 @@ class EntityRegistry:
             )
         )
 
+        def get_sendspin_enabled() -> bool:
+            if hasattr(self.server, "state") and self.server.state:
+                prefs = self.server.state.preferences
+                return bool(getattr(prefs, "sendspin_enabled", False))
+            return False
+
+        def set_sendspin_enabled(enabled: bool) -> None:
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.sendspin_enabled = enabled
+                self.server.state.save_preferences()
+
+            voice_assistant = getattr(self.server, "_voice_assistant_service", None)
+            if voice_assistant:
+                voice_assistant.set_sendspin_enabled(enabled)
+
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("sendspin_enabled"),
+                name="Sendspin",
+                object_id="sendspin_enabled",
+                icon="mdi:speaker-wireless",
+                entity_category=1,
+                value_getter=get_sendspin_enabled,
+                value_setter=set_sendspin_enabled,
+            )
+        )
+
         _LOGGER.debug(
-            "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, idle_motion_enabled"
+            "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
+            "idle_motion_enabled, sendspin_enabled"
         )
 
     def _setup_phase2_entities(self, entities: list) -> None:

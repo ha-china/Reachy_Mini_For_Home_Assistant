@@ -61,6 +61,8 @@ class Preferences:
     continuous_conversation: bool = False
     # Idle motion behavior toggle (controlled from Home Assistant)
     idle_motion_enabled: bool = False
+    # Sendspin discovery and playback toggle (controlled from Home Assistant)
+    sendspin_enabled: bool = False
 
 
 @dataclass

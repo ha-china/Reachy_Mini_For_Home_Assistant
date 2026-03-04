@@ -111,6 +111,7 @@ class VoiceAssistantService:
 
         # Sleep manager for sleep/wake handling
         self._sleep_manager: SleepManager | None = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
 
         # Home Assistant connection state
         self._ha_connected = False  # Track whether HA is connected
@@ -258,9 +259,15 @@ class VoiceAssistantService:
         self._discovery = HomeAssistantZeroconf(port=self.port, name=self.name)
         await self._discovery.register_server()
 
-        # Start Sendspin auto-discovery (auto-enabled, no user config needed)
-        # Sendspin is for music playback, so connect to music_player
-        await music_player.start_sendspin_discovery()
+        # Store service event loop for cross-thread async toggles
+        self._event_loop = asyncio.get_running_loop()
+
+        # Start Sendspin discovery only when enabled in preferences (default OFF)
+        if preferences.sendspin_enabled:
+            await music_player.start_sendspin_discovery()
+            _LOGGER.info("Sendspin discovery enabled from preferences")
+        else:
+            _LOGGER.info("Sendspin discovery disabled by default")
 
         # Start sleep manager for proper sleep/wake handling
         # This monitors the daemon state and coordinates service suspend/resume
@@ -281,6 +288,33 @@ class VoiceAssistantService:
         _LOGGER.info("Sleep manager started")
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
+
+    def set_sendspin_enabled(self, enabled: bool) -> None:
+        """Enable or disable Sendspin discovery and connection at runtime."""
+        if self._state is None or self._state.music_player is None:
+            return
+
+        if self._state.preferences.sendspin_enabled != enabled:
+            self._state.preferences.sendspin_enabled = enabled
+            self._state.save_preferences()
+
+        async def _apply() -> None:
+            if self._state is None or self._state.music_player is None:
+                return
+            if enabled:
+                await self._state.music_player.start_sendspin_discovery()
+            else:
+                await self._state.music_player.stop_sendspin()
+
+        try:
+            loop = self._event_loop
+            if loop is not None and loop.is_running():
+                asyncio.run_coroutine_threadsafe(_apply(), loop)
+            else:
+                task = asyncio.create_task(_apply())
+                task.add_done_callback(lambda _task: None)
+        except Exception as e:
+            _LOGGER.warning("Failed to apply Sendspin toggle (%s): %s", enabled, e)
 
     def _ensure_wireless_audio_routing_config(self) -> None:
         """Ensure ALSA routing aliases exist for Reachy Mini audio on Linux wireless."""

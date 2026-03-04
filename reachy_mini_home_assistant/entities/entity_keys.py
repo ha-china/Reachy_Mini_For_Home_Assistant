@@ -19,6 +19,7 @@ ENTITY_KEYS: dict[str, int] = {
     "backend_ready": 101,
     "speaker_volume": 103,
     "idle_motion_enabled": 104,
+    "sendspin_enabled": 105,
     # Phase 2: Motor control (200-299)
     "motors_enabled": 200,
     "motor_mode": 201,

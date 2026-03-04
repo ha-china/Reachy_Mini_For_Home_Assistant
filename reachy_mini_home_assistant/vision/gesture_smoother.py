@@ -29,15 +29,19 @@ class GestureSmoother:
         confirmed_gesture = smoother.update(detected_gesture, confidence)
     """
 
-    def __init__(self, history_size: int = 5):
+    def __init__(self, history_size: int = 5, clear_grace_updates: int = 3):
         """Initialize gesture smoother.
 
         Args:
             history_size: Number of recent frames to track (default: 5)
+            clear_grace_updates: Number of consecutive "none" detections
+                required before clearing a previously confirmed gesture.
         """
         self.history_size = history_size
+        self.clear_grace_updates = max(0, clear_grace_updates)
         self._history: deque[tuple[str, float]] = deque(maxlen=history_size)
         self._confirmed_gesture = "none"
+        self._none_streak = 0
 
     def update(self, gesture: str, confidence: float) -> str:
         """Update with new gesture detection and return confirmed gesture.
@@ -56,6 +60,17 @@ class GestureSmoother:
         """
         # Add to history
         self._history.append((gesture, confidence))
+
+        # Fast path: non-none detections should feel immediate.
+        if gesture != "none":
+            self._none_streak = 0
+            self._confirmed_gesture = gesture
+            return self._confirmed_gesture
+
+        # Slow clear path: avoid flicker on occasional missed detections.
+        self._none_streak += 1
+        if self._confirmed_gesture != "none" and self._none_streak <= self.clear_grace_updates:
+            return self._confirmed_gesture
 
         # Count occurrences of each gesture in history
         gesture_counts: dict[str, int] = {}
@@ -76,5 +91,6 @@ class GestureSmoother:
             # Otherwise return the most frequent non-none gesture
             # This is more responsive than requiring consecutive matches
             self._confirmed_gesture = most_frequent
+            self._none_streak = 0
 
         return self._confirmed_gesture

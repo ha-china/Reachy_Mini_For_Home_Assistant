@@ -68,12 +68,12 @@ BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 
 # Idle look-around behavior parameters
-IDLE_LOOK_AROUND_MIN_INTERVAL = 8.0  # Minimum seconds between look-arounds
-IDLE_LOOK_AROUND_MAX_INTERVAL = 20.0  # Maximum seconds between look-arounds
-IDLE_LOOK_AROUND_YAW_RANGE = 25.0  # Maximum yaw angle in degrees
-IDLE_LOOK_AROUND_PITCH_RANGE = 10.0  # Maximum pitch angle in degrees
-IDLE_LOOK_AROUND_DURATION = 1.2  # Duration of look-around action in seconds
-IDLE_INACTIVITY_THRESHOLD = 5.0  # Seconds of inactivity before look-around starts
+IDLE_LOOK_AROUND_MIN_INTERVAL = 12.0  # Minimum seconds between look-arounds
+IDLE_LOOK_AROUND_MAX_INTERVAL = 28.0  # Maximum seconds between look-arounds
+IDLE_LOOK_AROUND_YAW_RANGE = 15.0  # Maximum yaw angle in degrees
+IDLE_LOOK_AROUND_PITCH_RANGE = 6.0  # Maximum pitch angle in degrees
+IDLE_LOOK_AROUND_DURATION = 2.0  # Duration of look-around action in seconds
+IDLE_INACTIVITY_THRESHOLD = 8.0  # Seconds of inactivity before look-around starts
 
 
 class MovementManager:
