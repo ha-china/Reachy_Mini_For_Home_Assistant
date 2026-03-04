@@ -63,6 +63,10 @@ class Preferences:
     idle_motion_enabled: bool = False
     # Sendspin discovery and playback toggle (controlled from Home Assistant)
     sendspin_enabled: bool = False
+    # Vision toggles and parameters (controlled from Home Assistant)
+    face_tracking_enabled: bool = False
+    gesture_detection_enabled: bool = False
+    face_confidence_threshold: float = 0.5
 
 
 @dataclass

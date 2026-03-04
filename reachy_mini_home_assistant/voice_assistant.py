@@ -659,6 +659,17 @@ class VoiceAssistantService:
                     enable_face_tracking=True,
                     gstreamer_lock=self._gstreamer_lock,
                 )
+
+                # Apply persisted vision preferences before camera server start.
+                prefs = self._state.preferences
+                self._camera_server.set_face_tracking_enabled(bool(getattr(prefs, "face_tracking_enabled", False)))
+                self._camera_server.set_gesture_detection_enabled(
+                    bool(getattr(prefs, "gesture_detection_enabled", False))
+                )
+                self._camera_server.set_face_confidence_threshold(
+                    float(getattr(prefs, "face_confidence_threshold", 0.5))
+                )
+
                 await self._camera_server.start()
 
                 # Store camera_server reference in state for entity registry access

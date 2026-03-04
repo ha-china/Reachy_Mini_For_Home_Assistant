@@ -306,9 +306,90 @@ class EntityRegistry:
             )
         )
 
+        def get_face_tracking_enabled() -> bool:
+            if hasattr(self.server, "state") and self.server.state:
+                return bool(getattr(self.server.state.preferences, "face_tracking_enabled", False))
+            return False
+
+        def set_face_tracking_enabled(enabled: bool) -> None:
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.face_tracking_enabled = enabled
+                self.server.state.save_preferences()
+            if self.camera_server is not None:
+                self.camera_server.set_face_tracking_enabled(enabled)
+
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("face_tracking_enabled"),
+                name="Face Tracking",
+                object_id="face_tracking_enabled",
+                icon="mdi:face-recognition",
+                entity_category=1,
+                value_getter=get_face_tracking_enabled,
+                value_setter=set_face_tracking_enabled,
+            )
+        )
+
+        def get_gesture_detection_enabled() -> bool:
+            if hasattr(self.server, "state") and self.server.state:
+                return bool(getattr(self.server.state.preferences, "gesture_detection_enabled", False))
+            return False
+
+        def set_gesture_detection_enabled(enabled: bool) -> None:
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.gesture_detection_enabled = enabled
+                self.server.state.save_preferences()
+            if self.camera_server is not None:
+                self.camera_server.set_gesture_detection_enabled(enabled)
+
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("gesture_detection_enabled"),
+                name="Gesture Detection",
+                object_id="gesture_detection_enabled",
+                icon="mdi:hand-wave",
+                entity_category=1,
+                value_getter=get_gesture_detection_enabled,
+                value_setter=set_gesture_detection_enabled,
+            )
+        )
+
+        def get_face_confidence_threshold() -> float:
+            if hasattr(self.server, "state") and self.server.state:
+                return float(getattr(self.server.state.preferences, "face_confidence_threshold", 0.5))
+            return 0.5
+
+        def set_face_confidence_threshold(value: float) -> None:
+            value = max(0.0, min(1.0, float(value)))
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.face_confidence_threshold = value
+                self.server.state.save_preferences()
+            if self.camera_server is not None:
+                self.camera_server.set_face_confidence_threshold(value)
+
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("face_confidence_threshold"),
+                name="Face Confidence",
+                object_id="face_confidence_threshold",
+                min_value=0.0,
+                max_value=1.0,
+                step=0.01,
+                icon="mdi:target",
+                mode=2,
+                entity_category=1,
+                value_getter=get_face_confidence_threshold,
+                value_setter=set_face_confidence_threshold,
+            )
+        )
+
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
-            "idle_motion_enabled, sendspin_enabled"
+            "idle_motion_enabled, sendspin_enabled, face_tracking_enabled, gesture_detection_enabled, "
+            "face_confidence_threshold"
         )
 
     def _setup_phase2_entities(self, entities: list) -> None:

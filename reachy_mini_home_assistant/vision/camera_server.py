@@ -60,6 +60,7 @@ class MJPEGCameraServer:
         fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
+        enable_gesture_detection: bool = True,
         face_confidence_threshold: float = 0.5,  # Min confidence for face detection
         gstreamer_lock: threading.Lock | None = None,
     ):
@@ -97,13 +98,13 @@ class MJPEGCameraServer:
 
         # Face tracking state
         self._head_tracker = None
-        self._face_tracking_enabled = True  # Enabled by default for always-on face tracking
+        self._face_tracking_enabled = enable_face_tracking
         self._face_tracking_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
 
         # Gesture detection state
         self._gesture_detector = None
-        self._gesture_detection_enabled = True
+        self._gesture_detection_enabled = enable_gesture_detection
         self._current_gesture = "none"
         self._gesture_confidence = 0.0
         self._gesture_lock = threading.Lock()
@@ -169,7 +170,7 @@ class MJPEGCameraServer:
             _LOGGER.debug("Failed to detect media backend: %s", e)
 
         # Initialize head tracker if face tracking enabled
-        if self.enable_face_tracking:
+        if self._face_tracking_enabled:
             try:
                 from .head_tracker import HeadTracker
 
@@ -353,7 +354,7 @@ class MJPEGCameraServer:
         self._frame_rate_manager.resume()
 
         # Reload head tracker if face tracking was originally enabled
-        if self.enable_face_tracking and self._head_tracker is None:
+        if self._face_tracking_enabled and self._head_tracker is None:
             try:
                 from .head_tracker import HeadTracker
 
@@ -655,10 +656,51 @@ class MJPEGCameraServer:
         if self._face_tracking_enabled == enabled:
             return  # No change, skip logging
         self._face_tracking_enabled = enabled
-        if not enabled:
+        if enabled:
+            if self._head_tracker is None:
+                try:
+                    from .head_tracker import HeadTracker
+
+                    self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
+                except Exception as e:
+                    _LOGGER.warning("Failed to enable face tracking model: %s", e)
+                    self._face_tracking_enabled = False
+        else:
             # Start interpolation back to neutral
             self._face_interpolator.reset_interpolation()
+            self._head_tracker = None
+            with self._face_tracking_lock:
+                self._face_tracking_offsets = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
+
+    def get_face_tracking_enabled(self) -> bool:
+        """Return whether face tracking is enabled."""
+        return self._face_tracking_enabled
+
+    def get_face_confidence_threshold(self) -> float:
+        """Return current face confidence threshold (0-1)."""
+        return self._face_confidence_threshold
+
+    def set_face_confidence_threshold(self, threshold: float) -> None:
+        """Set face detection confidence threshold (0-1)."""
+        threshold = max(0.0, min(1.0, float(threshold)))
+        if abs(self._face_confidence_threshold - threshold) < 1e-6:
+            return
+
+        self._face_confidence_threshold = threshold
+
+        # Reload model to apply threshold immediately when enabled.
+        if self._face_tracking_enabled:
+            try:
+                from .head_tracker import HeadTracker
+
+                self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
+            except Exception as e:
+                _LOGGER.warning("Failed to apply face confidence threshold %.2f: %s", threshold, e)
+                self._head_tracker = None
+                self._face_tracking_enabled = False
+
+        _LOGGER.info("Face confidence threshold set to %.2f", self._face_confidence_threshold)
 
     def set_conversation_mode(self, in_conversation: bool) -> None:
         """Set conversation mode for adaptive face tracking.
@@ -742,12 +784,33 @@ class MJPEGCameraServer:
 
     def set_gesture_detection_enabled(self, enabled: bool) -> None:
         """Enable or disable gesture detection."""
+        if self._gesture_detection_enabled == enabled:
+            return
+
         self._gesture_detection_enabled = enabled
-        if not enabled:
+        if enabled:
+            if self._gesture_detector is None:
+                try:
+                    from .gesture_detector import GestureDetector
+
+                    self._gesture_detector = GestureDetector()
+                    if not self._gesture_detector.is_available:
+                        self._gesture_detector = None
+                        self._gesture_detection_enabled = False
+                except Exception as e:
+                    _LOGGER.warning("Failed to enable gesture detector model: %s", e)
+                    self._gesture_detection_enabled = False
+                    self._gesture_detector = None
+        else:
+            self._gesture_detector = None
             with self._gesture_lock:
                 self._current_gesture = "none"
                 self._gesture_confidence = 0.0
         _LOGGER.info("Gesture detection %s", "enabled" if enabled else "disabled")
+
+    def get_gesture_detection_enabled(self) -> bool:
+        """Return whether gesture detection is enabled."""
+        return self._gesture_detection_enabled
 
     def set_gesture_state_callback(self, callback) -> None:
         """Set callback to notify when gesture state changes."""
