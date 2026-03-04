@@ -125,7 +125,7 @@ class GestureDetector:
         self._available = False
         self._mean = np.array([127, 127, 127], dtype=np.float32)
         self._std = np.array([128, 128, 128], dtype=np.float32)
-        self._detector_size = (416, 320)
+        self._detector_size = (320, 240)
         self._classifier_size = (128, 128)
         self._load_models()
 
@@ -157,8 +157,15 @@ class GestureDetector:
             self._det_input = self._detector.get_inputs()[0].name
             self._det_outputs = [o.name for o in self._detector.get_outputs()]
             self._cls_input = self._classifier.get_inputs()[0].name
+
+            # Align preprocessing size with ONNX model input shape.
+            # Typical detector shape is [1, 3, 240, 320] (H, W).
+            det_shape = self._detector.get_inputs()[0].shape
+            if len(det_shape) == 4 and isinstance(det_shape[2], int) and isinstance(det_shape[3], int):
+                self._detector_size = (det_shape[3], det_shape[2])
+
             self._available = True
-            logger.info("Gesture detection ready")
+            logger.info("Gesture detection ready (detector_size=%s)", self._detector_size)
         except Exception as e:
             logger.error("Failed to load models: %s", e)
 
