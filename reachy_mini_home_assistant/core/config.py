@@ -103,7 +103,7 @@ class CameraConfig:
 
     # Gesture detection
     gesture_detection_enabled: bool = True
-    gesture_detection_interval: int = 2  # Run every N frames
+    gesture_detection_interval: int = 1  # Run every frame for responsive gestures
 
 
 @dataclass

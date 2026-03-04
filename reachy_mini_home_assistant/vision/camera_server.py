@@ -32,6 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
+GESTURE_MIN_FPS = 8.0
 
 
 class MJPEGCameraServer:
@@ -520,7 +521,10 @@ class MJPEGCameraServer:
                         last_log_time = current_time
 
                 # Sleep to maintain target FPS (use adaptive rate)
+                # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
+                if self._gesture_detection_enabled and self._gesture_detector is not None:
+                    sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
 
             except Exception as e:

@@ -134,8 +134,8 @@ class GestureDetector:
         try:
             from .gesture_smoother import GestureSmoother
 
-            self._smoother = GestureSmoother(history_size=5)
-            logger.info("Gesture smoother enabled (5-frame history, no confidence filtering)")
+            self._smoother = GestureSmoother(history_size=3)
+            logger.info("Gesture smoother enabled (3-frame history, no confidence filtering)")
         except ImportError:
             self._smoother = None
             logger.warning("Gesture smoother not available")
@@ -294,7 +294,9 @@ class GestureDetector:
 
             # Get crops for all detected hands
             crops = self._get_square_crop(frame, boxes)
-            valid_crops = [crop for crop in crops if crop.size > 0]
+            valid_pairs = [(crop, score) for crop, score in zip(crops, det_scores, strict=False) if crop.size > 0]
+            valid_crops = [crop for crop, _ in valid_pairs]
+            valid_det_scores = [score for _, score in valid_pairs]
             if len(valid_crops) == 0:
                 if self._smoother:
                     confirmed_gesture_name = self._smoother.update("none", 0.0)
@@ -310,7 +312,7 @@ class GestureDetector:
             # Find the gesture with highest combined confidence
             best_gesture = Gesture.NONE
             best_confidence = 0.0
-            for gest, cls_c, det_c in zip(gestures, cls_scores, det_scores, strict=True):
+            for gest, cls_c, det_c in zip(gestures, cls_scores, valid_det_scores, strict=True):
                 combined_conf = det_c * cls_c
                 # Allow all gestures including low confidence ones (reference behavior)
                 if combined_conf > best_confidence:
