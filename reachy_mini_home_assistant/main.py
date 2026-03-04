@@ -8,6 +8,7 @@ with Home Assistant via ESPHome protocol for voice control.
 import asyncio
 import logging
 import os
+import pathlib
 import socket
 import sys
 import threading
@@ -27,6 +28,48 @@ def _check_zenoh_available(timeout: float = 1.0) -> bool:
             return True
     except (TimeoutError, ConnectionRefusedError, OSError):
         return False
+
+
+def _ensure_audio_routing_config() -> None:
+    """Ensure Reachy Mini ALSA aliases exist before SDK media initialization.
+
+    SDK 1.4.1 may pick autoaudiosrc/openal when no explicit device is found.
+    Writing ~/.asoundrc early helps GStreamer select reachymini_audio_src/sink.
+    """
+    try:
+        from reachy_mini.media.audio_utils import has_reachymini_asoundrc, write_asoundrc_to_home
+
+        if has_reachymini_asoundrc():
+            return
+        write_asoundrc_to_home()
+        logger.info("Generated ~/.asoundrc for Reachy Mini audio routing")
+    except Exception as e:
+        logger.warning("Could not ensure audio routing config before startup: %s", e)
+
+
+def _normalize_home_for_audio_utils() -> None:
+    """Normalize HOME on robot so SDK audio_utils resolves ~/.asoundrc reliably."""
+    if not sys.platform.startswith("linux"):
+        return
+
+    current_home = os.environ.get("HOME", "")
+    user = os.environ.get("USER", "pollen")
+    preferred_home = f"/home/{user}"
+    preferred_path = pathlib.Path(preferred_home)
+
+    if not preferred_path.exists():
+        # Fallback for environments where USER is not set as expected.
+        preferred_home = "/home/pollen"
+        preferred_path = pathlib.Path(preferred_home)
+
+    if not preferred_path.exists():
+        return
+
+    # Force deterministic robot HOME for SDK Path.home() checks.
+    # Only adjust when HOME is missing or points outside /home.
+    if not current_home or not current_home.startswith("/home/"):
+        os.environ["HOME"] = preferred_home
+        logger.warning("Adjusted HOME from '%s' to '%s' for audio routing", current_home, preferred_home)
 
 
 class ReachyMiniHaVoice(ReachyMiniApp):
@@ -54,6 +97,10 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         If Zenoh is not available, exit with error message.
         """
         logger.info("Starting Reachy Mini HA Voice App...")
+
+        _normalize_home_for_audio_utils()
+        # Ensure audio routing config before SDK creates media pipelines.
+        _ensure_audio_routing_config()
 
         # Check if Zenoh is available before trying to connect
         if not _check_zenoh_available():

@@ -189,21 +189,44 @@ class VoiceAssistantService:
             # Check if media system is already running to avoid conflicts
             media = self.reachy_mini.media
             if media.audio is not None:
-                # Check recording state
-                is_recording = getattr(media, "_recording", False)
-                if not is_recording:
-                    media.start_recording()
-                    _LOGGER.info("Started Reachy Mini recording")
-                else:
-                    _LOGGER.debug("Reachy Mini recording already active")
+                # SDK >=1.4 switched Linux audio device selection to Pulse/DeviceMonitor.
+                # On wireless robots without a correct ~/.asoundrc, startup may fall back
+                # to autoaudiosrc/openal and fail with "Could not open device".
+                self._ensure_wireless_audio_routing_config()
 
-                # Check playback state
-                is_playing = getattr(media, "_playing", False)
-                if not is_playing:
+                # Clean stale media state from previous app sessions (daemon is persistent)
+                try:
+                    media.stop_recording()
+                except Exception:
+                    pass
+                try:
+                    media.stop_playing()
+                except Exception:
+                    pass
+                time.sleep(0.2)
+
+                media.start_recording()
+                _LOGGER.info("Started Reachy Mini recording")
+                media.start_playing()
+                _LOGGER.info("Started Reachy Mini playback")
+
+                # Probe early: detect non-throwing startup failures and retry once.
+                if not self._probe_audio_capture_ready(media, timeout_s=1.5):
+                    _LOGGER.warning("Audio capture probe failed after startup, retrying media initialization once")
+                    self._ensure_wireless_audio_routing_config()
+                    try:
+                        media.stop_recording()
+                    except Exception:
+                        pass
+                    try:
+                        media.stop_playing()
+                    except Exception:
+                        pass
+                    time.sleep(0.3)
+                    media.start_recording()
                     media.start_playing()
-                    _LOGGER.info("Started Reachy Mini playback")
-                else:
-                    _LOGGER.debug("Reachy Mini playback already active")
+                    if not self._probe_audio_capture_ready(media, timeout_s=1.5):
+                        _LOGGER.warning("Audio capture still not ready after retry (wake word may not work)")
 
                 _LOGGER.info("Reachy Mini media system initialized")
 
@@ -271,6 +294,31 @@ class VoiceAssistantService:
         _LOGGER.info("Sleep manager started")
 
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
+
+    def _ensure_wireless_audio_routing_config(self) -> None:
+        """Ensure ALSA routing aliases exist for Reachy Mini audio on Linux wireless."""
+        try:
+            from reachy_mini.media.audio_utils import has_reachymini_asoundrc, write_asoundrc_to_home
+
+            if has_reachymini_asoundrc():
+                return
+            write_asoundrc_to_home()
+            _LOGGER.info("Generated ~/.asoundrc for Reachy Mini audio routing")
+        except Exception as e:
+            _LOGGER.debug("Could not ensure Reachy Mini audio routing config: %s", e)
+
+    def _probe_audio_capture_ready(self, media, timeout_s: float = 1.5) -> bool:
+        """Check whether microphone samples become available shortly after startup."""
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            try:
+                sample = media.get_audio_sample()
+                if sample is not None and isinstance(sample, np.ndarray) and sample.size > 0:
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.05)
+        return False
 
     def _suspend_voice_services(self, reason: str) -> None:
         """Suspend only voice-related services (not camera or motion).

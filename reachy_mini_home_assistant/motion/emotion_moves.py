@@ -19,32 +19,52 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Initialize emotion library
+# Lazy emotion library initialization to avoid blocking app import/startup.
 try:
     from reachy_mini.motion.recorded_move import RecordedMoves
     from reachy_mini.utils import create_head_pose
 
-    RECORDED_MOVES: RecordedMoves | None = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
+    RECORDED_MOVES: RecordedMoves | None = None
     EMOTION_AVAILABLE = True
-    logger.info("Emotion library loaded successfully")
-except ImportError as e:
-    logger.warning(f"Emotion library not available: {e}")
-    RECORDED_MOVES = None
-    EMOTION_AVAILABLE = False
+    _EMOTION_INIT_ATTEMPTED = False
 except Exception as e:
-    logger.warning(f"Error loading emotion library: {e}")
+    logger.warning("Emotion library not available: %s", e)
     RECORDED_MOVES = None
     EMOTION_AVAILABLE = False
+    _EMOTION_INIT_ATTEMPTED = True
+
+
+def _ensure_emotion_library_loaded() -> bool:
+    """Initialize recorded emotions once, on demand."""
+    global RECORDED_MOVES, EMOTION_AVAILABLE, _EMOTION_INIT_ATTEMPTED
+
+    if not EMOTION_AVAILABLE:
+        return False
+    if RECORDED_MOVES is not None:
+        return True
+    if _EMOTION_INIT_ATTEMPTED:
+        return False
+
+    _EMOTION_INIT_ATTEMPTED = True
+    try:
+        RECORDED_MOVES = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
+        logger.info("Emotion library loaded successfully")
+        return True
+    except Exception as e:
+        logger.warning("Error loading emotion library: %s", e)
+        EMOTION_AVAILABLE = False
+        RECORDED_MOVES = None
+        return False
 
 
 def is_emotion_available() -> bool:
     """Check if emotion system is available."""
-    return EMOTION_AVAILABLE
+    return _ensure_emotion_library_loaded()
 
 
 def list_available_emotions() -> list[str]:
     """Get list of available emotion names."""
-    if not EMOTION_AVAILABLE or RECORDED_MOVES is None:
+    if not _ensure_emotion_library_loaded() or RECORDED_MOVES is None:
         return []
     try:
         return RECORDED_MOVES.list_moves()
@@ -67,7 +87,7 @@ class EmotionMove:
         Args:
             emotion_name: Name of the emotion (e.g., "happy1", "sad1")
         """
-        if not EMOTION_AVAILABLE or RECORDED_MOVES is None:
+        if not _ensure_emotion_library_loaded() or RECORDED_MOVES is None:
             raise RuntimeError("Emotion library not available")
 
         self.emotion_name = emotion_name

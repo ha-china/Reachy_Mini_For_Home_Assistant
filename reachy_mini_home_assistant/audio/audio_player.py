@@ -8,15 +8,18 @@ Sendspin is automatically enabled by default - no user configuration needed.
 The system uses mDNS to discover Sendspin servers on the local network.
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import socket
 import threading
 import time
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from aiosendspin.models.core import StreamStartMessage
 
     from ..protocol.zeroconf import SendspinDiscovery
@@ -35,9 +38,17 @@ try:
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles
 
     SENDSPIN_AVAILABLE = True
-except ImportError:
+except Exception as e:
     SENDSPIN_AVAILABLE = False
-    _LOGGER.debug("aiosendspin not installed, Sendspin support disabled")
+    _LOGGER.warning("Sendspin unavailable, disabling integration: %s", e)
+    # Fallback placeholders to keep runtime annotations safe when Sendspin is unavailable.
+    PCMFormat = None  # type: ignore[assignment]
+    SendspinClient = None  # type: ignore[assignment]
+    ClientHelloPlayerSupport = None  # type: ignore[assignment]
+    SupportedAudioFormat = None  # type: ignore[assignment]
+    AudioCodec = None  # type: ignore[assignment]
+    PlayerCommand = None  # type: ignore[assignment]
+    Roles = None  # type: ignore[assignment]
 
 
 def _get_stable_client_id() -> str:
@@ -251,7 +262,7 @@ class AudioPlayer:
             self._sendspin_enabled = False
             return False
 
-    def _on_sendspin_audio_chunk(self, server_timestamp_us: int, audio_data: bytes, fmt: "PCMFormat") -> None:
+    def _on_sendspin_audio_chunk(self, server_timestamp_us: int, audio_data: bytes, fmt: PCMFormat) -> None:
         """Handle incoming audio chunks from Sendspin server.
 
         Plays the audio through Reachy Mini's speaker using push_audio_sample().
@@ -344,7 +355,7 @@ class AudioPlayer:
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)
 
-    def _on_sendspin_stream_start(self, message: "StreamStartMessage") -> None:
+    def _on_sendspin_stream_start(self, message: StreamStartMessage) -> None:
         """Handle stream start from Sendspin server."""
         _LOGGER.debug("Sendspin stream started")
         # No need to clear buffer - just start fresh
@@ -430,7 +441,7 @@ class AudioPlayer:
         self._stop_flag.clear()
 
         # Limit active playback threads to prevent resource exhaustion
-        if hasattr(self, '_playback_thread') and self._playback_thread and self._playback_thread.is_alive():
+        if hasattr(self, "_playback_thread") and self._playback_thread and self._playback_thread.is_alive():
             _LOGGER.warning("Previous playback still active, stopping it")
             self.stop()
 
