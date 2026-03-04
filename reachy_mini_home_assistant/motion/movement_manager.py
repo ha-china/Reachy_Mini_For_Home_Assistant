@@ -66,7 +66,6 @@ POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
 ANTENNA_EPS = 0.005  # Radians (~0.29 deg)
 BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
-ANTENNA_IDLE_HOLD_DEADBAND = 0.02  # Radians (~1.15 deg) to suppress idle antenna micro-corrections
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 12.0  # Minimum seconds between look-arounds
@@ -142,9 +141,6 @@ class MovementManager:
         self._last_sent_body_yaw: float | None = None
         self._last_send_time = 0.0
 
-        # Idle antenna hold (prevents high-frequency micro-corrections/noise)
-        self._idle_antenna_hold: tuple[float, float] | None = None
-
         # Command send pacing (separate from control loop frequency)
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
         self._control_loop_hz = control_rate
@@ -185,6 +181,7 @@ class MovementManager:
 
         # Antenna controller (handles freeze/unfreeze for listening mode)
         self._antenna_controller = AntennaController(time_func=self._now)
+        self._antenna_torque_disabled_idle = False
 
         logger.info("MovementManager initialized with AnimationPlayer and DOA tracking")
 
@@ -585,18 +582,21 @@ class MovementManager:
                 self.state.idle_start_time = self._now()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
-                # Re-latch antennas on next compose cycle
-                self._idle_antenna_hold = None
+                # Disable antenna torque in idle so antennas rest naturally.
+                self._set_antenna_torque(enabled=False)
+            elif payload != RobotState.IDLE and old_state == RobotState.IDLE:
+                # Re-enable antenna torque when leaving idle.
+                self._set_antenna_torque(enabled=True)
 
             # Freeze antennas when entering listening mode
             if payload == RobotState.LISTENING:
+                self._set_antenna_torque(enabled=True)
                 self._freeze_antennas()
             elif old_state == RobotState.LISTENING and payload != RobotState.LISTENING:
                 # Start unfreezing when leaving listening mode
                 self._start_antenna_unfreeze()
-
-            if payload != RobotState.IDLE:
-                self._idle_antenna_hold = None
+                if payload != RobotState.IDLE:
+                    self._set_antenna_torque(enabled=True)
 
             logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
 
@@ -1042,23 +1042,6 @@ class MovementManager:
             target_antenna_left, target_antenna_right
         )
 
-        # In idle, hold antennas unless change exceeds deadband.
-        # This avoids continuous micro-corrections that cause mechanical chatter.
-        if self.state.robot_state == RobotState.IDLE:
-            if self._idle_antenna_hold is None:
-                self._idle_antenna_hold = (antenna_left, antenna_right)
-            else:
-                hold_left, hold_right = self._idle_antenna_hold
-                if (
-                    abs(antenna_left - hold_left) < ANTENNA_IDLE_HOLD_DEADBAND
-                    and abs(antenna_right - hold_right) < ANTENNA_IDLE_HOLD_DEADBAND
-                ):
-                    antenna_left, antenna_right = hold_left, hold_right
-                else:
-                    self._idle_antenna_hold = (antenna_left, antenna_right)
-        else:
-            self._idle_antenna_hold = None
-
         # Calculate body_yaw to follow head yaw (using pose_composer utilities)
         final_head_yaw = extract_yaw_from_pose(final_head)
         target_body_yaw = clamp_body_yaw(final_head_yaw)
@@ -1313,6 +1296,7 @@ class MovementManager:
         self._animation_player.set_animation("idle")
         self.state.robot_state = RobotState.IDLE
         self.state.idle_start_time = self._now()
+        self._set_antenna_torque(enabled=False)
         logger.info("Initialized with idle animation on startup")
 
         self._thread = threading.Thread(
@@ -1356,6 +1340,9 @@ class MovementManager:
         # Reset drain flag for potential restart
         self._draining_event.clear()
 
+        # Restore antenna torque on shutdown to avoid leaving hardware passive
+        self._set_antenna_torque(enabled=True)
+
         # Skip reset to neutral - let the app manager handle it
         # This speeds up shutdown significantly
         logger.info("Movement manager stopped")
@@ -1378,3 +1365,21 @@ class MovementManager:
     def is_running(self) -> bool:
         """Check if control loop is running."""
         return self._thread is not None and self._thread.is_alive()
+
+    def _set_antenna_torque(self, enabled: bool) -> None:
+        """Enable/disable antenna torque only (does not affect head motors)."""
+        should_disable = not enabled
+        if self._antenna_torque_disabled_idle == should_disable:
+            return
+
+        try:
+            ids = ["right_antenna", "left_antenna"]
+            if enabled:
+                self.robot.enable_motors(ids=ids)
+                logger.info("Antenna torque enabled")
+            else:
+                self.robot.disable_motors(ids=ids)
+                logger.info("Antenna torque disabled for idle mode")
+            self._antenna_torque_disabled_idle = should_disable
+        except Exception as e:
+            logger.warning("Failed to set antenna torque (%s): %s", "enabled" if enabled else "disabled", e)
