@@ -20,23 +20,6 @@ from .voice_assistant import VoiceAssistantService
 logger = logging.getLogger(__name__)
 
 
-def _ensure_audio_routing_config() -> None:
-    """Ensure Reachy Mini ALSA aliases exist before SDK media initialization.
-
-    SDK 1.4.1 may pick autoaudiosrc/openal when no explicit device is found.
-    Writing ~/.asoundrc early helps GStreamer select reachymini_audio_src/sink.
-    """
-    try:
-        from reachy_mini.media.audio_utils import has_reachymini_asoundrc, write_asoundrc_to_home
-
-        if has_reachymini_asoundrc():
-            return
-        write_asoundrc_to_home()
-        logger.info("Generated ~/.asoundrc for Reachy Mini audio routing")
-    except Exception as e:
-        logger.warning("Could not ensure audio routing config before startup: %s", e)
-
-
 def _normalize_home_for_audio_utils() -> None:
     """Normalize HOME on robot so SDK audio_utils resolves ~/.asoundrc reliably."""
     if not sys.platform.startswith("linux"):
@@ -87,8 +70,6 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         logger.info("Starting Reachy Mini HA Voice App...")
 
         _normalize_home_for_audio_utils()
-        # Ensure audio routing config before SDK creates media pipelines.
-        _ensure_audio_routing_config()
 
         # Connect to ReachyMini
         try:
