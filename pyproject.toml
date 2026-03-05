@@ -11,8 +11,7 @@ requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK with gstreamer support (for camera streaming)
-    "reachy-mini[gstreamer]>=1.4.1",
-    "reachy-mini-motor-controller>=1.5.5",
+    "reachy-mini>=1.5.0",
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
