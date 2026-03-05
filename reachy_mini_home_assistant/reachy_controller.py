@@ -156,7 +156,24 @@ class ReachyController:
 
     # ========== Phase 1: Basic Status & Volume ==========
 
-    def _get_cached_status(self) -> dict | None:
+    @staticmethod
+    def _status_value(status: Any, key: str, default: Any = None) -> Any:
+        if status is None:
+            return default
+        if isinstance(status, dict):
+            return status.get(key, default)
+        return getattr(status, key, default)
+
+    @classmethod
+    def _nested_status_value(cls, status: Any, parent_key: str, child_key: str, default: Any = None) -> Any:
+        parent = cls._status_value(status, parent_key, None)
+        if parent is None:
+            return default
+        if isinstance(parent, dict):
+            return parent.get(child_key, default)
+        return getattr(parent, child_key, default)
+
+    def _get_cached_status(self) -> Any:
         """Get cached daemon status to reduce query frequency.
 
         Note: get_status() may trigger I/O, so we cache it.
@@ -184,21 +201,21 @@ class ReachyController:
         status = self._get_cached_status()
         if status is None:
             return "not_available"
-        return status.get("state", "unknown")
+        return str(self._status_value(status, "state", "unknown"))
 
     def get_backend_ready(self) -> bool:
         """Check if backend is ready with caching."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return status.get("state") == "running"
+        return self._status_value(status, "state") == "running"
 
     def get_error_message(self) -> str:
         """Get current error message with caching."""
         status = self._get_cached_status()
         if status is None:
             return "Robot not available"
-        return status.get("error") or ""
+        return str(self._status_value(status, "error", "") or "")
 
     def get_speaker_volume(self) -> float:
         """Get speaker volume (0-100) using amixer directly (no HTTP request)."""
@@ -322,11 +339,10 @@ class ReachyController:
         if status is None:
             return False
         try:
-            backend_status = status.get("backend_status")
-            if backend_status and isinstance(backend_status, dict):
-                motor_mode = backend_status.get("motor_control_mode", "disabled")
+            motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
+            if motor_mode is not None:
                 return motor_mode == "enabled"
-            return status.get("state") == "running"
+            return self._status_value(status, "state") == "running"
         except Exception as e:
             logger.error(f"Error getting motor state: {e}")
             return False
@@ -358,11 +374,10 @@ class ReachyController:
         if status is None:
             return "disabled"
         try:
-            backend_status = status.get("backend_status")
-            if backend_status and isinstance(backend_status, dict):
-                motor_mode = backend_status.get("motor_control_mode", "disabled")
-                return motor_mode
-            if status.get("state") == "running":
+            motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
+            if motor_mode is not None:
+                return str(motor_mode)
+            if self._status_value(status, "state") == "running":
                 return "enabled"
             return "disabled"
         except Exception as e:
@@ -713,10 +728,11 @@ class ReachyController:
         if status is None:
             return 0.0
         try:
-            backend_status = status.get("backend_status")
-            if backend_status and isinstance(backend_status, dict):
-                control_loop_stats = backend_status.get("control_loop_stats", {})
-                return control_loop_stats.get("mean_control_loop_frequency", 0.0)
+            control_loop_stats = self._nested_status_value(status, "backend_status", "control_loop_stats", None)
+            if isinstance(control_loop_stats, dict):
+                return float(control_loop_stats.get("mean_control_loop_frequency", 0.0))
+            if control_loop_stats is not None:
+                return float(getattr(control_loop_stats, "mean_control_loop_frequency", 0.0))
             return 0.0
         except Exception as e:
             logger.error(f"Error getting control loop frequency: {e}")
@@ -727,35 +743,35 @@ class ReachyController:
         status = self._get_cached_status()
         if status is None:
             return "N/A"
-        return status.get("version") or "unknown"
+        return str(self._status_value(status, "version", "unknown") or "unknown")
 
     def get_robot_name(self) -> str:
         """Get robot name with caching."""
         status = self._get_cached_status()
         if status is None:
             return "N/A"
-        return status.get("robot_name") or "unknown"
+        return str(self._status_value(status, "robot_name", "unknown") or "unknown")
 
     def get_wireless_version(self) -> bool:
         """Check if this is a wireless version with caching."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return status.get("wireless_version", False)
+        return bool(self._status_value(status, "wireless_version", False))
 
     def get_simulation_mode(self) -> bool:
         """Check if simulation mode is enabled with caching."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return status.get("simulation_enabled", False)
+        return bool(self._status_value(status, "simulation_enabled", False))
 
     def get_wlan_ip(self) -> str:
         """Get WLAN IP address with caching."""
         status = self._get_cached_status()
         if status is None:
             return "N/A"
-        return status.get("wlan_ip") or "N/A"
+        return str(self._status_value(status, "wlan_ip", "N/A") or "N/A")
 
     # ========== Phase 7: IMU Sensors (Wireless only) ==========
 
