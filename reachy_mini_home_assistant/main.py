@@ -9,7 +9,6 @@ import asyncio
 import logging
 import os
 import pathlib
-import socket
 import sys
 import threading
 
@@ -19,15 +18,6 @@ from .core import get_health_monitor, get_memory_monitor
 from .voice_assistant import VoiceAssistantService
 
 logger = logging.getLogger(__name__)
-
-
-def _check_zenoh_available(timeout: float = 1.0) -> bool:
-    """Check if Zenoh service is available."""
-    try:
-        with socket.create_connection(("127.0.0.1", 7447), timeout=timeout):
-            return True
-    except (TimeoutError, ConnectionRefusedError, OSError):
-        return False
 
 
 def _ensure_audio_routing_config() -> None:
@@ -123,9 +113,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
 
     def wrapped_run(self, *args, **kwargs) -> None:
         """
-        Override wrapped_run to handle Zenoh connection failures.
-
-        If Zenoh is not available, exit with error message.
+        Override wrapped_run to handle Reachy Mini connection failures.
         """
         logger.info("Starting Reachy Mini HA Voice App...")
 
@@ -134,12 +122,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         _ensure_audio_routing_config()
         _patch_sdk_audio_device_resolution()
 
-        # Check if Zenoh is available before trying to connect
-        if not _check_zenoh_available():
-            logger.error("Zenoh service not available on port 7447")
-            sys.exit(1)
-
-        # Zenoh is available, connect to ReachyMini
+        # Connect to ReachyMini
         try:
             logger.info("Attempting to connect to Reachy Mini...")
             super().wrapped_run(*args, **kwargs)
@@ -148,7 +131,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             sys.exit(1)
         except Exception as e:
             error_str = str(e)
-            if "Unable to connect" in error_str or "ZError" in error_str or "Timeout" in error_str:
+            if "Unable to connect" in error_str or "Timeout" in error_str:
                 logger.error(f"Failed to connect to Reachy Mini: {e}")
                 sys.exit(1)
             else:

@@ -1063,7 +1063,7 @@ class VoiceAssistantService:
                     continue
 
                 # Check if this is a connection error
-                if "Lost connection" in error_msg or "ZError" in error_msg:
+                if "Lost connection" in error_msg:
                     # Don't log - the state monitor will handle this
                     if not self._robot_services_paused.is_set():
                         _LOGGER.debug("Connection error detected, waiting for state monitor")
@@ -1307,6 +1307,7 @@ class VoiceAssistantService:
                 stopped = True
                 break  # Stop at first detection
 
-        if stopped and (self._state.stop_word.id in self._state.active_wake_words):
+        stop_armed = self._state.stop_word.id in self._state.active_wake_words
+        if stopped and stop_armed and (not self._state.is_muted):
             _LOGGER.info("Stop word detected - stopping playback")
             self._state.satellite.stop()

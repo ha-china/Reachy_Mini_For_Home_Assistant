@@ -328,6 +328,7 @@ class VoiceSatelliteProtocol(APIServer):
             urls.append(msg.media_id)
 
             self.state.active_wake_words.add(self.state.stop_word.id)
+            self._set_stop_word_active(True)
             self._continue_conversation = msg.start_conversation
             self.duck()
 
@@ -522,12 +523,19 @@ class VoiceSatelliteProtocol(APIServer):
             ]
         )
         self.duck()
+        self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
+
+    def _on_wakeup_sound_finished(self) -> None:
+        """Start microphone streaming after wakeup sound finishes."""
         self._is_streaming_audio = True
-        self.state.tts_player.play(self.state.wakeup_sound)
 
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
+        # Ensure pipeline does not re-arm itself after manual stop
+        self._is_streaming_audio = False
+        self._continue_conversation = False
         self.state.active_wake_words.discard(self.state.stop_word.id)
+        self._set_stop_word_active(False)
         self.state.tts_player.stop()
 
         if self._timer_finished:
@@ -548,6 +556,7 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Playing TTS response: %s", self._tts_url)
 
         self.state.active_wake_words.add(self.state.stop_word.id)
+        self._set_stop_word_active(True)
         self.state.tts_player.play(self._tts_url, done_callback=self._tts_finished)
 
     def duck(self) -> None:
@@ -568,6 +577,7 @@ class VoiceSatelliteProtocol(APIServer):
         Following reference project pattern: handle continue conversation here.
         """
         self.state.active_wake_words.discard(self.state.stop_word.id)
+        self._set_stop_word_active(False)
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
         # Check if should continue conversation
@@ -607,6 +617,14 @@ class VoiceSatelliteProtocol(APIServer):
             # Reachy Mini: Return to idle
             self._reachy_on_idle()
 
+    def _set_stop_word_active(self, active: bool) -> None:
+        """Toggle stop word detector when model supports runtime activation."""
+        try:
+            if hasattr(self.state.stop_word, "is_active"):
+                self.state.stop_word.is_active = active
+        except Exception:
+            pass
+
     def _play_timer_finished(self) -> None:
         if not self._timer_finished:
             self.unduck()
@@ -625,6 +643,7 @@ class VoiceSatelliteProtocol(APIServer):
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
+        self._set_stop_word_active(False)
 
         # Trigger HA disconnected callback
         if self._on_ha_disconnected_callback:
@@ -1007,8 +1026,9 @@ class VoiceSatelliteProtocol(APIServer):
         if self.state.music_player:
             self.state.music_player.stop()
 
-        # Clear active wake words to prevent false triggers
-        self.state.active_wake_words.clear()
+        # Keep configured wake words intact.
+        # Audio processing is paused by sleep/mute lifecycle, so clearing wake words here
+        # can cause Home Assistant UI to temporarily show an empty wake word selection.
 
         # Reset conversation state
         self._tts_url = None
@@ -1022,6 +1042,7 @@ class VoiceSatelliteProtocol(APIServer):
         """Resume the satellite after sleep."""
         _LOGGER.info("Resuming VoiceSatellite from sleep...")
 
-        # Wake words are preserved in state.active_wake_words, no need to restore
+        # Ensure wake word processing context is refreshed after resume.
+        self.state.wake_words_changed = True
 
         _LOGGER.info("VoiceSatellite resumed")

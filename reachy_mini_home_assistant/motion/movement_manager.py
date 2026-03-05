@@ -1165,7 +1165,7 @@ class MovementManager:
             self._consecutive_errors += 1
 
             # Check if this is a connection error
-            is_connection_error = "Lost connection" in error_msg or "ZError" in error_msg
+            is_connection_error = "Lost connection" in error_msg
 
             if is_connection_error:
                 if not self._connection_lost:
