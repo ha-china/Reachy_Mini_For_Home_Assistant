@@ -1,5 +1,21 @@
 [
   {
+    "version": "1.0.1",
+    "date": "2026-03-05",
+    "changes": [
+      "Build: Bump package version to 1.0.1",
+      "Deps: Update runtime dependency baseline to reachy-mini>=1.5.0",
+      "Fix: Remove legacy Zenoh 7447 startup precheck for SDK v1.5 compatibility",
+      "Fix: Remove legacy ZError string matching from connection error handling",
+      "Fix: Adapt daemon status handling to SDK v1.5 DaemonStatus object (prevents AttributeError on status.get)",
+      "Fix: Harden stop-word handling with runtime activation/deactivation and mute-aware trigger gating",
+      "Fix: Align wakeup stream start timing with reference behavior (start microphone stream after wakeup sound)",
+      "Fix: Improve TTS streaming robustness and reduce cutoffs with retry-based audio push",
+      "Optimize: Support single-request streaming with in-memory fallback cache for one-time TTS URLs (no temp file dependency)",
+      "Optimize: Lower streaming fetch chunk size and apply unthrottled preroll for faster first audio"
+    ]
+  },
+  {
     "version": "1.0.0",
     "date": "2026-03-04",
     "changes": [
