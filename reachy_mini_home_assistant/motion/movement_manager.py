@@ -68,7 +68,7 @@ BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 IDLE_POSE_EPS = 0.0018  # Slightly relaxed pose deadband in quiet idle
 IDLE_BODY_YAW_EPS = 0.01  # Slightly relaxed body yaw deadband in quiet idle
-IDLE_MIN_SEND_INTERVAL_S = 0.15  # Keep idle smooth while limiting chatter
+IDLE_MIN_SEND_INTERVAL_S = 0.20  # Balanced idle smoothness and command pressure
 IDLE_ANTENNA_MAX_RATE_RAD_S = 0.55  # Slew-limit antenna motion in idle for smoother movement
 
 # Idle look-around behavior parameters
