@@ -261,8 +261,10 @@ class EntityRegistry:
 
         def set_idle_motion_enabled(enabled: bool) -> None:
             rc.set_idle_motion_enabled(enabled)
+            rc.set_idle_antenna_enabled(enabled)
             if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.idle_motion_enabled = enabled
+                self.server.state.preferences.idle_antenna_enabled = enabled
                 self.server.state.save_preferences()
 
         entities.append(
@@ -333,7 +335,7 @@ class EntityRegistry:
 
         def get_face_tracking_enabled() -> bool:
             if hasattr(self.server, "state") and self.server.state:
-                return bool(getattr(self.server.state.preferences, "face_tracking_enabled", False))
+                return bool(self.server.state.preferences.face_tracking_enabled)
             return False
 
         def set_face_tracking_enabled(enabled: bool) -> None:
@@ -358,7 +360,7 @@ class EntityRegistry:
 
         def get_gesture_detection_enabled() -> bool:
             if hasattr(self.server, "state") and self.server.state:
-                return bool(getattr(self.server.state.preferences, "gesture_detection_enabled", False))
+                return bool(self.server.state.preferences.gesture_detection_enabled)
             return False
 
         def set_gesture_detection_enabled(enabled: bool) -> None:
@@ -383,7 +385,7 @@ class EntityRegistry:
 
         def get_face_confidence_threshold() -> float:
             if hasattr(self.server, "state") and self.server.state:
-                return float(getattr(self.server.state.preferences, "face_confidence_threshold", 0.5))
+                return float(self.server.state.preferences.face_confidence_threshold)
             return 0.5
 
         def set_face_confidence_threshold(value: float) -> None:

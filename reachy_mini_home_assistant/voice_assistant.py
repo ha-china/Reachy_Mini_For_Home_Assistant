@@ -11,7 +11,7 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from pathlib import Path
 from queue import Queue
 from typing import TYPE_CHECKING
@@ -903,9 +903,7 @@ class VoiceAssistantService:
             try:
                 with open(preferences_path, encoding="utf-8") as f:
                     data = json.load(f)
-                valid_keys = {f.name for f in fields(Preferences)}
-                filtered = {k: v for k, v in data.items() if k in valid_keys}
-                return Preferences(**filtered)
+                return Preferences(**data)
             except Exception as e:
                 _LOGGER.warning("Failed to load preferences: %s", e)
 
