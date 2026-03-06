@@ -1,0 +1,263 @@
+blueprint:
+  name: Reachy Mini Presence Companion
+  description: >-
+    Presence-driven automation for Reachy Mini in Home Assistant.
+    Supports device-first auto-binding: select the Reachy device once,
+    then entities are auto-discovered by object_id suffix.
+  domain: automation
+  input:
+    occupancy_entity:
+      name: Home occupancy entity
+      description: Person, group, or binary sensor representing home presence.
+      selector:
+        entity: {}
+
+    reachy_device:
+      name: Reachy device (recommended)
+      description: Select your Reachy device for automatic entity binding.
+      default: ""
+      selector:
+        device: {}
+
+    reachy_wake_button:
+      name: Wake Up button (optional fallback)
+      default: ""
+      selector:
+        entity:
+          domain: button
+
+    reachy_sleep_button:
+      name: Go To Sleep button (optional fallback)
+      default: ""
+      selector:
+        entity:
+          domain: button
+
+    idle_motion_switch:
+      name: Idle Motion switch (optional fallback)
+      default: ""
+      selector:
+        entity:
+          domain: switch
+
+    idle_antenna_motion_switch:
+      name: Idle Antenna Motion switch (optional fallback)
+      default: ""
+      selector:
+        entity:
+          domain: switch
+
+    reachy_volume_number:
+      name: Speaker Volume number (optional fallback)
+      default: ""
+      selector:
+        entity:
+          domain: number
+
+    away_delay_minutes:
+      name: Away delay (minutes)
+      description: Wait before sleeping after everyone leaves.
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 180
+          mode: box
+          unit_of_measurement: min
+
+    day_volume:
+      name: Day volume
+      default: 0.8
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    night_volume:
+      name: Night volume
+      default: 0.35
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    quiet_start:
+      name: Quiet hours start
+      default: "22:30:00"
+      selector:
+        time: {}
+
+    quiet_end:
+      name: Quiet hours end
+      default: "07:30:00"
+      selector:
+        time: {}
+
+mode: restart
+
+variables:
+  occupancy_entity: !input occupancy_entity
+  reachy_device: !input reachy_device
+  manual_wake_button: !input reachy_wake_button
+  manual_sleep_button: !input reachy_sleep_button
+  manual_idle_motion_switch: !input idle_motion_switch
+  manual_idle_antenna_switch: !input idle_antenna_motion_switch
+  manual_volume_number: !input reachy_volume_number
+  day_volume: !input day_volume
+  night_volume: !input night_volume
+
+  device_entities_list: >-
+    {{ device_entities(reachy_device) if reachy_device else [] }}
+
+  wake_button_auto: >-
+    {{ (device_entities_list | select('match', '^button\..*wake_up$') | list | first) or '' }}
+  sleep_button_auto: >-
+    {{ (device_entities_list | select('match', '^button\..*go_to_sleep$') | list | first) or '' }}
+  idle_motion_switch_auto: >-
+    {{ (device_entities_list | select('match', '^switch\..*idle_motion_enabled$') | list | first) or '' }}
+  idle_antenna_switch_auto: >-
+    {{ (device_entities_list | select('match', '^switch\..*idle_antenna_enabled$') | list | first) or '' }}
+  volume_number_auto: >-
+    {{ (device_entities_list | select('match', '^number\..*speaker_volume$') | list | first) or '' }}
+
+  wake_button: >-
+    {{ manual_wake_button if manual_wake_button else wake_button_auto }}
+  sleep_button: >-
+    {{ manual_sleep_button if manual_sleep_button else sleep_button_auto }}
+  idle_motion_switch: >-
+    {{ manual_idle_motion_switch if manual_idle_motion_switch else idle_motion_switch_auto }}
+  idle_antenna_motion_switch: >-
+    {{ manual_idle_antenna_switch if manual_idle_antenna_switch else idle_antenna_switch_auto }}
+  volume_number: >-
+    {{ manual_volume_number if manual_volume_number else volume_number_auto }}
+
+  is_occupied: >-
+    {{ states(occupancy_entity) in ['home', 'on'] }}
+
+trigger:
+  - platform: state
+    id: occupied_home
+    entity_id: !input occupancy_entity
+    to: "home"
+
+  - platform: state
+    id: occupied_on
+    entity_id: !input occupancy_entity
+    to: "on"
+
+  - platform: state
+    id: empty_not_home
+    entity_id: !input occupancy_entity
+    to: "not_home"
+    for:
+      minutes: !input away_delay_minutes
+
+  - platform: state
+    id: empty_off
+    entity_id: !input occupancy_entity
+    to: "off"
+    for:
+      minutes: !input away_delay_minutes
+
+  - platform: time
+    id: quiet_start
+    at: !input quiet_start
+
+  - platform: time
+    id: quiet_end
+    at: !input quiet_end
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id in ['occupied_home', 'occupied_on'] }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ wake_button != '' }}"
+            then:
+              - service: button.press
+                target:
+                  entity_id: "{{ wake_button }}"
+          - if:
+              - condition: template
+                value_template: "{{ idle_motion_switch != '' }}"
+            then:
+              - service: switch.turn_on
+                target:
+                  entity_id: "{{ idle_motion_switch }}"
+          - if:
+              - condition: template
+                value_template: "{{ idle_antenna_motion_switch != '' }}"
+            then:
+              - service: switch.turn_on
+                target:
+                  entity_id: "{{ idle_antenna_motion_switch }}"
+          - if:
+              - condition: template
+                value_template: "{{ volume_number != '' }}"
+            then:
+              - service: number.set_value
+                target:
+                  entity_id: "{{ volume_number }}"
+                data:
+                  value: "{{ day_volume }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id in ['empty_not_home', 'empty_off'] }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ idle_motion_switch != '' }}"
+            then:
+              - service: switch.turn_off
+                target:
+                  entity_id: "{{ idle_motion_switch }}"
+          - if:
+              - condition: template
+                value_template: "{{ idle_antenna_motion_switch != '' }}"
+            then:
+              - service: switch.turn_off
+                target:
+                  entity_id: "{{ idle_antenna_motion_switch }}"
+          - if:
+              - condition: template
+                value_template: "{{ sleep_button != '' }}"
+            then:
+              - service: button.press
+                target:
+                  entity_id: "{{ sleep_button }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'quiet_start' and is_occupied }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ volume_number != '' }}"
+            then:
+              - service: number.set_value
+                target:
+                  entity_id: "{{ volume_number }}"
+                data:
+                  value: "{{ night_volume }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'quiet_end' and is_occupied }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ volume_number != '' }}"
+            then:
+              - service: number.set_value
+                target:
+                  entity_id: "{{ volume_number }}"
+                data:
+                  value: "{{ day_volume }}"
