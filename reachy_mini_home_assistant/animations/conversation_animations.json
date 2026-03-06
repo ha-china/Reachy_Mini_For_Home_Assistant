@@ -1,12 +1,12 @@
 {
   "animations": {
     "idle": {
-      "description": "Breathing animation when idle - gentle z-axis movement (antenna sway disabled)",
+      "description": "Breathing animation when idle - gentle z-axis movement and antenna sway",
       "z_amplitude_m": 0.006,
       "z_frequency_hz": 0.22,
-      "antenna_amplitude_rad": 0.0,
+      "antenna_amplitude_rad": 0.16,
       "antenna_move_name": "wiggle",
-      "antenna_frequency_hz": 0.0,
+      "antenna_frequency_hz": 0.3,
       "frequency_hz": 0.5
     },
     "listening": {
