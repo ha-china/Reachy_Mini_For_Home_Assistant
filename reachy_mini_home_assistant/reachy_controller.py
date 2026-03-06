@@ -101,6 +101,7 @@ class ReachyController:
         self._http_session = requests.Session()
         self._http_timeout = 5.0  # seconds
         self._cache_ttl = Config.daemon.status_cache_ttl
+        self._daemon_base_url = "http://127.0.0.1:8000"
 
         # Callback for sleep/wake to notify VoiceAssistant
         self._on_sleep_callback = None
@@ -153,6 +154,23 @@ class ReachyController:
             logger.warning("set_idle_motion_enabled failed - MovementManager not set")
             return
         self._movement_manager.set_idle_motion_enabled(enabled)
+
+    def get_idle_antenna_enabled(self) -> bool:
+        """Get whether idle antenna animation is enabled."""
+        if self._movement_manager is None:
+            return False
+        try:
+            return bool(self._movement_manager.get_idle_antenna_enabled())
+        except Exception as e:
+            logger.debug("Error getting idle antenna state: %s", e)
+            return False
+
+    def set_idle_antenna_enabled(self, enabled: bool) -> None:
+        """Enable or disable idle antenna animation."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_antenna_enabled failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_antenna_enabled(enabled)
 
     # ========== Phase 1: Basic Status & Volume ==========
 
@@ -416,8 +434,14 @@ class ReachyController:
             return
 
         try:
-            self.reachy.wake_up()
-            logger.info("Wake up animation executed")
+            # SDK v1.5 sleep/wake is managed at daemon level.
+            # Start daemon with wake_up=true so /api/daemon/status reflects awake state.
+            self._daemon_command("/api/daemon/start", params={"wake_up": "true"})
+            logger.info("Wake-up requested via daemon API")
+
+            # Invalidate cached status after transition request
+            self._last_status_query = 0.0
+
             # Notify callback (VoiceAssistant will resume services)
             if self._on_wake_callback is not None:
                 try:
@@ -453,12 +477,22 @@ class ReachyController:
             # Give services time to fully suspend
             time.sleep(0.5)
 
-            # Now send the robot to sleep
-            self.reachy.goto_sleep()
-            logger.info("Sleep animation executed")
+            # SDK v1.5 sleep/wake is managed at daemon level.
+            # Stop daemon with goto_sleep=true so /api/daemon/status reflects sleep state.
+            self._daemon_command("/api/daemon/stop", params={"goto_sleep": "true"})
+            logger.info("Sleep requested via daemon API")
+
+            # Invalidate cached status after transition request
+            self._last_status_query = 0.0
 
         except Exception as e:
             logger.error(f"Error executing sleep: {e}")
+
+    def _daemon_command(self, path: str, params: dict[str, str] | None = None) -> None:
+        """Send a daemon command request with lightweight validation."""
+        url = f"{self._daemon_base_url}{path}"
+        resp = self._http_session.post(url, params=params or {}, timeout=self._http_timeout)
+        resp.raise_for_status()
 
     # ========== Phase 3: Pose Control ==========
 

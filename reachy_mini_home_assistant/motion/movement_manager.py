@@ -68,13 +68,13 @@ BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 
 # Idle look-around behavior parameters
-IDLE_LOOK_AROUND_MIN_INTERVAL = 12.0  # Minimum seconds between look-arounds
-IDLE_LOOK_AROUND_MAX_INTERVAL = 28.0  # Maximum seconds between look-arounds
+IDLE_LOOK_AROUND_MIN_INTERVAL = 6.0  # Minimum seconds between look-arounds
+IDLE_LOOK_AROUND_MAX_INTERVAL = 14.0  # Maximum seconds between look-arounds
 IDLE_LOOK_AROUND_YAW_RANGE = 15.0  # Maximum yaw angle in degrees
 IDLE_LOOK_AROUND_PITCH_RANGE = 6.0  # Maximum pitch angle in degrees
 IDLE_LOOK_AROUND_DURATION = 2.0  # Duration of look-around action in seconds
-IDLE_INACTIVITY_THRESHOLD = 8.0  # Seconds of inactivity before look-around starts
-IDLE_LOOK_AROUND_PROBABILITY = 0.5  # Otherwise keep breathing-only cycle
+IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around starts
+IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
 
 
 class MovementManager:
@@ -178,10 +178,11 @@ class MovementManager:
         # Idle look-around behavior toggle (exposed via ESPHome switch)
         # Default OFF to prioritize long-running stability.
         self._idle_motion_enabled = False
+        # Idle antenna animation toggle (exposed via ESPHome switch)
+        self._idle_antenna_enabled = False
 
         # Antenna controller (handles freeze/unfreeze for listening mode)
         self._antenna_controller = AntennaController(time_func=self._now)
-        self._antenna_torque_disabled_idle = False
 
         logger.info("MovementManager initialized with AnimationPlayer and DOA tracking")
 
@@ -447,6 +448,17 @@ class MovementManager:
         except Exception:
             logger.warning("Command queue full, dropping set_idle_motion command")
 
+    def get_idle_antenna_enabled(self) -> bool:
+        """Get whether idle antenna animation is enabled."""
+        return self._idle_antenna_enabled
+
+    def set_idle_antenna_enabled(self, enabled: bool) -> None:
+        """Thread-safe: Enable or disable idle antenna animation."""
+        try:
+            self._command_queue.put(("set_idle_antenna", enabled), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_idle_antenna command")
+
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
 
@@ -582,21 +594,13 @@ class MovementManager:
                 self.state.idle_start_time = self._now()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
-                # Disable antenna torque in idle so antennas rest naturally.
-                self._set_antenna_torque(enabled=False)
-            elif payload != RobotState.IDLE and old_state == RobotState.IDLE:
-                # Re-enable antenna torque when leaving idle.
-                self._set_antenna_torque(enabled=True)
 
             # Freeze antennas when entering listening mode
             if payload == RobotState.LISTENING:
-                self._set_antenna_torque(enabled=True)
                 self._freeze_antennas()
             elif old_state == RobotState.LISTENING and payload != RobotState.LISTENING:
                 # Start unfreezing when leaving listening mode
                 self._start_antenna_unfreeze()
-                if payload != RobotState.IDLE:
-                    self._set_antenna_torque(enabled=True)
 
             logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
 
@@ -665,6 +669,16 @@ class MovementManager:
             elif self.state.robot_state == RobotState.IDLE:
                 self._animation_player.set_animation("idle")
             logger.info("Idle motion %s", "enabled" if enabled else "disabled")
+
+        elif cmd == "set_idle_antenna":
+            enabled = bool(payload)
+            self._idle_antenna_enabled = enabled
+
+            if not enabled:
+                self.state.anim_antenna_left = 0.0
+                self.state.anim_antenna_right = 0.0
+
+            logger.info("Idle antenna animation %s", "enabled" if enabled else "disabled")
 
     def _start_emotion_move(self, emotion_name: str) -> None:
         """Start playing an emotion move.
@@ -785,8 +799,12 @@ class MovementManager:
         self.state.anim_x = offsets["x"]
         self.state.anim_y = offsets["y"]
         self.state.anim_z = offsets["z"]
-        self.state.anim_antenna_left = offsets["antenna_left"]
-        self.state.anim_antenna_right = offsets["antenna_right"]
+        if self._idle_antenna_enabled:
+            self.state.anim_antenna_left = offsets["antenna_left"]
+            self.state.anim_antenna_right = offsets["antenna_right"]
+        else:
+            self.state.anim_antenna_left = 0.0
+            self.state.anim_antenna_right = 0.0
 
     def _freeze_antennas(self) -> None:
         """Freeze antennas at current position (for listening mode)."""
@@ -1296,7 +1314,6 @@ class MovementManager:
         self._animation_player.set_animation("idle")
         self.state.robot_state = RobotState.IDLE
         self.state.idle_start_time = self._now()
-        self._set_antenna_torque(enabled=False)
         logger.info("Initialized with idle animation on startup")
 
         self._thread = threading.Thread(
@@ -1340,9 +1357,6 @@ class MovementManager:
         # Reset drain flag for potential restart
         self._draining_event.clear()
 
-        # Restore antenna torque on shutdown to avoid leaving hardware passive
-        self._set_antenna_torque(enabled=True)
-
         # Skip reset to neutral - let the app manager handle it
         # This speeds up shutdown significantly
         logger.info("Movement manager stopped")
@@ -1365,21 +1379,3 @@ class MovementManager:
     def is_running(self) -> bool:
         """Check if control loop is running."""
         return self._thread is not None and self._thread.is_alive()
-
-    def _set_antenna_torque(self, enabled: bool) -> None:
-        """Enable/disable antenna torque only (does not affect head motors)."""
-        should_disable = not enabled
-        if self._antenna_torque_disabled_idle == should_disable:
-            return
-
-        try:
-            ids = ["right_antenna", "left_antenna"]
-            if enabled:
-                self.robot.enable_motors(ids=ids)
-                logger.info("Antenna torque enabled")
-            else:
-                self.robot.disable_motors(ids=ids)
-                logger.info("Antenna torque disabled for idle mode")
-            self._antenna_torque_disabled_idle = should_disable
-        except Exception as e:
-            logger.warning("Failed to set antenna torque (%s): %s", "enabled" if enabled else "disabled", e)

@@ -296,7 +296,7 @@ class DaemonStateMonitor:
             if status is None:
                 return DaemonStatus(state=DaemonState.UNAVAILABLE)
 
-            state_str = status.get("state", "unavailable")
+            state_str = self._status_value(status, "state", "unavailable")
             try:
                 state = DaemonState(state_str)
             except ValueError:
@@ -305,13 +305,19 @@ class DaemonStateMonitor:
 
             return DaemonStatus(
                 state=state,
-                robot_name=status.get("robot_name", ""),
-                version=status.get("version"),
-                error=status.get("error"),
+                robot_name=self._status_value(status, "robot_name", ""),
+                version=self._status_value(status, "version"),
+                error=self._status_value(status, "error"),
             )
         except Exception as e:
             logger.debug(f"Error getting status from SDK: {e}")
             return DaemonStatus(state=DaemonState.UNAVAILABLE)
+
+    @staticmethod
+    def _status_value(status: Any, key: str, default: Any = None) -> Any:
+        if isinstance(status, dict):
+            return status.get(key, default)
+        return getattr(status, key, default)
 
     def _process_status(self, status: DaemonStatus) -> None:
         """Process a new status and trigger callbacks if needed."""

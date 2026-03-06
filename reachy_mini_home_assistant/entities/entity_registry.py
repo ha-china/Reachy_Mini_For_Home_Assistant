@@ -278,6 +278,31 @@ class EntityRegistry:
             )
         )
 
+        def get_idle_antenna_enabled() -> bool:
+            if hasattr(self.server, "state") and self.server.state:
+                prefs = self.server.state.preferences
+                return bool(getattr(prefs, "idle_antenna_enabled", False))
+            return False
+
+        def set_idle_antenna_enabled(enabled: bool) -> None:
+            rc.set_idle_antenna_enabled(enabled)
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.idle_antenna_enabled = enabled
+                self.server.state.save_preferences()
+
+        entities.append(
+            SwitchEntity(
+                server=self.server,
+                key=get_entity_key("idle_antenna_enabled"),
+                name="Idle Antenna Motion",
+                object_id="idle_antenna_enabled",
+                icon="mdi:antenna",
+                entity_category=1,
+                value_getter=get_idle_antenna_enabled,
+                value_setter=set_idle_antenna_enabled,
+            )
+        )
+
         def get_sendspin_enabled() -> bool:
             if hasattr(self.server, "state") and self.server.state:
                 prefs = self.server.state.preferences
@@ -388,7 +413,7 @@ class EntityRegistry:
 
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
-            "idle_motion_enabled, sendspin_enabled, face_tracking_enabled, gesture_detection_enabled, "
+            "idle_motion_enabled, idle_antenna_enabled, sendspin_enabled, face_tracking_enabled, gesture_detection_enabled, "
             "face_confidence_threshold"
         )
 
