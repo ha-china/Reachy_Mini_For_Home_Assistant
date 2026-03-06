@@ -66,6 +66,10 @@ POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
 ANTENNA_EPS = 0.005  # Radians (~0.29 deg)
 BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
+ANTENNA_IDLE_HOLD_DEADBAND = 0.02  # Radians (~1.15 deg) to suppress idle antenna micro-corrections
+IDLE_POSE_EPS = 0.0025  # Relaxed pose deadband in quiet idle (reduce chatter)
+IDLE_BODY_YAW_EPS = 0.02  # Relaxed body yaw deadband in quiet idle (reduce chatter)
+IDLE_MIN_SEND_INTERVAL_S = 0.35  # Slower send cadence in quiet idle
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 6.0  # Minimum seconds between look-arounds
@@ -140,6 +144,9 @@ class MovementManager:
         self._last_sent_antennas: tuple[float, float] | None = None
         self._last_sent_body_yaw: float | None = None
         self._last_send_time = 0.0
+
+        # Idle antenna hold (prevents high-frequency micro-corrections/noise)
+        self._idle_antenna_hold: tuple[float, float] | None = None
 
         # Command send pacing (separate from control loop frequency)
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
@@ -594,6 +601,8 @@ class MovementManager:
                 self.state.idle_start_time = self._now()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
+                # Re-latch antennas on next compose cycle
+                self._idle_antenna_hold = None
 
             # Freeze antennas when entering listening mode
             if payload == RobotState.LISTENING:
@@ -601,6 +610,9 @@ class MovementManager:
             elif old_state == RobotState.LISTENING and payload != RobotState.LISTENING:
                 # Start unfreezing when leaving listening mode
                 self._start_antenna_unfreeze()
+
+            if payload != RobotState.IDLE:
+                self._idle_antenna_hold = None
 
             logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
 
@@ -677,6 +689,7 @@ class MovementManager:
             if not enabled:
                 self.state.anim_antenna_left = 0.0
                 self.state.anim_antenna_right = 0.0
+                self._idle_antenna_hold = None
 
             logger.info("Idle antenna animation %s", "enabled" if enabled else "disabled")
 
@@ -1060,6 +1073,23 @@ class MovementManager:
             target_antenna_left, target_antenna_right
         )
 
+        # In idle, hold antennas unless change exceeds deadband.
+        # This avoids continuous micro-corrections that cause mechanical chatter.
+        if self.state.robot_state == RobotState.IDLE:
+            if self._idle_antenna_hold is None:
+                self._idle_antenna_hold = (antenna_left, antenna_right)
+            else:
+                hold_left, hold_right = self._idle_antenna_hold
+                if (
+                    abs(antenna_left - hold_left) < ANTENNA_IDLE_HOLD_DEADBAND
+                    and abs(antenna_right - hold_right) < ANTENNA_IDLE_HOLD_DEADBAND
+                ):
+                    antenna_left, antenna_right = hold_left, hold_right
+                else:
+                    self._idle_antenna_hold = (antenna_left, antenna_right)
+        else:
+            self._idle_antenna_hold = None
+
         # Calculate body_yaw to follow head yaw (using pose_composer utilities)
         final_head_yaw = extract_yaw_from_pose(final_head)
         target_body_yaw = clamp_body_yaw(final_head_yaw)
@@ -1131,11 +1161,21 @@ class MovementManager:
             )
             body_yaw_delta = abs(body_yaw - self._last_sent_body_yaw)
 
-            min_interval = MIN_SEND_INTERVAL_S
+            quiet_idle = (
+                self.state.robot_state == RobotState.IDLE
+                and self._pending_action is None
+                and not self.state.face_detected
+                and not self.state.look_around_in_progress
+            )
+
+            pose_eps = IDLE_POSE_EPS if quiet_idle else POSE_EPS
+            body_yaw_eps = IDLE_BODY_YAW_EPS if quiet_idle else BODY_YAW_EPS
+
+            min_interval = IDLE_MIN_SEND_INTERVAL_S if quiet_idle else MIN_SEND_INTERVAL_S
             if body_yaw_delta >= Config.motion.body_yaw_deadband_rad:
                 min_interval = Config.motion.body_yaw_min_send_interval_s
 
-            if pose_delta < POSE_EPS and antenna_delta < ANTENNA_EPS and body_yaw_delta < BODY_YAW_EPS:
+            if pose_delta < pose_eps and antenna_delta < ANTENNA_EPS and body_yaw_delta < body_yaw_eps:
                 pose_unchanged = True
                 min_interval = max(min_interval, self._idle_heartbeat_interval)
                 if now - self._last_send_time < min_interval:

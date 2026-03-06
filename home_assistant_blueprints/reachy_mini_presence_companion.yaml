@@ -2,8 +2,26 @@ blueprint:
   name: Reachy Mini Presence Companion
   description: >-
     Presence-driven automation for Reachy Mini in Home Assistant.
-    Supports device-first auto-binding: select the Reachy device once,
-    then entities are auto-discovered by object_id suffix.
+
+    How to use:
+    1) Select Home occupancy entity (person/group/binary_sensor).
+    2) Select Reachy ESPHome device (recommended).
+    3) Leave optional fallback entity inputs empty unless auto-binding fails.
+    4) Set away delay and day/night volume.
+
+    What this automation does:
+    - Occupied: Wake Reachy, enable idle motion + idle antenna motion, set day volume.
+    - Empty (after delay): Disable idle motion + idle antenna motion, send Reachy to sleep.
+    - Quiet hours start/end: Apply night/day volume while occupied.
+
+    Auto-binding rules (when Reachy device is selected):
+    - Wake button suffix: wake_up
+    - Sleep button suffix: go_to_sleep
+    - Idle motion switch suffix: idle_motion_enabled
+    - Idle antenna switch suffix: idle_antenna_enabled
+    - Volume number suffix: speaker_volume
+
+    If your entities use different names, fill optional fallback entity inputs manually.
   domain: automation
   input:
     occupancy_entity:
@@ -23,6 +41,7 @@ blueprint:
 
     reachy_wake_button:
       name: Wake Up button (optional fallback)
+      description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
         entity:
@@ -30,6 +49,7 @@ blueprint:
 
     reachy_sleep_button:
       name: Go To Sleep button (optional fallback)
+      description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
         entity:
@@ -37,6 +57,7 @@ blueprint:
 
     idle_motion_switch:
       name: Idle Motion switch (optional fallback)
+      description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
         entity:
@@ -44,6 +65,7 @@ blueprint:
 
     idle_antenna_motion_switch:
       name: Idle Antenna Motion switch (optional fallback)
+      description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
         entity:
@@ -51,6 +73,7 @@ blueprint:
 
     reachy_volume_number:
       name: Speaker Volume number (optional fallback)
+      description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
         entity:
