@@ -1189,16 +1189,22 @@ class MovementManager:
             if body_yaw_delta >= Config.motion.body_yaw_deadband_rad:
                 min_interval = Config.motion.body_yaw_min_send_interval_s
 
-            antenna_eps = IDLE_ANTENNA_EPS if quiet_idle else ANTENNA_EPS
+            idle_animation_active = self.state.robot_state == RobotState.IDLE and (
+                self._idle_motion_enabled or self._idle_antenna_enabled
+            )
+
+            # When idle antenna animation is active, avoid antenna deadband gating
+            # to keep motion continuous and remove perceived step/jerk.
+            if idle_animation_active and self._idle_antenna_enabled:
+                antenna_eps = 0.0
+            else:
+                antenna_eps = IDLE_ANTENNA_EPS if quiet_idle else ANTENNA_EPS
 
             if pose_delta < pose_eps and antenna_delta < antenna_eps and body_yaw_delta < body_yaw_eps:
                 pose_unchanged = True
 
                 # Do not clamp to the long idle heartbeat interval when idle
                 # animation is active, otherwise antenna/body motion looks stepped.
-                idle_animation_active = self.state.robot_state == RobotState.IDLE and (
-                    self._idle_motion_enabled or self._idle_antenna_enabled
-                )
                 if not idle_animation_active:
                     min_interval = max(min_interval, self._idle_heartbeat_interval)
 
