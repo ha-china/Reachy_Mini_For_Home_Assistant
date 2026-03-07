@@ -63,6 +63,8 @@ class Preferences:
     idle_motion_enabled: bool = False
     # Idle antenna animation toggle (controlled from Home Assistant)
     idle_antenna_enabled: bool = False
+    # Idle random actions toggle (pure motion, no audio)
+    idle_random_actions_enabled: bool = False
     # Sendspin discovery and playback toggle (controlled from Home Assistant)
     sendspin_enabled: bool = False
     # Vision toggles and parameters (controlled from Home Assistant)

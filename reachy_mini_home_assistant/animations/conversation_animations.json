@@ -3,10 +3,10 @@
     "idle": {
       "description": "Breathing animation when idle - gentle z-axis movement and antenna sway",
       "z_amplitude_m": 0.005,
-      "z_frequency_hz": 0.1,
+      "z_frequency_hz": 0.24,
       "antenna_amplitude_rad": 0.262,
       "antenna_move_name": "wiggle",
-      "antenna_frequency_hz": 0.1,
+      "antenna_frequency_hz": 0.24,
       "frequency_hz": 0.24
     },
     "listening": {
@@ -166,6 +166,46 @@
       "antenna_right": 0.7,
       "frequency": 2.5
     }
+  },
+  "idle_random_actions": {
+    "description": "Pure movement actions used during idle random behavior (no audio)",
+    "min_interval_s": 6.0,
+    "max_interval_s": 14.0,
+    "trigger_probability": 0.85,
+    "actions": [
+      {
+        "name": "curious_left",
+        "weight": 1.0,
+        "duration_s": 1.8,
+        "yaw_range_deg": [-16.0, -6.0],
+        "pitch_range_deg": [-3.0, 4.0],
+        "roll_range_deg": [-4.0, 2.0]
+      },
+      {
+        "name": "curious_right",
+        "weight": 1.0,
+        "duration_s": 1.8,
+        "yaw_range_deg": [6.0, 16.0],
+        "pitch_range_deg": [-3.0, 4.0],
+        "roll_range_deg": [-2.0, 4.0]
+      },
+      {
+        "name": "micro_nod",
+        "weight": 0.9,
+        "duration_s": 1.3,
+        "yaw_range_deg": [-3.0, 3.0],
+        "pitch_range_deg": [-10.0, -4.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "micro_tilt",
+        "weight": 0.8,
+        "duration_s": 1.6,
+        "yaw_range_deg": [-6.0, 6.0],
+        "pitch_range_deg": [-2.0, 4.0],
+        "roll_range_deg": [-7.0, 7.0]
+      }
+    ]
   },
   "settings": {
     "amplitude_scale": 1.0,

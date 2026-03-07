@@ -16,11 +16,13 @@ Key features:
 - Antenna freeze during listening mode with smooth blend back
 """
 
+import json
 import logging
 import math
 import random
 import threading
 import time
+from pathlib import Path
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
@@ -68,8 +70,8 @@ BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 IDLE_POSE_EPS = 0.0018  # Slightly relaxed pose deadband in quiet idle
 IDLE_BODY_YAW_EPS = 0.01  # Slightly relaxed body yaw deadband in quiet idle
-IDLE_MIN_SEND_INTERVAL_S = 0.20  # Balanced idle smoothness and command pressure
-IDLE_ANTENNA_MAX_RATE_RAD_S = 0.35  # Slower antenna slew for lower mechanical noise
+IDLE_MIN_SEND_INTERVAL_S = 0.07  # Higher idle update cadence for smoother continuous motion
+IDLE_ANTENNA_MAX_RATE_RAD_S = 0.5  # Avoid clipping antenna sine wave during idle sway
 IDLE_ANTENNA_EPS = 0.012  # Larger idle antenna deadband to reduce tiny updates
 
 # Idle look-around behavior parameters
@@ -80,6 +82,42 @@ IDLE_LOOK_AROUND_PITCH_RANGE = 6.0  # Maximum pitch angle in degrees
 IDLE_LOOK_AROUND_DURATION = 2.0  # Duration of look-around action in seconds
 IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around starts
 IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
+
+_ANIMATION_CONFIG_FILE = Path(__file__).resolve().parent.parent / "animations" / "conversation_animations.json"
+_DEFAULT_IDLE_RANDOM_ACTIONS: list[dict[str, Any]] = [
+    {
+        "name": "curious_left",
+        "weight": 1.0,
+        "duration_s": 1.8,
+        "yaw_range_deg": [-16.0, -6.0],
+        "pitch_range_deg": [-3.0, 4.0],
+        "roll_range_deg": [-4.0, 2.0],
+    },
+    {
+        "name": "curious_right",
+        "weight": 1.0,
+        "duration_s": 1.8,
+        "yaw_range_deg": [6.0, 16.0],
+        "pitch_range_deg": [-3.0, 4.0],
+        "roll_range_deg": [-2.0, 4.0],
+    },
+    {
+        "name": "micro_nod",
+        "weight": 0.9,
+        "duration_s": 1.3,
+        "yaw_range_deg": [-3.0, 3.0],
+        "pitch_range_deg": [-10.0, -4.0],
+        "roll_range_deg": [-2.0, 2.0],
+    },
+    {
+        "name": "micro_tilt",
+        "weight": 0.8,
+        "duration_s": 1.6,
+        "yaw_range_deg": [-6.0, 6.0],
+        "pitch_range_deg": [-2.0, 4.0],
+        "roll_range_deg": [-7.0, 7.0],
+    },
+]
 
 
 class MovementManager:
@@ -189,6 +227,13 @@ class MovementManager:
         self._idle_motion_enabled = False
         # Idle antenna animation toggle (exposed via ESPHome switch)
         self._idle_antenna_enabled = False
+        # Idle random actions toggle (pure movement, no audio)
+        self._idle_random_actions_enabled = False
+        self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
+        self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
+        self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
+        self._idle_random_actions: list[dict[str, Any]] = []
+        self._load_idle_random_actions_config()
 
         # Antenna controller (handles freeze/unfreeze for listening mode)
         self._antenna_controller = AntennaController(time_func=self._now)
@@ -468,6 +513,17 @@ class MovementManager:
         except Exception:
             logger.warning("Command queue full, dropping set_idle_antenna command")
 
+    def get_idle_random_actions_enabled(self) -> bool:
+        """Get whether idle random actions are enabled."""
+        return self._idle_random_actions_enabled
+
+    def set_idle_random_actions_enabled(self, enabled: bool) -> None:
+        """Thread-safe: Enable or disable idle random actions."""
+        try:
+            self._command_queue.put(("set_idle_random_actions", enabled), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_idle_random_actions command")
+
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
 
@@ -573,6 +629,137 @@ class MovementManager:
     # Internal: Command processing (runs in control loop)
     # =========================================================================
 
+    @staticmethod
+    def _parse_numeric_range(value: Any, default_min: float, default_max: float) -> tuple[float, float]:
+        """Parse a numeric range from config value."""
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            try:
+                min_v = float(value[0])
+                max_v = float(value[1])
+                if min_v > max_v:
+                    min_v, max_v = max_v, min_v
+                return min_v, max_v
+            except (TypeError, ValueError):
+                return default_min, default_max
+
+        if value is None:
+            return default_min, default_max
+
+        try:
+            span = abs(float(value))
+            return -span, span
+        except (TypeError, ValueError):
+            return default_min, default_max
+
+    def _schedule_next_idle_action_time(self, now: float) -> None:
+        """Schedule the next idle action trigger time."""
+        interval = random.uniform(self._idle_random_actions_min_interval, self._idle_random_actions_max_interval)
+        self.state.next_look_around_time = now + interval
+
+    def _load_idle_random_actions_config(self) -> None:
+        """Load idle random action definitions from animation config."""
+        self._idle_random_actions = list(_DEFAULT_IDLE_RANDOM_ACTIONS)
+        self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
+        self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
+        self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
+
+        if not _ANIMATION_CONFIG_FILE.exists():
+            logger.debug("Idle random actions config file not found: %s", _ANIMATION_CONFIG_FILE)
+            return
+
+        try:
+            with open(_ANIMATION_CONFIG_FILE, encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception as e:
+            logger.warning("Failed to read idle random actions config: %s", e)
+            return
+
+        section = config.get("idle_random_actions")
+        if not isinstance(section, dict):
+            return
+
+        try:
+            min_interval = float(section.get("min_interval_s", IDLE_LOOK_AROUND_MIN_INTERVAL))
+            max_interval = float(section.get("max_interval_s", IDLE_LOOK_AROUND_MAX_INTERVAL))
+            if min_interval > max_interval:
+                min_interval, max_interval = max_interval, min_interval
+            self._idle_random_actions_min_interval = max(0.5, min_interval)
+            self._idle_random_actions_max_interval = max(self._idle_random_actions_min_interval, max_interval)
+        except (TypeError, ValueError):
+            self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
+            self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
+
+        try:
+            probability = float(section.get("trigger_probability", IDLE_LOOK_AROUND_PROBABILITY))
+        except (TypeError, ValueError):
+            probability = IDLE_LOOK_AROUND_PROBABILITY
+        self._idle_random_actions_probability = max(0.0, min(1.0, probability))
+
+        raw_actions = section.get("actions")
+        if not isinstance(raw_actions, list):
+            return
+
+        parsed_actions: list[dict[str, Any]] = []
+        for idx, action in enumerate(raw_actions):
+            if not isinstance(action, dict):
+                continue
+
+            name = str(action.get("name", f"idle_action_{idx + 1}"))
+            try:
+                weight = float(action.get("weight", 1.0))
+            except (TypeError, ValueError):
+                weight = 1.0
+            if weight <= 0.0:
+                continue
+
+            try:
+                duration_s = max(0.2, float(action.get("duration_s", IDLE_LOOK_AROUND_DURATION)))
+            except (TypeError, ValueError):
+                duration_s = IDLE_LOOK_AROUND_DURATION
+
+            yaw_min, yaw_max = self._parse_numeric_range(
+                action.get("yaw_range_deg"),
+                -IDLE_LOOK_AROUND_YAW_RANGE,
+                IDLE_LOOK_AROUND_YAW_RANGE,
+            )
+            pitch_min, pitch_max = self._parse_numeric_range(
+                action.get("pitch_range_deg"),
+                -IDLE_LOOK_AROUND_PITCH_RANGE,
+                IDLE_LOOK_AROUND_PITCH_RANGE,
+            )
+            roll_min, roll_max = self._parse_numeric_range(action.get("roll_range_deg"), 0.0, 0.0)
+            x_min, x_max = self._parse_numeric_range(action.get("x_range_m"), 0.0, 0.0)
+            y_min, y_max = self._parse_numeric_range(action.get("y_range_m"), 0.0, 0.0)
+            z_min, z_max = self._parse_numeric_range(action.get("z_range_m"), 0.0, 0.0)
+
+            parsed_actions.append(
+                {
+                    "name": name,
+                    "weight": weight,
+                    "duration_s": duration_s,
+                    "yaw_range_deg": (yaw_min, yaw_max),
+                    "pitch_range_deg": (pitch_min, pitch_max),
+                    "roll_range_deg": (roll_min, roll_max),
+                    "x_range_m": (x_min, x_max),
+                    "y_range_m": (y_min, y_max),
+                    "z_range_m": (z_min, z_max),
+                }
+            )
+
+        if parsed_actions:
+            self._idle_random_actions = parsed_actions
+
+    def _pick_idle_random_action(self) -> dict[str, Any]:
+        """Pick one idle random action from weighted definitions."""
+        if not self._idle_random_actions:
+            return random.choice(_DEFAULT_IDLE_RANDOM_ACTIONS)
+
+        weights = [max(0.0, float(action.get("weight", 1.0))) for action in self._idle_random_actions]
+        total_weight = sum(weights)
+        if total_weight <= 0.0:
+            return random.choice(self._idle_random_actions)
+        return random.choices(self._idle_random_actions, weights=weights, k=1)[0]
+
     def _poll_commands(self) -> None:
         """Process all pending commands from the queue."""
         while True:
@@ -670,8 +857,9 @@ class MovementManager:
             enabled = bool(payload)
             self._idle_motion_enabled = enabled
             if not enabled:
-                self.state.next_look_around_time = 0.0
-                self.state.look_around_in_progress = False
+                if not self._idle_random_actions_enabled:
+                    self.state.next_look_around_time = 0.0
+                    self.state.look_around_in_progress = False
                 if self.state.robot_state == RobotState.IDLE:
                     self._animation_player.stop()
                     self.state.anim_pitch = 0.0
@@ -685,6 +873,14 @@ class MovementManager:
             elif self.state.robot_state == RobotState.IDLE:
                 self._animation_player.set_animation("idle")
             logger.info("Idle motion %s", "enabled" if enabled else "disabled")
+
+        elif cmd == "set_idle_random_actions":
+            enabled = bool(payload)
+            self._idle_random_actions_enabled = enabled
+            if not enabled and not self._idle_motion_enabled:
+                self.state.next_look_around_time = 0.0
+                self.state.look_around_in_progress = False
+            logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
 
         elif cmd == "set_idle_antenna":
             enabled = bool(payload)
@@ -791,8 +987,8 @@ class MovementManager:
                     self._pending_action.callback()
                 except Exception as e:
                     logger.error("Action callback error: %s", e)
-            # Reset look-around state if this was a look-around action
-            if self._pending_action.name == "look_around":
+            # Reset idle action state when idle action completes
+            if self._pending_action.name.startswith("idle_action") or self._pending_action.name == "look_around":
                 self.state.look_around_in_progress = False
             self._pending_action = None
 
@@ -909,7 +1105,7 @@ class MovementManager:
         This adds life-like behavior to the robot by occasionally looking around
         when not engaged in conversation. Similar to conversation_app's idle behaviors.
         """
-        if not self._idle_motion_enabled:
+        if not self._idle_motion_enabled and not self._idle_random_actions_enabled:
             self.state.next_look_around_time = 0.0
             self.state.look_around_in_progress = False
             return
@@ -934,20 +1130,57 @@ class MovementManager:
 
         # Schedule next look-around if not scheduled
         if self.state.next_look_around_time == 0.0:
-            interval = random.uniform(IDLE_LOOK_AROUND_MIN_INTERVAL, IDLE_LOOK_AROUND_MAX_INTERVAL)
-            self.state.next_look_around_time = now + interval
-            logger.debug("Scheduled next look-around in %.1fs", interval)
+            self._schedule_next_idle_action_time(now)
             return
 
         # Check if it's time for look-around
         if now >= self.state.next_look_around_time and not self.state.look_around_in_progress:
+            if self._idle_random_actions_enabled:
+                if random.random() > self._idle_random_actions_probability:
+                    self._schedule_next_idle_action_time(now)
+                    return
+
+                action_config = self._pick_idle_random_action()
+
+                yaw_min, yaw_max = action_config.get(
+                    "yaw_range_deg", (-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE)
+                )
+                pitch_min, pitch_max = action_config.get(
+                    "pitch_range_deg", (-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE)
+                )
+                roll_min, roll_max = action_config.get("roll_range_deg", (0.0, 0.0))
+                x_min, x_max = action_config.get("x_range_m", (0.0, 0.0))
+                y_min, y_max = action_config.get("y_range_m", (0.0, 0.0))
+                z_min, z_max = action_config.get("z_range_m", (0.0, 0.0))
+                duration = float(action_config.get("duration_s", IDLE_LOOK_AROUND_DURATION))
+
+                idle_action = PendingAction(
+                    name=f"idle_action:{action_config.get('name', 'random')}",
+                    target_yaw=math.radians(random.uniform(float(yaw_min), float(yaw_max))),
+                    target_pitch=math.radians(random.uniform(float(pitch_min), float(pitch_max))),
+                    target_roll=math.radians(random.uniform(float(roll_min), float(roll_max))),
+                    target_x=random.uniform(float(x_min), float(x_max)),
+                    target_y=random.uniform(float(y_min), float(y_max)),
+                    target_z=random.uniform(float(z_min), float(z_max)),
+                    duration=max(0.2, duration),
+                )
+
+                self._start_action(idle_action)
+                self.state.look_around_in_progress = True
+                self.state.next_look_around_time = now + idle_action.duration
+                self._schedule_next_idle_action_time(self.state.next_look_around_time)
+                return
+
+            # Keep legacy behavior when random actions are disabled.
+            if not self._idle_motion_enabled:
+                self._schedule_next_idle_action_time(now)
+                return
+
             # Random alternation between breathing-only and look-around.
             # Breathing animation is always active in idle; skipping look-around
             # for this cycle shows breathing-only behavior.
             if random.random() > IDLE_LOOK_AROUND_PROBABILITY:
-                interval = random.uniform(IDLE_LOOK_AROUND_MIN_INTERVAL, IDLE_LOOK_AROUND_MAX_INTERVAL)
-                self.state.next_look_around_time = now + interval
-                logger.debug("Idle cycle: breathing-only for %.1fs", interval)
+                self._schedule_next_idle_action_time(now)
                 return
 
             # Generate random look direction
@@ -967,8 +1200,8 @@ class MovementManager:
             self.state.look_around_in_progress = True
 
             # Schedule return to center and next look-around
-            interval = random.uniform(IDLE_LOOK_AROUND_MIN_INTERVAL, IDLE_LOOK_AROUND_MAX_INTERVAL)
-            self.state.next_look_around_time = now + IDLE_LOOK_AROUND_DURATION * 2 + interval
+            self.state.next_look_around_time = now + IDLE_LOOK_AROUND_DURATION
+            self._schedule_next_idle_action_time(self.state.next_look_around_time)
 
             logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°", target_yaw, target_pitch)
 
@@ -1182,16 +1415,22 @@ class MovementManager:
                 and not self.state.look_around_in_progress
             )
 
-            pose_eps = IDLE_POSE_EPS if quiet_idle else POSE_EPS
-            body_yaw_eps = IDLE_BODY_YAW_EPS if quiet_idle else BODY_YAW_EPS
+            idle_animation_active = self.state.robot_state == RobotState.IDLE and (
+                self._idle_motion_enabled or self._idle_antenna_enabled
+            )
+
+            # For active idle animation, disable deadband gating so breathing
+            # and antenna sway are continuously updated (no step-like pauses).
+            if idle_animation_active:
+                pose_eps = 0.0
+                body_yaw_eps = 0.0
+            else:
+                pose_eps = IDLE_POSE_EPS if quiet_idle else POSE_EPS
+                body_yaw_eps = IDLE_BODY_YAW_EPS if quiet_idle else BODY_YAW_EPS
 
             min_interval = IDLE_MIN_SEND_INTERVAL_S if quiet_idle else MIN_SEND_INTERVAL_S
             if body_yaw_delta >= Config.motion.body_yaw_deadband_rad:
                 min_interval = Config.motion.body_yaw_min_send_interval_s
-
-            idle_animation_active = self.state.robot_state == RobotState.IDLE and (
-                self._idle_motion_enabled or self._idle_antenna_enabled
-            )
 
             # When idle antenna animation is active, avoid antenna deadband gating
             # to keep motion continuous and remove perceived step/jerk.

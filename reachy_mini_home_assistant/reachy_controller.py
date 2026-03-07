@@ -172,6 +172,23 @@ class ReachyController:
             return
         self._movement_manager.set_idle_antenna_enabled(enabled)
 
+    def get_idle_random_actions_enabled(self) -> bool:
+        """Get whether idle random actions are enabled."""
+        if self._movement_manager is None:
+            return False
+        try:
+            return bool(self._movement_manager.get_idle_random_actions_enabled())
+        except Exception as e:
+            logger.debug("Error getting idle random actions state: %s", e)
+            return False
+
+    def set_idle_random_actions_enabled(self, enabled: bool) -> None:
+        """Enable or disable idle random actions (no audio)."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_random_actions_enabled failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_random_actions_enabled(enabled)
+
     # ========== Phase 1: Basic Status & Volume ==========
 
     @staticmethod

@@ -20,6 +20,7 @@ ENTITY_KEYS: dict[str, int] = {
     "speaker_volume": 103,
     "idle_motion_enabled": 104,
     "idle_antenna_enabled": 109,
+    "idle_random_actions_enabled": 110,
     "sendspin_enabled": 105,
     "face_tracking_enabled": 106,
     "gesture_detection_enabled": 107,
