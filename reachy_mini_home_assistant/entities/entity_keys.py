@@ -25,8 +25,7 @@ ENTITY_KEYS: dict[str, int] = {
     "face_tracking_enabled": 106,
     "gesture_detection_enabled": 107,
     "face_confidence_threshold": 108,
-    # Phase 2: Motor control (200-299)
-    "motors_enabled": 200,
+    # Phase 2: Sleep/wake controls (200-299)
     "motor_mode": 201,
     "wake_up": 202,
     "go_to_sleep": 203,

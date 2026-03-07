@@ -450,19 +450,6 @@ class EntityRegistry:
         rc = self.reachy_controller
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("motors_enabled"),
-                name="Motors Enabled",
-                object_id="motors_enabled",
-                icon="mdi:engine",
-                device_class="switch",
-                value_getter=rc.get_motors_enabled,
-                value_setter=rc.set_motors_enabled,
-            )
-        )
-
-        entities.append(
             ButtonEntity(
                 server=self.server,
                 key=get_entity_key("wake_up"),
@@ -509,9 +496,7 @@ class EntityRegistry:
         )
         entities.append(self._services_suspended_entity)
 
-        _LOGGER.debug(
-            "Phase 2 entities registered: motors_enabled, wake_up, go_to_sleep, sleep_mode, services_suspended"
-        )
+        _LOGGER.debug("Phase 2 entities registered: wake_up, go_to_sleep, sleep_mode, services_suspended")
 
     def _setup_phase3_entities(self, entities: list) -> None:
         """Setup Phase 3 entities: Pose control."""
