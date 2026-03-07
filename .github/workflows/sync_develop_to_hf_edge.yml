@@ -1,0 +1,66 @@
+name: Sync Develop to Hugging Face Edge
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  sync-edge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub repo
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Transform project name for edge channel
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # Keep runtime module path unchanged, only rewrite package/app naming metadata.
+          pyproject = Path('pyproject.toml')
+          text = pyproject.read_text(encoding='utf-8')
+          text = text.replace(
+              'name = "reachy_mini_home_assistant"',
+              'name = "reachy_mini_home_assistant_edge"',
+              1,
+          )
+          text = text.replace(
+              'reachy_mini_home_assistant = "reachy_mini_home_assistant.main:ReachyMiniHaVoice"',
+              'reachy_mini_home_assistant_edge = "reachy_mini_home_assistant.main:ReachyMiniHaVoice"',
+              1,
+          )
+          pyproject.write_text(text, encoding='utf-8')
+
+          init_file = Path('reachy_mini_home_assistant/__init__.py')
+          init_text = init_file.read_text(encoding='utf-8')
+          init_text = init_text.replace(
+              'version("reachy_mini_home_assistant")',
+              'version("reachy_mini_home_assistant_edge")',
+              1,
+          )
+          init_file.write_text(init_text, encoding='utf-8')
+          PY
+
+      - name: Create fresh commit and push to Hugging Face edge space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
+          # Create a new orphan branch with no history
+          git checkout --orphan hf-edge-sync
+          git add -A
+          git commit -m "Fresh edge sync: $(date +%Y-%m-%d_%H:%M:%S)"
+
+          # Add Hugging Face edge remote
+          git remote add hf-edge https://djhui5710:$HF_TOKEN@huggingface.co/spaces/djhui5710/reachy_mini_home_assistant_edge
+
+          # Push LFS objects first
+          git lfs push hf-edge hf-edge-sync --all
+
+          # Force push as main to HF edge space
+          git push hf-edge hf-edge-sync:main --force
