@@ -42,6 +42,26 @@ jobs:
               1,
           )
           init_file.write_text(init_text, encoding='utf-8')
+
+          readme = Path('README.md')
+          if readme.exists():
+              readme_text = readme.read_text(encoding='utf-8')
+              readme_text = readme_text.replace(
+                  'title: Reachy Mini for Home Assistant',
+                  'title: Reachy Mini for Home Assistant (Edge)',
+                  1,
+              )
+              readme_text = readme_text.replace(
+                  'short_description: Deep integration of Reachy Mini robot with Home Assistant',
+                  'short_description: Edge channel for Reachy Mini Home Assistant integration',
+                  1,
+              )
+              readme_text = readme_text.replace(
+                  '  - reachy_mini_home_assistant',
+                  '  - reachy_mini_home_assistant_edge',
+                  1,
+              )
+              readme.write_text(readme_text, encoding='utf-8')
           PY
 
       - name: Create fresh commit and push to Hugging Face edge space
