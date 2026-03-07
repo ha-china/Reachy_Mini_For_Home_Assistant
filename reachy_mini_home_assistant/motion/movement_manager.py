@@ -22,6 +22,7 @@ import math
 import random
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
@@ -57,7 +58,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Control loop defaults (actual values come from Config.motion)
-DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 50
+DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
 
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
@@ -170,6 +171,7 @@ class MovementManager:
         self._pending_action: PendingAction | None = None
         self._action_start_time: float = 0.0
         self._action_start_pose: dict[str, float] = {}
+        self._idle_action_queue: deque[PendingAction] = deque()
 
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -853,6 +855,9 @@ class MovementManager:
                 if not self._idle_random_actions_enabled:
                     self.state.next_look_around_time = 0.0
                     self.state.look_around_in_progress = False
+                    self._idle_action_queue.clear()
+                    if self._pending_action and self._pending_action.name.startswith("idle_action"):
+                        self._pending_action = None
                 if self.state.robot_state == RobotState.IDLE:
                     self._animation_player.stop()
                     self.state.anim_pitch = 0.0
@@ -870,9 +875,13 @@ class MovementManager:
         elif cmd == "set_idle_random_actions":
             enabled = bool(payload)
             self._idle_random_actions_enabled = enabled
-            if not enabled and not self._idle_motion_enabled:
-                self.state.next_look_around_time = 0.0
-                self.state.look_around_in_progress = False
+            if not enabled:
+                if not self._idle_motion_enabled:
+                    self.state.next_look_around_time = 0.0
+                    self.state.look_around_in_progress = False
+                self._idle_action_queue.clear()
+                if self._pending_action and self._pending_action.name.startswith("idle_action"):
+                    self._pending_action = None
             logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
 
         elif cmd == "set_idle_antenna":
@@ -954,6 +963,10 @@ class MovementManager:
     def _update_action(self, dt: float) -> None:
         """Update pending action interpolation."""
         if self._pending_action is None:
+            if self._idle_action_queue:
+                self._start_action(self._idle_action_queue.popleft())
+            else:
+                self.state.look_around_in_progress = False
             return
 
         elapsed = self._now() - self._action_start_time
@@ -975,18 +988,43 @@ class MovementManager:
 
         # Action complete
         if progress >= 1.0:
-            if self._pending_action.callback:
+            completed_action = self._pending_action
+
+            if completed_action.callback:
                 try:
-                    self._pending_action.callback()
+                    completed_action.callback()
                 except Exception as e:
                     logger.error("Action callback error: %s", e)
-            # Reset idle action state when idle action completes
-            if self._pending_action.name.startswith("idle_action") or self._pending_action.name == "look_around":
-                self.state.look_around_in_progress = False
+
             self._pending_action = None
+
+            # Keep idle action state active until the full idle action queue is drained
+            if completed_action.name.startswith("idle_action") and self._idle_action_queue:
+                self._start_action(self._idle_action_queue.popleft())
+            elif completed_action.name.startswith("idle_action") or completed_action.name == "look_around":
+                self.state.look_around_in_progress = False
 
     def _update_animation(self, dt: float) -> None:
         """Update animation offsets from AnimationPlayer."""
+        idle_queue_action_active = (
+            self.state.robot_state == RobotState.IDLE
+            and self.state.look_around_in_progress
+            and (
+                (self._pending_action is not None and self._pending_action.name.startswith("idle_action"))
+                or len(self._idle_action_queue) > 0
+            )
+        )
+        if idle_queue_action_active:
+            self.state.anim_pitch = 0.0
+            self.state.anim_yaw = 0.0
+            self.state.anim_roll = 0.0
+            self.state.anim_x = 0.0
+            self.state.anim_y = 0.0
+            self.state.anim_z = 0.0
+            self.state.anim_antenna_left = 0.0
+            self.state.anim_antenna_right = 0.0
+            return
+
         if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
             self.state.anim_pitch = 0.0
             self.state.anim_yaw = 0.0
@@ -1033,21 +1071,9 @@ class MovementManager:
         When face is detected, animation_blend is set to 0 immediately.
         When face is lost, we smoothly blend animation back to 1.0.
         """
-        if self.state.face_detected:
-            # Face is detected, keep animation suppressed
-            return
-
-        if self.state.animation_blend >= 1.0:
-            # Already fully blended, nothing to do
-            return
-
-        # Calculate blend progress since face was lost
-        elapsed = self._now() - self.state.face_lost_time
-        if elapsed > 0:
-            self.state.animation_blend = min(1.0, elapsed / ANIMATION_BLEND_DURATION)
-
-            if self.state.animation_blend >= 1.0:
-                logger.debug("Animation fully restored")
+        # Face tracking no longer suppresses idle animation.
+        # Keep blend fixed at full strength to match reference behavior.
+        self.state.animation_blend = 1.0
 
     def _update_face_tracking(self) -> None:
         """Get face tracking offsets from camera server.
@@ -1079,14 +1105,11 @@ class MovementManager:
                 # Update face detection state
                 if face_now_detected:
                     if not self.state.face_detected:
-                        logger.debug("Face detected - suppressing breathing animation")
+                        logger.debug("Face detected")
                     self.state.face_detected = True
-                    self.state.animation_blend = 0.0  # Immediately suppress animation
                 else:
                     if self.state.face_detected:
-                        # Face just lost - start blend timer
-                        self.state.face_lost_time = self._now()
-                        logger.debug("Face lost - will restore animation after blend")
+                        logger.debug("Face lost")
                     self.state.face_detected = False
 
             except Exception as e:
@@ -1158,9 +1181,10 @@ class MovementManager:
                     duration=max(0.2, duration),
                 )
 
-                self._start_action(idle_action)
+                self._idle_action_queue.append(idle_action)
                 self.state.look_around_in_progress = True
-                self.state.next_look_around_time = now + idle_action.duration
+                queued_duration = sum(max(0.0, float(item.duration)) for item in self._idle_action_queue)
+                self.state.next_look_around_time = now + queued_duration
                 self._schedule_next_idle_action_time(self.state.next_look_around_time)
                 return
 
@@ -1189,11 +1213,12 @@ class MovementManager:
             )
 
             # Start the action
-            self._start_action(action)
+            self._idle_action_queue.append(action)
             self.state.look_around_in_progress = True
 
             # Schedule return to center and next look-around
-            self.state.next_look_around_time = now + IDLE_LOOK_AROUND_DURATION
+            queued_duration = sum(max(0.0, float(item.duration)) for item in self._idle_action_queue)
+            self.state.next_look_around_time = now + queued_duration
             self._schedule_next_idle_action_time(self.state.next_look_around_time)
 
             logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°", target_yaw, target_pitch)
