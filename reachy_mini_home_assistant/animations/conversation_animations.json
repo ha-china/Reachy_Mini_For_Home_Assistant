@@ -204,6 +204,392 @@
         "yaw_range_deg": [-6.0, 6.0],
         "pitch_range_deg": [-2.0, 4.0],
         "roll_range_deg": [-7.0, 7.0]
+      },
+      {
+        "name": "look_up_soft",
+        "weight": 0.7,
+        "duration_s": 1.2,
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [-14.0, -6.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "look_down_soft",
+        "weight": 0.7,
+        "duration_s": 1.2,
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [6.0, 14.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "side_glance_flick_left",
+        "weight": 0.9,
+        "duration_s": 0.9,
+        "yaw_range_deg": [-24.0, -14.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [-3.0, 2.0]
+      },
+      {
+        "name": "side_glance_flick_right",
+        "weight": 0.9,
+        "duration_s": 0.9,
+        "yaw_range_deg": [14.0, 24.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [-2.0, 3.0]
+      },
+      {
+        "name": "sharp_side_tilt_left",
+        "weight": 0.6,
+        "duration_s": 1.0,
+        "yaw_range_deg": [-5.0, 5.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [-14.0, -8.0]
+      },
+      {
+        "name": "sharp_side_tilt_right",
+        "weight": 0.6,
+        "duration_s": 1.0,
+        "yaw_range_deg": [-5.0, 5.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [8.0, 14.0]
+      },
+      {
+        "name": "chicken_peck",
+        "weight": 0.6,
+        "duration_s": 0.85,
+        "x_range_m": [0.007, 0.018],
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [8.0, 15.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "neck_recoil",
+        "weight": 0.5,
+        "duration_s": 1.0,
+        "x_range_m": [-0.015, -0.006],
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [-8.0, -2.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "side_to_side_sway_left",
+        "weight": 0.5,
+        "duration_s": 1.3,
+        "y_range_m": [-0.018, -0.008],
+        "yaw_range_deg": [-6.0, -1.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [-3.0, 3.0]
+      },
+      {
+        "name": "side_to_side_sway_right",
+        "weight": 0.5,
+        "duration_s": 1.3,
+        "y_range_m": [0.008, 0.018],
+        "yaw_range_deg": [1.0, 6.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [-3.0, 3.0]
+      },
+      {
+        "name": "emotion_cheerful_bounce",
+        "weight": 0.7,
+        "duration_s": 1.4,
+        "z_range_m": [0.004, 0.012],
+        "yaw_range_deg": [-6.0, 6.0],
+        "pitch_range_deg": [-8.0, -2.0],
+        "roll_range_deg": [-3.0, 3.0]
+      },
+      {
+        "name": "emotion_curious_peek_left",
+        "weight": 0.8,
+        "duration_s": 1.5,
+        "y_range_m": [-0.012, -0.004],
+        "yaw_range_deg": [-20.0, -10.0],
+        "pitch_range_deg": [-5.0, 2.0],
+        "roll_range_deg": [-8.0, -3.0]
+      },
+      {
+        "name": "emotion_curious_peek_right",
+        "weight": 0.8,
+        "duration_s": 1.5,
+        "y_range_m": [0.004, 0.012],
+        "yaw_range_deg": [10.0, 20.0],
+        "pitch_range_deg": [-5.0, 2.0],
+        "roll_range_deg": [3.0, 8.0]
+      },
+      {
+        "name": "emotion_surprised_pop",
+        "weight": 0.55,
+        "duration_s": 0.9,
+        "z_range_m": [0.006, 0.015],
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [-16.0, -8.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "emotion_sleepy_drop",
+        "weight": 0.45,
+        "duration_s": 1.7,
+        "z_range_m": [-0.014, -0.006],
+        "yaw_range_deg": [-5.0, 5.0],
+        "pitch_range_deg": [8.0, 16.0],
+        "roll_range_deg": [-4.0, 4.0]
+      },
+      {
+        "name": "emotion_thinking_tilt_left",
+        "weight": 0.65,
+        "duration_s": 1.6,
+        "yaw_range_deg": [-10.0, -2.0],
+        "pitch_range_deg": [-6.0, 1.0],
+        "roll_range_deg": [-10.0, -4.0]
+      },
+      {
+        "name": "emotion_thinking_tilt_right",
+        "weight": 0.65,
+        "duration_s": 1.6,
+        "yaw_range_deg": [2.0, 10.0],
+        "pitch_range_deg": [-6.0, 1.0],
+        "roll_range_deg": [4.0, 10.0]
+      },
+      {
+        "name": "emotion_shy_turn_away_left",
+        "weight": 0.5,
+        "duration_s": 1.5,
+        "yaw_range_deg": [-18.0, -10.0],
+        "pitch_range_deg": [4.0, 10.0],
+        "roll_range_deg": [2.0, 7.0]
+      },
+      {
+        "name": "emotion_shy_turn_away_right",
+        "weight": 0.5,
+        "duration_s": 1.5,
+        "yaw_range_deg": [10.0, 18.0],
+        "pitch_range_deg": [4.0, 10.0],
+        "roll_range_deg": [-7.0, -2.0]
+      },
+      {
+        "name": "emotion_alert_scan_up",
+        "weight": 0.55,
+        "duration_s": 1.0,
+        "z_range_m": [0.003, 0.01],
+        "yaw_range_deg": [-12.0, 12.0],
+        "pitch_range_deg": [-14.0, -6.0],
+        "roll_range_deg": [-3.0, 3.0]
+      },
+      {
+        "name": "emotion_bored_drift",
+        "weight": 0.45,
+        "duration_s": 1.9,
+        "y_range_m": [-0.01, 0.01],
+        "yaw_range_deg": [-8.0, 8.0],
+        "pitch_range_deg": [2.0, 8.0],
+        "roll_range_deg": [-5.0, 5.0]
+      },
+      {
+        "name": "dance_duo_flow_left_arc",
+        "weight": 0.65,
+        "duration_s": 1.6,
+        "x_range_m": [-0.005, 0.001],
+        "y_range_m": [0.006, 0.019],
+        "z_range_m": [0.0082, 0.0092],
+        "yaw_range_deg": [1.0, 5.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [3.0, 10.0]
+      },
+      {
+        "name": "dance_duo_flow_right_arc",
+        "weight": 0.65,
+        "duration_s": 1.6,
+        "x_range_m": [-0.005, 0.001],
+        "y_range_m": [-0.019, -0.006],
+        "z_range_m": [0.0082, 0.0092],
+        "yaw_range_deg": [-5.0, -1.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [-10.0, -3.0]
+      },
+      {
+        "name": "dance_duo_micro_wave",
+        "weight": 0.55,
+        "duration_s": 1.25,
+        "x_range_m": [-0.003, 0.002],
+        "y_range_m": [-0.012, 0.012],
+        "z_range_m": [0.0083, 0.0091],
+        "yaw_range_deg": [-4.0, 6.0],
+        "pitch_range_deg": [-2.0, 3.0],
+        "roll_range_deg": [-8.0, 8.0]
+      },
+      {
+        "name": "dancelib_interwoven_spiral_hint",
+        "weight": 0.6,
+        "duration_s": 1.7,
+        "yaw_range_deg": [-16.0, 16.0],
+        "pitch_range_deg": [-12.0, 12.0],
+        "roll_range_deg": [-10.0, 10.0]
+      },
+      {
+        "name": "dancelib_grid_snap_pose",
+        "weight": 0.45,
+        "duration_s": 0.85,
+        "yaw_range_deg": [-10.0, 10.0],
+        "pitch_range_deg": [-10.0, 10.0],
+        "roll_range_deg": [-10.0, 10.0]
+      },
+      {
+        "name": "dancelib_polyrhythm_combo_hint",
+        "weight": 0.5,
+        "duration_s": 1.4,
+        "y_range_m": [-0.02, 0.02],
+        "yaw_range_deg": [-7.0, 7.0],
+        "pitch_range_deg": [-10.0, -2.0],
+        "roll_range_deg": [-4.0, 4.0]
+      },
+      {
+        "name": "dancelib_jackson_square_corner",
+        "weight": 0.4,
+        "duration_s": 1.1,
+        "y_range_m": [-0.02, 0.02],
+        "z_range_m": [-0.012, 0.012],
+        "yaw_range_deg": [-8.0, 8.0],
+        "pitch_range_deg": [-8.0, 8.0],
+        "roll_range_deg": [-8.0, 8.0]
+      },
+      {
+        "name": "dancelib_simple_nod",
+        "weight": 0.6,
+        "duration_s": 1.0,
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [-14.0, -6.0],
+        "roll_range_deg": [-2.0, 2.0]
+      },
+      {
+        "name": "dancelib_yeah_nod",
+        "weight": 0.55,
+        "duration_s": 1.1,
+        "yaw_range_deg": [-4.0, 4.0],
+        "pitch_range_deg": [-18.0, -8.0],
+        "roll_range_deg": [-3.0, 3.0]
+      },
+      {
+        "name": "dancelib_head_tilt_roll_left",
+        "weight": 0.5,
+        "duration_s": 1.2,
+        "yaw_range_deg": [-5.0, 5.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [-15.0, -8.0]
+      },
+      {
+        "name": "dancelib_head_tilt_roll_right",
+        "weight": 0.5,
+        "duration_s": 1.2,
+        "yaw_range_deg": [-5.0, 5.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [8.0, 15.0]
+      },
+      {
+        "name": "dancelib_pendulum_swing_left",
+        "weight": 0.45,
+        "duration_s": 1.4,
+        "y_range_m": [-0.02, -0.008],
+        "yaw_range_deg": [-10.0, -3.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [-6.0, 2.0]
+      },
+      {
+        "name": "dancelib_pendulum_swing_right",
+        "weight": 0.45,
+        "duration_s": 1.4,
+        "y_range_m": [0.008, 0.02],
+        "yaw_range_deg": [3.0, 10.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [-2.0, 6.0]
+      },
+      {
+        "name": "dancelib_chin_lead",
+        "weight": 0.5,
+        "duration_s": 1.0,
+        "x_range_m": [0.006, 0.018],
+        "yaw_range_deg": [-5.0, 5.0],
+        "pitch_range_deg": [4.0, 12.0],
+        "roll_range_deg": [-3.0, 3.0]
+      },
+      {
+        "name": "dancelib_side_peekaboo_left",
+        "weight": 0.4,
+        "duration_s": 1.5,
+        "y_range_m": [-0.028, -0.012],
+        "z_range_m": [0.008, 0.02],
+        "yaw_range_deg": [-18.0, -8.0],
+        "pitch_range_deg": [-8.0, 0.0],
+        "roll_range_deg": [-8.0, -2.0]
+      },
+      {
+        "name": "dancelib_side_peekaboo_right",
+        "weight": 0.4,
+        "duration_s": 1.5,
+        "y_range_m": [0.012, 0.028],
+        "z_range_m": [0.008, 0.02],
+        "yaw_range_deg": [8.0, 18.0],
+        "pitch_range_deg": [-8.0, 0.0],
+        "roll_range_deg": [2.0, 8.0]
+      },
+      {
+        "name": "dancelib_dizzy_spin_hint",
+        "weight": 0.35,
+        "duration_s": 1.3,
+        "yaw_range_deg": [-20.0, 20.0],
+        "pitch_range_deg": [-10.0, 10.0],
+        "roll_range_deg": [-10.0, 10.0]
+      },
+      {
+        "name": "dancelib_groovy_sway_and_roll_left",
+        "weight": 0.4,
+        "duration_s": 1.4,
+        "y_range_m": [-0.022, -0.008],
+        "yaw_range_deg": [-8.0, -2.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [-10.0, -3.0]
+      },
+      {
+        "name": "dancelib_groovy_sway_and_roll_right",
+        "weight": 0.4,
+        "duration_s": 1.4,
+        "y_range_m": [0.008, 0.022],
+        "yaw_range_deg": [2.0, 8.0],
+        "pitch_range_deg": [-3.0, 3.0],
+        "roll_range_deg": [3.0, 10.0]
+      },
+      {
+        "name": "dancelib_uh_huh_tilt_left",
+        "weight": 0.45,
+        "duration_s": 1.1,
+        "yaw_range_deg": [-7.0, -1.0],
+        "pitch_range_deg": [-9.0, -2.0],
+        "roll_range_deg": [-10.0, -4.0]
+      },
+      {
+        "name": "dancelib_uh_huh_tilt_right",
+        "weight": 0.45,
+        "duration_s": 1.1,
+        "yaw_range_deg": [1.0, 7.0],
+        "pitch_range_deg": [-9.0, -2.0],
+        "roll_range_deg": [4.0, 10.0]
+      },
+      {
+        "name": "dancelib_headbanger_combo",
+        "weight": 0.3,
+        "duration_s": 0.9,
+        "z_range_m": [0.004, 0.014],
+        "yaw_range_deg": [-6.0, 6.0],
+        "pitch_range_deg": [-20.0, -10.0],
+        "roll_range_deg": [-4.0, 4.0]
+      },
+      {
+        "name": "dancelib_stumble_and_recover",
+        "weight": 0.25,
+        "duration_s": 1.6,
+        "y_range_m": [-0.014, 0.014],
+        "yaw_range_deg": [-15.0, 15.0],
+        "pitch_range_deg": [-10.0, 6.0],
+        "roll_range_deg": [-8.0, 8.0]
       }
     ]
   },
