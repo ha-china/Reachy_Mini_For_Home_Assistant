@@ -610,14 +610,26 @@ class VoiceAssistantService:
         This bypasses the DaemonStateMonitor polling and directly resumes services
         after a short delay to allow the robot to wake up.
         """
-        _LOGGER.info("Wake triggered from HA - resuming services after short delay...")
+        _LOGGER.info("Wake triggered from HA - waiting for daemon running state...")
 
-        # Wait for robot to wake up (shorter than the normal 30s resume delay)
-        await asyncio.sleep(5.0)
+        # Wait for daemon to be fully running before resuming services.
+        # This avoids early media/motion restart failures after long sleep.
+        timeout_s = 35.0
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            try:
+                if self._state is not None and self._state.satellite is not None:
+                    daemon_state = self._state.satellite.reachy_controller.get_daemon_state()
+                    if daemon_state == "running":
+                        _LOGGER.info("Daemon is running, resuming services now")
+                        self._on_pre_resume()
+                        return
+            except Exception as e:
+                _LOGGER.debug("Wake wait state check failed: %s", e)
 
-        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
+            await asyncio.sleep(1.0)
 
-        # Call the pre-resume handler to resume all services
+        _LOGGER.warning("Wake wait timed out after %.0fs, forcing service resume", timeout_s)
         self._on_pre_resume()
 
     async def _on_ha_connected(self) -> None:

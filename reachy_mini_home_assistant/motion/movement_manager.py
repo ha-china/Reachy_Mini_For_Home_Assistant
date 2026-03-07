@@ -66,10 +66,10 @@ POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
 ANTENNA_EPS = 0.005  # Radians (~0.29 deg)
 BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
-ANTENNA_IDLE_HOLD_DEADBAND = 0.02  # Radians (~1.15 deg) to suppress idle antenna micro-corrections
-IDLE_POSE_EPS = 0.0025  # Relaxed pose deadband in quiet idle (reduce chatter)
-IDLE_BODY_YAW_EPS = 0.02  # Relaxed body yaw deadband in quiet idle (reduce chatter)
-IDLE_MIN_SEND_INTERVAL_S = 0.35  # Slower send cadence in quiet idle
+IDLE_POSE_EPS = 0.0018  # Slightly relaxed pose deadband in quiet idle
+IDLE_BODY_YAW_EPS = 0.01  # Slightly relaxed body yaw deadband in quiet idle
+IDLE_MIN_SEND_INTERVAL_S = 0.20  # Balanced idle smoothness and command pressure
+IDLE_ANTENNA_MAX_RATE_RAD_S = 0.55  # Slew-limit antenna motion in idle for smoother movement
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 6.0  # Minimum seconds between look-arounds
@@ -145,8 +145,9 @@ class MovementManager:
         self._last_sent_body_yaw: float | None = None
         self._last_send_time = 0.0
 
-        # Idle antenna hold (prevents high-frequency micro-corrections/noise)
-        self._idle_antenna_hold: tuple[float, float] | None = None
+        # Idle antenna smoothing state
+        self._idle_antenna_smoothed: tuple[float, float] | None = None
+        self._last_idle_antenna_update = 0.0
 
         # Command send pacing (separate from control loop frequency)
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
@@ -601,8 +602,9 @@ class MovementManager:
                 self.state.idle_start_time = self._now()
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
-                # Re-latch antennas on next compose cycle
-                self._idle_antenna_hold = None
+                # Reset idle antenna smoothing state
+                self._idle_antenna_smoothed = None
+                self._last_idle_antenna_update = 0.0
 
             # Freeze antennas when entering listening mode
             if payload == RobotState.LISTENING:
@@ -612,7 +614,8 @@ class MovementManager:
                 self._start_antenna_unfreeze()
 
             if payload != RobotState.IDLE:
-                self._idle_antenna_hold = None
+                self._idle_antenna_smoothed = None
+                self._last_idle_antenna_update = 0.0
 
             logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
 
@@ -689,7 +692,8 @@ class MovementManager:
             if not enabled:
                 self.state.anim_antenna_left = 0.0
                 self.state.anim_antenna_right = 0.0
-                self._idle_antenna_hold = None
+                self._idle_antenna_smoothed = None
+                self._last_idle_antenna_update = 0.0
 
             logger.info("Idle antenna animation %s", "enabled" if enabled else "disabled")
 
@@ -1073,22 +1077,31 @@ class MovementManager:
             target_antenna_left, target_antenna_right
         )
 
-        # In idle, hold antennas unless change exceeds deadband.
-        # This avoids continuous micro-corrections that cause mechanical chatter.
+        # In idle, slew-limit antennas to avoid micro-jitter while keeping motion continuous.
         if self.state.robot_state == RobotState.IDLE:
-            if self._idle_antenna_hold is None:
-                self._idle_antenna_hold = (antenna_left, antenna_right)
+            now = self._now()
+            if self._idle_antenna_smoothed is None:
+                self._idle_antenna_smoothed = (antenna_left, antenna_right)
+                self._last_idle_antenna_update = now
             else:
-                hold_left, hold_right = self._idle_antenna_hold
-                if (
-                    abs(antenna_left - hold_left) < ANTENNA_IDLE_HOLD_DEADBAND
-                    and abs(antenna_right - hold_right) < ANTENNA_IDLE_HOLD_DEADBAND
-                ):
-                    antenna_left, antenna_right = hold_left, hold_right
-                else:
-                    self._idle_antenna_hold = (antenna_left, antenna_right)
+                prev_left, prev_right = self._idle_antenna_smoothed
+                dt_idle = max(1e-3, now - (self._last_idle_antenna_update or now))
+                max_step = IDLE_ANTENNA_MAX_RATE_RAD_S * dt_idle
+
+                delta_left = antenna_left - prev_left
+                delta_right = antenna_right - prev_right
+                step_left = max(-max_step, min(max_step, delta_left))
+                step_right = max(-max_step, min(max_step, delta_right))
+
+                smooth_left = prev_left + step_left
+                smooth_right = prev_right + step_right
+
+                self._idle_antenna_smoothed = (smooth_left, smooth_right)
+                self._last_idle_antenna_update = now
+                antenna_left, antenna_right = smooth_left, smooth_right
         else:
-            self._idle_antenna_hold = None
+            self._idle_antenna_smoothed = None
+            self._last_idle_antenna_update = 0.0
 
         # Calculate body_yaw to follow head yaw (using pose_composer utilities)
         final_head_yaw = extract_yaw_from_pose(final_head)
