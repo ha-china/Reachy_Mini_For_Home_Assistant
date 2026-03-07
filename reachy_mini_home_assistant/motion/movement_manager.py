@@ -72,6 +72,9 @@ BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
 IDLE_POSE_EPS = 0.0018  # Slightly relaxed pose deadband in quiet idle
 IDLE_BODY_YAW_EPS = 0.01  # Slightly relaxed body yaw deadband in quiet idle
 IDLE_ANTENNA_EPS = 0.012  # Larger idle antenna deadband to reduce tiny updates
+IDLE_HEAD_POSE_HOLD_EPS = 0.0012  # Hold tiny idle head pose deltas to reduce motor chatter
+IDLE_BODY_YAW_HOLD_EPS = 0.005  # Hold tiny idle body yaw deltas to reduce motor chatter
+IDLE_RELATIVE_YAW_LIMIT_DEG = 120.0  # Safety: cap |head_yaw - body_yaw| during random idle
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 6.0  # Minimum seconds between look-arounds
@@ -83,40 +86,6 @@ IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around star
 IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
 
 _ANIMATION_CONFIG_FILE = Path(__file__).resolve().parent.parent / "animations" / "conversation_animations.json"
-_DEFAULT_IDLE_RANDOM_ACTIONS: list[dict[str, Any]] = [
-    {
-        "name": "curious_left",
-        "weight": 1.0,
-        "duration_s": 1.8,
-        "yaw_range_deg": [-16.0, -6.0],
-        "pitch_range_deg": [-3.0, 4.0],
-        "roll_range_deg": [-4.0, 2.0],
-    },
-    {
-        "name": "curious_right",
-        "weight": 1.0,
-        "duration_s": 1.8,
-        "yaw_range_deg": [6.0, 16.0],
-        "pitch_range_deg": [-3.0, 4.0],
-        "roll_range_deg": [-2.0, 4.0],
-    },
-    {
-        "name": "micro_nod",
-        "weight": 0.9,
-        "duration_s": 1.3,
-        "yaw_range_deg": [-3.0, 3.0],
-        "pitch_range_deg": [-10.0, -4.0],
-        "roll_range_deg": [-2.0, 2.0],
-    },
-    {
-        "name": "micro_tilt",
-        "weight": 0.8,
-        "duration_s": 1.6,
-        "yaw_range_deg": [-6.0, 6.0],
-        "pitch_range_deg": [-2.0, 4.0],
-        "roll_range_deg": [-7.0, 7.0],
-    },
-]
 
 
 class MovementManager:
@@ -229,7 +198,29 @@ class MovementManager:
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
         self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
         self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
-        self._idle_random_actions: list[dict[str, Any]] = []
+        self._idle_random_duration_min_s = 0.9
+        self._idle_random_duration_max_s = 1.8
+        self._idle_random_yaw_bounds_deg = (-18.0, 18.0)
+        self._idle_random_pitch_bounds_deg = (-14.0, 14.0)
+        self._idle_random_roll_bounds_deg = (-10.0, 10.0)
+        self._idle_random_x_bounds_m = (-0.015, 0.015)
+        self._idle_random_y_bounds_m = (-0.02, 0.02)
+        self._idle_random_z_bounds_m = (-0.015, 0.015)
+        self._idle_random_max_step_yaw_deg = 12.0
+        self._idle_random_max_step_pitch_deg = 9.0
+        self._idle_random_max_step_roll_deg = 8.0
+        self._idle_random_max_step_x_m = 0.008
+        self._idle_random_max_step_y_m = 0.01
+        self._idle_random_max_step_z_m = 0.008
+        self._idle_random_anchor_pull = 0.35
+        self._idle_random_anchor_pose: dict[str, float] = {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "roll": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0,
+        }
         self._load_idle_random_actions_config()
 
         # Antenna controller (handles freeze/unfreeze for listening mode)
@@ -521,6 +512,17 @@ class MovementManager:
         except Exception:
             logger.warning("Command queue full, dropping set_idle_random_actions command")
 
+    def get_idle_random_interval_seconds(self) -> float:
+        """Get idle random trigger interval (seconds)."""
+        return max(2.0, (self._idle_random_actions_min_interval + self._idle_random_actions_max_interval) / 2.0)
+
+    def set_idle_random_interval_seconds(self, seconds: float) -> None:
+        """Thread-safe: Set idle random trigger interval (seconds)."""
+        try:
+            self._command_queue.put(("set_idle_random_interval", float(seconds)), timeout=0.1)
+        except Exception:
+            logger.warning("Command queue full, dropping set_idle_random_interval command")
+
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
 
@@ -653,9 +655,131 @@ class MovementManager:
         interval = random.uniform(self._idle_random_actions_min_interval, self._idle_random_actions_max_interval)
         self.state.next_look_around_time = now + interval
 
+    @staticmethod
+    def _sample_axis_with_step(current: float, bounds: tuple[float, float], max_step: float) -> float:
+        """Sample a random target within bounds and with a capped step from current."""
+        min_bound, max_bound = bounds
+        local_min = max(min_bound, current - abs(max_step))
+        local_max = min(max_bound, current + abs(max_step))
+        if local_min > local_max:
+            return max(min_bound, min(max_bound, current))
+        return random.uniform(local_min, local_max)
+
+    @staticmethod
+    def _sample_axis_with_anchor(
+        current: float,
+        anchor: float,
+        bounds: tuple[float, float],
+        max_step: float,
+        anchor_pull: float,
+    ) -> float:
+        """Sample with anchor guidance and capped step for continuity/safety."""
+        min_bound, max_bound = bounds
+        pull = max(0.0, min(1.0, anchor_pull))
+        guided_center = current + (anchor - current) * pull
+
+        # Candidate band around guided center
+        band_min = guided_center - abs(max_step)
+        band_max = guided_center + abs(max_step)
+
+        # Enforce absolute bounds and step continuity from current
+        local_min = max(min_bound, current - abs(max_step), band_min)
+        local_max = min(max_bound, current + abs(max_step), band_max)
+        if local_min > local_max:
+            return max(min_bound, min(max_bound, current))
+        return random.uniform(local_min, local_max)
+
+    def _generate_fully_random_idle_action(self) -> PendingAction:
+        """Generate one fully random idle action within conservative safe bounds."""
+        current_yaw_deg = math.degrees(self.state.target_yaw)
+        current_pitch_deg = math.degrees(self.state.target_pitch)
+        current_roll_deg = math.degrees(self.state.target_roll)
+
+        target_yaw_deg = self._sample_axis_with_anchor(
+            current=current_yaw_deg,
+            anchor=math.degrees(self._idle_random_anchor_pose["yaw"]),
+            bounds=self._idle_random_yaw_bounds_deg,
+            max_step=self._idle_random_max_step_yaw_deg,
+            anchor_pull=self._idle_random_anchor_pull,
+        )
+        target_pitch_deg = self._sample_axis_with_anchor(
+            current=current_pitch_deg,
+            anchor=math.degrees(self._idle_random_anchor_pose["pitch"]),
+            bounds=self._idle_random_pitch_bounds_deg,
+            max_step=self._idle_random_max_step_pitch_deg,
+            anchor_pull=self._idle_random_anchor_pull,
+        )
+        target_roll_deg = self._sample_axis_with_anchor(
+            current=current_roll_deg,
+            anchor=math.degrees(self._idle_random_anchor_pose["roll"]),
+            bounds=self._idle_random_roll_bounds_deg,
+            max_step=self._idle_random_max_step_roll_deg,
+            anchor_pull=self._idle_random_anchor_pull,
+        )
+
+        # Coupled safety: avoid extreme opposite twists between head and body.
+        body_yaw_deg = math.degrees(self.state.target_body_yaw)
+        relative_yaw = target_yaw_deg - body_yaw_deg
+        if relative_yaw > IDLE_RELATIVE_YAW_LIMIT_DEG:
+            target_yaw_deg = body_yaw_deg + IDLE_RELATIVE_YAW_LIMIT_DEG
+        elif relative_yaw < -IDLE_RELATIVE_YAW_LIMIT_DEG:
+            target_yaw_deg = body_yaw_deg - IDLE_RELATIVE_YAW_LIMIT_DEG
+
+        # Keep final yaw within configured bounds after coupled safety clamp.
+        target_yaw_deg = max(
+            self._idle_random_yaw_bounds_deg[0], min(self._idle_random_yaw_bounds_deg[1], target_yaw_deg)
+        )
+
+        target_x = self._sample_axis_with_anchor(
+            current=self.state.target_x,
+            anchor=self._idle_random_anchor_pose["x"],
+            bounds=self._idle_random_x_bounds_m,
+            max_step=self._idle_random_max_step_x_m,
+            anchor_pull=self._idle_random_anchor_pull,
+        )
+        target_y = self._sample_axis_with_anchor(
+            current=self.state.target_y,
+            anchor=self._idle_random_anchor_pose["y"],
+            bounds=self._idle_random_y_bounds_m,
+            max_step=self._idle_random_max_step_y_m,
+            anchor_pull=self._idle_random_anchor_pull,
+        )
+        target_z = self._sample_axis_with_anchor(
+            current=self.state.target_z,
+            anchor=self._idle_random_anchor_pose["z"],
+            bounds=self._idle_random_z_bounds_m,
+            max_step=self._idle_random_max_step_z_m,
+            anchor_pull=self._idle_random_anchor_pull,
+        )
+
+        # Larger move => longer duration, reducing jerk on slow servos.
+        yaw_factor = abs(target_yaw_deg - current_yaw_deg) / max(1e-3, self._idle_random_max_step_yaw_deg)
+        pitch_factor = abs(target_pitch_deg - current_pitch_deg) / max(1e-3, self._idle_random_max_step_pitch_deg)
+        roll_factor = abs(target_roll_deg - current_roll_deg) / max(1e-3, self._idle_random_max_step_roll_deg)
+        spatial_factor = max(
+            abs(target_x - self.state.target_x) / max(1e-4, self._idle_random_max_step_x_m),
+            abs(target_y - self.state.target_y) / max(1e-4, self._idle_random_max_step_y_m),
+            abs(target_z - self.state.target_z) / max(1e-4, self._idle_random_max_step_z_m),
+        )
+        effort = max(yaw_factor, pitch_factor, roll_factor, spatial_factor)
+        effort = max(0.0, min(1.0, effort))
+        duration = self._idle_random_duration_min_s + (
+            (self._idle_random_duration_max_s - self._idle_random_duration_min_s) * effort
+        )
+
+        return PendingAction(
+            name="idle_action:fully_random_safe",
+            target_yaw=math.radians(target_yaw_deg),
+            target_pitch=math.radians(target_pitch_deg),
+            target_roll=math.radians(target_roll_deg),
+            target_x=target_x,
+            target_y=target_y,
+            target_z=target_z,
+            duration=max(0.2, duration),
+        )
+
     def _load_idle_random_actions_config(self) -> None:
         """Load idle random action definitions from animation config."""
-        self._idle_random_actions = list(_DEFAULT_IDLE_RANDOM_ACTIONS)
         self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
         self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
@@ -692,70 +816,103 @@ class MovementManager:
             probability = IDLE_LOOK_AROUND_PROBABILITY
         self._idle_random_actions_probability = max(0.0, min(1.0, probability))
 
-        raw_actions = section.get("actions")
-        if not isinstance(raw_actions, list):
-            return
+        try:
+            anchor_pull = float(section.get("anchor_pull", self._idle_random_anchor_pull))
+            self._idle_random_anchor_pull = max(0.0, min(1.0, anchor_pull))
+        except (TypeError, ValueError):
+            pass
 
-        parsed_actions: list[dict[str, Any]] = []
-        for idx, action in enumerate(raw_actions):
-            if not isinstance(action, dict):
-                continue
+        try:
+            duration_min = float(section.get("duration_min_s", self._idle_random_duration_min_s))
+            duration_max = float(section.get("duration_max_s", self._idle_random_duration_max_s))
+            if duration_min > duration_max:
+                duration_min, duration_max = duration_max, duration_min
+            self._idle_random_duration_min_s = max(0.2, duration_min)
+            self._idle_random_duration_max_s = max(self._idle_random_duration_min_s, duration_max)
+        except (TypeError, ValueError):
+            pass
 
-            name = str(action.get("name", f"idle_action_{idx + 1}"))
-            try:
-                weight = float(action.get("weight", 1.0))
-            except (TypeError, ValueError):
-                weight = 1.0
-            if weight <= 0.0:
-                continue
+        bounds = section.get("safe_bounds", {})
+        if not isinstance(bounds, dict):
+            bounds = {}
 
-            try:
-                duration_s = max(0.2, float(action.get("duration_s", IDLE_LOOK_AROUND_DURATION)))
-            except (TypeError, ValueError):
-                duration_s = IDLE_LOOK_AROUND_DURATION
+        self._idle_random_yaw_bounds_deg = self._parse_numeric_range(
+            bounds.get("yaw_range_deg", section.get("yaw_range_deg")),
+            self._idle_random_yaw_bounds_deg[0],
+            self._idle_random_yaw_bounds_deg[1],
+        )
+        self._idle_random_pitch_bounds_deg = self._parse_numeric_range(
+            bounds.get("pitch_range_deg", section.get("pitch_range_deg")),
+            self._idle_random_pitch_bounds_deg[0],
+            self._idle_random_pitch_bounds_deg[1],
+        )
+        self._idle_random_roll_bounds_deg = self._parse_numeric_range(
+            bounds.get("roll_range_deg", section.get("roll_range_deg")),
+            self._idle_random_roll_bounds_deg[0],
+            self._idle_random_roll_bounds_deg[1],
+        )
+        self._idle_random_x_bounds_m = self._parse_numeric_range(
+            bounds.get("x_range_m", section.get("x_range_m")),
+            self._idle_random_x_bounds_m[0],
+            self._idle_random_x_bounds_m[1],
+        )
+        self._idle_random_y_bounds_m = self._parse_numeric_range(
+            bounds.get("y_range_m", section.get("y_range_m")),
+            self._idle_random_y_bounds_m[0],
+            self._idle_random_y_bounds_m[1],
+        )
+        self._idle_random_z_bounds_m = self._parse_numeric_range(
+            bounds.get("z_range_m", section.get("z_range_m")),
+            self._idle_random_z_bounds_m[0],
+            self._idle_random_z_bounds_m[1],
+        )
 
-            yaw_min, yaw_max = self._parse_numeric_range(
-                action.get("yaw_range_deg"),
-                -IDLE_LOOK_AROUND_YAW_RANGE,
-                IDLE_LOOK_AROUND_YAW_RANGE,
+        step_limits = section.get("max_step", {})
+        if not isinstance(step_limits, dict):
+            step_limits = {}
+
+        try:
+            self._idle_random_max_step_yaw_deg = max(
+                1.0,
+                float(step_limits.get("yaw_deg", self._idle_random_max_step_yaw_deg)),
             )
-            pitch_min, pitch_max = self._parse_numeric_range(
-                action.get("pitch_range_deg"),
-                -IDLE_LOOK_AROUND_PITCH_RANGE,
-                IDLE_LOOK_AROUND_PITCH_RANGE,
+        except (TypeError, ValueError):
+            pass
+        try:
+            self._idle_random_max_step_pitch_deg = max(
+                1.0,
+                float(step_limits.get("pitch_deg", self._idle_random_max_step_pitch_deg)),
             )
-            roll_min, roll_max = self._parse_numeric_range(action.get("roll_range_deg"), 0.0, 0.0)
-            x_min, x_max = self._parse_numeric_range(action.get("x_range_m"), 0.0, 0.0)
-            y_min, y_max = self._parse_numeric_range(action.get("y_range_m"), 0.0, 0.0)
-            z_min, z_max = self._parse_numeric_range(action.get("z_range_m"), 0.0, 0.0)
-
-            parsed_actions.append(
-                {
-                    "name": name,
-                    "weight": weight,
-                    "duration_s": duration_s,
-                    "yaw_range_deg": (yaw_min, yaw_max),
-                    "pitch_range_deg": (pitch_min, pitch_max),
-                    "roll_range_deg": (roll_min, roll_max),
-                    "x_range_m": (x_min, x_max),
-                    "y_range_m": (y_min, y_max),
-                    "z_range_m": (z_min, z_max),
-                }
+        except (TypeError, ValueError):
+            pass
+        try:
+            self._idle_random_max_step_roll_deg = max(
+                1.0,
+                float(step_limits.get("roll_deg", self._idle_random_max_step_roll_deg)),
             )
-
-        if parsed_actions:
-            self._idle_random_actions = parsed_actions
-
-    def _pick_idle_random_action(self) -> dict[str, Any]:
-        """Pick one idle random action from weighted definitions."""
-        if not self._idle_random_actions:
-            return random.choice(_DEFAULT_IDLE_RANDOM_ACTIONS)
-
-        weights = [max(0.0, float(action.get("weight", 1.0))) for action in self._idle_random_actions]
-        total_weight = sum(weights)
-        if total_weight <= 0.0:
-            return random.choice(self._idle_random_actions)
-        return random.choices(self._idle_random_actions, weights=weights, k=1)[0]
+        except (TypeError, ValueError):
+            pass
+        try:
+            self._idle_random_max_step_x_m = max(
+                0.001,
+                float(step_limits.get("x_m", self._idle_random_max_step_x_m)),
+            )
+        except (TypeError, ValueError):
+            pass
+        try:
+            self._idle_random_max_step_y_m = max(
+                0.001,
+                float(step_limits.get("y_m", self._idle_random_max_step_y_m)),
+            )
+        except (TypeError, ValueError):
+            pass
+        try:
+            self._idle_random_max_step_z_m = max(
+                0.001,
+                float(step_limits.get("z_m", self._idle_random_max_step_z_m)),
+            )
+        except (TypeError, ValueError):
+            pass
 
     def _poll_commands(self) -> None:
         """Process all pending commands from the queue."""
@@ -785,6 +942,14 @@ class MovementManager:
             # State transition logic
             if payload == RobotState.IDLE and old_state != RobotState.IDLE:
                 self.state.idle_start_time = self._now()
+                self._idle_random_anchor_pose = {
+                    "x": self.state.target_x,
+                    "y": self.state.target_y,
+                    "z": self.state.target_z,
+                    "roll": self.state.target_roll,
+                    "pitch": self.state.target_pitch,
+                    "yaw": self.state.target_yaw,
+                }
                 # Unfreeze antennas when returning to idle
                 self._start_antenna_unfreeze()
                 # Reset idle antenna smoothing state
@@ -886,6 +1051,20 @@ class MovementManager:
                     self._pending_action = None
             logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
 
+        elif cmd == "set_idle_random_interval":
+            interval_seconds = max(2.0, min(60.0, float(payload)))
+            self._idle_random_actions_min_interval = max(0.5, interval_seconds * 0.6)
+            self._idle_random_actions_max_interval = max(
+                self._idle_random_actions_min_interval,
+                interval_seconds * 1.4,
+            )
+            logger.info(
+                "Idle random interval updated: %.1fs (range %.1f~%.1fs)",
+                interval_seconds,
+                self._idle_random_actions_min_interval,
+                self._idle_random_actions_max_interval,
+            )
+
         elif cmd == "set_idle_antenna":
             enabled = bool(payload)
             self._idle_antenna_enabled = enabled
@@ -974,8 +1153,8 @@ class MovementManager:
         elapsed = self._now() - self._action_start_time
         progress = min(1.0, elapsed / self._pending_action.duration)
 
-        # Smooth interpolation (ease in-out)
-        t = progress * progress * (3 - 2 * progress)
+        # Smooth interpolation (smootherstep, C2 continuous)
+        t = progress * progress * progress * (progress * (progress * 6 - 15) + 10)
 
         # Interpolate pose
         start = self._action_start_pose
@@ -1165,30 +1344,7 @@ class MovementManager:
                     self._schedule_next_idle_action_time(now)
                     return
 
-                action_config = self._pick_idle_random_action()
-
-                yaw_min, yaw_max = action_config.get(
-                    "yaw_range_deg", (-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE)
-                )
-                pitch_min, pitch_max = action_config.get(
-                    "pitch_range_deg", (-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE)
-                )
-                roll_min, roll_max = action_config.get("roll_range_deg", (0.0, 0.0))
-                x_min, x_max = action_config.get("x_range_m", (0.0, 0.0))
-                y_min, y_max = action_config.get("y_range_m", (0.0, 0.0))
-                z_min, z_max = action_config.get("z_range_m", (0.0, 0.0))
-                duration = float(action_config.get("duration_s", IDLE_LOOK_AROUND_DURATION))
-
-                idle_action = PendingAction(
-                    name=f"idle_action:{action_config.get('name', 'random')}",
-                    target_yaw=math.radians(random.uniform(float(yaw_min), float(yaw_max))),
-                    target_pitch=math.radians(random.uniform(float(pitch_min), float(pitch_max))),
-                    target_roll=math.radians(random.uniform(float(roll_min), float(roll_max))),
-                    target_x=random.uniform(float(x_min), float(x_max)),
-                    target_y=random.uniform(float(y_min), float(y_max)),
-                    target_z=random.uniform(float(z_min), float(z_max)),
-                    duration=max(0.2, duration),
-                )
+                idle_action = self._generate_fully_random_idle_action()
 
                 self._idle_action_queue.append(idle_action)
                 self.state.look_around_in_progress = True
@@ -1396,6 +1552,29 @@ class MovementManager:
             return
 
         now = self._now()
+
+        # In quiet idle breathing, avoid sending tiny head/body micro-adjustments
+        # that can produce audible servo chatter, while still sending antennas.
+        quiet_idle = (
+            self.state.robot_state == RobotState.IDLE
+            and self._pending_action is None
+            and not self.state.look_around_in_progress
+            and not self.state.face_detected
+            and abs(self.state.sway_x) < 1e-4
+            and abs(self.state.sway_y) < 1e-4
+            and abs(self.state.sway_z) < 1e-4
+            and abs(self.state.sway_roll) < 1e-4
+            and abs(self.state.sway_pitch) < 1e-4
+            and abs(self.state.sway_yaw) < 1e-4
+        )
+        if quiet_idle and self._last_sent_head_pose is not None and self._last_sent_body_yaw is not None:
+            pose_delta = float(np.max(np.abs(head_pose - self._last_sent_head_pose)))
+            if pose_delta < IDLE_HEAD_POSE_HOLD_EPS:
+                head_pose = self._last_sent_head_pose.copy()
+
+            body_yaw_delta = abs(body_yaw - self._last_sent_body_yaw)
+            if body_yaw_delta < IDLE_BODY_YAW_HOLD_EPS:
+                body_yaw = self._last_sent_body_yaw
 
         # Check if we should skip due to connection loss (but always try periodically)
         if self._connection_lost:

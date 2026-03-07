@@ -189,6 +189,23 @@ class ReachyController:
             return
         self._movement_manager.set_idle_random_actions_enabled(enabled)
 
+    def get_idle_random_interval_seconds(self) -> float:
+        """Get idle random interval center in seconds."""
+        if self._movement_manager is None:
+            return 10.0
+        try:
+            return float(self._movement_manager.get_idle_random_interval_seconds())
+        except Exception as e:
+            logger.debug("Error getting idle random interval: %s", e)
+            return 10.0
+
+    def set_idle_random_interval_seconds(self, seconds: float) -> None:
+        """Set idle random interval center in seconds."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_random_interval_seconds failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_random_interval_seconds(seconds)
+
     # ========== Phase 1: Basic Status & Volume ==========
 
     @staticmethod

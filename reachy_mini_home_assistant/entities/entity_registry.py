@@ -330,6 +330,37 @@ class EntityRegistry:
             )
         )
 
+        def get_idle_random_interval_seconds() -> float:
+            if hasattr(self.server, "state") and self.server.state:
+                prefs = self.server.state.preferences
+                return float(getattr(prefs, "idle_random_interval_seconds", 10.0))
+            return 10.0
+
+        def set_idle_random_interval_seconds(value: float) -> None:
+            interval_seconds = max(2.0, min(60.0, float(value)))
+            rc.set_idle_random_interval_seconds(interval_seconds)
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.idle_random_interval_seconds = interval_seconds
+                self.server.state.save_preferences()
+
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("idle_random_interval_seconds"),
+                name="Idle Random Interval",
+                object_id="idle_random_interval_seconds",
+                min_value=2.0,
+                max_value=60.0,
+                step=1.0,
+                icon="mdi:timer-outline",
+                unit_of_measurement="s",
+                mode=2,
+                entity_category=1,
+                value_getter=get_idle_random_interval_seconds,
+                value_setter=set_idle_random_interval_seconds,
+            )
+        )
+
         def get_sendspin_enabled() -> bool:
             if hasattr(self.server, "state") and self.server.state:
                 prefs = self.server.state.preferences
@@ -446,7 +477,8 @@ class EntityRegistry:
 
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
-            "idle_motion_enabled, idle_antenna_enabled, idle_random_actions_enabled, sendspin_enabled, "
+            "idle_motion_enabled, idle_antenna_enabled, idle_random_actions_enabled, idle_random_interval_seconds, "
+            "sendspin_enabled, "
             "face_tracking_enabled, gesture_detection_enabled, "
             "face_confidence_threshold"
         )
