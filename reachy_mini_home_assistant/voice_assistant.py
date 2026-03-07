@@ -658,7 +658,8 @@ class VoiceAssistantService:
                     port=self.camera_port,
                     fps=15,
                     quality=80,
-                    enable_face_tracking=True,
+                    enable_face_tracking=bool(getattr(self._state.preferences, "face_tracking_enabled", False)),
+                    enable_gesture_detection=bool(getattr(self._state.preferences, "gesture_detection_enabled", False)),
                     gstreamer_lock=self._gstreamer_lock,
                 )
 
