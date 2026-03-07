@@ -63,6 +63,7 @@ DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
 ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
+IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.25  # Seconds to fade idle animation during queued idle actions
 
 # Pose epsilon constants are kept for compatibility with existing motion logic.
 POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
@@ -172,6 +173,7 @@ class MovementManager:
         self._action_start_time: float = 0.0
         self._action_start_pose: dict[str, float] = {}
         self._idle_action_queue: deque[PendingAction] = deque()
+        self._idle_action_animation_suppression = 0.0
 
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -1006,6 +1008,7 @@ class MovementManager:
 
     def _update_animation(self, dt: float) -> None:
         """Update animation offsets from AnimationPlayer."""
+        dt_safe = max(0.0, dt)
         idle_queue_action_active = (
             self.state.robot_state == RobotState.IDLE
             and self.state.look_around_in_progress
@@ -1014,16 +1017,20 @@ class MovementManager:
                 or len(self._idle_action_queue) > 0
             )
         )
-        if idle_queue_action_active:
-            self.state.anim_pitch = 0.0
-            self.state.anim_yaw = 0.0
-            self.state.anim_roll = 0.0
-            self.state.anim_x = 0.0
-            self.state.anim_y = 0.0
-            self.state.anim_z = 0.0
-            self.state.anim_antenna_left = 0.0
-            self.state.anim_antenna_right = 0.0
-            return
+
+        fade_duration = max(1e-3, IDLE_ACTION_ANIMATION_BLEND_DURATION)
+        fade_step = dt_safe / fade_duration
+        target_suppression = 1.0 if idle_queue_action_active else 0.0
+        if target_suppression > self._idle_action_animation_suppression:
+            self._idle_action_animation_suppression = min(
+                target_suppression,
+                self._idle_action_animation_suppression + fade_step,
+            )
+        else:
+            self._idle_action_animation_suppression = max(
+                target_suppression,
+                self._idle_action_animation_suppression - fade_step,
+            )
 
         if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
             self.state.anim_pitch = 0.0
@@ -1034,19 +1041,21 @@ class MovementManager:
             self.state.anim_z = 0.0
             self.state.anim_antenna_left = 0.0
             self.state.anim_antenna_right = 0.0
+            self._idle_action_animation_suppression = 0.0
             return
 
         offsets = self._animation_player.get_offsets(dt)
+        idle_animation_scale = 1.0 - self._idle_action_animation_suppression
 
-        self.state.anim_pitch = offsets["pitch"]
-        self.state.anim_yaw = offsets["yaw"]
-        self.state.anim_roll = offsets["roll"]
-        self.state.anim_x = offsets["x"]
-        self.state.anim_y = offsets["y"]
-        self.state.anim_z = offsets["z"]
+        self.state.anim_pitch = offsets["pitch"] * idle_animation_scale
+        self.state.anim_yaw = offsets["yaw"] * idle_animation_scale
+        self.state.anim_roll = offsets["roll"] * idle_animation_scale
+        self.state.anim_x = offsets["x"] * idle_animation_scale
+        self.state.anim_y = offsets["y"] * idle_animation_scale
+        self.state.anim_z = offsets["z"] * idle_animation_scale
         if self._idle_antenna_enabled:
-            self.state.anim_antenna_left = offsets["antenna_left"]
-            self.state.anim_antenna_right = offsets["antenna_right"]
+            self.state.anim_antenna_left = offsets["antenna_left"] * idle_animation_scale
+            self.state.anim_antenna_right = offsets["antenna_right"] * idle_animation_scale
         else:
             self.state.anim_antenna_left = 0.0
             self.state.anim_antenna_right = 0.0
@@ -1336,6 +1345,8 @@ class MovementManager:
         # Calculate body_yaw to follow head yaw (using pose_composer utilities)
         final_head_yaw = extract_yaw_from_pose(final_head)
         target_body_yaw = clamp_body_yaw(final_head_yaw)
+        if self.state.robot_state == RobotState.IDLE:
+            target_body_yaw = 0.0
 
         # Rate-limit body yaw for smooth, continuous turning
         now = self._now()
