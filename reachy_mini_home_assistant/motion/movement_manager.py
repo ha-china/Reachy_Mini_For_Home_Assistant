@@ -718,7 +718,12 @@ class MovementManager:
         )
 
         # Coupled safety: avoid extreme opposite twists between head and body.
-        body_yaw_deg = math.degrees(self.state.target_body_yaw)
+        body_yaw_ref = (
+            self._body_yaw_smoothed
+            if self._body_yaw_smoothed is not None
+            else (self._last_sent_body_yaw if self._last_sent_body_yaw is not None else 0.0)
+        )
+        body_yaw_deg = math.degrees(body_yaw_ref)
         relative_yaw = target_yaw_deg - body_yaw_deg
         if relative_yaw > IDLE_RELATIVE_YAW_LIMIT_DEG:
             target_yaw_deg = body_yaw_deg + IDLE_RELATIVE_YAW_LIMIT_DEG
