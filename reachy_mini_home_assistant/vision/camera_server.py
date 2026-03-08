@@ -660,19 +660,21 @@ class MJPEGCameraServer:
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
         self._face_tracking_requested = enabled
-        if self._face_tracking_enabled == enabled:
-            return  # No change, skip logging
-        self._face_tracking_enabled = enabled
+
         if enabled:
             if self._head_tracker is None:
                 try:
                     from .head_tracker import HeadTracker
 
                     self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
+                    self._face_tracking_enabled = True
                 except Exception as e:
                     _LOGGER.warning("Failed to enable face tracking model: %s", e)
                     self._face_tracking_enabled = False
+            else:
+                self._face_tracking_enabled = True
         else:
+            self._face_tracking_enabled = False
             # Start interpolation back to neutral
             self._face_interpolator.reset_interpolation()
             self._head_tracker = None
@@ -792,10 +794,7 @@ class MJPEGCameraServer:
     def set_gesture_detection_enabled(self, enabled: bool) -> None:
         """Enable or disable gesture detection."""
         self._gesture_detection_requested = enabled
-        if self._gesture_detection_enabled == enabled:
-            return
 
-        self._gesture_detection_enabled = enabled
         if enabled:
             if self._gesture_detector is None:
                 try:
@@ -805,11 +804,16 @@ class MJPEGCameraServer:
                     if not self._gesture_detector.is_available:
                         self._gesture_detector = None
                         self._gesture_detection_enabled = False
+                    else:
+                        self._gesture_detection_enabled = True
                 except Exception as e:
                     _LOGGER.warning("Failed to enable gesture detector model: %s", e)
                     self._gesture_detection_enabled = False
                     self._gesture_detector = None
+            else:
+                self._gesture_detection_enabled = True
         else:
+            self._gesture_detection_enabled = False
             self._gesture_detector = None
             with self._gesture_lock:
                 self._current_gesture = "none"

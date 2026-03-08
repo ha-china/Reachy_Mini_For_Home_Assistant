@@ -400,10 +400,11 @@ class EntityRegistry:
             return False
 
         def set_face_tracking_enabled(enabled: bool) -> None:
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.face_tracking_enabled = enabled
             if self.camera_server is not None:
                 self.camera_server.set_face_tracking_enabled(enabled)
             if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.face_tracking_enabled = enabled
                 try:
                     self.server.state.save_preferences()
                 except Exception as e:
@@ -433,10 +434,11 @@ class EntityRegistry:
             return False
 
         def set_gesture_detection_enabled(enabled: bool) -> None:
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.gesture_detection_enabled = enabled
             if self.camera_server is not None:
                 self.camera_server.set_gesture_detection_enabled(enabled)
             if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.gesture_detection_enabled = enabled
                 try:
                     self.server.state.save_preferences()
                 except Exception as e:
