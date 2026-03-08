@@ -1282,11 +1282,9 @@ class MovementManager:
                 # Get offsets directly - no EMA smoothing (matches reference project)
                 raw_offsets = self._camera_server.get_face_tracking_offsets()
 
-                # In true static idle mode, keep vision detection active but
-                # do not apply tracking offsets to motion.
+                # Apply face tracking offsets directly when face tracking is enabled.
+                # Idle motion toggle should not disable face tracking behavior.
                 offsets_for_motion = raw_offsets
-                if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
-                    offsets_for_motion = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
                 with self._face_tracking_lock:
                     self._face_tracking_offsets = offsets_for_motion

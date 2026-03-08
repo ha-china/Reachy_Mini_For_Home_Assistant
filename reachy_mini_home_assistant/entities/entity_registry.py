@@ -390,6 +390,11 @@ class EntityRegistry:
         )
 
         def get_face_tracking_enabled() -> bool:
+            if self.camera_server is not None:
+                try:
+                    return bool(self.camera_server.get_face_tracking_enabled())
+                except Exception:
+                    pass
             if hasattr(self.server, "state") and self.server.state:
                 return bool(self.server.state.preferences.face_tracking_enabled)
             return False
@@ -418,6 +423,11 @@ class EntityRegistry:
         )
 
         def get_gesture_detection_enabled() -> bool:
+            if self.camera_server is not None:
+                try:
+                    return bool(self.camera_server.get_gesture_detection_enabled())
+                except Exception:
+                    pass
             if hasattr(self.server, "state") and self.server.state:
                 return bool(self.server.state.preferences.gesture_detection_enabled)
             return False
