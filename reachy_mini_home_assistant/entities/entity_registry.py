@@ -330,6 +330,37 @@ class EntityRegistry:
             )
         )
 
+        def get_idle_random_interval_seconds() -> float:
+            if hasattr(self.server, "state") and self.server.state:
+                prefs = self.server.state.preferences
+                return float(getattr(prefs, "idle_random_interval_seconds", 10.0))
+            return 10.0
+
+        def set_idle_random_interval_seconds(value: float) -> None:
+            interval_seconds = max(2.0, min(60.0, float(value)))
+            rc.set_idle_random_interval_seconds(interval_seconds)
+            if hasattr(self.server, "state") and self.server.state:
+                self.server.state.preferences.idle_random_interval_seconds = interval_seconds
+                self.server.state.save_preferences()
+
+        entities.append(
+            NumberEntity(
+                server=self.server,
+                key=get_entity_key("idle_random_interval_seconds"),
+                name="Idle Random Interval",
+                object_id="idle_random_interval_seconds",
+                min_value=2.0,
+                max_value=60.0,
+                step=1.0,
+                icon="mdi:timer-outline",
+                unit_of_measurement="s",
+                mode=2,
+                entity_category=1,
+                value_getter=get_idle_random_interval_seconds,
+                value_setter=set_idle_random_interval_seconds,
+            )
+        )
+
         def get_sendspin_enabled() -> bool:
             if hasattr(self.server, "state") and self.server.state:
                 prefs = self.server.state.preferences
@@ -359,6 +390,11 @@ class EntityRegistry:
         )
 
         def get_face_tracking_enabled() -> bool:
+            if self.camera_server is not None:
+                try:
+                    return bool(self.camera_server.get_face_tracking_enabled())
+                except Exception:
+                    pass
             if hasattr(self.server, "state") and self.server.state:
                 return bool(self.server.state.preferences.face_tracking_enabled)
             return False
@@ -366,9 +402,13 @@ class EntityRegistry:
         def set_face_tracking_enabled(enabled: bool) -> None:
             if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.face_tracking_enabled = enabled
-                self.server.state.save_preferences()
             if self.camera_server is not None:
                 self.camera_server.set_face_tracking_enabled(enabled)
+            if hasattr(self.server, "state") and self.server.state:
+                try:
+                    self.server.state.save_preferences()
+                except Exception as e:
+                    _LOGGER.warning("Failed to save face tracking preference: %s", e)
 
         entities.append(
             SwitchEntity(
@@ -384,6 +424,11 @@ class EntityRegistry:
         )
 
         def get_gesture_detection_enabled() -> bool:
+            if self.camera_server is not None:
+                try:
+                    return bool(self.camera_server.get_gesture_detection_enabled())
+                except Exception:
+                    pass
             if hasattr(self.server, "state") and self.server.state:
                 return bool(self.server.state.preferences.gesture_detection_enabled)
             return False
@@ -391,9 +436,13 @@ class EntityRegistry:
         def set_gesture_detection_enabled(enabled: bool) -> None:
             if hasattr(self.server, "state") and self.server.state:
                 self.server.state.preferences.gesture_detection_enabled = enabled
-                self.server.state.save_preferences()
             if self.camera_server is not None:
                 self.camera_server.set_gesture_detection_enabled(enabled)
+            if hasattr(self.server, "state") and self.server.state:
+                try:
+                    self.server.state.save_preferences()
+                except Exception as e:
+                    _LOGGER.warning("Failed to save gesture detection preference: %s", e)
 
         entities.append(
             SwitchEntity(
@@ -440,7 +489,8 @@ class EntityRegistry:
 
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
-            "idle_motion_enabled, idle_antenna_enabled, idle_random_actions_enabled, sendspin_enabled, "
+            "idle_motion_enabled, idle_antenna_enabled, idle_random_actions_enabled, idle_random_interval_seconds, "
+            "sendspin_enabled, "
             "face_tracking_enabled, gesture_detection_enabled, "
             "face_confidence_threshold"
         )

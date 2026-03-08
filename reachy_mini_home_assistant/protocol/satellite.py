@@ -796,10 +796,11 @@ class VoiceSatelliteProtocol(APIServer):
         # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
 
-        # Resume face tracking (may have been paused during speaking)
+        # Resume face tracking according to user preference (may have been paused during speaking)
         if self.camera_server is not None:
             try:
-                self.camera_server.set_face_tracking_enabled(True)
+                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
+                self.camera_server.set_face_tracking_enabled(enabled)
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
 
@@ -814,10 +815,11 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_thinking(self) -> None:
         """Called when processing speech (HA state: Processing)."""
-        # Resume face tracking (may have been paused during speaking)
+        # Resume face tracking according to user preference (may have been paused during speaking)
         if self.camera_server is not None:
             try:
-                self.camera_server.set_face_tracking_enabled(True)
+                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
+                self.camera_server.set_face_tracking_enabled(enabled)
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
 
@@ -832,13 +834,14 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_speaking(self) -> None:
         """Called when TTS is playing (HA state: Responding)."""
-        # Pause face tracking during speaking - robot will use speaking animation instead
+        # Keep face tracking aligned with user preference during speaking.
+        # Forcing disable here makes the ESPHome switch appear to bounce back.
         if self.camera_server is not None:
             try:
-                self.camera_server.set_face_tracking_enabled(False)
-                _LOGGER.debug("Face tracking paused during speaking")
+                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
+                self.camera_server.set_face_tracking_enabled(enabled)
             except Exception as e:
-                _LOGGER.debug("Failed to pause face tracking: %s", e)
+                _LOGGER.debug("Failed to apply face tracking preference during speaking: %s", e)
 
         if not self.state.motion_enabled:
             _LOGGER.warning("Motion disabled, skipping speaking animation")
@@ -858,10 +861,11 @@ class VoiceSatelliteProtocol(APIServer):
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
 
-        # Resume face tracking (may have been paused during speaking)
+        # Resume face tracking according to user preference (may have been paused during speaking)
         if self.camera_server is not None:
             try:
-                self.camera_server.set_face_tracking_enabled(True)
+                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
+                self.camera_server.set_face_tracking_enabled(enabled)
             except Exception as e:
                 _LOGGER.debug("Failed to resume face tracking: %s", e)
 

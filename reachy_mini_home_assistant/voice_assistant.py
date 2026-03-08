@@ -182,9 +182,16 @@ class VoiceAssistantService:
             self._motion.movement_manager.set_idle_motion_enabled(preferences.idle_motion_enabled)
             self._motion.movement_manager.set_idle_antenna_enabled(preferences.idle_antenna_enabled)
             self._motion.movement_manager.set_idle_random_actions_enabled(preferences.idle_random_actions_enabled)
+            self._motion.movement_manager.set_idle_random_interval_seconds(
+                float(getattr(preferences, "idle_random_interval_seconds", 10.0))
+            )
             _LOGGER.info("Idle motion restored from preferences: %s", preferences.idle_motion_enabled)
             _LOGGER.info("Idle antenna motion restored from preferences: %s", preferences.idle_antenna_enabled)
             _LOGGER.info("Idle random actions restored from preferences: %s", preferences.idle_random_actions_enabled)
+            _LOGGER.info(
+                "Idle random interval restored from preferences: %.1fs",
+                float(getattr(preferences, "idle_random_interval_seconds", 10.0)),
+            )
 
         # Set sleep/wake callbacks for HA button triggers
         self._state.on_ha_sleep = self._on_sleep
@@ -658,7 +665,8 @@ class VoiceAssistantService:
                     port=self.camera_port,
                     fps=15,
                     quality=80,
-                    enable_face_tracking=True,
+                    enable_face_tracking=bool(getattr(self._state.preferences, "face_tracking_enabled", False)),
+                    enable_gesture_detection=bool(getattr(self._state.preferences, "gesture_detection_enabled", False)),
                     gstreamer_lock=self._gstreamer_lock,
                 )
 
