@@ -653,6 +653,8 @@ class MJPEGCameraServer:
             return  # No change, skip logging
         self._face_tracking_enabled = enabled
         if enabled:
+            # Ensure AI scheduler is active when user re-enables tracking from HA switch.
+            self._frame_rate_manager.resume()
             if self._head_tracker is None:
                 try:
                     from .head_tracker import HeadTracker
@@ -785,6 +787,8 @@ class MJPEGCameraServer:
 
         self._gesture_detection_enabled = enabled
         if enabled:
+            # Ensure AI scheduler is active when user re-enables tracking from HA switch.
+            self._frame_rate_manager.resume()
             if self._gesture_detector is None:
                 try:
                     from .gesture_detector import GestureDetector
