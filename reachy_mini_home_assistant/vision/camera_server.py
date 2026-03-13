@@ -100,12 +100,14 @@ class MJPEGCameraServer:
         # Face tracking state
         self._head_tracker = None
         self._face_tracking_enabled = enable_face_tracking
+        self._face_tracking_requested = enable_face_tracking
         self._face_tracking_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
 
         # Gesture detection state
         self._gesture_detector = None
         self._gesture_detection_enabled = enable_gesture_detection
+        self._gesture_detection_requested = enable_gesture_detection
         self._current_gesture = "none"
         self._gesture_confidence = 0.0
         self._gesture_lock = threading.Lock()
@@ -327,6 +329,7 @@ class MJPEGCameraServer:
 
         # Suspend frame rate manager
         self._frame_rate_manager.suspend()
+        # Disable runtime processing while preserving requested user preferences.
         self._face_tracking_enabled = False
         self._gesture_detection_enabled = False
 
@@ -354,8 +357,12 @@ class MJPEGCameraServer:
         # Resume frame rate manager
         self._frame_rate_manager.resume()
 
-        # Reload head tracker if face tracking was originally enabled
-        if self._face_tracking_enabled and self._head_tracker is None:
+        # Restore runtime states from requested user preferences
+        self._face_tracking_enabled = self._face_tracking_requested
+        self._gesture_detection_enabled = self._gesture_detection_requested
+
+        # Reload head tracker if face tracking is requested
+        if self._face_tracking_requested and self._head_tracker is None:
             try:
                 from .head_tracker import HeadTracker
 
@@ -366,8 +373,8 @@ class MJPEGCameraServer:
                 _LOGGER.warning("Failed to reload head tracker: %s", e)
                 self._face_tracking_enabled = False
 
-        # Reload gesture detector
-        if self._gesture_detector is None:
+        # Reload gesture detector only if gesture detection is requested
+        if self._gesture_detection_requested and self._gesture_detector is None:
             try:
                 from .gesture_detector import GestureDetector
 
@@ -381,6 +388,9 @@ class MJPEGCameraServer:
             except Exception as e:
                 _LOGGER.warning("Failed to reload gesture detector: %s", e)
                 self._gesture_detection_enabled = False
+        elif not self._gesture_detection_requested:
+            self._gesture_detector = None
+            self._gesture_detection_enabled = False
 
         _LOGGER.info("Camera processing resumed - full functionality restored")
 
@@ -652,6 +662,7 @@ class MJPEGCameraServer:
 
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
+        self._face_tracking_requested = enabled
         if self._face_tracking_enabled == enabled:
             return  # No change, skip logging
         self._face_tracking_enabled = enabled
@@ -785,6 +796,7 @@ class MJPEGCameraServer:
 
     def set_gesture_detection_enabled(self, enabled: bool) -> None:
         """Enable or disable gesture detection."""
+        self._gesture_detection_requested = enabled
         if self._gesture_detection_enabled == enabled:
             return
 
