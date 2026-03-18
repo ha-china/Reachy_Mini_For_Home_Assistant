@@ -1399,16 +1399,14 @@ class MovementManager:
         Returns:
             Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
         """
-        # Build primary head pose from target state plus animation offsets.
-        # This keeps animation in the primary motion stream, while secondary
-        # stays reserved for speech sway and face tracking offsets.
+        # Build primary head pose from target state (using pose_composer utility)
         primary_head = create_head_pose_matrix(
-            x=self.state.target_x + self.state.anim_x,
-            y=self.state.target_y + self.state.anim_y,
-            z=self.state.target_z + self.state.anim_z,
-            roll=self.state.target_roll + self.state.anim_roll,
-            pitch=self.state.target_pitch + self.state.anim_pitch,
-            yaw=self.state.target_yaw + self.state.anim_yaw,
+            x=self.state.target_x,
+            y=self.state.target_y,
+            z=self.state.target_z,
+            roll=self.state.target_roll,
+            pitch=self.state.target_pitch,
+            yaw=self.state.target_yaw,
         )
 
         # Build secondary pose from speech sway + face tracking.
