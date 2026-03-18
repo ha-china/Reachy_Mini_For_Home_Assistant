@@ -764,28 +764,22 @@ class VoiceAssistantService:
             "timer_finished.flac",
         ]
 
-        # Verify wake word files
-        missing_wakewords = []
-        for filename in required_wakewords:
-            filepath = _WAKEWORDS_DIR / filename
-            if not filepath.exists():
-                missing_wakewords.append(filename)
+        missing_wakewords = self._find_missing_files(_WAKEWORDS_DIR, required_wakewords)
 
         if missing_wakewords:
             _LOGGER.warning("Missing wake word files: %s. These should be bundled with the package.", missing_wakewords)
 
-        # Verify sound files
-        missing_sounds = []
-        for filename in required_sounds:
-            filepath = _SOUNDS_DIR / filename
-            if not filepath.exists():
-                missing_sounds.append(filename)
+        missing_sounds = self._find_missing_files(_SOUNDS_DIR, required_sounds)
 
         if missing_sounds:
             _LOGGER.warning("Missing sound files: %s. These should be bundled with the package.", missing_sounds)
 
         if not missing_wakewords and not missing_sounds:
             _LOGGER.info("All required files verified successfully.")
+
+    @staticmethod
+    def _find_missing_files(base_dir: Path, filenames: list[str]) -> list[str]:
+        return [filename for filename in filenames if not (base_dir / filename).exists()]
 
     def _load_available_wake_words(self) -> dict[str, AvailableWakeWord]:
         """Load available wake word configurations."""
@@ -853,39 +847,55 @@ class VoiceAssistantService:
         wake_models: dict[str, MicroWakeWord | OpenWakeWord] = {}
         active_wake_words: set[str] = set()
 
-        # Try to load preferred models
         if preferences.active_wake_words:
             for wake_word_id in preferences.active_wake_words:
-                wake_word = available_wake_words.get(wake_word_id)
-                if wake_word is None:
-                    _LOGGER.warning("Unknown wake word: %s", wake_word_id)
-                    continue
-
-                try:
-                    _LOGGER.debug("Loading wake model: %s", wake_word_id)
-                    loaded_model = wake_word.load()
-                    # Set id attribute on the model for later identification
-                    loaded_model.id = wake_word_id
-                    wake_models[wake_word_id] = loaded_model
-                    active_wake_words.add(wake_word_id)
-                except Exception as e:
-                    _LOGGER.warning("Failed to load wake model %s: %s", wake_word_id, e)
+                self._try_add_wake_model(wake_models, active_wake_words, available_wake_words, wake_word_id)
 
         # Load default model if none loaded
         if not wake_models:
-            wake_word = available_wake_words.get(self.wake_model)
-            if wake_word:
-                try:
-                    _LOGGER.debug("Loading default wake model: %s", self.wake_model)
-                    loaded_model = wake_word.load()
-                    # Set id attribute on the model for later identification
-                    loaded_model.id = self.wake_model
-                    wake_models[self.wake_model] = loaded_model
-                    active_wake_words.add(self.wake_model)
-                except Exception as e:
-                    _LOGGER.error("Failed to load default wake model: %s", e)
+            self._try_add_wake_model(
+                wake_models,
+                active_wake_words,
+                available_wake_words,
+                self.wake_model,
+                unknown_level="error",
+                failure_level="error",
+                log_default=True,
+            )
 
         return wake_models, active_wake_words
+
+    def _try_add_wake_model(
+        self,
+        wake_models: dict[str, MicroWakeWord | OpenWakeWord],
+        active_wake_words: set[str],
+        available_wake_words: dict[str, AvailableWakeWord],
+        wake_word_id: str,
+        *,
+        unknown_level: str = "warning",
+        failure_level: str = "warning",
+        log_default: bool = False,
+    ) -> None:
+        wake_word = available_wake_words.get(wake_word_id)
+        if wake_word is None:
+            getattr(_LOGGER, unknown_level)("Unknown wake word: %s", wake_word_id)
+            return
+
+        try:
+            if log_default:
+                _LOGGER.debug("Loading default wake model: %s", wake_word_id)
+            else:
+                _LOGGER.debug("Loading wake model: %s", wake_word_id)
+            loaded_model = wake_word.load()
+            loaded_model.id = wake_word_id
+            wake_models[wake_word_id] = loaded_model
+            active_wake_words.add(wake_word_id)
+        except Exception as e:
+            message = "Failed to load default wake model: %s" if log_default else "Failed to load wake model %s: %s"
+            if log_default:
+                getattr(_LOGGER, failure_level)(message, e)
+            else:
+                getattr(_LOGGER, failure_level)(message, wake_word_id, e)
 
     def _load_stop_model(self):
         """Load the stop word model."""

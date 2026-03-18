@@ -246,6 +246,14 @@ class ReachyController:
             logger.error("Failed to set %s volume via daemon API: %s", label, e)
             return volume
 
+    def _motor_mode_from_status(self, status: Any) -> str | None:
+        motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
+        if motor_mode is not None:
+            return str(motor_mode)
+        if self._status_value(status, "state") == "running":
+            return "enabled"
+        return None
+
     def get_speaker_volume(self) -> float:
         """Get speaker volume (0-100) from the daemon volume API."""
         self._speaker_volume = self._get_volume_via_api("/api/volume/current", self._speaker_volume, "speaker")
@@ -289,10 +297,8 @@ class ReachyController:
         if status is None:
             return False
         try:
-            motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
-            if motor_mode is not None:
-                return motor_mode == "enabled"
-            return self._status_value(status, "state") == "running"
+            motor_mode = self._motor_mode_from_status(status)
+            return motor_mode == "enabled"
         except Exception as e:
             logger.error(f"Error getting motor state: {e}")
             return False
@@ -324,12 +330,7 @@ class ReachyController:
         if status is None:
             return "disabled"
         try:
-            motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
-            if motor_mode is not None:
-                return str(motor_mode)
-            if self._status_value(status, "state") == "running":
-                return "enabled"
-            return "disabled"
+            return self._motor_mode_from_status(status) or "disabled"
         except Exception as e:
             logger.error(f"Error getting motor mode: {e}")
             return "error"
