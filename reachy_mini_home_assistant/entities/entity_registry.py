@@ -143,6 +143,58 @@ class EntityRegistry:
             prefs.set_idle_behavior_enabled(enabled)
             self._save_preferences()
 
+    def _make_preference_switch(
+        self,
+        *,
+        key_name: str,
+        name: str,
+        object_id: str,
+        icon: str,
+        getter: Callable[[], bool],
+        setter: Callable[[bool], None],
+    ) -> SwitchEntity:
+        """Create a switch entity with the common registry wiring."""
+        return SwitchEntity(
+            server=self.server,
+            key=get_entity_key(key_name),
+            name=name,
+            object_id=object_id,
+            icon=icon,
+            entity_category=1,
+            value_getter=getter,
+            value_setter=setter,
+        )
+
+    def _make_preference_number(
+        self,
+        *,
+        key_name: str,
+        name: str,
+        object_id: str,
+        icon: str,
+        getter: Callable[[], float],
+        setter: Callable[[float], None],
+        min_value: float,
+        max_value: float,
+        step: float,
+        mode: int = 2,
+    ) -> NumberEntity:
+        """Create a number entity with the common registry wiring."""
+        return NumberEntity(
+            server=self.server,
+            key=get_entity_key(key_name),
+            name=name,
+            object_id=object_id,
+            min_value=min_value,
+            max_value=max_value,
+            step=step,
+            icon=icon,
+            mode=mode,
+            entity_category=1,
+            value_getter=getter,
+            value_setter=setter,
+        )
+
     def setup_all_entities(self, entities: list) -> None:
         """Setup all entity phases.
 
@@ -279,15 +331,13 @@ class EntityRegistry:
             self._set_idle_behavior_enabled(enabled)
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("idle_motion_enabled"),
+            self._make_preference_switch(
+                key_name="idle_motion_enabled",
                 name="Idle Behavior",
                 object_id="idle_motion_enabled",
                 icon="mdi:motion-play",
-                entity_category=1,
-                value_getter=get_idle_motion_enabled,
-                value_setter=set_idle_motion_enabled,
+                getter=get_idle_motion_enabled,
+                setter=set_idle_motion_enabled,
             )
         )
 
@@ -306,15 +356,13 @@ class EntityRegistry:
                 voice_assistant.set_sendspin_enabled(enabled)
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("sendspin_enabled"),
+            self._make_preference_switch(
+                key_name="sendspin_enabled",
                 name="Sendspin",
                 object_id="sendspin_enabled",
                 icon="mdi:speaker-wireless",
-                entity_category=1,
-                value_getter=get_sendspin_enabled,
-                value_setter=set_sendspin_enabled,
+                getter=get_sendspin_enabled,
+                setter=set_sendspin_enabled,
             )
         )
 
@@ -331,15 +379,13 @@ class EntityRegistry:
                 self.camera_server.set_face_tracking_enabled(enabled)
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("face_tracking_enabled"),
+            self._make_preference_switch(
+                key_name="face_tracking_enabled",
                 name="Face Tracking",
                 object_id="face_tracking_enabled",
                 icon="mdi:face-recognition",
-                entity_category=1,
-                value_getter=get_face_tracking_enabled,
-                value_setter=set_face_tracking_enabled,
+                getter=get_face_tracking_enabled,
+                setter=set_face_tracking_enabled,
             )
         )
 
@@ -356,15 +402,13 @@ class EntityRegistry:
                 self.camera_server.set_gesture_detection_enabled(enabled)
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("gesture_detection_enabled"),
+            self._make_preference_switch(
+                key_name="gesture_detection_enabled",
                 name="Gesture Detection",
                 object_id="gesture_detection_enabled",
                 icon="mdi:hand-wave",
-                entity_category=1,
-                value_getter=get_gesture_detection_enabled,
-                value_setter=set_gesture_detection_enabled,
+                getter=get_gesture_detection_enabled,
+                setter=set_gesture_detection_enabled,
             )
         )
 
@@ -382,19 +426,16 @@ class EntityRegistry:
                 self.camera_server.set_face_confidence_threshold(value)
 
         entities.append(
-            NumberEntity(
-                server=self.server,
-                key=get_entity_key("face_confidence_threshold"),
+            self._make_preference_number(
+                key_name="face_confidence_threshold",
                 name="Face Confidence",
                 object_id="face_confidence_threshold",
+                icon="mdi:target",
+                getter=get_face_confidence_threshold,
+                setter=set_face_confidence_threshold,
                 min_value=0.0,
                 max_value=1.0,
                 step=0.01,
-                icon="mdi:target",
-                mode=2,
-                entity_category=1,
-                value_getter=get_face_confidence_threshold,
-                value_setter=set_face_confidence_threshold,
             )
         )
 
