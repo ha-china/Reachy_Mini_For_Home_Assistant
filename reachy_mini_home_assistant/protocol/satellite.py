@@ -504,7 +504,6 @@ class VoiceSatelliteProtocol(APIServer):
     def wakeup(self, wake_word: MicroWakeWord | OpenWakeWord) -> None:
         """Handle wake word detection - start voice pipeline."""
         if self._timer_finished:
-            # Stop timer instead
             self._timer_finished = False
             self.state.tts_player.stop()
             _LOGGER.debug("Stopping timer finished sound")
@@ -513,10 +512,7 @@ class VoiceSatelliteProtocol(APIServer):
         wake_word_phrase = wake_word.wake_word
         _LOGGER.debug("Detected wake word: %s", wake_word_phrase)
 
-        # Turn toward sound source using DOA (Direction of Arrival)
         self._turn_to_sound_source()
-
-        # Get or create conversation_id for context tracking
         conv_id = self._get_or_create_conversation_id()
 
         self.send_messages(
@@ -549,7 +545,6 @@ class VoiceSatelliteProtocol(APIServer):
 
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
-        # Ensure pipeline does not re-arm itself after manual stop
         self._pipeline_active = False
         self._is_streaming_audio = False
         self._continue_conversation = False
@@ -562,7 +557,6 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.debug("Stopping timer finished sound")
         else:
             _LOGGER.debug("TTS response stopped manually")
-            # Reset TTS state to prevent double-finished
             self._tts_url = None
             self._tts_played = True
             self._tts_finished()
@@ -600,9 +594,6 @@ class VoiceSatelliteProtocol(APIServer):
         self._run_motion_state("speaking_end", "on_speaking_end")
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
-        # Check if should continue conversation
-        # 1. Our switch is ON: Always continue (unconditional)
-        # 2. Our switch is OFF: Follow HA's continue_conversation request
         continuous_mode = self.state.preferences.continuous_conversation
         should_continue = continuous_mode or self._continue_conversation
 
@@ -611,7 +602,6 @@ class VoiceSatelliteProtocol(APIServer):
                 "Continuing conversation (our_switch=%s, ha_request=%s)", continuous_mode, self._continue_conversation
             )
 
-            # Use same conversation_id for context continuity
             conv_id = self._get_or_create_conversation_id()
             self.send_messages(
                 [
@@ -622,7 +612,6 @@ class VoiceSatelliteProtocol(APIServer):
                 ]
             )
 
-            # Stay in listening mode
             self._reachy_on_listening()
             self._play_wakeup_sound()
         else:
@@ -631,7 +620,6 @@ class VoiceSatelliteProtocol(APIServer):
             self._is_streaming_audio = False
             _LOGGER.debug("Conversation finished")
 
-            # Reachy Mini: Return to idle after a short delay.
             self._schedule_delayed_idle_return()
 
     def _cancel_delayed_idle_return(self) -> None:
@@ -886,7 +874,6 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
-        # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
         self._enter_motion_state("idle", "on_idle", face_tracking=True)
 

@@ -328,10 +328,7 @@ class VoiceAssistantService:
         return False
 
     def _suspend_voice_services(self, reason: str) -> None:
-        """Suspend only voice-related services (not camera or motion).
-
-        This is used for the Mute feature - camera and motion should remain active.
-        """
+        """Suspend only voice-related services."""
         _LOGGER.warning("Suspending voice services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
@@ -344,10 +341,7 @@ class VoiceAssistantService:
         _LOGGER.info("Voice services suspended - camera and motion remain active")
 
     def _resume_voice_services(self, reason: str) -> None:
-        """Resume only voice-related services (not camera or motion).
-
-        This is used for the Mute feature - camera and motion remain active.
-        """
+        """Resume only voice-related services."""
         _LOGGER.info("Resuming voice services (%s)", reason)
         self._robot_services_paused.clear()
         self._set_service_state(suspended=False)
@@ -359,19 +353,13 @@ class VoiceAssistantService:
         _LOGGER.info("Voice services resumed - camera and motion remained active")
 
     def _suspend_non_esphome_services(self, reason: str, set_sleep_state: bool) -> None:
-        """Suspend all non-ESPHome services to reduce load.
-
-        ESPHome server stays up so Home Assistant can wake the robot.
-        """
+        """Suspend all non-ESPHome services."""
         _LOGGER.warning("Suspending non-ESPHome services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
         self._set_service_state(suspended=True, sleeping=set_sleep_state)
         self._audio_buffer.clear()
 
-        # Suspend camera server (stops thread and releases YOLO model)
-        # Only suspend if camera is NOT disabled (user has not manually disabled it)
-        # AND camera server has been started (not None)
         if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.suspend()
@@ -379,7 +367,6 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error suspending camera: %s", e)
 
-        # Suspend motion controller (stops control loop thread)
         if self._motion is not None and self._motion._movement_manager is not None:
             try:
                 self._motion._movement_manager.suspend()
@@ -400,9 +387,6 @@ class VoiceAssistantService:
         self._set_service_state(suspended=False, sleeping=False if clear_sleep_state else None)
         self._start_media_system()
 
-        # Resume camera server (reloads YOLO model and restarts capture thread)
-        # Only resume if camera is NOT disabled (user has not manually disabled it)
-        # AND camera server has been started (not None)
         if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.resume_from_suspend()
@@ -410,7 +394,6 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error resuming camera: %s", e)
 
-        # Resume motion controller (restarts control loop thread)
         if self._motion is not None and self._motion._movement_manager is not None:
             try:
                 self._motion._movement_manager.resume_from_suspend()
@@ -482,19 +465,11 @@ class VoiceAssistantService:
             _LOGGER.warning("Failed to restart media: %s", e)
 
     def _on_robot_disconnected(self) -> None:
-        """Called when robot connection is lost (e.g., daemon unavailable).
-
-        Suspends all non-ESPHome services to keep HA wake control available.
-        """
-        # RobotStateMonitor removed - connection tracking is handled by DaemonStateMonitor
+        """Called when robot connection is lost."""
         self._suspend_non_esphome_services(reason="robot_disconnected", set_sleep_state=False)
 
     def _on_robot_connected(self) -> None:
-        """Called when robot connection is restored.
-
-        Resumes non-ESPHome services unless the system is in sleep mode.
-        """
-        # RobotStateMonitor removed - connection tracking is handled by DaemonStateMonitor
+        """Called when robot connection is restored."""
 
         if self._state is not None and self._state.is_sleeping:
             _LOGGER.info("Robot connected but system is sleeping; deferring resume")
@@ -503,45 +478,22 @@ class VoiceAssistantService:
         self._resume_non_esphome_services(reason="robot_connected", clear_sleep_state=False)
 
     def _on_sleep(self) -> None:
-        """Called when the robot enters sleep mode.
-
-        This is triggered by the SleepManager when the daemon enters STOPPED state.
-        At this point, we should:
-        1. Stop all resource-intensive operations
-        2. Release ML models from memory
-        3. Keep only ESPHome server running for HA control
-        """
-        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
+        """Called when the robot enters sleep mode."""
         self._suspend_non_esphome_services(reason="sleep", set_sleep_state=True)
 
     def _on_wake(self) -> None:
-        """Called when the robot starts waking up.
-
-        This is triggered immediately when daemon state changes from STOPPED.
-        The actual service resume happens after the configured delay (30s default).
-        """
+        """Called when the robot starts waking up."""
         _LOGGER.info("Robot waking up - will resume services after delay...")
 
     def _on_pre_resume(self) -> None:
-        """Called just before services are resumed.
-
-        This happens after the resume delay (30s default).
-        At this point, the daemon should be fully ready.
-        """
+        """Called just before services are resumed."""
         _LOGGER.info("Resuming services after wake delay...")
-        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
         self._resume_non_esphome_services(reason="wake_pre_resume", clear_sleep_state=True)
 
     async def _on_wake_from_ha(self) -> None:
-        """Called when wake_up is triggered from Home Assistant button.
-
-        This bypasses the DaemonStateMonitor polling and directly resumes services
-        after a short delay to allow the robot to wake up.
-        """
+        """Called when wake_up is triggered from Home Assistant."""
         _LOGGER.info("Wake triggered from HA - waiting for daemon running state...")
 
-        # Wait for daemon to be fully running before resuming services.
-        # This avoids early media/motion restart failures after long sleep.
         timeout_s = 35.0
         deadline = time.monotonic() + timeout_s
         daemon_url = Config.daemon.url.rstrip("/")
@@ -563,13 +515,7 @@ class VoiceAssistantService:
         self._on_pre_resume()
 
     async def _on_ha_connected(self) -> None:
-        """Called when Home Assistant connects.
-
-        At this point, we should:
-        1. Load and start camera server if not already started
-        2. Ensure voice models are loaded
-        3. Resume any suspended services
-        """
+        """Called when Home Assistant connects."""
         _LOGGER.info("Home Assistant connected - initializing camera and voice services")
         self._ha_connected = True
         self._ha_connection_established = True
@@ -593,7 +539,6 @@ class VoiceAssistantService:
                     gstreamer_lock=self._gstreamer_lock,
                 )
 
-                # Apply persisted vision preferences before camera server start.
                 prefs = self._state.preferences
                 vision_allowed = prefs.idle_behavior_enabled
                 self._camera_server.set_face_tracking_enabled(bool(vision_allowed and prefs.face_tracking_enabled))
@@ -604,14 +549,11 @@ class VoiceAssistantService:
 
                 await self._camera_server.start()
 
-                # Store camera_server reference in state for entity registry access
                 self._state._camera_server = self._camera_server
 
-                # Update entity registry with the new camera_server reference
                 if self._state.satellite:
                     self._state.satellite.update_camera_server(self._camera_server)
 
-                # Connect camera server to motion controller for face tracking
                 if self._motion is not None:
                     self._motion.set_camera_server(self._camera_server)
 
@@ -624,18 +566,10 @@ class VoiceAssistantService:
             self._resume_non_esphome_services(reason="ha_connected", clear_sleep_state=False)
 
     def _on_ha_disconnected(self) -> None:
-        """Called when Home Assistant disconnects.
-
-        At this point, we should:
-        1. Suspend camera server to save resources
-        2. Keep ESPHome server running for reconnection
-        3. Ensure voice services are suspended
-        """
+        """Called when Home Assistant disconnects."""
         _LOGGER.warning("Home Assistant disconnected - suspending camera and voice services")
         self._ha_connected = False
 
-        # Suspend non-ESPHome services including camera
-        # Keep ESPHome server running so HA can reconnect
         self._suspend_non_esphome_services(reason="ha_disconnected", set_sleep_state=False)
 
     def _optimize_microphone_settings(self) -> None:
