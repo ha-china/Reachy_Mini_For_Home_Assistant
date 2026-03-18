@@ -344,6 +344,7 @@ class MJPEGCameraServer:
             self._gesture_confidence = 0.0
 
         _LOGGER.info("Camera processing suspended - ML models released")
+        self._log_vision_runtime_state("Suspended")
 
     def resume_processing(self) -> None:
         """Resume AI processing after sleep mode.
@@ -390,6 +391,7 @@ class MJPEGCameraServer:
             self._gesture_detection_enabled = self._gesture_detection_requested and self._gesture_detector is not None
 
         _LOGGER.info("Camera processing resumed - full functionality restored")
+        self._log_vision_runtime_state("Resumed")
 
     def suspend(self) -> None:
         """Fully suspend the camera server for sleep mode.
@@ -657,6 +659,17 @@ class MJPEGCameraServer:
         """
         return self._face_interpolator.is_face_detected()
 
+    def _log_vision_runtime_state(self, source: str) -> None:
+        """Log requested and active vision state together."""
+        _LOGGER.info(
+            "%s vision state: face requested=%s active=%s, gesture requested=%s active=%s",
+            source,
+            self._face_tracking_requested,
+            self._face_tracking_enabled,
+            self._gesture_detection_requested,
+            self._gesture_detection_enabled,
+        )
+
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
         if self._face_tracking_requested == enabled and self._face_tracking_enabled == enabled:
@@ -680,7 +693,7 @@ class MJPEGCameraServer:
             self._head_tracker = None
             with self._face_tracking_lock:
                 self._face_tracking_offsets = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
+        self._log_vision_runtime_state("Face toggle")
 
     def get_face_tracking_enabled(self) -> bool:
         """Return whether face tracking is enabled."""
@@ -819,7 +832,7 @@ class MJPEGCameraServer:
             with self._gesture_lock:
                 self._current_gesture = "none"
                 self._gesture_confidence = 0.0
-        _LOGGER.info("Gesture detection %s", "enabled" if enabled else "disabled")
+        self._log_vision_runtime_state("Gesture toggle")
 
     def get_gesture_detection_enabled(self) -> bool:
         """Return whether gesture detection is enabled."""
