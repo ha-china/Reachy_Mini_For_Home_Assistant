@@ -575,6 +575,13 @@ class MovementManager:
         self.state.anim_antenna_right = 0.0
         self._antenna_controller.reset()
 
+    def _transition_or_apply_idle_rest_pose(self, duration: float = 2.0) -> None:
+        """Move into idle rest pose, preferring a smooth transition when already idle."""
+        if self.state.robot_state == RobotState.IDLE:
+            self.transition_to_idle_rest(duration=duration)
+        else:
+            self._apply_idle_rest_pose()
+
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
 
@@ -962,7 +969,7 @@ class MovementManager:
                     self.state.anim_antenna_left = 0.0
                     self.state.anim_antenna_right = 0.0
                     if not self._idle_behavior_enabled():
-                        self._apply_idle_rest_pose()
+                        self._transition_or_apply_idle_rest_pose()
             elif self.state.robot_state == RobotState.IDLE:
                 self._animation_player.set_animation("idle")
                 self.state.target_pitch = 0.0
@@ -981,7 +988,7 @@ class MovementManager:
                 if self._pending_action and self._pending_action.name.startswith("idle_action"):
                     self._pending_action = None
                 if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
-                    self._apply_idle_rest_pose()
+                    self._transition_or_apply_idle_rest_pose()
             logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
 
         elif cmd == "set_idle_antenna":
@@ -994,7 +1001,7 @@ class MovementManager:
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
                 if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
-                    self._apply_idle_rest_pose()
+                    self._transition_or_apply_idle_rest_pose()
             elif self.state.robot_state == RobotState.IDLE:
                 self.state.target_antenna_left = 0.0
                 self.state.target_antenna_right = 0.0
