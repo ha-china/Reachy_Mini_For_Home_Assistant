@@ -1409,17 +1409,18 @@ class MovementManager:
             yaw=self.state.target_yaw,
         )
 
-        # Build secondary pose from speech sway + face tracking.
-        # Animation remains part of the primary target flow to reduce contention.
+        # Build secondary pose from animation + face tracking + speech sway
         with self._face_tracking_lock:
             face_offsets = self._face_tracking_offsets
 
-        secondary_x = self.state.sway_x + face_offsets[0]
-        secondary_y = self.state.sway_y + face_offsets[1]
-        secondary_z = self.state.sway_z + face_offsets[2]
-        secondary_roll = self.state.sway_roll + face_offsets[3]
-        secondary_pitch = self.state.sway_pitch + face_offsets[4]
-        secondary_yaw = self.state.sway_yaw + face_offsets[5]
+        # Apply animation blend factor (0 when face detected, 1 when no face)
+        anim_blend = self.state.animation_blend
+        secondary_x = self.state.anim_x * anim_blend + self.state.sway_x + face_offsets[0]
+        secondary_y = self.state.anim_y * anim_blend + self.state.sway_y + face_offsets[1]
+        secondary_z = self.state.anim_z * anim_blend + self.state.sway_z + face_offsets[2]
+        secondary_roll = self.state.anim_roll * anim_blend + self.state.sway_roll + face_offsets[3]
+        secondary_pitch = self.state.anim_pitch * anim_blend + self.state.sway_pitch + face_offsets[4]
+        secondary_yaw = self.state.anim_yaw * anim_blend + self.state.sway_yaw + face_offsets[5]
 
         # Build secondary pose and compose with primary (using pose_composer utilities)
         secondary_head = create_head_pose_matrix(
@@ -1433,8 +1434,11 @@ class MovementManager:
         final_head = compose_poses(primary_head, secondary_head)
 
         # Antenna pose with freeze blending (using AntennaController)
-        target_antenna_left = self.state.target_antenna_left + self.state.anim_antenna_left
-        target_antenna_right = self.state.target_antenna_right + self.state.anim_antenna_right
+        anim_antenna_left = self.state.anim_antenna_left * anim_blend
+        anim_antenna_right = self.state.anim_antenna_right * anim_blend
+
+        target_antenna_left = self.state.target_antenna_left + anim_antenna_left
+        target_antenna_right = self.state.target_antenna_right + anim_antenna_right
 
         # Apply antenna freeze blending via controller
         antenna_left, antenna_right = self._antenna_controller.get_blended_positions(
