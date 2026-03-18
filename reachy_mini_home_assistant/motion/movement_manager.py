@@ -889,6 +889,14 @@ class MovementManager:
                 self._last_idle_antenna_update = 0.0
 
             if payload != RobotState.IDLE:
+                self.state.target_pitch = 0.0
+                self.state.target_yaw = 0.0
+                self.state.target_roll = 0.0
+                self.state.target_x = 0.0
+                self.state.target_y = 0.0
+                self.state.target_z = 0.0
+                self.state.target_antenna_left = 0.0
+                self.state.target_antenna_right = 0.0
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
 
@@ -964,6 +972,9 @@ class MovementManager:
                         self._transition_or_apply_idle_rest_pose()
             elif self.state.robot_state == RobotState.IDLE:
                 self._animation_player.set_animation("idle")
+                self.state.target_pitch = 0.0
+                self.state.target_antenna_left = 0.0
+                self.state.target_antenna_right = 0.0
             logger.info("Idle motion %s", "enabled" if enabled else "disabled")
 
         elif cmd == "set_idle_random_actions":
@@ -992,8 +1003,8 @@ class MovementManager:
                 if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
                     self._transition_or_apply_idle_rest_pose()
             elif self.state.robot_state == RobotState.IDLE:
-                self._idle_antenna_smoothed = None
-                self._last_idle_antenna_update = 0.0
+                self.state.target_antenna_left = 0.0
+                self.state.target_antenna_right = 0.0
 
             logger.info("Idle antenna animation %s", "enabled" if enabled else "disabled")
 
