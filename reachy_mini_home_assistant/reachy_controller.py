@@ -53,11 +53,6 @@ class ReachyController:
         self._microphone_volume = 50.0  # Default mic volume
         self._movement_manager = None  # Set later via set_movement_manager()
 
-        # Volume caching to reduce daemon HTTP load
-        self._volume_cache_ttl = Config.daemon.volume_cache_ttl  # seconds
-        self._speaker_volume_cache_ts = 0.0
-        self._microphone_volume_cache_ts = 0.0
-
         # Shared session to reduce per-request overhead
         self._http_session = requests.Session()
         self._http_timeout = 5.0  # seconds
