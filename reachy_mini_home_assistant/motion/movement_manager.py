@@ -744,26 +744,15 @@ class MovementManager:
             except (TypeError, ValueError):
                 self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
 
-            antenna_fallback = rest_pose.get("antenna_rad", None)
             try:
                 self._idle_rest_antenna_left_rad = float(
-                    rest_pose.get(
-                        "antenna_left_rad",
-                        antenna_fallback
-                        if antenna_fallback is not None
-                        else DEFAULT_IDLE_REST_POSE["antenna_left_rad"],
-                    )
+                    rest_pose.get("antenna_left_rad", DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
                 )
             except (TypeError, ValueError):
                 self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
             try:
                 self._idle_rest_antenna_right_rad = float(
-                    rest_pose.get(
-                        "antenna_right_rad",
-                        antenna_fallback
-                        if antenna_fallback is not None
-                        else DEFAULT_IDLE_REST_POSE["antenna_right_rad"],
-                    )
+                    rest_pose.get("antenna_right_rad", DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
                 )
             except (TypeError, ValueError):
                 self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])

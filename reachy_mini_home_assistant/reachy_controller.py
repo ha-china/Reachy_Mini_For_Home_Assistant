@@ -207,7 +207,7 @@ class ReachyController:
             return status
         except Exception as e:
             logger.error(f"Error getting status: {e}")
-            return self._state_cache.get("status")  # Return stale cache on error
+            return None
 
     def get_daemon_state(self) -> str:
         """Get daemon state with caching."""
