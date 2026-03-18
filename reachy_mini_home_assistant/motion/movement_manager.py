@@ -81,8 +81,11 @@ IDLE_LOOK_AROUND_PITCH_RANGE = 6.0  # Maximum pitch angle in degrees
 IDLE_LOOK_AROUND_DURATION = 2.0  # Duration of look-around action in seconds
 IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around starts
 IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
-IDLE_REST_HEAD_PITCH_DEG = 12.0  # Tired idle pose when idle behavior is disabled
-IDLE_REST_ANTENNA_RAD = -0.35  # Lower antenna pose in tired idle
+DEFAULT_IDLE_REST_POSE = {
+    "pitch_deg": 0.0,
+    "antenna_left_rad": 0.0,
+    "antenna_right_rad": 0.0,
+}
 
 _ANIMATION_CONFIG_FILE = Path(__file__).resolve().parent.parent / "animations" / "conversation_animations.json"
 _DEFAULT_IDLE_RANDOM_ACTIONS: list[dict[str, Any]] = [
@@ -228,8 +231,9 @@ class MovementManager:
         self._idle_antenna_enabled = False
         # Idle random actions toggle (pure movement, no audio)
         self._idle_random_actions_enabled = False
-        self._idle_rest_head_pitch_rad = math.radians(IDLE_REST_HEAD_PITCH_DEG)
-        self._idle_rest_antenna_rad = IDLE_REST_ANTENNA_RAD
+        self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
+        self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
+        self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
         self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
         self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
@@ -547,8 +551,11 @@ class MovementManager:
         self.state.target_x = 0.0
         self.state.target_y = 0.0
         self.state.target_z = 0.0
-        self.state.target_antenna_left = self._idle_rest_antenna_rad
-        self.state.target_antenna_right = self._idle_rest_antenna_rad
+        self.state.target_antenna_left = self._idle_rest_antenna_left_rad
+        self.state.target_antenna_right = self._idle_rest_antenna_right_rad
+        self.state.anim_antenna_left = 0.0
+        self.state.anim_antenna_right = 0.0
+        self._antenna_controller.reset()
 
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
@@ -685,8 +692,9 @@ class MovementManager:
     def _load_idle_random_actions_config(self) -> None:
         """Load idle random action definitions from animation config."""
         self._idle_random_actions = list(_DEFAULT_IDLE_RANDOM_ACTIONS)
-        self._idle_rest_head_pitch_rad = math.radians(IDLE_REST_HEAD_PITCH_DEG)
-        self._idle_rest_antenna_rad = IDLE_REST_ANTENNA_RAD
+        self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
+        self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
+        self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
         self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
         self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
@@ -706,14 +714,34 @@ class MovementManager:
         if isinstance(rest_pose, dict):
             try:
                 self._idle_rest_head_pitch_rad = math.radians(
-                    float(rest_pose.get("pitch_deg", IDLE_REST_HEAD_PITCH_DEG))
+                    float(rest_pose.get("pitch_deg", DEFAULT_IDLE_REST_POSE["pitch_deg"]))
                 )
             except (TypeError, ValueError):
-                self._idle_rest_head_pitch_rad = math.radians(IDLE_REST_HEAD_PITCH_DEG)
+                self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
+
+            antenna_fallback = rest_pose.get("antenna_rad", None)
             try:
-                self._idle_rest_antenna_rad = float(rest_pose.get("antenna_rad", IDLE_REST_ANTENNA_RAD))
+                self._idle_rest_antenna_left_rad = float(
+                    rest_pose.get(
+                        "antenna_left_rad",
+                        antenna_fallback
+                        if antenna_fallback is not None
+                        else DEFAULT_IDLE_REST_POSE["antenna_left_rad"],
+                    )
+                )
             except (TypeError, ValueError):
-                self._idle_rest_antenna_rad = IDLE_REST_ANTENNA_RAD
+                self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
+            try:
+                self._idle_rest_antenna_right_rad = float(
+                    rest_pose.get(
+                        "antenna_right_rad",
+                        antenna_fallback
+                        if antenna_fallback is not None
+                        else DEFAULT_IDLE_REST_POSE["antenna_right_rad"],
+                    )
+                )
+            except (TypeError, ValueError):
+                self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
 
         section = config.get("idle_random_actions")
         if not isinstance(section, dict):
