@@ -27,7 +27,7 @@ from .core.util import get_mac
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
-from .protocol.zeroconf import HomeAssistantZeroconf
+from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
 from .reachy_controller import ReachyController
 from .vision.camera_server import MJPEGCameraServer
 
@@ -70,7 +70,7 @@ class VoiceAssistantService:
     def __init__(
         self,
         reachy_mini: ReachyMini,
-        name: str = "Reachy Mini",
+        name: str | None = None,
         host: str = "0.0.0.0",
         port: int = 6053,
         wake_model: str = "okay_nabu",
@@ -78,7 +78,7 @@ class VoiceAssistantService:
         camera_enabled: bool = True,
     ):
         self.reachy_mini = reachy_mini
-        self.name = name
+        self.name = name or get_default_friendly_name()
         self.host = host
         self.port = port
         self.wake_model = wake_model

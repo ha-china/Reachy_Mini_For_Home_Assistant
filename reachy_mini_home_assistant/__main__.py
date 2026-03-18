@@ -11,6 +11,7 @@ import logging
 import threading
 
 from .core import get_health_monitor, get_memory_monitor
+from .protocol.zeroconf import get_default_friendly_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,8 +20,8 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Reachy Mini for Home Assistant")
     parser.add_argument(
         "--name",
-        default="Reachy Mini",
-        help="Name of the voice assistant (default: Reachy Mini)",
+        default=get_default_friendly_name(),
+        help="Name of the voice assistant (default: auto-generated from MAC)",
     )
     parser.add_argument(
         "--host",

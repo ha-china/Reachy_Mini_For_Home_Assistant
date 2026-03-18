@@ -25,6 +25,18 @@ SENDSPIN_SERVICE_TYPE = "_sendspin-server._tcp.local."
 SENDSPIN_DEFAULT_PATH = "/sendspin"
 
 
+def get_default_device_name(prefix: str = "reachy-mini") -> str:
+    """Build a stable zero-config device name from the MAC address."""
+    mac = get_mac().replace(":", "").lower()
+    suffix = mac[-6:] if len(mac) >= 6 else mac or "device"
+    return f"{prefix}-{suffix}" if prefix else suffix
+
+
+def get_default_friendly_name() -> str:
+    """Build a stable friendly name for Home Assistant discovery."""
+    return f"Reachy Mini {get_default_device_name(prefix='')[-6:].upper()}"
+
+
 def get_local_ip() -> str:
     """Get local IP address for mDNS."""
     test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,7 +55,7 @@ class HomeAssistantZeroconf:
 
     def __init__(self, port: int, name: str | None = None, host: str | None = None) -> None:
         self.port = port
-        self.name = name or f"reachy-mini-{get_mac()[:6]}"
+        self.name = name or get_default_device_name()
 
         if not host:
             host = get_local_ip()
