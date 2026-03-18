@@ -269,58 +269,57 @@ class ReachyController:
             return "Robot not available"
         return str(self._status_value(status, "error", "") or "")
 
-    def get_speaker_volume(self) -> float:
-        """Get speaker volume (0-100) from the daemon volume API."""
+    def _get_volume_via_api(self, path: str, cached_value: float, label: str) -> float:
+        """Fetch a volume value from the daemon API, falling back to the cached value."""
         try:
             resp = self._http_session.get(
-                f"{self._daemon_base_url}/api/volume/current",
+                f"{self._daemon_base_url}{path}",
                 timeout=self._http_timeout,
             )
             resp.raise_for_status()
             data = resp.json()
             if isinstance(data, dict) and "volume" in data:
-                self._speaker_volume = float(data["volume"])
-                return self._speaker_volume
+                return float(data["volume"])
         except Exception as e:
-            logger.warning("Failed to get speaker volume via daemon API: %s", e)
+            logger.warning("Failed to get %s volume via daemon API: %s", label, e)
 
-        return self._speaker_volume
+        return cached_value
 
-    def set_speaker_volume(self, volume: float) -> None:
-        """Set speaker volume (0-100) through the daemon volume API."""
-        volume = max(0.0, min(100.0, volume))
-        self._speaker_volume = volume
-
+    def _set_volume_via_api(self, path: str, volume: float, label: str) -> float:
+        """Write a volume value through the daemon API and return the confirmed level."""
         try:
             resp = self._http_session.post(
-                f"{self._daemon_base_url}/api/volume/set",
+                f"{self._daemon_base_url}{path}",
                 json={"volume": int(volume)},
                 timeout=self._http_timeout,
             )
             resp.raise_for_status()
             data = resp.json()
             if isinstance(data, dict) and "volume" in data:
-                self._speaker_volume = float(data["volume"])
-            logger.info("Speaker volume set to %.1f%% via daemon API", self._speaker_volume)
+                return float(data["volume"])
+            return volume
         except Exception as e:
-            logger.error("Failed to set speaker volume via daemon API: %s", e)
+            logger.error("Failed to set %s volume via daemon API: %s", label, e)
+            return volume
+
+    def get_speaker_volume(self) -> float:
+        """Get speaker volume (0-100) from the daemon volume API."""
+        self._speaker_volume = self._get_volume_via_api("/api/volume/current", self._speaker_volume, "speaker")
+        return self._speaker_volume
+
+    def set_speaker_volume(self, volume: float) -> None:
+        """Set speaker volume (0-100) through the daemon volume API."""
+        volume = max(0.0, min(100.0, volume))
+        self._speaker_volume = self._set_volume_via_api("/api/volume/set", volume, "speaker")
+        logger.info("Speaker volume set to %.1f%% via daemon API", self._speaker_volume)
 
     def get_microphone_volume(self) -> float:
         """Get microphone volume (0-100), preferring daemon volume API."""
-        try:
-            resp = self._http_session.get(
-                f"{self._daemon_base_url}/api/volume/microphone/current",
-                timeout=self._http_timeout,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, dict) and "volume" in data:
-                self._microphone_volume = float(data["volume"])
-                return self._microphone_volume
-        except Exception as e:
-            logger.warning("Failed to get microphone volume via daemon API: %s", e)
-
-        # Return cached value on API failure.
+        self._microphone_volume = self._get_volume_via_api(
+            "/api/volume/microphone/current",
+            self._microphone_volume,
+            "microphone",
+        )
         return self._microphone_volume
 
     def set_microphone_volume(self, volume: float) -> None:
@@ -331,22 +330,12 @@ class ReachyController:
             volume: Volume level 0-100
         """
         volume = max(0.0, min(100.0, volume))
-        self._microphone_volume = volume
-
-        try:
-            resp = self._http_session.post(
-                f"{self._daemon_base_url}/api/volume/microphone/set",
-                json={"volume": int(volume)},
-                timeout=self._http_timeout,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, dict) and "volume" in data:
-                self._microphone_volume = float(data["volume"])
-            logger.info("Microphone volume set to %.1f%% via daemon API", self._microphone_volume)
-            return
-        except Exception as e:
-            logger.error("Failed to set microphone volume via daemon API: %s", e)
+        self._microphone_volume = self._set_volume_via_api(
+            "/api/volume/microphone/set",
+            volume,
+            "microphone",
+        )
+        logger.info("Microphone volume set to %.1f%% via daemon API", self._microphone_volume)
 
     # ========== Phase 2: Motor Control ==========
 
