@@ -32,9 +32,9 @@
   },
   "idle_rest_pose": {
     "description": "Low-energy static pose when idle behavior is disabled",
-    "pitch_deg": 45.0,
-    "antenna_left_rad": -0.6,
-    "antenna_right_rad": -0.6
+    "pitch_deg": 16.0,
+    "antenna_left_rad": 0.0,
+    "antenna_right_rad": 0.0
   },
   "emotions": {
     "happy": {
