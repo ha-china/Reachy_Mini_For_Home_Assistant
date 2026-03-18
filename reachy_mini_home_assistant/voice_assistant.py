@@ -21,13 +21,14 @@ import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
-from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
+from .audio.microphone import MicrophonePreferences
 from .core import Config, SleepManager
 from .core.util import get_mac
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
 from .protocol.zeroconf import HomeAssistantZeroconf
+from .reachy_controller import ReachyController
 from .vision.camera_server import MJPEGCameraServer
 
 if TYPE_CHECKING:
@@ -708,21 +709,10 @@ class VoiceAssistantService:
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
 
-        Delegates to MicrophoneOptimizer for actual settings configuration.
+        Delegates to ReachyController's ReSpeaker adapter.
         User preferences from Home Assistant override defaults when available.
         """
         try:
-            # Access ReSpeaker through the media audio system
-            audio = self.reachy_mini.media.audio
-            if audio is None or not hasattr(audio, "_respeaker"):
-                _LOGGER.debug("ReSpeaker not available for optimization")
-                return
-
-            respeaker = audio._respeaker
-            if respeaker is None:
-                _LOGGER.debug("ReSpeaker device not found")
-                return
-
             # Build preferences from saved state
             prefs = self._state.preferences if self._state else None
             mic_prefs = MicrophonePreferences(
@@ -731,9 +721,7 @@ class VoiceAssistantService:
                 noise_suppression=prefs.noise_suppression if prefs else None,
             )
 
-            # Delegate to optimizer
-            optimizer = MicrophoneOptimizer()
-            optimizer.optimize(respeaker, mic_prefs)
+            ReachyController(self.reachy_mini).optimize_microphone_settings(mic_prefs)
 
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)

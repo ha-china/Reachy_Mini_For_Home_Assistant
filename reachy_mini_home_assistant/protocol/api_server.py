@@ -41,6 +41,10 @@ class APIServer(asyncio.Protocol):
     def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
         pass
 
+    def on_authenticated(self) -> None:
+        """Hook called after authentication succeeds."""
+        return
+
     def process_packet(self, msg_type: int, packet_data: bytes) -> None:
         msg_class = MESSAGE_TYPE_TO_PROTO[msg_type]
         msg_inst = msg_class.FromString(packet_data)
@@ -62,6 +66,7 @@ class APIServer(asyncio.Protocol):
         if isinstance(msg_inst, AuthenticationRequest):
             _LOGGER.info("AuthenticationRequest received, sending AuthenticationResponse")
             self.send_messages([AuthenticationResponse()])
+            self.on_authenticated()
         elif isinstance(msg_inst, DisconnectRequest):
             self.send_messages([DisconnectResponse()])
             _LOGGER.debug("Disconnect requested")
@@ -85,8 +90,11 @@ class APIServer(asyncio.Protocol):
             packet_bytes = make_plain_text_packets(packets)
             self._writelines(packet_bytes)
         except (IndexError, OSError, BrokenPipeError, ConnectionResetError) as e:
-            _LOGGER.warning("Error sending message (%s): %s - connection may be lost",
-                         msgs[0].__class__.__name__ if msgs else "unknown", e)
+            _LOGGER.warning(
+                "Error sending message (%s): %s - connection may be lost",
+                msgs[0].__class__.__name__ if msgs else "unknown",
+                e,
+            )
             # Mark transport as invalid to prevent further writes
             self._writelines = None
             if self._transport:

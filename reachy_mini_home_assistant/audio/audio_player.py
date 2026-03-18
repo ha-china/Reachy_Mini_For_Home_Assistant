@@ -4,7 +4,7 @@ Sendspin integration allows synchronized multi-room audio playback through
 a Sendspin server. Reachy Mini connects as a PLAYER to receive audio streams
 from Home Assistant or other Sendspin controllers.
 
-Sendspin is automatically enabled by default - no user configuration needed.
+Sendspin can be enabled by the runtime integration when a server is discovered.
 The system uses mDNS to discover Sendspin servers on the local network.
 """
 
@@ -348,14 +348,12 @@ class AudioPlayer:
                     self._gstreamer_lock.release()
             else:
                 _LOGGER.debug("GStreamer lock busy, skipping audio sample")
-                # Flush SDK playback buffer to prevent buffer overflow during lock contention
-                try:
-                    if hasattr(self.reachy_mini.media, "flush"):
-                        self.reachy_mini.media.flush()
-                    elif hasattr(self.reachy_mini.media, "flush_audio"):
-                        self.reachy_mini.media.flush_audio()
-                except Exception:
-                    pass
+                audio_backend = getattr(self.reachy_mini.media, "audio", None)
+                if audio_backend is not None and hasattr(audio_backend, "clear_output_buffer"):
+                    try:
+                        audio_backend.clear_output_buffer()
+                    except Exception:
+                        pass
 
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)

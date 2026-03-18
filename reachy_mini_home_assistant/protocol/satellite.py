@@ -100,6 +100,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Track Home Assistant entity states for change detection
         self._ha_entity_states: dict[str, str] = {}
         self._idle_return_timer: Optional[threading.Timer] = None
+        self._pipeline_active = False
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -245,6 +246,7 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
+            self._pipeline_active = True
             self._tts_url = data.get("url")
             self._tts_played = False
             self._continue_conversation = False
@@ -289,6 +291,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
             # Pipeline run ended
+            self._pipeline_active = False
             self._is_streaming_audio = False
 
             # Following reference project pattern
@@ -532,9 +535,19 @@ class VoiceSatelliteProtocol(APIServer):
         """Start microphone streaming after wakeup sound finishes."""
         self._is_streaming_audio = True
 
+    def on_authenticated(self) -> None:
+        """Replay current entity states after ESPHome authentication."""
+        for entity in self.state.entities:
+            if hasattr(entity, "update_state"):
+                try:
+                    entity.update_state()
+                except Exception as e:
+                    _LOGGER.debug("Failed to replay state for %s: %s", getattr(entity, "object_id", entity), e)
+
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
         # Ensure pipeline does not re-arm itself after manual stop
+        self._pipeline_active = False
         self._is_streaming_audio = False
         self._continue_conversation = False
         self.state.active_wake_words.discard(self.state.stop_word.id)
@@ -581,6 +594,7 @@ class VoiceSatelliteProtocol(APIServer):
         """
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self._set_stop_word_active(False)
+        self._run_motion_state("speaking_end", "on_speaking_end")
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
         # Check if should continue conversation
@@ -594,9 +608,6 @@ class VoiceSatelliteProtocol(APIServer):
                 "Continuing conversation (our_switch=%s, ha_request=%s)", continuous_mode, self._continue_conversation
             )
 
-            # Play prompt sound to indicate ready for next input
-            self.state.tts_player.play(self.state.wakeup_sound)
-
             # Use same conversation_id for context continuity
             conv_id = self._get_or_create_conversation_id()
             self.send_messages(
@@ -607,10 +618,10 @@ class VoiceSatelliteProtocol(APIServer):
                     )
                 ]
             )
-            self._is_streaming_audio = True
 
             # Stay in listening mode
             self._reachy_on_listening()
+            self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
         else:
             self._clear_conversation()
             self.unduck()
@@ -695,6 +706,7 @@ class VoiceSatelliteProtocol(APIServer):
         self._cancel_delayed_idle_return()
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
+        self._pipeline_active = False
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
@@ -927,6 +939,9 @@ class VoiceSatelliteProtocol(APIServer):
         allowing users to activate the voice assistant with a hand gesture.
         """
         try:
+            if self._pipeline_active:
+                _LOGGER.debug("Ignoring gesture wake trigger while pipeline is active")
+                return
             # The wake word detected event triggers the voice pipeline
             _LOGGER.info("Gesture triggered wake word - starting voice assistant")
             # Set the wake word event to simulate detection
@@ -1019,6 +1034,7 @@ class VoiceSatelliteProtocol(APIServer):
         """
         _LOGGER.info("Suspending VoiceSatellite for sleep...")
         self._cancel_delayed_idle_return()
+        self._pipeline_active = False
 
         # Stop any current TTS/music
         if self.state.tts_player:

@@ -2,8 +2,6 @@
 
 import logging
 import math
-import platform
-import subprocess
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -11,50 +9,13 @@ import numpy as np
 import requests
 from scipy.spatial.transform import Rotation as R
 
+from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
 from .core.config import Config
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
-
-# Audio device card names for amixer commands (from SDK)
-DEVICE_CARD_NAMES = {
-    "reachy_mini_audio": "reachy_mini_audio",
-    "respeaker": "respeaker",
-    "default": "Audio",  # Default to Reachy Mini Audio
-}
-
-
-def _detect_audio_device() -> str:
-    """Detect the current audio output device (from SDK)."""
-    system = platform.system()
-
-    if system == "Linux":
-        # Try to detect if Reachy Mini Audio or legacy Respeaker is available
-        try:
-            result = subprocess.run(
-                ["aplay", "-l"],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=1.0,
-            )
-            output_lower = result.stdout.lower()
-            if "reachy mini audio" in output_lower:
-                return "reachy_mini_audio"
-            elif "respeaker" in output_lower:
-                return "respeaker"
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-        return "default"
-    return "unknown"
-
-
-def _get_amixer_card_name() -> str:
-    """Get the appropriate card name for Linux amixer commands (from SDK)."""
-    device = _detect_audio_device()
-    return DEVICE_CARD_NAMES.get(device, DEVICE_CARD_NAMES["default"])
 
 
 class _ReSpeakerContext:
@@ -477,10 +438,40 @@ class ReachyController:
             logger.error(f"Error executing sleep: {e}")
 
     def _daemon_command(self, path: str, params: dict[str, str] | None = None) -> None:
-        """Send a daemon command request with lightweight validation."""
+        """Send a daemon command request and wait for the daemon state to settle."""
         url = f"{self._daemon_base_url}{path}"
         resp = self._http_session.post(url, params=params or {}, timeout=self._http_timeout)
         resp.raise_for_status()
+
+        desired_state = None
+        if path.endswith("/start"):
+            desired_state = "running"
+        elif path.endswith("/stop"):
+            desired_state = "stopped"
+
+        if desired_state is not None:
+            self._wait_for_daemon_state(desired_state)
+
+    def _wait_for_daemon_state(self, desired_state: str, timeout: float = 10.0) -> None:
+        """Poll daemon status until the requested state is reached."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                resp = self._http_session.get(
+                    f"{self._daemon_base_url}/api/daemon/status",
+                    timeout=self._http_timeout,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                current_state = str(data.get("state", "")).lower()
+                if current_state == desired_state:
+                    self._last_status_query = 0.0
+                    return
+            except Exception as e:
+                logger.debug("Waiting for daemon state %s failed: %s", desired_state, e)
+            time.sleep(0.2)
+
+        logger.warning("Timed out waiting for daemon state '%s'", desired_state)
 
     # ========== Phase 3: Pose Control ==========
 
@@ -876,6 +867,15 @@ class ReachyController:
         except Exception:
             return _ReSpeakerContext(None, self._respeaker_lock)
 
+    def optimize_microphone_settings(self, preferences: MicrophonePreferences) -> None:
+        """Apply microphone optimization through the centralized ReSpeaker adapter."""
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                logger.debug("ReSpeaker not available for optimization")
+                return
+            optimizer = MicrophoneOptimizer()
+            optimizer.optimize(respeaker, preferences)
+
     # ========== Phase 12: Audio Processing (via local SDK with thread-safe access) ==========
 
     def get_agc_enabled(self) -> bool:
@@ -1000,8 +1000,8 @@ class ReachyController:
         if not self.is_available:
             return None
         try:
-            if self.reachy.media and self.reachy.media.audio:
-                return self.reachy.media.audio.get_DoA()
+            if self.reachy.media and hasattr(self.reachy.media, "get_DoA"):
+                return self.reachy.media.get_DoA()
         except Exception as e:
             logger.debug(f"Error getting DOA: {e}")
         return None

@@ -244,17 +244,9 @@ class MJPEGCameraServer:
         - HTTP server
         - ML models (head tracker, gesture detector)
         - Frame buffers and state
-        - SDK media resources
         """
         _LOGGER.info("Stopping MJPEG camera server...")
         self._running = False
-
-        # 0. Close SDK media resources to prevent leaks
-        try:
-            self.reachy_mini.media.close()
-            _LOGGER.info("SDK media resources closed")
-        except Exception as e:
-            _LOGGER.debug("Failed to close SDK media: %s", e)
 
         # 1. Stop capture thread
         if self._capture_thread:
@@ -838,14 +830,7 @@ class MJPEGCameraServer:
                     self._gstreamer_lock.release()
             else:
                 _LOGGER.debug("GStreamer lock busy, skipping camera frame")
-                # Flush SDK video buffer to prevent buffer overflow during lock contention
-                try:
-                    if hasattr(self.reachy_mini.media, "flush"):
-                        self.reachy_mini.media.flush()
-                    elif hasattr(self.reachy_mini.media, "flush_video"):
-                        self.reachy_mini.media.flush_video()
-                except Exception:
-                    pass
+                return None
                 return None
         except Exception as e:
             _LOGGER.debug("Failed to get camera frame: %s", e)
