@@ -657,28 +657,23 @@ class VoiceAssistantService:
                     fps=15,
                     quality=80,
                     enable_face_tracking=bool(
-                        getattr(self._state.preferences, "idle_behavior_enabled", False)
-                        and getattr(self._state.preferences, "face_tracking_enabled", False)
+                        self._state.preferences.idle_behavior_enabled and self._state.preferences.face_tracking_enabled
                     ),
                     enable_gesture_detection=bool(
-                        getattr(self._state.preferences, "idle_behavior_enabled", False)
-                        and getattr(self._state.preferences, "gesture_detection_enabled", False)
+                        self._state.preferences.idle_behavior_enabled
+                        and self._state.preferences.gesture_detection_enabled
                     ),
                     gstreamer_lock=self._gstreamer_lock,
                 )
 
                 # Apply persisted vision preferences before camera server start.
                 prefs = self._state.preferences
-                vision_allowed = bool(getattr(prefs, "idle_behavior_enabled", False))
-                self._camera_server.set_face_tracking_enabled(
-                    bool(vision_allowed and getattr(prefs, "face_tracking_enabled", False))
-                )
+                vision_allowed = prefs.idle_behavior_enabled
+                self._camera_server.set_face_tracking_enabled(bool(vision_allowed and prefs.face_tracking_enabled))
                 self._camera_server.set_gesture_detection_enabled(
-                    bool(vision_allowed and getattr(prefs, "gesture_detection_enabled", False))
+                    bool(vision_allowed and prefs.gesture_detection_enabled)
                 )
-                self._camera_server.set_face_confidence_threshold(
-                    float(getattr(prefs, "face_confidence_threshold", 0.5))
-                )
+                self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
 
                 await self._camera_server.start()
 

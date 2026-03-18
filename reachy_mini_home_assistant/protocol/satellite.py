@@ -654,7 +654,7 @@ class VoiceSatelliteProtocol(APIServer):
         if self.camera_server is None:
             return
         prefs = getattr(self.state, "preferences", None)
-        if prefs is not None and not bool(getattr(prefs, "idle_behavior_enabled", False)):
+        if prefs is not None and not prefs.idle_behavior_enabled:
             enabled = False
         try:
             self.camera_server.set_face_tracking_enabled(enabled)
