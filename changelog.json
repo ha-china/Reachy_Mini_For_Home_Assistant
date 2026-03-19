@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.4",
+    "date": "2026-03-19",
+    "changes": [
+      "Build: Bump package version to 1.0.4",
+      "Fix: Align Reachy Mini integration with current SDK assumptions by removing legacy compatibility paths and private client health checks",
+      "Fix: Replace direct SDK private _respeaker access with audio_control_utils-based ReSpeaker initialization",
+      "Fix: Tighten camera and pose composition to require current SDK media/utils APIs and valid look_at_image inputs",
+      "Improve: Unify idle behavior into a single persisted Home Assistant entity and remove old idle compatibility aliases",
+      "Improve: Replace separate wake/sleep buttons with a single sleep control entity",
+      "Improve: Update Sendspin integration for current aiosendspin lifecycle, stream handling, listener cleanup, and synchronized buffering",
+      "Improve: Standardize daemon URL usage on shared config across controller, sleep manager, and daemon monitor"
+    ]
+  },
+  {
     "version": "1.0.3",
     "date": "2026-03-07",
     "changes": [
