@@ -767,6 +767,7 @@ class VoiceAssistantService:
             try:
                 with open(preferences_path, encoding="utf-8") as f:
                     data = json.load(f)
+
                 return Preferences(**data)
             except Exception as e:
                 _LOGGER.warning("Failed to load preferences: %s", e)

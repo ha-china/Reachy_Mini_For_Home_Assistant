@@ -6,7 +6,7 @@ or the daemon becomes unavailable, all dependent services are notified to
 pause their operations gracefully.
 
 Key features:
-- Monitors robot connection via SDK's is_alive status
+- Monitors robot connection via SDK status queries
 - Provides callbacks for state changes
 - Thread-safe state access
 - Supports service pause/resume lifecycle
@@ -181,26 +181,13 @@ class RobotStateMonitor:
             return self._state
 
         try:
-            # Check the SDK's internal _is_alive flag
-            # This is set by the background check_alive thread in ZenohClient
-            client = getattr(self._robot, "client", None)
-            if client is None:
+            client = self._robot.client
+            status = client.get_status(wait=False, timeout=0.1)
+            if status is None:
                 return RobotConnectionState.DISCONNECTED
 
-            is_alive = getattr(client, "_is_alive", False)
-            if not is_alive:
-                return RobotConnectionState.DISCONNECTED
-
-            # Also check if we can access the media system
-            # During sleep mode, the client may report alive but media is unavailable
-            try:
-                media = getattr(self._robot, "media", None)
-                if media is not None:
-                    audio = getattr(media, "audio", None)
-                    if audio is None:
-                        return RobotConnectionState.DISCONNECTED
-            except Exception:
-                # If we can't access media, consider it disconnected
+            state = status.get("state") if isinstance(status, dict) else getattr(status, "state", None)
+            if state in {None, "error", "unavailable"}:
                 return RobotConnectionState.DISCONNECTED
 
             return RobotConnectionState.CONNECTED

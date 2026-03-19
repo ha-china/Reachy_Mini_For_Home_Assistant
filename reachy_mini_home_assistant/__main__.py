@@ -67,69 +67,69 @@ async def main() -> None:
     # Initialize Reachy Mini (required)
     from reachy_mini import ReachyMini
 
-    reachy_mini = ReachyMini()
-    _LOGGER.info("Reachy Mini connected")
+    with ReachyMini() as reachy_mini:
+        _LOGGER.info("Reachy Mini connected")
 
-    # Import and create VoiceAssistantService
-    from .voice_assistant import VoiceAssistantService
+        # Import and create VoiceAssistantService
+        from .voice_assistant import VoiceAssistantService
 
-    service = VoiceAssistantService(
-        reachy_mini=reachy_mini,
-        name=args.name,
-        host=args.host,
-        port=args.port,
-        wake_model=args.wake_model,
-        camera_port=args.camera_port,
-        camera_enabled=not args.no_camera,
-    )
+        service = VoiceAssistantService(
+            reachy_mini=reachy_mini,
+            name=args.name,
+            host=args.host,
+            port=args.port,
+            wake_model=args.wake_model,
+            camera_port=args.camera_port,
+            camera_enabled=not args.no_camera,
+        )
 
-    # Create stop event for graceful shutdown
-    stop_event = threading.Event()
+        # Create stop event for graceful shutdown
+        stop_event = threading.Event()
 
-    # Initialize monitoring services
-    health_monitor = get_health_monitor()
-    memory_monitor = get_memory_monitor()
+        # Initialize monitoring services
+        health_monitor = get_health_monitor()
+        memory_monitor = get_memory_monitor()
 
-    # Register service health checks
-    health_monitor.register_checker(
-        "voice_assistant",
-        lambda: service.is_running if hasattr(service, "is_running") else True,
-        interval=30.0,
-    )
+        # Register service health checks
+        health_monitor.register_checker(
+            "voice_assistant",
+            lambda: service.is_running,
+            interval=30.0,
+        )
 
-    try:
-        # Start monitoring
-        health_monitor.start()
-        memory_monitor.start()
+        try:
+            # Start monitoring
+            health_monitor.start()
+            memory_monitor.start()
 
-        await service.start()
+            await service.start()
 
-        _LOGGER.info("=" * 50)
-        _LOGGER.info("Reachy Mini Voice Assistant Started")
-        _LOGGER.info("=" * 50)
-        _LOGGER.info("Name: %s", args.name)
-        _LOGGER.info("ESPHome Server: %s:%s", args.host, args.port)
-        _LOGGER.info("Camera Server: %s:%s", args.host, args.camera_port)
-        _LOGGER.info("Motion control: enabled")
-        _LOGGER.info("=" * 50)
-        _LOGGER.info("Add this device in Home Assistant:")
-        _LOGGER.info("  Settings -> Devices & Services -> Add Integration -> ESPHome")
-        _LOGGER.info("  Enter: <this-device-ip>:%s", args.port)
-        _LOGGER.info("=" * 50)
+            _LOGGER.info("=" * 50)
+            _LOGGER.info("Reachy Mini Voice Assistant Started")
+            _LOGGER.info("=" * 50)
+            _LOGGER.info("Name: %s", args.name)
+            _LOGGER.info("ESPHome Server: %s:%s", args.host, args.port)
+            _LOGGER.info("Camera Server: %s:%s", args.host, args.camera_port)
+            _LOGGER.info("Motion control: enabled")
+            _LOGGER.info("=" * 50)
+            _LOGGER.info("Add this device in Home Assistant:")
+            _LOGGER.info("  Settings -> Devices & Services -> Add Integration -> ESPHome")
+            _LOGGER.info("  Enter: <this-device-ip>:%s", args.port)
+            _LOGGER.info("=" * 50)
 
-        # Wait for stop signal
-        while not stop_event.is_set():
-            await asyncio.sleep(0.5)
+            # Wait for stop signal
+            while not stop_event.is_set():
+                await asyncio.sleep(0.5)
 
-    except KeyboardInterrupt:
-        _LOGGER.info("Shutting down...")
-    finally:
-        # Stop monitoring services
-        health_monitor.stop()
-        memory_monitor.stop()
+        except KeyboardInterrupt:
+            _LOGGER.info("Shutting down...")
+        finally:
+            # Stop monitoring services
+            health_monitor.stop()
+            memory_monitor.stop()
 
-        await service.stop()
-        _LOGGER.info("Voice assistant stopped")
+            await service.stop()
+            _LOGGER.info("Voice assistant stopped")
 
 
 def run():

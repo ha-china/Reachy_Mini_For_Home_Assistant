@@ -14,27 +14,11 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
+from reachy_mini.utils import create_head_pose
+from reachy_mini.utils.interpolation import compose_world_offset
 
 logger = logging.getLogger(__name__)
-
-# Try to import SDK utilities
-try:
-    from reachy_mini.utils import create_head_pose
-    from reachy_mini.utils.interpolation import compose_world_offset
-
-    SDK_UTILS_AVAILABLE = True
-except ImportError:
-    SDK_UTILS_AVAILABLE = False
-    logger.debug("SDK utils not available, using fallback pose composition")
-
-# Try to import scipy for rotation handling
-try:
-    from scipy.spatial.transform import Rotation as R
-
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-    logger.warning("scipy not available, some pose functions may not work")
 
 
 # Body yaw safety limits (matches SDK's inverse_kinematics_safe constraints)
@@ -80,8 +64,6 @@ def create_head_pose_matrix(
 ) -> np.ndarray:
     """Create a 4x4 head pose matrix from position and rotation.
 
-    Uses SDK's create_head_pose if available, otherwise builds manually.
-
     Args:
         x, y, z: Position in meters
         roll, pitch, yaw: Rotation in radians (euler xyz)
@@ -89,36 +71,16 @@ def create_head_pose_matrix(
     Returns:
         4x4 numpy array representing the pose
     """
-    if SDK_UTILS_AVAILABLE:
-        return create_head_pose(
-            x=x,
-            y=y,
-            z=z,
-            roll=roll,
-            pitch=pitch,
-            yaw=yaw,
-            degrees=False,
-            mm=False,
-        )
-
-    # Fallback: build matrix manually
-    if SCIPY_AVAILABLE:
-        rotation = R.from_euler("xyz", [roll, pitch, yaw])
-        pose = np.eye(4, dtype=np.float64)
-        pose[:3, :3] = rotation.as_matrix()
-        pose[0, 3] = x
-        pose[1, 3] = y
-        pose[2, 3] = z
-        return pose
-    else:
-        # Basic fallback without scipy
-        pose = np.eye(4, dtype=np.float64)
-        pose[0, 3] = x
-        pose[1, 3] = y
-        pose[2, 3] = z
-        # Note: rotation is ignored without scipy
-        logger.warning("Cannot create rotation matrix without scipy")
-        return pose
+    return create_head_pose(
+        x=x,
+        y=y,
+        z=z,
+        roll=roll,
+        pitch=pitch,
+        yaw=yaw,
+        degrees=False,
+        mm=False,
+    )
 
 
 def compose_poses(
@@ -128,8 +90,6 @@ def compose_poses(
 ) -> np.ndarray:
     """Compose two pose matrices.
 
-    Uses SDK's compose_world_offset if available, otherwise does simple composition.
-
     Args:
         primary: Primary pose matrix (target)
         secondary: Secondary pose matrix (offsets)
@@ -138,21 +98,7 @@ def compose_poses(
     Returns:
         Composed 4x4 pose matrix
     """
-    if SDK_UTILS_AVAILABLE:
-        return compose_world_offset(primary, secondary, reorthonormalize=reorthonormalize)
-
-    # Fallback: simple composition
-    # R_final = R_secondary @ R_primary, t_final = t_primary + t_secondary
-    if SCIPY_AVAILABLE:
-        final = np.eye(4, dtype=np.float64)
-        final[:3, :3] = secondary[:3, :3] @ primary[:3, :3]
-        final[:3, 3] = primary[:3, 3] + secondary[:3, 3]
-        return final
-    else:
-        # Without scipy, just add translations
-        final = primary.copy()
-        final[:3, 3] = primary[:3, 3] + secondary[:3, 3]
-        return final
+    return compose_world_offset(primary, secondary, reorthonormalize=reorthonormalize)
 
 
 def extract_yaw_from_pose(pose: np.ndarray) -> float:
@@ -164,9 +110,6 @@ def extract_yaw_from_pose(pose: np.ndarray) -> float:
     Returns:
         Yaw angle in radians
     """
-    if not SCIPY_AVAILABLE:
-        return 0.0
-
     rotation = R.from_matrix(pose[:3, :3])
     _, _, yaw = rotation.as_euler("xyz")
     return yaw

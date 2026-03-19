@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Optional
 from ..core.system_diagnostics import get_system_diagnostics
 from ..models import Preferences
 from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
-from .entity_extensions import ButtonEntity, SelectEntity, SensorEntity, SwitchEntity
+from .entity_extensions import SelectEntity, SensorEntity, SwitchEntity
 from .entity_factory import (
     create_entity,
     get_diagnostic_sensor_definitions,
@@ -130,16 +130,13 @@ class EntityRegistry:
         }
 
     def _get_preferences(self) -> Preferences | None:
-        state = getattr(self.server, "state", None)
-        return state.preferences if state is not None else None
+        return self.server.state.preferences
 
     def _get_server_state(self):
-        return getattr(self.server, "state", None)
+        return self.server.state
 
     def _save_preferences(self) -> None:
-        state = getattr(self.server, "state", None)
-        if state is not None:
-            state.save_preferences()
+        self.server.state.save_preferences()
 
     def _set_preference_and_save(self, key: str, value) -> None:
         prefs = self._get_preferences()
@@ -374,19 +371,16 @@ class EntityRegistry:
 
         def get_muted() -> bool:
             state = self._get_server_state()
-            return bool(state.is_muted) if state is not None else False
+            return bool(state.is_muted)
 
         def set_muted(muted: bool) -> None:
             state = self._get_server_state()
-            if state is None:
-                return
             state.is_muted = muted
-            voice_assistant = getattr(self.server, "_voice_assistant_service", None)
-            if voice_assistant:
-                if muted:
-                    voice_assistant._suspend_voice_services(reason="mute")
-                else:
-                    voice_assistant._resume_voice_services(reason="mute")
+            voice_assistant = self.server._voice_assistant_service
+            if muted:
+                voice_assistant._suspend_voice_services(reason="mute")
+            else:
+                voice_assistant._resume_voice_services(reason="mute")
 
         entities.append(
             SwitchEntity(
@@ -429,28 +423,26 @@ class EntityRegistry:
             )
         )
 
-        def get_idle_motion_enabled() -> bool:
+        def get_idle_behavior_enabled() -> bool:
             prefs = self._get_preferences()
             return bool(prefs.idle_behavior_enabled) if prefs is not None else False
 
-        def set_idle_motion_enabled(enabled: bool) -> None:
+        def set_idle_behavior_enabled(enabled: bool) -> None:
             self._set_idle_behavior_enabled(enabled)
 
         entities.append(
             self._make_preference_switch(
-                key_name="idle_motion_enabled",
+                key_name="idle_behavior_enabled",
                 name="Idle Behavior",
-                object_id="idle_motion_enabled",
+                object_id="idle_behavior_enabled",
                 icon="mdi:motion-play",
-                getter=get_idle_motion_enabled,
-                setter=set_idle_motion_enabled,
+                getter=get_idle_behavior_enabled,
+                setter=set_idle_behavior_enabled,
             )
         )
 
         def sync_sendspin() -> None:
-            voice_assistant = getattr(self.server, "_voice_assistant_service", None)
-            if voice_assistant:
-                voice_assistant.set_sendspin_enabled(self._get_pref_bool("sendspin_enabled"))
+            self.server._voice_assistant_service.set_sendspin_enabled(self._get_pref_bool("sendspin_enabled"))
 
         entities.append(
             self._make_stored_switch(
@@ -514,7 +506,7 @@ class EntityRegistry:
 
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
-            "idle_motion_enabled, sendspin_enabled, "
+            "idle_behavior_enabled, sendspin_enabled, "
             "face_tracking_enabled, gesture_detection_enabled, "
             "face_confidence_threshold"
         )
@@ -523,27 +515,30 @@ class EntityRegistry:
         """Setup Phase 2 entities: Motor control."""
         rc = self.reachy_controller
 
-        entities.append(
-            ButtonEntity(
-                server=self.server,
-                key=get_entity_key("wake_up"),
-                name="Wake Up",
-                object_id="wake_up",
-                icon="mdi:alarm",
-                device_class="restart",
-                on_press=rc.wake_up,
-            )
-        )
+        def get_sleep_control() -> bool:
+            if self._sleep_mode_entity is not None:
+                return not bool(self._sleep_mode_entity.value)
+            return False
+
+        def set_sleep_control(sleeping: bool) -> None:
+            is_sleeping = get_sleep_control()
+            if sleeping == is_sleeping:
+                return
+            if sleeping:
+                rc.go_to_sleep()
+            else:
+                rc.wake_up()
 
         entities.append(
-            ButtonEntity(
+            SwitchEntity(
                 server=self.server,
-                key=get_entity_key("go_to_sleep"),
-                name="Go to Sleep",
-                object_id="go_to_sleep",
+                key=get_entity_key("sleep_control"),
+                name="Sleep Control",
+                object_id="sleep_control",
                 icon="mdi:sleep",
-                device_class="restart",
-                on_press=rc.go_to_sleep,
+                entity_category=1,
+                value_getter=get_sleep_control,
+                value_setter=set_sleep_control,
             )
         )
 
@@ -567,7 +562,7 @@ class EntityRegistry:
         )
         entities.append(self._services_suspended_entity)
 
-        _LOGGER.debug("Phase 2 entities registered: wake_up, go_to_sleep, sleep_mode, services_suspended")
+        _LOGGER.debug("Phase 2 entities registered: sleep_control, sleep_mode, services_suspended")
 
     def _setup_phase3_entities(self, entities: list) -> None:
         """Setup Phase 3 entities: Pose control."""

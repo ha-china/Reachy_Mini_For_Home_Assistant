@@ -181,10 +181,22 @@ class MJPEGCameraServer:
             self._gesture_detection_enabled = False
             return False
 
+    def _get_media_camera(self):
+        """Return the SDK camera object when video is available."""
+        return self.reachy_mini.media.camera
+
+    def _camera_ready(self) -> bool:
+        """Whether the SDK reports a usable camera backend."""
+        return self._get_media_camera() is not None
+
     async def start(self) -> None:
         """Start the MJPEG camera server."""
         if self._running:
             _LOGGER.warning("Camera server already running")
+            return
+
+        if not self._camera_ready():
+            _LOGGER.warning("Camera server not started: SDK media camera is unavailable")
             return
 
         self._running = True
@@ -195,9 +207,14 @@ class MJPEGCameraServer:
 
             backend = self.reachy_mini.media.backend
             backend_name = {
+                MediaBackend.NO_MEDIA: "No Media",
                 MediaBackend.GSTREAMER: "GStreamer",
+                MediaBackend.GSTREAMER_NO_VIDEO: "GStreamer (No Video)",
                 MediaBackend.DEFAULT: "Default",
                 MediaBackend.DEFAULT_NO_VIDEO: "Default (No Video)",
+                MediaBackend.SOUNDDEVICE_OPENCV: "SoundDevice + OpenCV",
+                MediaBackend.SOUNDDEVICE_NO_VIDEO: "SoundDevice (No Video)",
+                MediaBackend.WEBRTC: "WebRTC",
             }.get(backend, str(backend))
             _LOGGER.info("Detected media backend: %s", backend_name)
         except ImportError:
@@ -581,15 +598,13 @@ class MJPEGCameraServer:
                 h, w = frame.shape[:2]
                 eye_center_norm = (face_center + 1) / 2
 
-                eye_center_pixels = [
-                    float(eye_center_norm[0] * w),
-                    float(eye_center_norm[1] * h),
-                ]
+                u = int(np.clip(round(float(eye_center_norm[0] * w)), 1, max(1, w - 1)))
+                v = int(np.clip(round(float(eye_center_norm[1] * h)), 1, max(1, h - 1)))
 
                 # Get the head pose needed to look at the target
                 target_pose = self.reachy_mini.look_at_image(
-                    eye_center_pixels[0],
-                    eye_center_pixels[1],
+                    u,
+                    v,
                     duration=0.0,
                     perform_movement=False,
                 )
@@ -820,6 +835,9 @@ class MJPEGCameraServer:
 
     def _get_camera_frame(self) -> np.ndarray | None:
         """Get a frame from Reachy Mini's camera."""
+        if not self._camera_ready():
+            return None
+
         try:
             # Use GStreamer lock to prevent concurrent access conflicts
             acquired = self._gstreamer_lock.acquire(timeout=0.05)

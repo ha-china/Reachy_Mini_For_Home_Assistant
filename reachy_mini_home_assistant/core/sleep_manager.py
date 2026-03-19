@@ -54,7 +54,7 @@ class SleepManager:
     def __init__(
         self,
         reachy_mini,
-        daemon_url: str = "http://127.0.0.1:8000",
+        daemon_url: str | None = None,
         check_interval: float = 2.0,
         resume_delay: float = 30.0,
     ):
@@ -68,7 +68,7 @@ class SleepManager:
         """
         self._daemon_monitor = DaemonStateMonitor(
             reachy_mini=reachy_mini,
-            daemon_url=daemon_url,
+            daemon_url=(daemon_url or Config.daemon.url),
             check_interval=check_interval,
             sleep_interval=Config.daemon.check_interval_sleep,
             error_interval=Config.daemon.check_interval_error,

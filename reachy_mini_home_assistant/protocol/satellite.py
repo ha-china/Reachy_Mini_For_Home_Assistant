@@ -180,7 +180,7 @@ class VoiceSatelliteProtocol(APIServer):
         # This prevents duplicate entity registration on reconnection
         try:
             _LOGGER.info("Checking entity initialization state...")
-            if not getattr(self.state, "_entities_initialized", False):
+            if not self.state._entities_initialized:
                 _LOGGER.info("Setting up entities for first time...")
                 if self.state.media_player_entity is None:
                     _LOGGER.info("Creating MediaPlayerEntity...")

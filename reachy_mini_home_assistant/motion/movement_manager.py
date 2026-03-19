@@ -173,6 +173,26 @@ class MovementManager:
         self._consecutive_errors = 0
         self._max_consecutive_errors = 5
 
+    @staticmethod
+    def _is_connection_error(exc: Exception) -> bool:
+        """Best-effort connection error detection without relying on private SDK state."""
+        if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+            return True
+
+        error_msg = str(exc).lower()
+        connection_markers = (
+            "lost connection",
+            "connection lost",
+            "connection refused",
+            "connection reset",
+            "not connected",
+            "timed out",
+            "timeout",
+            "broken pipe",
+            "unavailable",
+        )
+        return any(marker in error_msg for marker in connection_markers)
+
         # Pending action
         self._pending_action: PendingAction | None = None
         self._action_start_time: float = 0.0
@@ -491,43 +511,40 @@ class MovementManager:
         self._doa_tracker.enabled = enabled
         logger.info("DOA tracking %s", "enabled" if enabled else "disabled")
 
-    def get_idle_motion_enabled(self) -> bool:
-        """Get whether idle look-around behavior is enabled."""
-        return self._idle_motion_enabled
-
     def get_idle_behavior_enabled(self) -> bool:
         """Get whether any idle behavior subsystem is enabled."""
         return self._idle_behavior_enabled()
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Thread-safe: Enable or disable all idle behavior subsystems together."""
-        self.set_idle_motion_enabled(enabled)
-        self.set_idle_antenna_enabled(enabled)
-        self.set_idle_random_actions_enabled(enabled)
-
-    def set_idle_motion_enabled(self, enabled: bool) -> None:
-        """Thread-safe: Enable or disable idle look-around behavior."""
-        self._enqueue_command("set_idle_motion", enabled, "set_idle_motion")
-
-    def get_idle_antenna_enabled(self) -> bool:
-        """Get whether idle antenna animation is enabled."""
-        return self._idle_antenna_enabled
-
-    def set_idle_antenna_enabled(self, enabled: bool) -> None:
-        """Thread-safe: Enable or disable idle antenna animation."""
-        self._enqueue_command("set_idle_antenna", enabled, "set_idle_antenna")
-
-    def get_idle_random_actions_enabled(self) -> bool:
-        """Get whether idle random actions are enabled."""
-        return self._idle_random_actions_enabled
-
-    def set_idle_random_actions_enabled(self, enabled: bool) -> None:
-        """Thread-safe: Enable or disable idle random actions."""
-        self._enqueue_command("set_idle_random_actions", enabled, "set_idle_random_actions")
+        self._enqueue_command("set_idle_behavior", enabled, "set_idle_behavior")
 
     def _idle_behavior_enabled(self) -> bool:
         """Whether any idle behavior subsystem is currently enabled."""
         return self._idle_motion_enabled or self._idle_antenna_enabled or self._idle_random_actions_enabled
+
+    def _apply_idle_behavior_enabled(self, enabled: bool) -> None:
+        """Apply the unified idle behavior toggle to all idle subsystems."""
+        self._idle_motion_enabled = enabled
+        self._idle_antenna_enabled = enabled
+        self._idle_random_actions_enabled = enabled
+
+        if not enabled:
+            self._clear_idle_activity()
+            self._clear_idle_animation()
+            self.state.anim_antenna_left = 0.0
+            self.state.anim_antenna_right = 0.0
+            self._idle_antenna_smoothed = None
+            self._last_idle_antenna_update = 0.0
+            if self.state.robot_state == RobotState.IDLE:
+                self._transition_or_apply_idle_rest_pose()
+        elif self.state.robot_state == RobotState.IDLE:
+            self._animation_player.set_animation("idle")
+            self.state.target_pitch = 0.0
+            self.state.target_antenna_left = 0.0
+            self.state.target_antenna_right = 0.0
+
+        logger.info("Idle behavior %s", "enabled" if enabled else "disabled")
 
     def _apply_idle_rest_pose(self) -> None:
         """Apply a low-energy idle pose when idle behavior is disabled."""
@@ -923,53 +940,8 @@ class MovementManager:
             # Start playing an emotion move
             self._start_emotion_move(payload)
 
-        elif cmd == "set_idle_motion":
-            enabled = bool(payload)
-            self._idle_motion_enabled = enabled
-            if not enabled:
-                if not self._idle_behavior_enabled():
-                    self._clear_idle_activity()
-                if self.state.robot_state == RobotState.IDLE:
-                    self._clear_idle_animation()
-                    if not self._idle_behavior_enabled():
-                        self._transition_or_apply_idle_rest_pose()
-            elif self.state.robot_state == RobotState.IDLE:
-                self._animation_player.set_animation("idle")
-                self.state.target_pitch = 0.0
-                self.state.target_antenna_left = 0.0
-                self.state.target_antenna_right = 0.0
-            logger.info("Idle motion %s", "enabled" if enabled else "disabled")
-
-        elif cmd == "set_idle_random_actions":
-            enabled = bool(payload)
-            self._idle_random_actions_enabled = enabled
-            if not enabled:
-                if not self._idle_behavior_enabled():
-                    self._clear_idle_activity()
-                else:
-                    self._idle_action_queue.clear()
-                    if self._pending_action and self._pending_action.name.startswith("idle_action"):
-                        self._pending_action = None
-                if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
-                    self._transition_or_apply_idle_rest_pose()
-            logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
-
-        elif cmd == "set_idle_antenna":
-            enabled = bool(payload)
-            self._idle_antenna_enabled = enabled
-
-            if not enabled:
-                self.state.anim_antenna_left = 0.0
-                self.state.anim_antenna_right = 0.0
-                self._idle_antenna_smoothed = None
-                self._last_idle_antenna_update = 0.0
-                if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
-                    self._transition_or_apply_idle_rest_pose()
-            elif self.state.robot_state == RobotState.IDLE:
-                self.state.target_antenna_left = 0.0
-                self.state.target_antenna_right = 0.0
-
-            logger.info("Idle antenna animation %s", "enabled" if enabled else "disabled")
+        elif cmd == "set_idle_behavior":
+            self._apply_idle_behavior_enabled(bool(payload))
 
     def _start_emotion_move(self, emotion_name: str) -> None:
         """Start playing an emotion move.
@@ -1517,7 +1489,7 @@ class MovementManager:
             self._consecutive_errors += 1
 
             # Check if this is a connection error
-            is_connection_error = "Lost connection" in error_msg
+            is_connection_error = self._is_connection_error(e)
 
             if is_connection_error:
                 if not self._connection_lost:

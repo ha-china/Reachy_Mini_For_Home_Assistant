@@ -165,6 +165,7 @@ class SendspinDiscovery:
         if self._zeroconf:
             await self._zeroconf.__aexit__(None, None, None)
             self._zeroconf = None
+        self._known_servers.clear()
         self._running = False
 
     async def stop(self) -> None:
@@ -243,8 +244,9 @@ class _SendspinServiceListener:
     async def _process_service(self, zeroconf, service_type: str, name: str) -> None:
         """Process discovered service and notify callback."""
         try:
-            azc = AsyncZeroconf(zc=zeroconf)
-            info = await azc.async_get_service_info(service_type, name)
+            info = AsyncServiceInfo(service_type, name)
+            if not info.load_from_cache(zeroconf):
+                await info.async_request(zeroconf, 3000)
 
             if info is None or info.port is None:
                 return
@@ -255,6 +257,10 @@ class _SendspinServiceListener:
 
             host = addresses[0]
             url = self._build_url(host, info.port, info.properties)
+            previous_url = self._discovery._known_servers.get(name)
+            if previous_url == url:
+                return
+
             self._discovery._known_servers[name] = url
 
             _LOGGER.info("Discovered Sendspin server: %s at %s", name, url)

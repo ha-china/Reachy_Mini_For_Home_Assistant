@@ -34,8 +34,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
     def __init__(self, *args, **kwargs):
         """Initialize the app."""
         super().__init__(*args, **kwargs)
-        if not hasattr(self, "stop_event"):
-            self.stop_event = threading.Event()
+        self.stop_event = threading.Event()
 
     def wrapped_run(self, *args, **kwargs) -> None:
         """
@@ -79,7 +78,7 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         if enable_monitors:
             health_monitor.register_checker(
                 "voice_assistant",
-                lambda: service.is_running if hasattr(service, "is_running") else True,
+                lambda: service.is_running,
                 interval=30.0,
             )
 

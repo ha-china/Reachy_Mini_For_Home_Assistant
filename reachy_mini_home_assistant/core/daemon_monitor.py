@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from .config import Config
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -81,7 +83,6 @@ class DaemonStateMonitor:
         await monitor.start()
     """
 
-    DEFAULT_DAEMON_URL = "http://127.0.0.1:8000"
     DEFAULT_CHECK_INTERVAL = 2.0  # seconds
     DEFAULT_SLEEP_INTERVAL = 8.0  # seconds
     DEFAULT_ERROR_INTERVAL = 6.0  # seconds
@@ -92,7 +93,7 @@ class DaemonStateMonitor:
     def __init__(
         self,
         reachy_mini: Any,  # Added for Zenoth access
-        daemon_url: str = DEFAULT_DAEMON_URL,
+        daemon_url: str | None = None,
         check_interval: float = DEFAULT_CHECK_INTERVAL,
         sleep_interval: float = DEFAULT_SLEEP_INTERVAL,
         error_interval: float = DEFAULT_ERROR_INTERVAL,
@@ -111,7 +112,7 @@ class DaemonStateMonitor:
             backoff_multiplier: Multiplier for backoff growth
             backoff_error_threshold: Consecutive errors before backoff
         """
-        self._daemon_url = daemon_url
+        self._daemon_url = (daemon_url or Config.daemon.url).rstrip("/")
         self._check_interval_active = check_interval
         self._check_interval_sleep = sleep_interval
         self._check_interval_error = error_interval
