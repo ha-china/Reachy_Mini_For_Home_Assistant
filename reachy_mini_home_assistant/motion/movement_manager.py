@@ -173,26 +173,6 @@ class MovementManager:
         self._consecutive_errors = 0
         self._max_consecutive_errors = 5
 
-    @staticmethod
-    def _is_connection_error(exc: Exception) -> bool:
-        """Best-effort connection error detection without relying on private SDK state."""
-        if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
-            return True
-
-        error_msg = str(exc).lower()
-        connection_markers = (
-            "lost connection",
-            "connection lost",
-            "connection refused",
-            "connection reset",
-            "not connected",
-            "timed out",
-            "timeout",
-            "broken pipe",
-            "unavailable",
-        )
-        return any(marker in error_msg for marker in connection_markers)
-
         # Pending action
         self._pending_action: PendingAction | None = None
         self._action_start_time: float = 0.0
@@ -264,6 +244,26 @@ class MovementManager:
         self._antenna_controller = AntennaController(time_func=self._now)
 
         logger.info("MovementManager initialized with AnimationPlayer and DOA tracking")
+
+    @staticmethod
+    def _is_connection_error(exc: Exception) -> bool:
+        """Best-effort connection error detection without relying on private SDK state."""
+        if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+            return True
+
+        error_msg = str(exc).lower()
+        connection_markers = (
+            "lost connection",
+            "connection lost",
+            "connection refused",
+            "connection reset",
+            "not connected",
+            "timed out",
+            "timeout",
+            "broken pipe",
+            "unavailable",
+        )
+        return any(marker in error_msg for marker in connection_markers)
 
     # =========================================================================
     # Thread-safe public API (called from any thread)
