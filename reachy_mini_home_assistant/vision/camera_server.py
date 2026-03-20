@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
 GESTURE_MIN_FPS = 12.0
-FACE_TRACKING_MIN_FPS = 15.0
+FACE_TRACKING_TARGET_FPS = 25.0
 
 
 class MJPEGCameraServer:
@@ -103,6 +103,7 @@ class MJPEGCameraServer:
         self._face_tracking_enabled = enable_face_tracking
         self._face_tracking_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
+        self._next_face_tracking_time = 0.0
 
         # Gesture detection state
         self._gesture_detector = None
@@ -465,6 +466,11 @@ class MJPEGCameraServer:
 
                 # Determine if we should run AI inference this frame
                 should_run_ai = self._should_run_ai_inference(current_time)
+                should_run_face_tracking = (
+                    self._face_tracking_enabled
+                    and self._head_tracker is not None
+                    and current_time >= self._next_face_tracking_time
+                )
                 should_run_gesture = (
                     self._gesture_detection_enabled
                     and self._gesture_detector is not None
@@ -474,7 +480,7 @@ class MJPEGCameraServer:
                 # Only get frame if needed (AI inference, gesture detection, or MJPEG streaming)
                 frame = (
                     self._get_camera_frame()
-                    if should_run_ai or should_run_gesture or self._has_stream_clients()
+                    if should_run_ai or should_run_face_tracking or should_run_gesture or self._has_stream_clients()
                     else None
                 )
 
@@ -491,11 +497,12 @@ class MJPEGCameraServer:
                             self._last_frame_time = time.time()
 
                     # Only run AI inference when enabled
-                    if should_run_ai:
+                    if should_run_ai or should_run_face_tracking:
                         # Face tracking
-                        if self._face_tracking_enabled and self._head_tracker is not None:
+                        if should_run_face_tracking:
                             face_detect_count += 1
                             face_detected = self._process_face_tracking(frame, current_time)
+                            self._next_face_tracking_time = current_time + (1.0 / FACE_TRACKING_TARGET_FPS)
 
                             # Update adaptive frame rate manager
                             self._frame_rate_manager.update(face_detected=face_detected)
@@ -536,7 +543,7 @@ class MJPEGCameraServer:
                 # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
                 if self._face_tracking_enabled and self._head_tracker is not None:
-                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_MIN_FPS)
+                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_TARGET_FPS)
                 if self._gesture_detection_enabled and self._gesture_detector is not None:
                     sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
@@ -679,6 +686,7 @@ class MJPEGCameraServer:
             return  # No change, skip logging
         self._face_tracking_requested = enabled
         self._face_tracking_enabled = enabled
+        self._next_face_tracking_time = 0.0
         if enabled:
             # Ensure AI scheduler is active when user re-enables tracking from HA switch.
             self._frame_rate_manager.resume()

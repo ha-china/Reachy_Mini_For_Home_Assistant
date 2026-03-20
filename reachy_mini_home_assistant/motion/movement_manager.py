@@ -62,7 +62,8 @@ DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
 
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
-ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
+ANIMATION_BLEND_DURATION = 0.18  # Seconds to blend animation back when face lost
+FACE_TRACKING_ANIMATION_BLEND = 0.35
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.25  # Seconds to fade idle animation during queued idle actions
 
 # Pose epsilon constants are kept for compatibility with existing motion logic.
@@ -1134,12 +1135,20 @@ class MovementManager:
     def _update_animation_blend(self) -> None:
         """Update animation blend factor when face is lost.
 
-        When face is detected, animation_blend is set to 0 immediately.
-        When face is lost, we smoothly blend animation back to 1.0.
+        Keep existing idle/speaking features active, but reduce idle animation
+        weight while face tracking is actively steering the head.
         """
-        # Face tracking no longer suppresses idle animation.
-        # Keep blend fixed at full strength to match reference behavior.
-        self.state.animation_blend = 1.0
+        target_blend = FACE_TRACKING_ANIMATION_BLEND if self.state.face_detected else 1.0
+        current_blend = self.state.animation_blend
+        if abs(target_blend - current_blend) < 1e-3:
+            self.state.animation_blend = target_blend
+            return
+
+        step = self._target_period / max(1e-3, ANIMATION_BLEND_DURATION)
+        if target_blend > current_blend:
+            self.state.animation_blend = min(target_blend, current_blend + step)
+        else:
+            self.state.animation_blend = max(target_blend, current_blend - step)
 
     def _update_face_tracking(self) -> None:
         """Get face tracking offsets from camera server.
