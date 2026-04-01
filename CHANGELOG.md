@@ -15,6 +15,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.4] - 2026-03-19
+
+### Fixed
+- Align Reachy Mini integration with current SDK assumptions by removing legacy compatibility paths and private client health checks
+- Replace direct SDK private `_respeaker` access with `audio_control_utils`-based ReSpeaker initialization
+- Tighten camera and pose composition to require current SDK media/utils APIs and valid `look_at_image` inputs
+
+### Improved
+- Unify idle behavior into a single persisted Home Assistant entity and remove old idle compatibility aliases
+- Replace separate wake/sleep buttons with a single sleep control entity
+- Update Sendspin integration for current `aiosendspin` lifecycle, stream handling, listener cleanup, and synchronized buffering
+- Standardize daemon URL usage on shared config across controller, sleep manager, and daemon monitor
+
+## [1.0.3] - 2026-03-07
+
+### Added
+- Idle Random Actions switch in Home Assistant with preferences persistence and startup restore
+- Configurable `idle_random_actions` presets in `conversation_animations.json` for centralized idle motion tuning
+
+### Fixed
+- Remove duplicate `idle_random_actions` fields/methods and complete runtime control wiring in controller/entity registry/movement manager
+
+### Optimized
+- Increase idle breathing and antenna sway cadence to 0.24Hz with wiggle antenna profile for more natural standby motion
+- Remove `set_target` global rate limiting and unchanged-pose skip gating to continuously stream motion commands each control tick
+- Remove idle antenna slew-rate limiter so antenna motion follows animation waveforms directly for reference-like smoothness
+
+## [1.0.2] - 2026-03-06
+
+### Fixed
+- Restore idle antenna sway animation and tune idle breathing parameters to reduce perceived stiffness
+- Reintroduce idle anti-chatter smoothing/deadband for antenna and body updates to reduce mechanical jitter/noise
+- Switch sleep/wake control to daemon API (`start` with `wake_up=true`, `stop` with `goto_sleep=true`) so `/api/daemon/status` reflects real sleep state on SDK 1.5
+- Normalize daemon status parsing for SDK 1.5 object-based status responses
+- Remove all app-side antenna power on/off operations to avoid SDK instability and external-control conflicts
+- Sync Idle Motion toggle with Idle Antenna Motion toggle for expected behavior in ESPHome
+- Remove legacy app-managed audio routing hooks and rely on native SDK/system audio selection
+- Harden startup against import-time failures (lazy emotion library loading and graceful Sendspin disable)
+
+### Changed
+- Keep idle antenna behavior as animation-only control (no torque coupling)
+- Tighten preference loading to current schema (no legacy config fallback filtering)
+
+### Added
+- Home Assistant blueprint for Reachy presence companion automation
+- GitHub workflow to auto-create releases when pyproject/changelog version updates produce a new tag
+
+### Improved
+- Blueprint supports device-first auto-binding and richer usage instructions
+- Refresh landing page (`index.html`) with current version, GitHub source link, and new Blueprint/Auto Release capability cards
+
+## [1.0.1] - 2026-03-05
+
+### Changed
+- Update runtime dependency baseline to `reachy-mini>=1.5.0`
+
+### Fixed
+- Remove legacy Zenoh 7447 startup precheck for SDK v1.5 compatibility
+- Remove legacy ZError string matching from connection error handling
+- Adapt daemon status handling to SDK v1.5 `DaemonStatus` object (prevents `AttributeError` on `status.get`)
+- Harden stop-word handling with runtime activation/deactivation and mute-aware trigger gating
+- Align wakeup stream start timing with reference behavior (start microphone stream after wakeup sound)
+- Improve TTS streaming robustness and reduce cutoffs with retry-based audio push
+
+### Optimized
+- Support single-request streaming with in-memory fallback cache for one-time TTS URLs (no temp file dependency)
+- Lower streaming fetch chunk size and apply unthrottled preroll for faster first audio
+
+## [1.0.0] - 2026-03-04
+
+### Changed
+- Require `reachy-mini[gstreamer]>=1.4.1`
+
+### Added
+- Sendspin switch in ESPHome (default OFF, persistent, runtime enable/disable)
+- Face Tracking and Gesture Detection switches in ESPHome (both default OFF, persistent)
+- Face Confidence number entity (0.0-1.0, persistent)
+
+### Fixed
+- Improve gesture responsiveness and stability (faster smoothing, min processing cadence, no-gesture alignment)
+- Auto-match ONNX gesture input size from model shape to prevent `INVALID_ARGUMENT` dimension errors
+- Disable antenna torque in idle mode and re-enable outside idle to reduce chatter/noise
+- Enforce deterministic audio startup path and fail fast when microphone capture is not ready
+- Add on-demand `/snapshot` JPEG generation when no cached stream frame is available
+
+### Optimized
+- Unload/reload face and gesture models when toggled off/on to save resources
+- Update idle behavior to breathing + look-around alternation, idle antenna sway disabled
+- Adjust idle breathing to human-like cadence
+- Make MJPEG streaming viewer-aware (skip continuous JPEG encode/push when no stream clients)
+- Keep face/gesture AI processing active even when stream viewers are absent
+
+### Changed
+- Use camera backend default FPS/resolution for stream path instead of forcing fixed 1080p/25fps
+
 ## [0.9.9] - 2026-01-28
 
 ### Fixed
