@@ -19,12 +19,13 @@ class RobotState(Enum):
 
 
 # State to animation mapping
-# Note: SPEAKING uses idle animation as base, with speech_sway offsets layered on top
+# SPEAKING uses a dedicated antenna-forward animation while speech_sway
+# continues to drive the head motion on top.
 STATE_ANIMATION_MAP = {
     "idle": "idle",
     "listening": "listening",
     "thinking": "thinking",
-    "speaking": "idle",  # Base animation only; actual motion from speech_sway
+    "speaking": "speaking",
 }
 
 
