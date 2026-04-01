@@ -169,8 +169,6 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Initialize gesture action mapper for local gesture → action handling
         self._gesture_action_mapper = GestureActionMapper()
-        gesture_mappings_file = Path(__file__).resolve().parent.parent / "animations" / "gesture_mappings.json"
-        self._gesture_action_mapper.load_from_json(gesture_mappings_file)
         self._gesture_action_mapper.set_emotion_callback(self._play_emotion)
         self._gesture_action_mapper.set_start_listening_callback(self._trigger_wake_word)
         self._gesture_action_mapper.set_stop_speaking_callback(self._stop_current_tts)
@@ -182,7 +180,10 @@ class VoiceSatelliteProtocol(APIServer):
         self._event_emotion_mapper.set_emotion_callback(self._play_emotion)
         mappings_file = Path(__file__).resolve().parent.parent / "animations" / "event_mappings.json"
         if mappings_file.exists():
-            self._event_emotion_mapper.load_from_json(mappings_file)
+            try:
+                self._event_emotion_mapper.load_from_json(mappings_file)
+            except Exception as e:
+                _LOGGER.error("Failed to load event mappings from %s: %s", mappings_file, e)
         _LOGGER.info("Event emotion mapper initialized")
 
         # Only setup entities once (check if already initialized)
