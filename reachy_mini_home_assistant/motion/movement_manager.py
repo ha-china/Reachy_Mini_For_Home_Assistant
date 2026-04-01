@@ -65,7 +65,20 @@ MAX_CONTROL_DT_S = 0.05
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
 ANIMATION_BLEND_DURATION = 0.18  # Seconds to blend animation back when face lost
 FACE_TRACKING_ANIMATION_BLEND = 0.35
-IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.25  # Seconds to fade idle animation during queued idle actions
+IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps
+
+
+def _smoothstep(value: float) -> float:
+    """Return a smooth ease-in-out factor in the 0..1 range."""
+    clamped = max(0.0, min(1.0, value))
+    return clamped * clamped * (3.0 - 2.0 * clamped)
+
+
+def _smootherstep(value: float) -> float:
+    """Return a softer ease-in-out factor with flatter endpoints."""
+    clamped = max(0.0, min(1.0, value))
+    return clamped * clamped * clamped * (clamped * (clamped * 6.0 - 15.0) + 10.0)
+
 
 # Pose epsilon constants are kept for compatibility with existing motion logic.
 POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
@@ -1027,8 +1040,8 @@ class MovementManager:
         elapsed = self._now() - self._action_start_time
         progress = min(1.0, elapsed / self._pending_action.duration)
 
-        # Smooth interpolation (ease in-out)
-        t = progress * progress * (3 - 2 * progress)
+        # Use a softer easing curve so idle actions and micro gestures start/stop less abruptly.
+        t = _smootherstep(progress)
 
         # Interpolate pose
         start = self._action_start_pose
@@ -1104,7 +1117,7 @@ class MovementManager:
             return
 
         offsets = self._animation_player.get_offsets(dt)
-        idle_animation_scale = 1.0 - self._idle_action_animation_suppression
+        idle_animation_scale = 1.0 - _smoothstep(self._idle_action_animation_suppression)
 
         self.state.anim_pitch = offsets["pitch"] * idle_animation_scale
         self.state.anim_yaw = offsets["yaw"] * idle_animation_scale
@@ -1412,7 +1425,7 @@ class MovementManager:
         # Calculate body_yaw to follow head yaw (using pose_composer utilities)
         final_head_yaw = extract_yaw_from_pose(final_head)
         target_body_yaw = clamp_body_yaw(final_head_yaw)
-        if self.state.robot_state == RobotState.IDLE:
+        if self.state.robot_state == RobotState.IDLE and not self.state.face_detected:
             target_body_yaw = 0.0
 
         # Rate-limit body yaw for smooth, continuous turning
