@@ -10,34 +10,12 @@ import numpy as np
 import requests
 from scipy.spatial.transform import Rotation as R
 
-from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
 from .core.config import Config
-
-try:
-    from reachy_mini.media.audio_control_utils import init_respeaker_usb
-except Exception:
-    init_respeaker_usb = None
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
-
-
-class _ReSpeakerContext:
-    """Context manager for thread-safe ReSpeaker access."""
-
-    def __init__(self, respeaker, lock):
-        self._respeaker = respeaker
-        self._lock = lock
-
-    def __enter__(self):
-        self._lock.acquire()
-        return self._respeaker
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._lock.release()
-        return False
 
 
 class ReachyController:
@@ -56,7 +34,6 @@ class ReachyController:
         """
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
-        self._microphone_volume = 50.0  # Default mic volume
         self._movement_manager = None  # Set later via set_movement_manager()
 
         # Shared session to reduce per-request overhead
@@ -77,15 +54,9 @@ class ReachyController:
         self._state_cache: dict[str, Any] = {}
         self._last_status_query = 0.0
 
-        # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
-        self._respeaker_lock = __import__("threading").Lock()
-        self._respeaker = init_respeaker_usb()
         self._look_at_x = 0.0
         self._look_at_y = 0.0
         self._look_at_z = 0.0
-        self._agc_enabled = True
-        self._agc_max_gain = 30.0
-        self._noise_suppression = 15.0
 
     def set_sleep_callback(self, callback) -> None:
         """Set callback to be called when go_to_sleep is triggered."""
@@ -247,30 +218,6 @@ class ReachyController:
         volume = max(0.0, min(100.0, volume))
         self._speaker_volume = self._set_volume_via_api("/api/volume/set", volume, "speaker")
         logger.info("Speaker volume set to %.1f%% via daemon API", self._speaker_volume)
-
-    def get_microphone_volume(self) -> float:
-        """Get microphone volume (0-100), preferring daemon volume API."""
-        self._microphone_volume = self._get_volume_via_api(
-            "/api/volume/microphone/current",
-            self._microphone_volume,
-            "microphone",
-        )
-        return self._microphone_volume
-
-    def set_microphone_volume(self, volume: float) -> None:
-        """
-        Set microphone volume (0-100), preferring daemon volume API.
-
-        Args:
-            volume: Volume level 0-100
-        """
-        volume = max(0.0, min(100.0, volume))
-        self._microphone_volume = self._set_volume_via_api(
-            "/api/volume/microphone/set",
-            volume,
-            "microphone",
-        )
-        logger.info("Microphone volume set to %.1f%% via daemon API", self._microphone_volume)
 
     # ========== Phase 2: Motor Control ==========
 
@@ -845,142 +792,6 @@ class ReachyController:
     # ========== Phase 11: LED Control (DISABLED) ==========
     # LED control is disabled because LEDs are hidden inside the robot.
     # See PROJECT_PLAN.md principle 8.
-
-    def _get_respeaker(self):
-        """Get ReSpeaker device through the SDK audio control utilities.
-
-        Returns a context manager that holds the lock during ReSpeaker operations.
-        Usage:
-            with self._get_respeaker() as respeaker:
-                if respeaker:
-                    respeaker.read("...")
-        """
-        if not self.is_available:
-            return _ReSpeakerContext(None, self._respeaker_lock)
-        try:
-            if not self.reachy.media or not self.reachy.media.audio:
-                return _ReSpeakerContext(None, self._respeaker_lock)
-
-            return _ReSpeakerContext(self._respeaker, self._respeaker_lock)
-        except Exception:
-            return _ReSpeakerContext(None, self._respeaker_lock)
-
-    def optimize_microphone_settings(self, preferences: MicrophonePreferences) -> None:
-        """Apply microphone optimization through the centralized ReSpeaker adapter."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                logger.debug("ReSpeaker not available for optimization")
-                return
-            optimizer = MicrophoneOptimizer()
-            optimizer.optimize(respeaker, preferences)
-
-    # ========== Phase 12: Audio Processing (via local SDK with thread-safe access) ==========
-
-    def get_agc_enabled(self) -> bool:
-        """Get AGC (Automatic Gain Control) enabled status."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return self._agc_enabled
-            try:
-                result = respeaker.read("PP_AGCONOFF")
-                if result is not None:
-                    self._agc_enabled = bool(result[1])
-                    return self._agc_enabled
-            except Exception as e:
-                logger.debug(f"Error getting AGC status: {e}")
-        return self._agc_enabled
-
-    def set_agc_enabled(self, enabled: bool) -> None:
-        """Set AGC (Automatic Gain Control) enabled status."""
-        self._agc_enabled = enabled
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return
-            try:
-                respeaker.write("PP_AGCONOFF", [1 if enabled else 0])
-                logger.info(f"AGC {'enabled' if enabled else 'disabled'}")
-            except Exception as e:
-                logger.error(f"Error setting AGC status: {e}")
-
-    def get_agc_max_gain(self) -> float:
-        """Get AGC maximum gain in dB (0-40 dB range)."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return self._agc_max_gain
-            try:
-                result = respeaker.read("PP_AGCMAXGAIN")
-                if result is not None:
-                    self._agc_max_gain = float(result[0])
-                    return self._agc_max_gain
-            except Exception as e:
-                logger.debug(f"Error getting AGC max gain: {e}")
-        return self._agc_max_gain
-
-    def set_agc_max_gain(self, gain: float) -> None:
-        """Set AGC maximum gain in dB (0-40 dB range)."""
-        gain = max(0.0, min(40.0, gain))  # XVF3800 supports up to 40dB
-        self._agc_max_gain = gain
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return
-            try:
-                respeaker.write("PP_AGCMAXGAIN", [gain])
-                logger.info(f"AGC max gain set to {gain} dB")
-            except Exception as e:
-                logger.error(f"Error setting AGC max gain: {e}")
-
-    def get_noise_suppression(self) -> float:
-        """Get noise suppression level (0-100%).
-
-        PP_MIN_NS represents "minimum signal preservation ratio":
-        - PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% suppression
-        - PP_MIN_NS = 0.15 means "keep at least 15% of signal" = 85% suppression
-
-        We display "noise suppression strength" to user, so:
-        - suppression_percent = (1.0 - PP_MIN_NS) * 100
-        """
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return self._noise_suppression
-            try:
-                result = respeaker.read("PP_MIN_NS")
-                if result is not None:
-                    raw_value = result[0]
-                    # Convert: PP_MIN_NS=0.85 -> 15% suppression, PP_MIN_NS=0.15 -> 85% suppression
-                    self._noise_suppression = max(0.0, min(100.0, (1.0 - raw_value) * 100.0))
-                    logger.debug(f"Noise suppression: PP_MIN_NS={raw_value:.2f} -> {self._noise_suppression:.1f}%")
-                    return self._noise_suppression
-            except Exception as e:
-                logger.debug(f"Error getting noise suppression: {e}")
-        return self._noise_suppression
-
-    def set_noise_suppression(self, level: float) -> None:
-        """Set noise suppression level (0-100%)."""
-        level = max(0.0, min(100.0, level))
-        self._noise_suppression = level
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return
-            try:
-                # Convert percentage to PP_MIN_NS value (inverted)
-                value = 1.0 - (level / 100.0)
-                respeaker.write("PP_MIN_NS", [value])
-                logger.info(f"Noise suppression set to {level}%")
-            except Exception as e:
-                logger.error(f"Error setting noise suppression: {e}")
-
-    def get_echo_cancellation_converged(self) -> bool:
-        """Check if echo cancellation has converged."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return False
-            try:
-                result = respeaker.read("AEC_AECCONVERGED")
-                if result is not None:
-                    return bool(result[1])
-            except Exception as e:
-                logger.debug(f"Error getting AEC converged status: {e}")
-        return False
 
     # ========== DOA (Direction of Arrival) ==========
 

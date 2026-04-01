@@ -25,6 +25,7 @@ ENTITY_KEYS: dict[str, int] = {
     "gesture_detection_enabled": 107,
     "face_confidence_threshold": 108,
     "camera_disabled": 109,
+    "gesture_confidence_threshold": 110,
     # Phase 2: Sleep/wake controls (200-299)
     "motor_mode": 201,
     "sleep_control": 202,
@@ -63,16 +64,9 @@ ENTITY_KEYS: dict[str, int] = {
     "imu_temperature": 706,
     # Phase 8: Emotion selector (800-899)
     "emotion": 800,
-    # Phase 9: Audio controls (900-999)
-    "microphone_volume": 900,
     # Phase 10: Camera (1000-1099)
     "camera_url": 1000,
     "camera": 1001,
-    # Phase 12: Audio processing (1200-1299)
-    "agc_enabled": 1200,
-    "agc_max_gain": 1201,
-    "noise_suppression": 1202,
-    "echo_cancellation_converged": 1203,
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
     # Phase 22: Gesture detection (1600-1699)

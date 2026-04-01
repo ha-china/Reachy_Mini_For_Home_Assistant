@@ -53,10 +53,6 @@ class AvailableWakeWord:
 @dataclass
 class Preferences:
     active_wake_words: list[str] = field(default_factory=list)
-    # Audio processing settings (persisted from Home Assistant)
-    agc_enabled: bool | None = None  # None = use hardware default
-    agc_max_gain: float | None = None  # None = use hardware default
-    noise_suppression: float | None = None  # None = use hardware default
     # Continuous conversation mode (controlled from Home Assistant)
     continuous_conversation: bool = False
     # Unified idle behavior toggle (controlled from Home Assistant)
@@ -67,6 +63,7 @@ class Preferences:
     face_tracking_enabled: bool = False
     gesture_detection_enabled: bool = False
     face_confidence_threshold: float = 0.5
+    gesture_confidence_threshold: float = 0.55
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Update the unified idle behavior toggle."""

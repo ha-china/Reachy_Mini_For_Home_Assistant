@@ -13,7 +13,7 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from queue import Queue
 from typing import TYPE_CHECKING
@@ -23,14 +23,12 @@ import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
-from .audio.microphone import MicrophonePreferences
 from .core import Config, SleepManager
 from .core.util import get_mac
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
 from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
-from .reachy_controller import ReachyController
 from .vision.camera_server import MJPEGCameraServer
 
 if TYPE_CHECKING:
@@ -221,8 +219,6 @@ class VoiceAssistantService:
                 # Body yaw now follows head yaw in movement_manager.py
                 # This enables natural body rotation when tracking faces
 
-                # Optimize microphone settings for voice recognition
-                self._optimize_microphone_settings()
         except Exception as e:
             _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
@@ -566,26 +562,6 @@ class VoiceAssistantService:
 
         self._suspend_non_esphome_services(reason="ha_disconnected", set_sleep_state=False)
 
-    def _optimize_microphone_settings(self) -> None:
-        """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
-
-        Delegates to ReachyController's ReSpeaker adapter.
-        User preferences from Home Assistant override defaults when available.
-        """
-        try:
-            # Build preferences from saved state
-            prefs = self._state.preferences if self._state else None
-            mic_prefs = MicrophonePreferences(
-                agc_enabled=prefs.agc_enabled if prefs else None,
-                agc_max_gain=prefs.agc_max_gain if prefs else None,
-                noise_suppression=prefs.noise_suppression if prefs else None,
-            )
-
-            ReachyController(self.reachy_mini).optimize_microphone_settings(mic_prefs)
-
-        except Exception as e:
-            _LOGGER.warning("Failed to optimize microphone settings: %s", e)
-
     async def stop(self) -> None:
         """Stop the voice assistant service."""
         _LOGGER.info("Stopping voice assistant service...")
@@ -760,7 +736,9 @@ class VoiceAssistantService:
                 with open(preferences_path, encoding="utf-8") as f:
                     data = json.load(f)
 
-                return Preferences(**data)
+                valid_fields = {field.name for field in fields(Preferences)}
+                filtered = {key: value for key, value in data.items() if key in valid_fields}
+                return Preferences(**filtered)
             except Exception as e:
                 _LOGGER.warning("Failed to load preferences: %s", e)
 

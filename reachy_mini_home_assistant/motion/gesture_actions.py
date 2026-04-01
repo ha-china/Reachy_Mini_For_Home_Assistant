@@ -185,6 +185,14 @@ class GestureActionMapper:
         """Set callback for Home Assistant events."""
         self._ha_event_callback = callback
 
+    def get_min_confidence(self) -> float:
+        """Return the current trigger confidence threshold."""
+        return self._min_confidence
+
+    def set_min_confidence(self, min_confidence: float) -> None:
+        """Update the trigger confidence threshold."""
+        self._min_confidence = max(0.0, min(1.0, float(min_confidence)))
+
     def handle_gesture(
         self,
         gesture_name: str,
@@ -221,6 +229,7 @@ class GestureActionMapper:
         # Periodic cleanup of old cooldowns (1% chance per call to avoid performance impact)
         if len(self._last_trigger_times) > 100:
             import random
+
             if random.random() < 0.01:
                 self._cleanup_old_cooldowns()
 

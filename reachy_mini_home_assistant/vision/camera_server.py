@@ -20,6 +20,7 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from ..core.config import Config
 from .face_tracking_interpolator import FaceTrackingInterpolator, InterpolationConfig
 
 # Import adaptive frame rate manager
@@ -140,7 +141,7 @@ class MJPEGCameraServer:
                 fps_idle=0.5,
                 low_power_threshold=5.0,
                 idle_threshold=30.0,
-                gesture_detection_interval=2,
+                gesture_detection_interval=Config.camera.gesture_detection_interval,
             )
         )
 

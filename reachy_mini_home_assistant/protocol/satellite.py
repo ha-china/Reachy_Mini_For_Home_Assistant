@@ -168,6 +168,10 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Initialize gesture action mapper for local gesture → action handling
         self._gesture_action_mapper = GestureActionMapper()
+        gesture_mappings_file = Path(__file__).resolve().parent.parent / "animations" / "gesture_mappings.json"
+        self._gesture_action_mapper.load_from_json(gesture_mappings_file)
+        gesture_threshold = float(getattr(self.state.preferences, "gesture_confidence_threshold", 0.55))
+        self._gesture_action_mapper.set_min_confidence(gesture_threshold)
         self._gesture_action_mapper.set_emotion_callback(self._play_emotion)
         self._gesture_action_mapper.set_start_listening_callback(self._trigger_wake_word)
         self._gesture_action_mapper.set_stop_speaking_callback(self._stop_current_tts)
@@ -1070,6 +1074,14 @@ class VoiceSatelliteProtocol(APIServer):
             True if an action was triggered, False otherwise
         """
         return self._gesture_action_mapper.handle_gesture(gesture_name, confidence)
+
+    def get_gesture_confidence_threshold(self) -> float:
+        """Return the current gesture trigger threshold."""
+        return self._gesture_action_mapper.get_min_confidence()
+
+    def set_gesture_confidence_threshold(self, threshold: float) -> None:
+        """Update the gesture trigger threshold."""
+        self._gesture_action_mapper.set_min_confidence(threshold)
 
     def suspend(self) -> None:
         """Suspend the satellite for sleep mode.

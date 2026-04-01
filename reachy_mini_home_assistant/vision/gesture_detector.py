@@ -318,12 +318,14 @@ class GestureDetector:
             # Find the gesture with highest combined confidence
             best_gesture = Gesture.NONE
             best_confidence = 0.0
+            best_classification_confidence = 0.0
             for gest, cls_c, det_c in zip(gestures, cls_scores, valid_det_scores, strict=True):
                 combined_conf = det_c * cls_c
                 # Allow all gestures including low confidence ones (reference behavior)
                 if combined_conf > best_confidence:
                     best_gesture = gest
                     best_confidence = combined_conf
+                    best_classification_confidence = cls_c
                     logger.debug(
                         "Gesture: %s (det=%.2f cls=%.2f combined=%.2f)",
                         gest.value,
@@ -337,11 +339,12 @@ class GestureDetector:
                 gesture_name = best_gesture.value if best_gesture != Gesture.NONE else "none"
                 confirmed_gesture_name = self._smoother.update(gesture_name, best_confidence)
                 confirmed_gesture = _NAME_TO_GESTURE.get(confirmed_gesture_name, Gesture.NONE)
-                # Return current detection confidence (not aggregated)
-                # This follows reference implementation which returns real-time detection
-                return confirmed_gesture, best_confidence
+                # Use classifier confidence for downstream triggering.
+                # The detector score is still used for ranking candidate hands,
+                # but multiplying both made valid gestures too hard to trigger.
+                return confirmed_gesture, best_classification_confidence
 
-            return best_gesture, best_confidence
+            return best_gesture, best_classification_confidence
         except Exception as e:
             logger.warning("Gesture error: %s", e)
             return Gesture.NONE, 0.0

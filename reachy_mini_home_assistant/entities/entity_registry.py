@@ -478,6 +478,15 @@ class EntityRegistry:
             if self.camera_server is not None:
                 self.camera_server.set_face_confidence_threshold(value)
 
+        def get_gesture_confidence_threshold() -> float:
+            return self._get_pref_float("gesture_confidence_threshold", 0.55)
+
+        def set_gesture_confidence_threshold(value: float) -> None:
+            value = max(0.0, min(1.0, float(value)))
+            self._set_pref_float("gesture_confidence_threshold", value)
+            if hasattr(self.server, "set_gesture_confidence_threshold"):
+                self.server.set_gesture_confidence_threshold(value)
+
         entities.append(
             self._make_preference_number(
                 key_name="face_confidence_threshold",
@@ -492,11 +501,25 @@ class EntityRegistry:
             )
         )
 
+        entities.append(
+            self._make_preference_number(
+                key_name="gesture_confidence_threshold",
+                name="Gesture Trigger Confidence",
+                object_id="gesture_confidence_threshold",
+                icon="mdi:gesture-tap-button",
+                getter=get_gesture_confidence_threshold,
+                setter=set_gesture_confidence_threshold,
+                min_value=0.0,
+                max_value=1.0,
+                step=0.01,
+            )
+        )
+
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
             "idle_behavior_enabled, sendspin_enabled, "
             "face_tracking_enabled, gesture_detection_enabled, "
-            "face_confidence_threshold"
+            "face_confidence_threshold, gesture_confidence_threshold"
         )
 
     def _setup_phase2_entities(self, entities: list) -> None:
@@ -705,27 +728,7 @@ class EntityRegistry:
 
     def _setup_phase9_entities(self, entities: list) -> None:
         """Setup Phase 9 entities: Audio controls."""
-        rc = self.reachy_controller
-
-        entities.append(
-            NumberEntity(
-                server=self.server,
-                key=get_entity_key("microphone_volume"),
-                name="Microphone Volume",
-                object_id="microphone_volume",
-                min_value=0.0,
-                max_value=100.0,
-                step=1.0,
-                icon="mdi:microphone",
-                unit_of_measurement="%",
-                mode=2,  # Slider mode
-                entity_category=1,  # config
-                value_getter=rc.get_microphone_volume,
-                value_setter=rc.set_microphone_volume,
-            )
-        )
-
-        _LOGGER.debug("Phase 9 entities registered: microphone_volume")
+        _LOGGER.debug("Phase 9 entities registered: none")
 
     def _setup_phase10_entities(self, entities: list) -> None:
         """Setup Phase 10 entities: Camera for Home Assistant integration."""
@@ -752,90 +755,8 @@ class EntityRegistry:
         _LOGGER.debug("Phase 10 entities registered: camera (ESPHome Camera entity)")
 
     def _setup_phase12_entities(self, entities: list) -> None:
-        """Setup Phase 12 entities: Audio processing parameters (via local SDK)."""
-        rc = self.reachy_controller
-
-        def set_agc_enabled_with_save(enabled: bool) -> None:
-            rc.set_agc_enabled(enabled)
-            self._set_preference_and_save("agc_enabled", enabled)
-            _LOGGER.debug("AGC enabled saved to preferences: %s", enabled)
-
-        def set_agc_max_gain_with_save(gain: float) -> None:
-            rc.set_agc_max_gain(gain)
-            self._set_preference_and_save("agc_max_gain", gain)
-            _LOGGER.debug("AGC max gain saved to preferences: %.1f dB", gain)
-
-        def set_noise_suppression_with_save(level: float) -> None:
-            rc.set_noise_suppression(level)
-            self._set_preference_and_save("noise_suppression", level)
-            _LOGGER.debug("Noise suppression saved to preferences: %.1f%%", level)
-
-        entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("agc_enabled"),
-                name="AGC Enabled",
-                object_id="agc_enabled",
-                icon="mdi:tune-vertical",
-                device_class="switch",
-                entity_category=1,  # config
-                value_getter=rc.get_agc_enabled,
-                value_setter=set_agc_enabled_with_save,
-            )
-        )
-
-        entities.append(
-            NumberEntity(
-                server=self.server,
-                key=get_entity_key("agc_max_gain"),
-                name="AGC Max Gain",
-                object_id="agc_max_gain",
-                min_value=0.0,
-                max_value=40.0,  # XVF3800 supports up to 40dB
-                step=1.0,
-                icon="mdi:volume-plus",
-                unit_of_measurement="dB",
-                mode=2,
-                entity_category=1,  # config
-                value_getter=rc.get_agc_max_gain,
-                value_setter=set_agc_max_gain_with_save,
-            )
-        )
-
-        entities.append(
-            NumberEntity(
-                server=self.server,
-                key=get_entity_key("noise_suppression"),
-                name="Noise Suppression",
-                object_id="noise_suppression",
-                min_value=0.0,
-                max_value=100.0,
-                step=1.0,
-                icon="mdi:volume-off",
-                unit_of_measurement="%",
-                mode=2,
-                entity_category=1,  # config
-                value_getter=rc.get_noise_suppression,
-                value_setter=set_noise_suppression_with_save,
-            )
-        )
-
-        entities.append(
-            BinarySensorEntity(
-                server=self.server,
-                key=get_entity_key("echo_cancellation_converged"),
-                name="Echo Cancellation Converged",
-                object_id="echo_cancellation_converged",
-                icon="mdi:waveform",
-                device_class="running",
-                entity_category=2,  # diagnostic
-                value_getter=rc.get_echo_cancellation_converged,
-            )
-        )
-
-        _LOGGER.debug(
-            "Phase 12 entities registered: agc_enabled, agc_max_gain, noise_suppression, echo_cancellation_converged"
-        )
+        """Setup Phase 12 entities: Audio processing parameters."""
+        _LOGGER.debug("Phase 12 entities registered: none")
 
     def _setup_phase21_entities(self, entities: list) -> None:
         """Setup Phase 21 entities: Continuous conversation mode."""
