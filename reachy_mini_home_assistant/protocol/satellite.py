@@ -9,6 +9,7 @@ import shutil
 import threading
 import time
 from collections.abc import Iterable
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
@@ -184,7 +185,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Load custom mappings from JSON if available
         from pathlib import Path
 
-        mappings_file = Path(__file__).parent / "animations" / "event_mappings.json"
+        mappings_file = Path(__file__).resolve().parent.parent / "animations" / "event_mappings.json"
         if mappings_file.exists():
             self._event_emotion_mapper.load_from_json(mappings_file)
         _LOGGER.info("Event emotion mapper initialized")
