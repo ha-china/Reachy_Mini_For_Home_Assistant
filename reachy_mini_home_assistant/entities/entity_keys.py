@@ -17,12 +17,14 @@ ENTITY_KEYS: dict[str, int] = {
     # Phase 1: Basic status and volume (100-199)
     "daemon_state": 100,
     "backend_ready": 101,
+    "mute": 102,
     "speaker_volume": 103,
     "idle_behavior_enabled": 104,
     "sendspin_enabled": 105,
     "face_tracking_enabled": 106,
     "gesture_detection_enabled": 107,
     "face_confidence_threshold": 108,
+    "camera_disabled": 109,
     # Phase 2: Sleep/wake controls (200-299)
     "motor_mode": 201,
     "sleep_control": 202,

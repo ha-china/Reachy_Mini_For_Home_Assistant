@@ -66,6 +66,7 @@ FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face det
 ANIMATION_BLEND_DURATION = 0.18  # Seconds to blend animation back when face lost
 FACE_TRACKING_ANIMATION_BLEND = 0.35
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps
+IDLE_ACTION_ANTENNA_SUPPRESSION = 0.25  # Keep idle antenna motion mostly continuous during idle actions
 
 
 def _smoothstep(value: float) -> float:
@@ -1117,7 +1118,9 @@ class MovementManager:
             return
 
         offsets = self._animation_player.get_offsets(dt)
-        idle_animation_scale = 1.0 - _smoothstep(self._idle_action_animation_suppression)
+        suppression = _smoothstep(self._idle_action_animation_suppression)
+        idle_animation_scale = 1.0 - suppression
+        antenna_animation_scale = 1.0 - suppression * IDLE_ACTION_ANTENNA_SUPPRESSION
 
         self.state.anim_pitch = offsets["pitch"] * idle_animation_scale
         self.state.anim_yaw = offsets["yaw"] * idle_animation_scale
@@ -1126,8 +1129,8 @@ class MovementManager:
         self.state.anim_y = offsets["y"] * idle_animation_scale
         self.state.anim_z = offsets["z"] * idle_animation_scale
         if self.state.robot_state != RobotState.IDLE or self._idle_antenna_enabled:
-            self.state.anim_antenna_left = offsets["antenna_left"] * idle_animation_scale
-            self.state.anim_antenna_right = offsets["antenna_right"] * idle_animation_scale
+            self.state.anim_antenna_left = offsets["antenna_left"] * antenna_animation_scale
+            self.state.anim_antenna_right = offsets["antenna_right"] * antenna_animation_scale
         else:
             self.state.anim_antenna_left = 0.0
             self.state.anim_antenna_right = 0.0
