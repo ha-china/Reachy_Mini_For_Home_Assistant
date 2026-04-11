@@ -29,7 +29,7 @@ jobs:
           from pathlib import Path
 
           data = tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))
-          version = data['project']['version']
+          version = data['project']['version'].strip()
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
               f.write(f"version={version}\\n")
           print(f"Detected version: {version}")
