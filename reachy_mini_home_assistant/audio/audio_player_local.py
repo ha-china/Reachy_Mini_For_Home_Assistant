@@ -6,7 +6,7 @@ from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, _L
 
 
 class AudioPlayerLocalMixin:
-    def _play_cached_audio(self, audio_bytes: bytes | bytearray, content_type: str) -> bool:
+    def _play_cached_audio(self, audio_bytes: bytes | bytearray, content_type: str, source_url: str = "") -> bool:
         if not audio_bytes:
             return False
         audio_data = bytes(audio_bytes)
@@ -16,7 +16,63 @@ class AudioPlayerLocalMixin:
         adapted_response = self._iterator_response_adapter(mem_iter)
         if self._is_pcm_content_type(content_type):
             return self._stream_pcm_response(adapted_response, content_type)
-        return self._stream_decoded_response(adapted_response, "memory-cache", content_type)
+        if self._stream_decoded_response(adapted_response, source_url or "memory-cache", content_type):
+            return True
+        return self._play_cached_audio_via_tempfile(audio_data, content_type, source_url)
+
+    def _play_cached_audio_via_tempfile(self, audio_data: bytes, content_type: str, source_url: str) -> bool:
+        import os
+        import tempfile
+
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=self._guess_audio_suffix(content_type, source_url)
+            ) as tmp:
+                tmp.write(audio_data)
+                temp_path = tmp.name
+            self._play_local_file(temp_path)
+            return True
+        except Exception as e:
+            _LOGGER.debug("Tempfile fallback playback failed: %s", e)
+            return False
+        finally:
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+
+    def _guess_audio_suffix(self, content_type: str, source_url: str) -> str:
+        from urllib.parse import urlparse
+
+        ct = (content_type or "").split(";", 1)[0].strip().lower()
+        mapping = {
+            "audio/mpeg": ".mp3",
+            "audio/mp3": ".mp3",
+            "audio/aac": ".aac",
+            "audio/mp4": ".m4a",
+            "audio/ogg": ".ogg",
+            "application/ogg": ".ogg",
+            "audio/opus": ".opus",
+            "audio/webm": ".webm",
+            "audio/wav": ".wav",
+            "audio/wave": ".wav",
+            "audio/x-wav": ".wav",
+            "audio/flac": ".flac",
+            "audio/x-flac": ".flac",
+        }
+        if ct in mapping:
+            return mapping[ct]
+        try:
+            path = urlparse(source_url).path
+            if "." in path:
+                suffix = "." + path.rsplit(".", 1)[1]
+                if len(suffix) <= 8:
+                    return suffix
+        except Exception:
+            pass
+        return ".bin"
 
     def _play_local_file(self, file_path: str) -> None:
         try:

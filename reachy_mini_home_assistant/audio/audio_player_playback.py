@@ -74,7 +74,7 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
                 if streamed:
                     return
                 _LOGGER.info("TTS playback mode: fallback_memory")
-                played = self._play_cached_audio(cached_audio, content_type)
+                played = self._play_cached_audio(cached_audio, content_type, source_url=source_url)
                 if played:
                     return
                 _LOGGER.error("Failed to play cached TTS audio from memory")
