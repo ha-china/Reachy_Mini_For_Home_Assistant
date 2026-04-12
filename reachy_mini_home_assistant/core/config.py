@@ -101,7 +101,7 @@ class CameraConfig:
     idle_threshold: float = 30.0  # Seconds without face -> idle
 
     # Gesture detection runtime tuning
-    gesture_detection_interval: int = 2  # Run every other frame for balanced responsiveness
+    gesture_detection_interval: int = 1  # Run every frame for maximum gesture responsiveness
 
 
 @dataclass

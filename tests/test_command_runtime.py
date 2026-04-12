@@ -80,3 +80,13 @@ class VoicePipelineStopTests(unittest.TestCase):
         self.assertEqual(len(unduck_calls), 1)
         self.assertEqual(len(stop_calls), 1)
         self.assertEqual(protocol._tts_finished_calls, 0)
+
+
+class CommandRuntimeStateQueueTests(unittest.TestCase):
+    def test_poll_commands_coalesces_back_to_back_state_updates(self):
+        path = Path("reachy_mini_home_assistant/motion/command_runtime.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn('if cmd == "set_state":', content)
+        self.assertIn('if next_cmd == "set_state":', content)
+        self.assertIn("payload = next_payload", content)

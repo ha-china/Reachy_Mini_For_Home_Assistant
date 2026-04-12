@@ -22,6 +22,18 @@ def poll_commands(manager: "MovementManager") -> None:
             cmd, payload = manager._command_queue.get_nowait()
         except Empty:
             break
+
+        if cmd == "set_state":
+            while True:
+                try:
+                    next_cmd, next_payload = manager._command_queue.get_nowait()
+                except Empty:
+                    break
+                if next_cmd == "set_state":
+                    payload = next_payload
+                    continue
+                handle_command(manager, next_cmd, next_payload)
+
         handle_command(manager, cmd, payload)
 
 
