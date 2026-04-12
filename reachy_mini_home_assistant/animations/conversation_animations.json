@@ -1,620 +1,1659 @@
 {
-  "animations": {
-    "idle": {
-      "description": "Breathing animation when idle - gentle z-axis movement and antenna sway",
-      "z_amplitude_m": 0.005,
-      "z_frequency_hz": 0.24,
-      "antenna_amplitude_rad": 0.262,
-      "antenna_move_name": "wiggle",
-      "antenna_frequency_hz": 0.5,
-      "frequency_hz": 0.24
-    },
-    "listening": {
-      "description": "Attentive pose while listening to user",
-      "pitch_amplitude_rad": 0.05,
-      "pitch_offset_rad": -0.03,
-      "z_amplitude_m": 0.003,
-      "antenna_amplitude_rad": 0.2,
-      "antenna_move_name": "both",
-      "antenna_frequency_hz": 0.6,
-      "frequency_hz": 0.6
-    },
-    "thinking": {
-      "description": "Processing/thinking animation - head tilts side to side",
-      "pitch_amplitude_rad": 0.06,
-      "yaw_amplitude_rad": 0.1,
-      "roll_amplitude_rad": 0.04,
-      "z_amplitude_m": 0.005,
-      "antenna_amplitude_rad": 0.35,
-      "antenna_move_name": "wiggle",
-      "antenna_frequency_hz": 0.5,
-      "frequency_hz": 0.5
-    },
-    "speaking": {
-      "description": "Animation while TTS is playing - lively head movement",
-      "pitch_amplitude_rad": 0.06,
-      "yaw_amplitude_rad": 0.05,
-      "roll_amplitude_rad": 0.04,
-      "z_amplitude_m": 0.004,
-      "antenna_amplitude_rad": 0.35,
-      "antenna_move_name": "wiggle",
-      "antenna_frequency_hz": 0.9,
-      "frequency_hz": 0.9
-    }
-  },
-  "idle_rest_pose": {
-    "description": "Low-energy static pose when idle behavior is disabled",
-    "pitch_deg": 22.0,
-    "antenna_left_rad": 3.05,
-    "antenna_right_rad": -3.05
-  },
-  "emotions": {
-    "happy": {
-      "description": "Happy/joyful expression - bouncy head movement with excited antennas",
-      "duration": 2.0,
-      "pitch_amplitude": 0.15,
-      "z_amplitude": 0.015,
-      "antenna_left": 0.5,
-      "antenna_right": 0.5,
-      "frequency": 1.5
-    },
-    "sad": {
-      "description": "Sad/disappointed expression - drooping head and antennas",
-      "duration": 2.5,
-      "pitch": 0.15,
-      "z": -0.01,
-      "pitch_amplitude": 0.05,
-      "antenna_left": -0.2,
-      "antenna_right": -0.2,
-      "frequency": 0.3
-    },
-    "surprised": {
-      "description": "Surprised/shocked expression - head pulls back with alert antennas",
-      "duration": 1.5,
-      "pitch": -0.1,
-      "z": 0.01,
-      "antenna_left": 0.7,
-      "antenna_right": 0.7,
-      "frequency": 2.0
-    },
-    "confused": {
-      "description": "Confused/puzzled expression - head tilts with asymmetric antennas",
-      "duration": 2.0,
-      "roll": 0.12,
-      "yaw_amplitude": 0.15,
-      "antenna_left": 0.3,
-      "antenna_right": -0.3,
-      "frequency": 0.8
-    },
-    "excited": {
-      "description": "Excited/enthusiastic expression - energetic multi-axis movement",
-      "duration": 2.0,
-      "pitch_amplitude": 0.12,
-      "yaw_amplitude": 0.1,
-      "z_amplitude": 0.02,
-      "antenna_left": 0.6,
-      "antenna_right": 0.6,
-      "frequency": 2.0
-    },
-    "thinking_emotion": {
-      "description": "Thinking/pondering expression - slight tilt with slow movement",
-      "duration": 2.0,
-      "roll": 0.08,
-      "pitch": -0.05,
-      "yaw_amplitude": 0.08,
-      "antenna_left": 0.4,
-      "antenna_right": -0.2,
-      "frequency": 0.4
-    },
-    "nod": {
-      "description": "Nodding gesture - quick up-down head movement",
-      "duration": 0.8,
-      "pitch_amplitude": 0.2,
-      "frequency": 2.5
-    },
-    "shake": {
-      "description": "Shaking gesture - quick left-right head movement",
-      "duration": 0.8,
-      "yaw_amplitude": 0.25,
-      "frequency": 3.0
-    },
-    "curious": {
-      "description": "Curious/interested expression - head tilts forward with alert antennas",
-      "duration": 1.5,
-      "pitch": -0.08,
-      "roll": 0.1,
-      "antenna_left": 0.5,
-      "antenna_right": 0.3,
-      "frequency": 0.6
-    },
-    "sleepy": {
-      "description": "Sleepy/tired expression - slow drooping movement",
-      "duration": 3.0,
-      "pitch": 0.12,
-      "z": -0.015,
-      "pitch_amplitude": 0.03,
-      "antenna_left": -0.4,
-      "antenna_right": -0.4,
-      "frequency": 0.15
-    },
-    "angry": {
-      "description": "Angry/frustrated expression - intense forward lean with tense antennas",
-      "duration": 1.5,
-      "pitch": -0.12,
-      "roll_amplitude": 0.08,
-      "antenna_left": 0.8,
-      "antenna_right": 0.8,
-      "frequency": 1.8
-    },
-    "shy": {
-      "description": "Shy/embarrassed expression - head turns away slightly",
-      "duration": 2.0,
-      "yaw": 0.15,
-      "pitch": 0.08,
-      "roll": 0.05,
-      "antenna_left": -0.1,
-      "antenna_right": -0.1,
-      "frequency": 0.3
-    },
-    "love": {
-      "description": "Loving/affectionate expression - gentle swaying with happy antennas",
-      "duration": 2.5,
-      "yaw_amplitude": 0.08,
-      "pitch_amplitude": 0.06,
-      "z_amplitude": 0.008,
-      "antenna_left": 0.4,
-      "antenna_right": 0.4,
-      "frequency": 0.8
-    },
-    "bored": {
-      "description": "Bored/uninterested expression - slow side-to-side with droopy antennas",
-      "duration": 3.0,
-      "yaw_amplitude": 0.1,
-      "pitch": 0.05,
-      "antenna_left": -0.15,
-      "antenna_right": -0.15,
-      "frequency": 0.2
-    },
-    "alert": {
-      "description": "Alert/attentive expression - quick upward movement with perky antennas",
-      "duration": 1.0,
-      "pitch": -0.15,
-      "z": 0.015,
-      "antenna_left": 0.7,
-      "antenna_right": 0.7,
-      "frequency": 2.5
-    }
-  },
-  "idle_random_actions": {
-    "description": "Pure movement actions used during idle random behavior (no audio)",
-    "min_interval_s": 6.0,
-    "max_interval_s": 14.0,
-    "trigger_probability": 0.85,
-    "actions": [
-      {
-        "name": "curious_left",
-        "weight": 1.0,
-        "duration_s": 1.8,
-        "yaw_range_deg": [-16.0, -6.0],
-        "pitch_range_deg": [-3.0, 4.0],
-        "roll_range_deg": [-4.0, 2.0]
-      },
-      {
-        "name": "curious_right",
-        "weight": 1.0,
-        "duration_s": 1.8,
-        "yaw_range_deg": [6.0, 16.0],
-        "pitch_range_deg": [-3.0, 4.0],
-        "roll_range_deg": [-2.0, 4.0]
-      },
-      {
-        "name": "micro_nod",
-        "weight": 0.9,
-        "duration_s": 1.3,
-        "yaw_range_deg": [-3.0, 3.0],
-        "pitch_range_deg": [-10.0, -4.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "micro_tilt",
-        "weight": 0.8,
-        "duration_s": 1.6,
-        "yaw_range_deg": [-6.0, 6.0],
-        "pitch_range_deg": [-2.0, 4.0],
-        "roll_range_deg": [-7.0, 7.0]
-      },
-      {
-        "name": "look_up_soft",
-        "weight": 0.7,
-        "duration_s": 1.2,
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [-14.0, -6.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "look_down_soft",
-        "weight": 0.7,
-        "duration_s": 1.2,
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [6.0, 14.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "side_glance_flick_left",
-        "weight": 0.9,
-        "duration_s": 0.9,
-        "yaw_range_deg": [-24.0, -14.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [-3.0, 2.0]
-      },
-      {
-        "name": "side_glance_flick_right",
-        "weight": 0.9,
-        "duration_s": 0.9,
-        "yaw_range_deg": [14.0, 24.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [-2.0, 3.0]
-      },
-      {
-        "name": "sharp_side_tilt_left",
-        "weight": 0.6,
-        "duration_s": 1.0,
-        "yaw_range_deg": [-5.0, 5.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [-14.0, -8.0]
-      },
-      {
-        "name": "sharp_side_tilt_right",
-        "weight": 0.6,
-        "duration_s": 1.0,
-        "yaw_range_deg": [-5.0, 5.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [8.0, 14.0]
-      },
-      {
-        "name": "chicken_peck",
-        "weight": 0.6,
-        "duration_s": 0.85,
-        "x_range_m": [0.007, 0.018],
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [8.0, 15.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "neck_recoil",
-        "weight": 0.5,
-        "duration_s": 1.0,
-        "x_range_m": [-0.015, -0.006],
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [-8.0, -2.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "side_to_side_sway_left",
-        "weight": 0.5,
-        "duration_s": 1.3,
-        "y_range_m": [-0.018, -0.008],
-        "yaw_range_deg": [-6.0, -1.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [-3.0, 3.0]
-      },
-      {
-        "name": "side_to_side_sway_right",
-        "weight": 0.5,
-        "duration_s": 1.3,
-        "y_range_m": [0.008, 0.018],
-        "yaw_range_deg": [1.0, 6.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [-3.0, 3.0]
-      },
-      {
-        "name": "emotion_cheerful_bounce",
-        "weight": 0.7,
-        "duration_s": 1.4,
-        "z_range_m": [0.004, 0.012],
-        "yaw_range_deg": [-6.0, 6.0],
-        "pitch_range_deg": [-8.0, -2.0],
-        "roll_range_deg": [-3.0, 3.0]
-      },
-      {
-        "name": "emotion_curious_peek_left",
-        "weight": 0.8,
-        "duration_s": 1.5,
-        "y_range_m": [-0.012, -0.004],
-        "yaw_range_deg": [-20.0, -10.0],
-        "pitch_range_deg": [-5.0, 2.0],
-        "roll_range_deg": [-8.0, -3.0]
-      },
-      {
-        "name": "emotion_curious_peek_right",
-        "weight": 0.8,
-        "duration_s": 1.5,
-        "y_range_m": [0.004, 0.012],
-        "yaw_range_deg": [10.0, 20.0],
-        "pitch_range_deg": [-5.0, 2.0],
-        "roll_range_deg": [3.0, 8.0]
-      },
-      {
-        "name": "emotion_surprised_pop",
-        "weight": 0.55,
-        "duration_s": 0.9,
-        "z_range_m": [0.006, 0.015],
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [-16.0, -8.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "emotion_sleepy_drop",
-        "weight": 0.45,
-        "duration_s": 1.7,
-        "z_range_m": [-0.014, -0.006],
-        "yaw_range_deg": [-5.0, 5.0],
-        "pitch_range_deg": [8.0, 16.0],
-        "roll_range_deg": [-4.0, 4.0]
-      },
-      {
-        "name": "emotion_thinking_tilt_left",
-        "weight": 0.65,
-        "duration_s": 1.6,
-        "yaw_range_deg": [-10.0, -2.0],
-        "pitch_range_deg": [-6.0, 1.0],
-        "roll_range_deg": [-10.0, -4.0]
-      },
-      {
-        "name": "emotion_thinking_tilt_right",
-        "weight": 0.65,
-        "duration_s": 1.6,
-        "yaw_range_deg": [2.0, 10.0],
-        "pitch_range_deg": [-6.0, 1.0],
-        "roll_range_deg": [4.0, 10.0]
-      },
-      {
-        "name": "emotion_shy_turn_away_left",
-        "weight": 0.5,
-        "duration_s": 1.5,
-        "yaw_range_deg": [-18.0, -10.0],
-        "pitch_range_deg": [4.0, 10.0],
-        "roll_range_deg": [2.0, 7.0]
-      },
-      {
-        "name": "emotion_shy_turn_away_right",
-        "weight": 0.5,
-        "duration_s": 1.5,
-        "yaw_range_deg": [10.0, 18.0],
-        "pitch_range_deg": [4.0, 10.0],
-        "roll_range_deg": [-7.0, -2.0]
-      },
-      {
-        "name": "emotion_alert_scan_up",
-        "weight": 0.55,
-        "duration_s": 1.0,
-        "z_range_m": [0.003, 0.01],
-        "yaw_range_deg": [-12.0, 12.0],
-        "pitch_range_deg": [-14.0, -6.0],
-        "roll_range_deg": [-3.0, 3.0]
-      },
-      {
-        "name": "emotion_bored_drift",
-        "weight": 0.45,
-        "duration_s": 1.9,
-        "y_range_m": [-0.01, 0.01],
-        "yaw_range_deg": [-8.0, 8.0],
-        "pitch_range_deg": [2.0, 8.0],
-        "roll_range_deg": [-5.0, 5.0]
-      },
-      {
-        "name": "dance_duo_flow_left_arc",
-        "weight": 0.65,
-        "duration_s": 1.6,
-        "x_range_m": [-0.005, 0.001],
-        "y_range_m": [0.006, 0.019],
-        "z_range_m": [0.0082, 0.0092],
-        "yaw_range_deg": [1.0, 5.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [3.0, 10.0]
-      },
-      {
-        "name": "dance_duo_flow_right_arc",
-        "weight": 0.65,
-        "duration_s": 1.6,
-        "x_range_m": [-0.005, 0.001],
-        "y_range_m": [-0.019, -0.006],
-        "z_range_m": [0.0082, 0.0092],
-        "yaw_range_deg": [-5.0, -1.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [-10.0, -3.0]
-      },
-      {
-        "name": "dance_duo_micro_wave",
-        "weight": 0.55,
-        "duration_s": 1.25,
-        "x_range_m": [-0.003, 0.002],
-        "y_range_m": [-0.012, 0.012],
-        "z_range_m": [0.0083, 0.0091],
-        "yaw_range_deg": [-4.0, 6.0],
-        "pitch_range_deg": [-2.0, 3.0],
-        "roll_range_deg": [-8.0, 8.0]
-      },
-      {
-        "name": "dancelib_interwoven_spiral_hint",
-        "weight": 0.6,
-        "duration_s": 1.7,
-        "yaw_range_deg": [-16.0, 16.0],
-        "pitch_range_deg": [-12.0, 12.0],
-        "roll_range_deg": [-10.0, 10.0]
-      },
-      {
-        "name": "dancelib_grid_snap_pose",
-        "weight": 0.45,
-        "duration_s": 0.85,
-        "yaw_range_deg": [-10.0, 10.0],
-        "pitch_range_deg": [-10.0, 10.0],
-        "roll_range_deg": [-10.0, 10.0]
-      },
-      {
-        "name": "dancelib_polyrhythm_combo_hint",
-        "weight": 0.5,
-        "duration_s": 1.4,
-        "y_range_m": [-0.02, 0.02],
-        "yaw_range_deg": [-7.0, 7.0],
-        "pitch_range_deg": [-10.0, -2.0],
-        "roll_range_deg": [-4.0, 4.0]
-      },
-      {
-        "name": "dancelib_jackson_square_corner",
-        "weight": 0.4,
-        "duration_s": 1.1,
-        "y_range_m": [-0.02, 0.02],
-        "z_range_m": [-0.012, 0.012],
-        "yaw_range_deg": [-8.0, 8.0],
-        "pitch_range_deg": [-8.0, 8.0],
-        "roll_range_deg": [-8.0, 8.0]
-      },
-      {
-        "name": "dancelib_simple_nod",
-        "weight": 0.6,
-        "duration_s": 1.0,
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [-14.0, -6.0],
-        "roll_range_deg": [-2.0, 2.0]
-      },
-      {
-        "name": "dancelib_yeah_nod",
-        "weight": 0.55,
-        "duration_s": 1.1,
-        "yaw_range_deg": [-4.0, 4.0],
-        "pitch_range_deg": [-18.0, -8.0],
-        "roll_range_deg": [-3.0, 3.0]
-      },
-      {
-        "name": "dancelib_head_tilt_roll_left",
-        "weight": 0.5,
-        "duration_s": 1.2,
-        "yaw_range_deg": [-5.0, 5.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [-15.0, -8.0]
-      },
-      {
-        "name": "dancelib_head_tilt_roll_right",
-        "weight": 0.5,
-        "duration_s": 1.2,
-        "yaw_range_deg": [-5.0, 5.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [8.0, 15.0]
-      },
-      {
-        "name": "dancelib_pendulum_swing_left",
-        "weight": 0.45,
-        "duration_s": 1.4,
-        "y_range_m": [-0.02, -0.008],
-        "yaw_range_deg": [-10.0, -3.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [-6.0, 2.0]
-      },
-      {
-        "name": "dancelib_pendulum_swing_right",
-        "weight": 0.45,
-        "duration_s": 1.4,
-        "y_range_m": [0.008, 0.02],
-        "yaw_range_deg": [3.0, 10.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [-2.0, 6.0]
-      },
-      {
-        "name": "dancelib_chin_lead",
-        "weight": 0.5,
-        "duration_s": 1.0,
-        "x_range_m": [0.006, 0.018],
-        "yaw_range_deg": [-5.0, 5.0],
-        "pitch_range_deg": [4.0, 12.0],
-        "roll_range_deg": [-3.0, 3.0]
-      },
-      {
-        "name": "dancelib_side_peekaboo_left",
-        "weight": 0.4,
-        "duration_s": 1.5,
-        "y_range_m": [-0.028, -0.012],
-        "z_range_m": [0.008, 0.02],
-        "yaw_range_deg": [-18.0, -8.0],
-        "pitch_range_deg": [-8.0, 0.0],
-        "roll_range_deg": [-8.0, -2.0]
-      },
-      {
-        "name": "dancelib_side_peekaboo_right",
-        "weight": 0.4,
-        "duration_s": 1.5,
-        "y_range_m": [0.012, 0.028],
-        "z_range_m": [0.008, 0.02],
-        "yaw_range_deg": [8.0, 18.0],
-        "pitch_range_deg": [-8.0, 0.0],
-        "roll_range_deg": [2.0, 8.0]
-      },
-      {
-        "name": "dancelib_dizzy_spin_hint",
-        "weight": 0.35,
-        "duration_s": 1.3,
-        "yaw_range_deg": [-20.0, 20.0],
-        "pitch_range_deg": [-10.0, 10.0],
-        "roll_range_deg": [-10.0, 10.0]
-      },
-      {
-        "name": "dancelib_groovy_sway_and_roll_left",
-        "weight": 0.4,
-        "duration_s": 1.4,
-        "y_range_m": [-0.022, -0.008],
-        "yaw_range_deg": [-8.0, -2.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [-10.0, -3.0]
-      },
-      {
-        "name": "dancelib_groovy_sway_and_roll_right",
-        "weight": 0.4,
-        "duration_s": 1.4,
-        "y_range_m": [0.008, 0.022],
-        "yaw_range_deg": [2.0, 8.0],
-        "pitch_range_deg": [-3.0, 3.0],
-        "roll_range_deg": [3.0, 10.0]
-      },
-      {
-        "name": "dancelib_uh_huh_tilt_left",
-        "weight": 0.45,
-        "duration_s": 1.1,
-        "yaw_range_deg": [-7.0, -1.0],
-        "pitch_range_deg": [-9.0, -2.0],
-        "roll_range_deg": [-10.0, -4.0]
-      },
-      {
-        "name": "dancelib_uh_huh_tilt_right",
-        "weight": 0.45,
-        "duration_s": 1.1,
-        "yaw_range_deg": [1.0, 7.0],
-        "pitch_range_deg": [-9.0, -2.0],
-        "roll_range_deg": [4.0, 10.0]
-      },
-      {
-        "name": "dancelib_headbanger_combo",
-        "weight": 0.3,
-        "duration_s": 0.9,
-        "z_range_m": [0.004, 0.014],
-        "yaw_range_deg": [-6.0, 6.0],
-        "pitch_range_deg": [-20.0, -10.0],
-        "roll_range_deg": [-4.0, 4.0]
-      },
-      {
-        "name": "dancelib_stumble_and_recover",
-        "weight": 0.25,
-        "duration_s": 1.6,
-        "y_range_m": [-0.014, 0.014],
-        "yaw_range_deg": [-15.0, 15.0],
-        "pitch_range_deg": [-10.0, 6.0],
-        "roll_range_deg": [-8.0, 8.0]
-      }
-    ]
-  },
-  "settings": {
-    "amplitude_scale": 1.0,
-    "transition_duration_s": 0.35,
-    "default_emotion_duration": 2.0,
-    "default_emotion_frequency": 1.0
-  }
+    "animations":  {
+                       "idle":  {
+                                    "description":  "Breathing animation when idle - gentle z-axis movement and antenna sway",
+                                    "z_amplitude_m":  0.005,
+                                    "z_frequency_hz":  0.24,
+                                    "antenna_amplitude_rad":  0.262,
+                                    "antenna_move_name":  "wiggle",
+                                    "antenna_frequency_hz":  0.5,
+                                    "frequency_hz":  0.24
+                                },
+                       "listening":  {
+                                         "description":  "Attentive pose while listening to user",
+                                         "pitch_amplitude_rad":  0.05,
+                                         "pitch_offset_rad":  -0.03,
+                                         "z_amplitude_m":  0.003,
+                                         "antenna_amplitude_rad":  0.2,
+                                         "antenna_move_name":  "both",
+                                         "antenna_frequency_hz":  0.6,
+                                         "frequency_hz":  0.6
+                                     },
+                       "thinking":  {
+                                        "description":  "Processing/thinking animation - head tilts side to side",
+                                        "pitch_amplitude_rad":  0.06,
+                                        "yaw_amplitude_rad":  0.1,
+                                        "roll_amplitude_rad":  0.04,
+                                        "z_amplitude_m":  0.005,
+                                        "antenna_amplitude_rad":  0.35,
+                                        "antenna_move_name":  "wiggle",
+                                        "antenna_frequency_hz":  0.5,
+                                        "frequency_hz":  0.5
+                                    },
+                       "speaking":  {
+                                        "description":  "Animation while TTS is playing - lively head movement",
+                                        "pitch_amplitude_rad":  0.06,
+                                        "yaw_amplitude_rad":  0.05,
+                                        "roll_amplitude_rad":  0.04,
+                                        "z_amplitude_m":  0.004,
+                                        "antenna_amplitude_rad":  0.35,
+                                        "antenna_move_name":  "wiggle",
+                                        "antenna_frequency_hz":  0.9,
+                                        "frequency_hz":  0.9
+                                    }
+                   },
+    "idle_rest_pose":  {
+                           "description":  "Low-energy static pose when idle behavior is disabled",
+                           "pitch_deg":  22.0,
+                           "antenna_left_rad":  3.05,
+                           "antenna_right_rad":  -3.05
+                       },
+    "emotions":  {
+                     "happy":  {
+                                   "description":  "Happy/joyful expression - bouncy head movement with excited antennas",
+                                   "duration":  2.0,
+                                   "pitch_amplitude":  0.15,
+                                   "z_amplitude":  0.015,
+                                   "antenna_left":  0.5,
+                                   "antenna_right":  0.5,
+                                   "frequency":  1.5
+                               },
+                     "sad":  {
+                                 "description":  "Sad/disappointed expression - drooping head and antennas",
+                                 "duration":  2.5,
+                                 "pitch":  0.15,
+                                 "z":  -0.01,
+                                 "pitch_amplitude":  0.05,
+                                 "antenna_left":  -0.2,
+                                 "antenna_right":  -0.2,
+                                 "frequency":  0.3
+                             },
+                     "surprised":  {
+                                       "description":  "Surprised/shocked expression - head pulls back with alert antennas",
+                                       "duration":  1.5,
+                                       "pitch":  -0.1,
+                                       "z":  0.01,
+                                       "antenna_left":  0.7,
+                                       "antenna_right":  0.7,
+                                       "frequency":  2.0
+                                   },
+                     "confused":  {
+                                      "description":  "Confused/puzzled expression - head tilts with asymmetric antennas",
+                                      "duration":  2.0,
+                                      "roll":  0.12,
+                                      "yaw_amplitude":  0.15,
+                                      "antenna_left":  0.3,
+                                      "antenna_right":  -0.3,
+                                      "frequency":  0.8
+                                  },
+                     "excited":  {
+                                     "description":  "Excited/enthusiastic expression - energetic multi-axis movement",
+                                     "duration":  2.0,
+                                     "pitch_amplitude":  0.12,
+                                     "yaw_amplitude":  0.1,
+                                     "z_amplitude":  0.02,
+                                     "antenna_left":  0.6,
+                                     "antenna_right":  0.6,
+                                     "frequency":  2.0
+                                 },
+                     "thinking_emotion":  {
+                                              "description":  "Thinking/pondering expression - slight tilt with slow movement",
+                                              "duration":  2.0,
+                                              "roll":  0.08,
+                                              "pitch":  -0.05,
+                                              "yaw_amplitude":  0.08,
+                                              "antenna_left":  0.4,
+                                              "antenna_right":  -0.2,
+                                              "frequency":  0.4
+                                          },
+                     "nod":  {
+                                 "description":  "Nodding gesture - quick up-down head movement",
+                                 "duration":  0.8,
+                                 "pitch_amplitude":  0.2,
+                                 "frequency":  2.5
+                             },
+                     "shake":  {
+                                   "description":  "Shaking gesture - quick left-right head movement",
+                                   "duration":  0.8,
+                                   "yaw_amplitude":  0.25,
+                                   "frequency":  3.0
+                               },
+                     "curious":  {
+                                     "description":  "Curious/interested expression - head tilts forward with alert antennas",
+                                     "duration":  1.5,
+                                     "pitch":  -0.08,
+                                     "roll":  0.1,
+                                     "antenna_left":  0.5,
+                                     "antenna_right":  0.3,
+                                     "frequency":  0.6
+                                 },
+                     "sleepy":  {
+                                    "description":  "Sleepy/tired expression - slow drooping movement",
+                                    "duration":  3.0,
+                                    "pitch":  0.12,
+                                    "z":  -0.015,
+                                    "pitch_amplitude":  0.03,
+                                    "antenna_left":  -0.4,
+                                    "antenna_right":  -0.4,
+                                    "frequency":  0.15
+                                },
+                     "angry":  {
+                                   "description":  "Angry/frustrated expression - intense forward lean with tense antennas",
+                                   "duration":  1.5,
+                                   "pitch":  -0.12,
+                                   "roll_amplitude":  0.08,
+                                   "antenna_left":  0.8,
+                                   "antenna_right":  0.8,
+                                   "frequency":  1.8
+                               },
+                     "shy":  {
+                                 "description":  "Shy/embarrassed expression - head turns away slightly",
+                                 "duration":  2.0,
+                                 "yaw":  0.15,
+                                 "pitch":  0.08,
+                                 "roll":  0.05,
+                                 "antenna_left":  -0.1,
+                                 "antenna_right":  -0.1,
+                                 "frequency":  0.3
+                             },
+                     "love":  {
+                                  "description":  "Loving/affectionate expression - gentle swaying with happy antennas",
+                                  "duration":  2.5,
+                                  "yaw_amplitude":  0.08,
+                                  "pitch_amplitude":  0.06,
+                                  "z_amplitude":  0.008,
+                                  "antenna_left":  0.4,
+                                  "antenna_right":  0.4,
+                                  "frequency":  0.8
+                              },
+                     "bored":  {
+                                   "description":  "Bored/uninterested expression - slow side-to-side with droopy antennas",
+                                   "duration":  3.0,
+                                   "yaw_amplitude":  0.1,
+                                   "pitch":  0.05,
+                                   "antenna_left":  -0.15,
+                                   "antenna_right":  -0.15,
+                                   "frequency":  0.2
+                               },
+                     "alert":  {
+                                   "description":  "Alert/attentive expression - quick upward movement with perky antennas",
+                                   "duration":  1.0,
+                                   "pitch":  -0.15,
+                                   "z":  0.015,
+                                   "antenna_left":  0.7,
+                                   "antenna_right":  0.7,
+                                   "frequency":  2.5
+                               }
+                 },
+    "idle_random_actions":  {
+                                "description":  "Pure movement actions used during idle random behavior (no audio)",
+                                "min_interval_s":  6.0,
+                                "max_interval_s":  14.0,
+                                "trigger_probability":  0.85,
+                                "actions":  [
+                                                {
+                                                    "name":  "curious_left",
+                                                    "weight":  1.0,
+                                                    "duration_s":  1.8,
+                                                    "yaw_range_deg":  [
+                                                                          -16.0,
+                                                                          -6.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            4.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -4.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "curious_right",
+                                                    "weight":  1.0,
+                                                    "duration_s":  1.8,
+                                                    "yaw_range_deg":  [
+                                                                          6.0,
+                                                                          16.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            4.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           4.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "micro_nod",
+                                                    "weight":  0.9,
+                                                    "duration_s":  1.3,
+                                                    "yaw_range_deg":  [
+                                                                          -3.0,
+                                                                          3.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -10.0,
+                                                                            -4.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "micro_tilt",
+                                                    "weight":  0.8,
+                                                    "duration_s":  1.6,
+                                                    "yaw_range_deg":  [
+                                                                          -6.0,
+                                                                          6.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            4.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -7.0,
+                                                                           7.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "look_up_soft",
+                                                    "weight":  0.7,
+                                                    "duration_s":  1.2,
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -14.0,
+                                                                            -6.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "look_down_soft",
+                                                    "weight":  0.7,
+                                                    "duration_s":  1.2,
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            6.0,
+                                                                            14.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "side_glance_flick_left",
+                                                    "weight":  0.9,
+                                                    "duration_s":  0.9,
+                                                    "yaw_range_deg":  [
+                                                                          -24.0,
+                                                                          -14.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "side_glance_flick_right",
+                                                    "weight":  0.9,
+                                                    "duration_s":  0.9,
+                                                    "yaw_range_deg":  [
+                                                                          14.0,
+                                                                          24.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "sharp_side_tilt_left",
+                                                    "weight":  0.6,
+                                                    "duration_s":  1.0,
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -14.0,
+                                                                           -8.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "sharp_side_tilt_right",
+                                                    "weight":  0.6,
+                                                    "duration_s":  1.0,
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           8.0,
+                                                                           14.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "chicken_peck",
+                                                    "weight":  0.6,
+                                                    "duration_s":  0.85,
+                                                    "x_range_m":  [
+                                                                      0.007,
+                                                                      0.018
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            8.0,
+                                                                            15.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "neck_recoil",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.0,
+                                                    "x_range_m":  [
+                                                                      -0.015,
+                                                                      -0.006
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -8.0,
+                                                                            -2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "side_to_side_sway_left",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.3,
+                                                    "y_range_m":  [
+                                                                      -0.018,
+                                                                      -0.008
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -6.0,
+                                                                          -1.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "side_to_side_sway_right",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.3,
+                                                    "y_range_m":  [
+                                                                      0.008,
+                                                                      0.018
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          1.0,
+                                                                          6.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_cheerful_bounce",
+                                                    "weight":  0.7,
+                                                    "duration_s":  1.4,
+                                                    "z_range_m":  [
+                                                                      0.004,
+                                                                      0.012
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -6.0,
+                                                                          6.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -8.0,
+                                                                            -2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_curious_peek_left",
+                                                    "weight":  0.8,
+                                                    "duration_s":  1.5,
+                                                    "y_range_m":  [
+                                                                      -0.012,
+                                                                      -0.004
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -20.0,
+                                                                          -10.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -5.0,
+                                                                            2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -8.0,
+                                                                           -3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_curious_peek_right",
+                                                    "weight":  0.8,
+                                                    "duration_s":  1.5,
+                                                    "y_range_m":  [
+                                                                      0.004,
+                                                                      0.012
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          10.0,
+                                                                          20.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -5.0,
+                                                                            2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           3.0,
+                                                                           8.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_surprised_pop",
+                                                    "weight":  0.55,
+                                                    "duration_s":  0.9,
+                                                    "z_range_m":  [
+                                                                      0.006,
+                                                                      0.015
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -16.0,
+                                                                            -8.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_sleepy_drop",
+                                                    "weight":  0.45,
+                                                    "duration_s":  1.7,
+                                                    "z_range_m":  [
+                                                                      -0.014,
+                                                                      -0.006
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            8.0,
+                                                                            16.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -4.0,
+                                                                           4.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_thinking_tilt_left",
+                                                    "weight":  0.65,
+                                                    "duration_s":  1.6,
+                                                    "yaw_range_deg":  [
+                                                                          -10.0,
+                                                                          -2.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -6.0,
+                                                                            1.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           -4.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_thinking_tilt_right",
+                                                    "weight":  0.65,
+                                                    "duration_s":  1.6,
+                                                    "yaw_range_deg":  [
+                                                                          2.0,
+                                                                          10.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -6.0,
+                                                                            1.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           4.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_shy_turn_away_left",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.5,
+                                                    "yaw_range_deg":  [
+                                                                          -18.0,
+                                                                          -10.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            4.0,
+                                                                            10.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           2.0,
+                                                                           7.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_shy_turn_away_right",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.5,
+                                                    "yaw_range_deg":  [
+                                                                          10.0,
+                                                                          18.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            4.0,
+                                                                            10.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -7.0,
+                                                                           -2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_alert_scan_up",
+                                                    "weight":  0.55,
+                                                    "duration_s":  1.0,
+                                                    "z_range_m":  [
+                                                                      0.003,
+                                                                      0.01
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -12.0,
+                                                                          12.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -14.0,
+                                                                            -6.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "emotion_bored_drift",
+                                                    "weight":  0.45,
+                                                    "duration_s":  1.9,
+                                                    "y_range_m":  [
+                                                                      -0.01,
+                                                                      0.01
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -8.0,
+                                                                          8.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            2.0,
+                                                                            8.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -5.0,
+                                                                           5.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dance_duo_flow_left_arc",
+                                                    "weight":  0.65,
+                                                    "duration_s":  1.6,
+                                                    "x_range_m":  [
+                                                                      -0.005,
+                                                                      0.001
+                                                                  ],
+                                                    "y_range_m":  [
+                                                                      0.006,
+                                                                      0.019
+                                                                  ],
+                                                    "z_range_m":  [
+                                                                      0.0082,
+                                                                      0.0092
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          1.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           3.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dance_duo_flow_right_arc",
+                                                    "weight":  0.65,
+                                                    "duration_s":  1.6,
+                                                    "x_range_m":  [
+                                                                      -0.005,
+                                                                      0.001
+                                                                  ],
+                                                    "y_range_m":  [
+                                                                      -0.019,
+                                                                      -0.006
+                                                                  ],
+                                                    "z_range_m":  [
+                                                                      0.0082,
+                                                                      0.0092
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          -1.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           -3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dance_duo_micro_wave",
+                                                    "weight":  0.55,
+                                                    "duration_s":  1.25,
+                                                    "x_range_m":  [
+                                                                      -0.003,
+                                                                      0.002
+                                                                  ],
+                                                    "y_range_m":  [
+                                                                      -0.012,
+                                                                      0.012
+                                                                  ],
+                                                    "z_range_m":  [
+                                                                      0.0083,
+                                                                      0.0091
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          6.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -2.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -8.0,
+                                                                           8.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_interwoven_spiral_hint",
+                                                    "weight":  0.6,
+                                                    "duration_s":  1.7,
+                                                    "yaw_range_deg":  [
+                                                                          -16.0,
+                                                                          16.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -12.0,
+                                                                            12.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_grid_snap_pose",
+                                                    "weight":  0.45,
+                                                    "duration_s":  0.85,
+                                                    "yaw_range_deg":  [
+                                                                          -10.0,
+                                                                          10.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -10.0,
+                                                                            10.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_polyrhythm_combo_hint",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.4,
+                                                    "y_range_m":  [
+                                                                      -0.02,
+                                                                      0.02
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -7.0,
+                                                                          7.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -10.0,
+                                                                            -2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -4.0,
+                                                                           4.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_jackson_square_corner",
+                                                    "weight":  0.4,
+                                                    "duration_s":  1.1,
+                                                    "y_range_m":  [
+                                                                      -0.02,
+                                                                      0.02
+                                                                  ],
+                                                    "z_range_m":  [
+                                                                      -0.012,
+                                                                      0.012
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -8.0,
+                                                                          8.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -8.0,
+                                                                            8.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -8.0,
+                                                                           8.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_simple_nod",
+                                                    "weight":  0.6,
+                                                    "duration_s":  1.0,
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -14.0,
+                                                                            -6.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_yeah_nod",
+                                                    "weight":  0.55,
+                                                    "duration_s":  1.1,
+                                                    "yaw_range_deg":  [
+                                                                          -4.0,
+                                                                          4.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -18.0,
+                                                                            -8.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_head_tilt_roll_left",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.2,
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -15.0,
+                                                                           -8.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_head_tilt_roll_right",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.2,
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           8.0,
+                                                                           15.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_pendulum_swing_left",
+                                                    "weight":  0.45,
+                                                    "duration_s":  1.4,
+                                                    "y_range_m":  [
+                                                                      -0.02,
+                                                                      -0.008
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -10.0,
+                                                                          -3.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -6.0,
+                                                                           2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_pendulum_swing_right",
+                                                    "weight":  0.45,
+                                                    "duration_s":  1.4,
+                                                    "y_range_m":  [
+                                                                      0.008,
+                                                                      0.02
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          3.0,
+                                                                          10.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -2.0,
+                                                                           6.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_chin_lead",
+                                                    "weight":  0.5,
+                                                    "duration_s":  1.0,
+                                                    "x_range_m":  [
+                                                                      0.006,
+                                                                      0.018
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -5.0,
+                                                                          5.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            4.0,
+                                                                            12.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -3.0,
+                                                                           3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_side_peekaboo_left",
+                                                    "weight":  0.4,
+                                                    "duration_s":  1.5,
+                                                    "y_range_m":  [
+                                                                      -0.028,
+                                                                      -0.012
+                                                                  ],
+                                                    "z_range_m":  [
+                                                                      0.008,
+                                                                      0.02
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -18.0,
+                                                                          -8.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -8.0,
+                                                                            0.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -8.0,
+                                                                           -2.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_side_peekaboo_right",
+                                                    "weight":  0.4,
+                                                    "duration_s":  1.5,
+                                                    "y_range_m":  [
+                                                                      0.012,
+                                                                      0.028
+                                                                  ],
+                                                    "z_range_m":  [
+                                                                      0.008,
+                                                                      0.02
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          8.0,
+                                                                          18.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -8.0,
+                                                                            0.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           2.0,
+                                                                           8.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_dizzy_spin_hint",
+                                                    "weight":  0.35,
+                                                    "duration_s":  1.3,
+                                                    "yaw_range_deg":  [
+                                                                          -20.0,
+                                                                          20.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -10.0,
+                                                                            10.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_groovy_sway_and_roll_left",
+                                                    "weight":  0.4,
+                                                    "duration_s":  1.4,
+                                                    "y_range_m":  [
+                                                                      -0.022,
+                                                                      -0.008
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -8.0,
+                                                                          -2.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           -3.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_groovy_sway_and_roll_right",
+                                                    "weight":  0.4,
+                                                    "duration_s":  1.4,
+                                                    "y_range_m":  [
+                                                                      0.008,
+                                                                      0.022
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          2.0,
+                                                                          8.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -3.0,
+                                                                            3.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           3.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_uh_huh_tilt_left",
+                                                    "weight":  0.45,
+                                                    "duration_s":  1.1,
+                                                    "yaw_range_deg":  [
+                                                                          -7.0,
+                                                                          -1.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -9.0,
+                                                                            -2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -10.0,
+                                                                           -4.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_uh_huh_tilt_right",
+                                                    "weight":  0.45,
+                                                    "duration_s":  1.1,
+                                                    "yaw_range_deg":  [
+                                                                          1.0,
+                                                                          7.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -9.0,
+                                                                            -2.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           4.0,
+                                                                           10.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_headbanger_combo",
+                                                    "weight":  0.3,
+                                                    "duration_s":  0.9,
+                                                    "z_range_m":  [
+                                                                      0.004,
+                                                                      0.014
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -6.0,
+                                                                          6.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -20.0,
+                                                                            -10.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -4.0,
+                                                                           4.0
+                                                                       ]
+                                                },
+                                                {
+                                                    "name":  "dancelib_stumble_and_recover",
+                                                    "weight":  0.25,
+                                                    "duration_s":  1.6,
+                                                    "y_range_m":  [
+                                                                      -0.014,
+                                                                      0.014
+                                                                  ],
+                                                    "yaw_range_deg":  [
+                                                                          -15.0,
+                                                                          15.0
+                                                                      ],
+                                                    "pitch_range_deg":  [
+                                                                            -10.0,
+                                                                            6.0
+                                                                        ],
+                                                    "roll_range_deg":  [
+                                                                           -8.0,
+                                                                           8.0
+                                                                       ]
+                                                }
+                                            ]
+                            },
+    "settings":  {
+                     "amplitude_scale":  1.0,
+                     "transition_duration_s":  0.35,
+                     "default_emotion_duration":  2.0,
+                     "default_emotion_frequency":  1.0
+                 },
+    "ha_event_behaviors":  {
+                               "$schema":  "event_mappings_schema.json",
+                               "_description":  "Home Assistant event to robot emotion mappings",
+                               "_version":  "1.0",
+                               "settings":  {
+                                                "max_triggers_per_minute":  3,
+                                                "default_cooldown":  60.0
+                                            },
+                               "mappings":  {
+                                                "binary_sensor.front_door":  [
+                                                                                 {
+                                                                                     "state":  "on",
+                                                                                     "emotion":  "curious1",
+                                                                                     "cooldown":  30.0,
+                                                                                     "priority":  70,
+                                                                                     "description":  "Someone at the door - robot looks curious"
+                                                                                 }
+                                                                             ],
+                                                "binary_sensor.back_door":  [
+                                                                                {
+                                                                                    "state":  "on",
+                                                                                    "emotion":  "surprised1",
+                                                                                    "cooldown":  30.0,
+                                                                                    "priority":  60,
+                                                                                    "description":  "Back door opened - robot looks alert"
+                                                                                }
+                                                                            ],
+                                                "binary_sensor.living_room_motion":  [
+                                                                                         {
+                                                                                             "state":  "on",
+                                                                                             "emotion":  "surprised1",
+                                                                                             "cooldown":  120.0,
+                                                                                             "priority":  40,
+                                                                                             "description":  "Motion detected - brief alert"
+                                                                                         }
+                                                                                     ],
+                                                "binary_sensor.doorbell":  [
+                                                                               {
+                                                                                   "state":  "on",
+                                                                                   "emotion":  "enthusiastic1",
+                                                                                   "cooldown":  10.0,
+                                                                                   "priority":  90,
+                                                                                   "description":  "Doorbell rang - excited reaction"
+                                                                               }
+                                                                           ],
+                                                "input_boolean.morning_routine":  [
+                                                                                      {
+                                                                                          "state":  "on",
+                                                                                          "emotion":  "cheerful1",
+                                                                                          "cooldown":  3600.0,
+                                                                                          "priority":  60,
+                                                                                          "description":  "Morning routine started - happy greeting"
+                                                                                      }
+                                                                                  ],
+                                                "input_boolean.bedtime_routine":  [
+                                                                                      {
+                                                                                          "state":  "on",
+                                                                                          "emotion":  "sleep1",
+                                                                                          "cooldown":  3600.0,
+                                                                                          "priority":  60,
+                                                                                          "description":  "Bedtime - sleepy animation"
+                                                                                      }
+                                                                                  ],
+                                                "input_boolean.party_mode":  [
+                                                                                 {
+                                                                                     "state":  "on",
+                                                                                     "emotion":  "cheerful1",
+                                                                                     "cooldown":  60.0,
+                                                                                     "priority":  50,
+                                                                                     "description":  "Party mode activated - cheerful"
+                                                                                 }
+                                                                             ],
+                                                "input_boolean.robot_happy_trigger":  [
+                                                                                          {
+                                                                                              "state":  "on",
+                                                                                              "emotion":  "cheerful1",
+                                                                                              "cooldown":  5.0,
+                                                                                              "priority":  80,
+                                                                                              "description":  "Manual happy trigger from HA automation"
+                                                                                          }
+                                                                                      ],
+                                                "input_boolean.robot_sad_trigger":  [
+                                                                                        {
+                                                                                            "state":  "on",
+                                                                                            "emotion":  "sad1",
+                                                                                            "cooldown":  5.0,
+                                                                                            "priority":  80,
+                                                                                            "description":  "Manual sad trigger from HA automation"
+                                                                                        }
+                                                                                    ],
+                                                "input_boolean.robot_alert_trigger":  [
+                                                                                          {
+                                                                                              "state":  "on",
+                                                                                              "emotion":  "surprised1",
+                                                                                              "cooldown":  5.0,
+                                                                                              "priority":  80,
+                                                                                              "description":  "Manual alert trigger from HA automation"
+                                                                                          }
+                                                                                      ]
+                                            },
+                               "_emotions":  {
+                                                 "cheerful1":  "Joyful expression with antenna wiggle",
+                                                 "sad1":  "Downcast expression",
+                                                 "surprised1":  "Attentive, wide-eyed look",
+                                                 "curious1":  "Head tilt, interested expression",
+                                                 "sleep1":  "Droopy, tired animation",
+                                                 "enthusiastic1":  "Enthusiastic bouncing",
+                                                 "yes1":  "Nodding in agreement"
+                                             },
+                               "_usage":  {
+                                              "description":  "Create input_boolean helpers in HA and use automations to trigger robot emotions",
+                                              "example_automation":  {
+                                                                         "trigger":  "time-based or event-based trigger",
+                                                                         "action":  "Turn on input_boolean.robot_happy_trigger, then turn it off after 1 second"
+                                                                     }
+                                          }
+                           },
+    "emotion_keywords":  {
+                             "description":  "Emotion keyword detection for automatic emotion triggering. Maps text patterns to robot emotion names from pollen-robotics/reachy-mini-emotions-library.",
+                             "keywords":  {
+                                              "===== 开心/高兴 (Cheerful) =====":  "cheerful1",
+                                              "太棒了":  "cheerful1",
+                                              "太好了":  "cheerful1",
+                                              "好开心":  "cheerful1",
+                                              "真高兴":  "cheerful1",
+                                              "开心":  "cheerful1",
+                                              "高兴":  "cheerful1",
+                                              "快乐":  "cheerful1",
+                                              "棒":  "cheerful1",
+                                              "恭喜":  "cheerful1",
+                                              "真好":  "cheerful1",
+                                              "nice":  "cheerful1",
+                                              "great":  "cheerful1",
+                                              "awesome":  "cheerful1",
+                                              "wonderful":  "cheerful1",
+                                              "excellent":  "cheerful1",
+                                              "happy":  "cheerful1",
+                                              "congratulations":  "cheerful1",
+                                              "congrats":  "cheerful1",
+                                              "good job":  "cheerful1",
+                                              "well done":  "cheerful1",
+                                              "===== 大笑 (Laughing) =====":  "laughing1",
+                                              "哈哈":  "laughing1",
+                                              "哈哈哈":  "laughing1",
+                                              "嘿嘿":  "laughing1",
+                                              "呵呵":  "laughing1",
+                                              "笑死":  "laughing1",
+                                              "太搞笑":  "laughing1",
+                                              "好笑":  "laughing1",
+                                              "笑了":  "laughing1",
+                                              "haha":  "laughing1",
+                                              "hehe":  "laughing1",
+                                              "lol":  "laughing1",
+                                              "lmao":  "laughing1",
+                                              "rofl":  "laughing1",
+                                              "funny":  "laughing1",
+                                              "hilarious":  "laughing1",
+                                              "===== 热情/兴奋 (Enthusiastic) =====":  "enthusiastic1",
+                                              "太激动":  "enthusiastic1",
+                                              "太兴奋":  "enthusiastic1",
+                                              "兴奋":  "enthusiastic1",
+                                              "激动":  "enthusiastic1",
+                                              "耶":  "enthusiastic1",
+                                              "太酷了":  "enthusiastic1",
+                                              "酷":  "enthusiastic1",
+                                              "fantastic":  "enthusiastic1",
+                                              "excited":  "enthusiastic1",
+                                              "exciting":  "enthusiastic1",
+                                              "yay":  "enthusiastic1",
+                                              "woohoo":  "enthusiastic1",
+                                              "cool":  "enthusiastic1",
+                                              "===== 惊讶/惊叹 (Amazed) =====":  "amazed1",
+                                              "太神奇":  "amazed1",
+                                              "神奇":  "amazed1",
+                                              "不可思议":  "amazed1",
+                                              "太厉害":  "amazed1",
+                                              "厉害":  "amazed1",
+                                              "牛":  "amazed1",
+                                              "amazing":  "amazed1",
+                                              "incredible":  "amazed1",
+                                              "unbelievable":  "amazed1",
+                                              "impressive":  "amazed1",
+                                              "===== 惊讶 (Surprised) =====":  "surprised1",
+                                              "哇":  "surprised1",
+                                              "哇塞":  "surprised1",
+                                              "真的吗":  "surprised1",
+                                              "天啊":  "surprised1",
+                                              "我的天":  "surprised1",
+                                              "什么":  "surprised1",
+                                              "啊":  "surprised1",
+                                              "wow":  "surprised1",
+                                              "really":  "surprised1",
+                                              "oh my god":  "surprised1",
+                                              "omg":  "surprised1",
+                                              "seriously":  "surprised1",
+                                              "no way":  "surprised1",
+                                              "===== 爱/喜欢 (Loving) =====":  "loving1",
+                                              "爱":  "loving1",
+                                              "爱你":  "loving1",
+                                              "喜欢":  "loving1",
+                                              "太爱了":  "loving1",
+                                              "可爱":  "loving1",
+                                              "萌":  "loving1",
+                                              "爱死了":  "loving1",
+                                              "love":  "loving1",
+                                              "lovely":  "loving1",
+                                              "adore":  "loving1",
+                                              "cute":  "loving1",
+                                              "===== 感谢 (Grateful) =====":  "grateful1",
+                                              "谢谢":  "grateful1",
+                                              "感谢":  "grateful1",
+                                              "多谢":  "grateful1",
+                                              "太感谢":  "grateful1",
+                                              "非常感谢":  "grateful1",
+                                              "感激":  "grateful1",
+                                              "thank":  "grateful1",
+                                              "thanks":  "grateful1",
+                                              "appreciate":  "grateful1",
+                                              "grateful":  "grateful1",
+                                              "===== 欢迎 (Welcoming) =====":  "welcoming1",
+                                              "欢迎":  "welcoming1",
+                                              "你好":  "welcoming1",
+                                              "早上好":  "welcoming1",
+                                              "下午好":  "welcoming1",
+                                              "晚上好":  "welcoming1",
+                                              "嗨":  "welcoming1",
+                                              "welcome":  "welcoming1",
+                                              "hello":  "welcoming1",
+                                              "hi":  "welcoming1",
+                                              "hey":  "welcoming1",
+                                              "good morning":  "welcoming1",
+                                              "good afternoon":  "welcoming1",
+                                              "good evening":  "welcoming1",
+                                              "===== 乐于助人 (Helpful) =====":  "helpful1",
+                                              "当然":  "helpful1",
+                                              "好的":  "helpful1",
+                                              "没问题":  "helpful1",
+                                              "可以":  "helpful1",
+                                              "行":  "helpful1",
+                                              "好啊":  "helpful1",
+                                              "乐意":  "helpful1",
+                                              "sure":  "helpful1",
+                                              "of course":  "helpful1",
+                                              "no problem":  "helpful1",
+                                              "certainly":  "helpful1",
+                                              "absolutely":  "helpful1",
+                                              "glad to help":  "helpful1",
+                                              "===== 好奇 (Curious) =====":  "curious1",
+                                              "好奇":  "curious1",
+                                              "有意思":  "curious1",
+                                              "有趣":  "curious1",
+                                              "奇怪":  "curious1",
+                                              "怎么回事":  "curious1",
+                                              "curious":  "curious1",
+                                              "interesting":  "curious1",
+                                              "intriguing":  "curious1",
+                                              "wonder":  "curious1",
+                                              "===== 思考 (Thoughtful) =====":  "thoughtful1",
+                                              "嗯":  "thoughtful1",
+                                              "让我想想":  "thoughtful1",
+                                              "想一想":  "thoughtful1",
+                                              "考虑":  "thoughtful1",
+                                              "思考":  "thoughtful1",
+                                              "想想看":  "thoughtful1",
+                                              "我觉得":  "thoughtful1",
+                                              "hmm":  "thoughtful1",
+                                              "let me think":  "thoughtful1",
+                                              "thinking":  "thoughtful1",
+                                              "i think":  "thoughtful1",
+                                              "perhaps":  "thoughtful1",
+                                              "maybe":  "thoughtful1",
+                                              "===== 理解 (Understanding) =====":  "understanding1",
+                                              "明白":  "understanding1",
+                                              "懂了":  "understanding1",
+                                              "理解":  "understanding1",
+                                              "原来如此":  "understanding1",
+                                              "我明白了":  "understanding1",
+                                              "i see":  "understanding1",
+                                              "i understand":  "understanding1",
+                                              "got it":  "understanding1",
+                                              "makes sense":  "understanding1",
+                                              "===== 骄傲/自豪 (Proud) =====":  "proud1",
+                                              "骄傲":  "proud1",
+                                              "自豪":  "proud1",
+                                              "了不起":  "proud1",
+                                              "真棒":  "proud1",
+                                              "做得好":  "proud1",
+                                              "proud":  "proud1",
+                                              "bravo":  "proud1",
+                                              "===== 成功 (Success) =====":  "success1",
+                                              "成功":  "success1",
+                                              "搞定":  "success1",
+                                              "完成":  "success1",
+                                              "做到了":  "success1",
+                                              "success":  "success1",
+                                              "done":  "success1",
+                                              "finished":  "success1",
+                                              "accomplished":  "success1",
+                                              "===== 悲伤 (Sad) =====":  "sad1",
+                                              "难过":  "sad1",
+                                              "伤心":  "sad1",
+                                              "悲伤":  "sad1",
+                                              "可惜":  "sad1",
+                                              "遗憾":  "sad1",
+                                              "唉":  "sad1",
+                                              "不幸":  "sad1",
+                                              "sad":  "sad1",
+                                              "unfortunately":  "sad1",
+                                              "too bad":  "sad1",
+                                              "pity":  "sad1",
+                                              "===== 抱歉 (Sorry/Oops) =====":  "oops1",
+                                              "抱歉":  "oops1",
+                                              "对不起":  "oops1",
+                                              "不好意思":  "shy1",
+                                              "糟糕":  "oops1",
+                                              "哎呀":  "oops1",
+                                              "失误":  "oops1",
+                                              "搞砸":  "oops1",
+                                              "sorry":  "oops1",
+                                              "oops":  "oops1",
+                                              "my bad":  "oops1",
+                                              "excuse me":  "oops1",
+                                              "pardon":  "oops1",
+                                              "===== 不确定 (Uncertain) =====":  "uncertain1",
+                                              "不知道":  "uncertain1",
+                                              "不确定":  "uncertain1",
+                                              "不太清楚":  "uncertain1",
+                                              "说不准":  "uncertain1",
+                                              "不一定":  "uncertain1",
+                                              "don\u0027t know":  "uncertain1",
+                                              "not sure":  "uncertain1",
+                                              "uncertain":  "uncertain1",
+                                              "unsure":  "uncertain1",
+                                              "i\u0027m not sure":  "uncertain1",
+                                              "===== 困惑 (Confused) =====":  "confused1",
+                                              "困惑":  "confused1",
+                                              "迷惑":  "confused1",
+                                              "搞不懂":  "confused1",
+                                              "看不懂":  "confused1",
+                                              "不理解":  "confused1",
+                                              "晕":  "confused1",
+                                              "懵":  "confused1",
+                                              "confused":  "confused1",
+                                              "confusing":  "confused1",
+                                              "puzzled":  "confused1",
+                                              "what":  "confused1",
+                                              "===== 害怕/恐惧 (Fear) =====":  "fear1",
+                                              "害怕":  "fear1",
+                                              "恐惧":  "fear1",
+                                              "可怕":  "fear1",
+                                              "吓人":  "fear1",
+                                              "担心":  "fear1",
+                                              "afraid":  "fear1",
+                                              "scared":  "fear1",
+                                              "fear":  "fear1",
+                                              "scary":  "fear1",
+                                              "frightening":  "fear1",
+                                              "===== 焦虑 (Anxiety) =====":  "anxiety1",
+                                              "焦虑":  "anxiety1",
+                                              "紧张":  "anxiety1",
+                                              "忐忑":  "anxiety1",
+                                              "不安":  "anxiety1",
+                                              "anxious":  "anxiety1",
+                                              "nervous":  "anxiety1",
+                                              "worried":  "anxiety1",
+                                              "anxiety":  "anxiety1",
+                                              "===== 愤怒 (Rage) =====":  "rage1",
+                                              "生气":  "rage1",
+                                              "愤怒":  "rage1",
+                                              "气死":  "rage1",
+                                              "太过分":  "rage1",
+                                              "可恶":  "rage1",
+                                              "angry":  "rage1",
+                                              "mad":  "rage1",
+                                              "rage":  "rage1",
+                                              "outrageous":  "rage1",
+                                              "===== 烦躁/不耐烦 (Irritated) =====":  "irritated1",
+                                              "烦":  "irritated1",
+                                              "烦躁":  "irritated1",
+                                              "烦死了":  "irritated1",
+                                              "讨厌":  "irritated1",
+                                              "annoyed":  "irritated1",
+                                              "irritated":  "irritated1",
+                                              "annoying":  "irritated1",
+                                              "===== 沮丧 (Frustrated) =====":  "frustrated1",
+                                              "沮丧":  "frustrated1",
+                                              "挫败":  "frustrated1",
+                                              "郁闷":  "frustrated1",
+                                              "心烦":  "frustrated1",
+                                              "frustrated":  "frustrated1",
+                                              "frustrating":  "frustrated1",
+                                              "===== 厌恶 (Disgusted) =====":  "disgusted1",
+                                              "恶心":  "disgusted1",
+                                              "厌恶":  "disgusted1",
+                                              "反感":  "disgusted1",
+                                              "太恶心":  "disgusted1",
+                                              "disgusted":  "disgusted1",
+                                              "disgusting":  "disgusted1",
+                                              "gross":  "disgusted1",
+                                              "yuck":  "disgusted1",
+                                              "eww":  "disgusted1",
+                                              "===== 无聊 (Boredom) =====":  "boredom1",
+                                              "无聊":  "boredom1",
+                                              "好无聊":  "boredom1",
+                                              "没意思":  "boredom1",
+                                              "闷":  "boredom1",
+                                              "bored":  "boredom1",
+                                              "boring":  "boredom1",
+                                              "===== 疲惫 (Tired) =====":  "tired1",
+                                              "累":  "tired1",
+                                              "好累":  "tired1",
+                                              "累了":  "tired1",
+                                              "疲惫":  "tired1",
+                                              "困":  "tired1",
+                                              "tired":  "tired1",
+                                              "exhausted":  "tired1",
+                                              "sleepy":  "tired1",
+                                              "===== 困倦/睡眠 (Sleep) =====":  "sleep1",
+                                              "想睡":  "sleep1",
+                                              "睡觉":  "sleep1",
+                                              "晚安":  "sleep1",
+                                              "good night":  "sleep1",
+                                              "sleep":  "sleep1",
+                                              "nap":  "sleep1",
+                                              "===== 害羞 (Shy) =====":  "shy1",
+                                              "害羞":  "shy1",
+                                              "脸红":  "shy1",
+                                              "shy":  "shy1",
+                                              "embarrassed":  "shy1",
+                                              "blush":  "shy1",
+                                              "===== 孤独 (Lonely) =====":  "lonely1",
+                                              "孤独":  "lonely1",
+                                              "寂寞":  "lonely1",
+                                              "孤单":  "lonely1",
+                                              "lonely":  "lonely1",
+                                              "alone":  "lonely1",
+                                              "===== 放松/释然 (Relief) =====":  "relief1",
+                                              "放松":  "relief1",
+                                              "松一口气":  "relief1",
+                                              "终于":  "relief1",
+                                              "幸好":  "relief1",
+                                              "还好":  "relief1",
+                                              "relief":  "relief1",
+                                              "relieved":  "relief1",
+                                              "finally":  "relief1",
+                                              "phew":  "relief1",
+                                              "===== 平静 (Serenity) =====":  "serenity1",
+                                              "平静":  "serenity1",
+                                              "安静":  "serenity1",
+                                              "冷静":  "serenity1",
+                                              "淡定":  "serenity1",
+                                              "calm":  "serenity1",
+                                              "peaceful":  "serenity1",
+                                              "serene":  "serenity1",
+                                              "relax":  "serenity1",
+                                              "===== 肯定/是 (Yes) =====":  "yes1",
+                                              "是的":  "yes1",
+                                              "对":  "yes1",
+                                              "没错":  "yes1",
+                                              "正确":  "yes1",
+                                              "嗯嗯":  "yes1",
+                                              "是啊":  "yes1",
+                                              "对的":  "yes1",
+                                              "yes":  "yes1",
+                                              "yeah":  "yes1",
+                                              "yep":  "yes1",
+                                              "correct":  "yes1",
+                                              "right":  "yes1",
+                                              "exactly":  "yes1",
+                                              "===== 否定/不 (No) =====":  "no1",
+                                              "不是":  "no1",
+                                              "不行":  "no1",
+                                              "不可以":  "no1",
+                                              "不对":  "no1",
+                                              "错":  "no1",
+                                              "no":  "no1",
+                                              "nope":  "no1",
+                                              "wrong":  "no1",
+                                              "incorrect":  "no1",
+                                              "===== 过来 (Come) =====":  "come1",
+                                              "过来":  "come1",
+                                              "来":  "come1",
+                                              "来吧":  "come1",
+                                              "come":  "come1",
+                                              "come here":  "come1",
+                                              "===== 走开 (Go away) =====":  "go_away1",
+                                              "走开":  "go_away1",
+                                              "滚":  "go_away1",
+                                              "走":  "go_away1",
+                                              "go away":  "go_away1",
+                                              "leave":  "go_away1",
+                                              "get out":  "go_away1",
+                                              "===== 跳舞 (Dance) =====":  "dance1",
+                                              "跳舞":  "dance1",
+                                              "舞蹈":  "dance1",
+                                              "蹦迪":  "dance1",
+                                              "dance":  "dance1",
+                                              "dancing":  "dance1"
+                                          },
+                             "settings":  {
+                                              "enabled":  true,
+                                              "case_sensitive":  false,
+                                              "max_emotions_per_response":  1
+                                          }
+                         }
 }

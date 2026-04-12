@@ -9,7 +9,11 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from ..animations.animation_config import get_animation_config_section
+
 _LOGGER = logging.getLogger(__name__)
+
+_UNIFIED_BEHAVIORS_FILE = Path(__file__).parent.parent / "animations" / "conversation_animations.json"
 
 
 class EmotionKeywordDetector:
@@ -27,7 +31,7 @@ class EmotionKeywordDetector:
         """Initialize the emotion detector.
 
         Args:
-            config_path: Path to emotion_keywords.json. Defaults to animations folder.
+            config_path: Path to the unified behavior JSON. Defaults to animations folder.
             play_emotion_callback: Function to call when emotion is detected.
         """
         self._keywords: dict[str, str] = {}
@@ -35,7 +39,7 @@ class EmotionKeywordDetector:
         self._play_emotion_callback = play_emotion_callback
 
         if config_path is None:
-            config_path = Path(__file__).parent.parent / "animations" / "emotion_keywords.json"
+            config_path = _UNIFIED_BEHAVIORS_FILE
 
         self._load_keywords(config_path)
 
@@ -46,8 +50,7 @@ class EmotionKeywordDetector:
             return
 
         try:
-            with open(config_path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = get_animation_config_section(config_path, "emotion_keywords") or {}
 
             self._keywords = data.get("keywords", {})
             settings = data.get("settings", {})

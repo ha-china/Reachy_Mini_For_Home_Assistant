@@ -10,15 +10,13 @@ blueprint:
     4) Set away delay and day/night volume.
 
     What this automation does:
-    - Occupied: Wake Reachy, enable idle motion + idle antenna motion, set day volume.
-    - Empty (after delay): Disable idle motion + idle antenna motion, send Reachy to sleep.
+    - Occupied: Wake Reachy, enable unified idle behavior, set day volume.
+    - Empty (after delay): Disable unified idle behavior, send Reachy to sleep.
     - Quiet hours start/end: Apply night/day volume while occupied.
 
     Auto-binding rules (when Reachy device is selected):
-    - Wake button suffix: wake_up
-    - Sleep button suffix: go_to_sleep
-    - Idle motion switch suffix: idle_motion_enabled
-    - Idle antenna switch suffix: idle_antenna_enabled
+    - Sleep switch suffix: sleep_control
+    - Idle behavior switch suffix: idle_behavior_enabled
     - Volume number suffix: speaker_volume
 
     If your entities use different names, fill optional fallback entity inputs manually.
@@ -39,32 +37,16 @@ blueprint:
           filter:
             - integration: esphome
 
-    reachy_wake_button:
-      name: Wake Up button (optional fallback)
-      description: Leave empty to auto-bind from Reachy device.
-      default: ""
-      selector:
-        entity:
-          domain: button
-
-    reachy_sleep_button:
-      name: Go To Sleep button (optional fallback)
-      description: Leave empty to auto-bind from Reachy device.
-      default: ""
-      selector:
-        entity:
-          domain: button
-
-    idle_motion_switch:
-      name: Idle Motion switch (optional fallback)
+    reachy_sleep_switch:
+      name: Sleep Control switch (optional fallback)
       description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
         entity:
           domain: switch
 
-    idle_antenna_motion_switch:
-      name: Idle Antenna Motion switch (optional fallback)
+    idle_behavior_switch:
+      name: Idle Behavior switch (optional fallback)
       description: Leave empty to auto-bind from Reachy device.
       default: ""
       selector:
@@ -92,22 +74,22 @@ blueprint:
 
     day_volume:
       name: Day volume
-      default: 0.8
+      default: 80
       selector:
         number:
           min: 0
-          max: 1
-          step: 0.05
+          max: 100
+          step: 1
           mode: slider
 
     night_volume:
       name: Night volume
-      default: 0.35
+      default: 35
       selector:
         number:
           min: 0
-          max: 1
-          step: 0.05
+          max: 100
+          step: 1
           mode: slider
 
     quiet_start:
@@ -127,10 +109,8 @@ mode: restart
 variables:
   occupancy_entity: !input occupancy_entity
   reachy_device: !input reachy_device
-  manual_wake_button: !input reachy_wake_button
-  manual_sleep_button: !input reachy_sleep_button
-  manual_idle_motion_switch: !input idle_motion_switch
-  manual_idle_antenna_switch: !input idle_antenna_motion_switch
+  manual_sleep_switch: !input reachy_sleep_switch
+  manual_idle_behavior_switch: !input idle_behavior_switch
   manual_volume_number: !input reachy_volume_number
   day_volume: !input day_volume
   night_volume: !input night_volume
@@ -138,25 +118,17 @@ variables:
   device_entities_list: >-
     {{ device_entities(reachy_device) if reachy_device else [] }}
 
-  wake_button_auto: >-
-    {{ (device_entities_list | select('match', '^button\..*wake_up$') | list | first) or '' }}
-  sleep_button_auto: >-
-    {{ (device_entities_list | select('match', '^button\..*go_to_sleep$') | list | first) or '' }}
-  idle_motion_switch_auto: >-
-    {{ (device_entities_list | select('match', '^switch\..*idle_motion_enabled$') | list | first) or '' }}
-  idle_antenna_switch_auto: >-
-    {{ (device_entities_list | select('match', '^switch\..*idle_antenna_enabled$') | list | first) or '' }}
+  sleep_switch_auto: >-
+    {{ (device_entities_list | select('match', '^switch\..*sleep_control$') | list | first) or '' }}
+  idle_behavior_switch_auto: >-
+    {{ (device_entities_list | select('match', '^switch\..*idle_behavior_enabled$') | list | first) or '' }}
   volume_number_auto: >-
     {{ (device_entities_list | select('match', '^number\..*speaker_volume$') | list | first) or '' }}
 
-  wake_button: >-
-    {{ manual_wake_button if manual_wake_button else wake_button_auto }}
-  sleep_button: >-
-    {{ manual_sleep_button if manual_sleep_button else sleep_button_auto }}
-  idle_motion_switch: >-
-    {{ manual_idle_motion_switch if manual_idle_motion_switch else idle_motion_switch_auto }}
-  idle_antenna_motion_switch: >-
-    {{ manual_idle_antenna_switch if manual_idle_antenna_switch else idle_antenna_switch_auto }}
+  sleep_switch: >-
+    {{ manual_sleep_switch if manual_sleep_switch else sleep_switch_auto }}
+  idle_behavior_switch: >-
+    {{ manual_idle_behavior_switch if manual_idle_behavior_switch else idle_behavior_switch_auto }}
   volume_number: >-
     {{ manual_volume_number if manual_volume_number else volume_number_auto }}
 
@@ -204,25 +176,18 @@ action:
         sequence:
           - if:
               - condition: template
-                value_template: "{{ wake_button != '' }}"
+                value_template: "{{ sleep_switch != '' }}"
             then:
-              - service: button.press
+              - service: switch.turn_off
                 target:
-                  entity_id: "{{ wake_button }}"
+                  entity_id: "{{ sleep_switch }}"
           - if:
               - condition: template
-                value_template: "{{ idle_motion_switch != '' }}"
+                value_template: "{{ idle_behavior_switch != '' }}"
             then:
               - service: switch.turn_on
                 target:
-                  entity_id: "{{ idle_motion_switch }}"
-          - if:
-              - condition: template
-                value_template: "{{ idle_antenna_motion_switch != '' }}"
-            then:
-              - service: switch.turn_on
-                target:
-                  entity_id: "{{ idle_antenna_motion_switch }}"
+                  entity_id: "{{ idle_behavior_switch }}"
           - if:
               - condition: template
                 value_template: "{{ volume_number != '' }}"
@@ -239,25 +204,18 @@ action:
         sequence:
           - if:
               - condition: template
-                value_template: "{{ idle_motion_switch != '' }}"
+                value_template: "{{ idle_behavior_switch != '' }}"
             then:
               - service: switch.turn_off
                 target:
-                  entity_id: "{{ idle_motion_switch }}"
+                  entity_id: "{{ idle_behavior_switch }}"
           - if:
               - condition: template
-                value_template: "{{ idle_antenna_motion_switch != '' }}"
+                value_template: "{{ sleep_switch != '' }}"
             then:
-              - service: switch.turn_off
+              - service: switch.turn_on
                 target:
-                  entity_id: "{{ idle_antenna_motion_switch }}"
-          - if:
-              - condition: template
-                value_template: "{{ sleep_button != '' }}"
-            then:
-              - service: button.press
-                target:
-                  entity_id: "{{ sleep_button }}"
+                  entity_id: "{{ sleep_switch }}"
 
       - conditions:
           - condition: template

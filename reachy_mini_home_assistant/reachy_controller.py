@@ -2,7 +2,6 @@
 
 import logging
 import math
-import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -42,12 +41,6 @@ class ReachyController:
         self._cache_ttl = Config.daemon.status_cache_ttl
         self._daemon_base_url = Config.daemon.url.rstrip("/")
 
-        # Callback for sleep/wake to notify VoiceAssistant
-        self._on_sleep_callback = None
-        self._on_wake_callback = None
-        self._sleep_transition_lock = threading.Lock()
-        self._sleep_transition_thread: threading.Thread | None = None
-
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
         # non-blocking in the SDK (they return cached Zenoh data), so no caching needed
@@ -57,14 +50,6 @@ class ReachyController:
         self._look_at_x = 0.0
         self._look_at_y = 0.0
         self._look_at_z = 0.0
-
-    def set_sleep_callback(self, callback) -> None:
-        """Set callback to be called when go_to_sleep is triggered."""
-        self._on_sleep_callback = callback
-
-    def set_wake_callback(self, callback) -> None:
-        """Set callback to be called when wake_up is triggered."""
-        self._on_wake_callback = callback
 
     def set_movement_manager(self, movement_manager) -> None:
         """Set the MovementManager instance for pose control.
@@ -290,67 +275,6 @@ class ReachyController:
         except Exception as e:
             logger.error(f"Error setting motor mode: {e}")
 
-    def wake_up(self) -> None:
-        """Execute wake up animation."""
-        if not self.is_available:
-            logger.warning("Cannot wake up: robot not available")
-            return
-
-        try:
-            # SDK v1.5 sleep/wake is managed at daemon level.
-            # Start daemon with wake_up=true so /api/daemon/status reflects awake state.
-            self._daemon_command("/api/daemon/start", params={"wake_up": "true"})
-            logger.info("Wake-up requested via daemon API")
-
-            # Invalidate cached status after transition request
-            self._last_status_query = 0.0
-
-            # Notify callback (VoiceAssistant will resume services)
-            if self._on_wake_callback is not None:
-                try:
-                    self._on_wake_callback()
-                except Exception as e:
-                    logger.error(f"Error in wake callback: {e}")
-        except Exception as e:
-            logger.error(f"Error executing wake up: {e}")
-
-    def go_to_sleep(self) -> None:
-        """Execute sleep animation.
-
-        The order is important:
-        1. First suspend all services via callback (so they release robot resources)
-        2. Then send the robot to sleep
-
-        This prevents errors from services trying to access a sleeping robot.
-        """
-        if not self.is_available:
-            logger.warning("Cannot sleep: robot not available")
-            return
-
-        try:
-            # First, notify callback to suspend all services
-            # This must happen BEFORE the robot goes to sleep
-            logger.info("Suspending services before sleep...")
-            if self._on_sleep_callback is not None:
-                try:
-                    self._on_sleep_callback()
-                except Exception as e:
-                    logger.error(f"Error in sleep callback: {e}")
-
-            # Give services time to fully suspend
-            time.sleep(0.5)
-
-            # SDK v1.5 sleep/wake is managed at daemon level.
-            # Stop daemon with goto_sleep=true so /api/daemon/status reflects sleep state.
-            self._daemon_command("/api/daemon/stop", params={"goto_sleep": "true"})
-            logger.info("Sleep requested via daemon API")
-
-            # Invalidate cached status after transition request
-            self._last_status_query = 0.0
-
-        except Exception as e:
-            logger.error(f"Error executing sleep: {e}")
-
     def get_doa_enabled(self) -> bool:
         """Get whether DOA sound tracking is enabled."""
         return self._get_movement_bool("get_doa_enabled", "DOA tracking")
@@ -360,35 +284,6 @@ class ReachyController:
         movement_manager = self._with_movement_manager("set_doa_enabled")
         if movement_manager is not None:
             movement_manager.set_doa_enabled(enabled)
-
-    def request_sleep_state(self, sleeping: bool) -> bool:
-        """Execute sleep/wake transitions in a background thread.
-
-        Returns True when a transition was started.
-        """
-
-        def _run_transition() -> None:
-            try:
-                if sleeping:
-                    self.go_to_sleep()
-                else:
-                    self.wake_up()
-            finally:
-                with self._sleep_transition_lock:
-                    self._sleep_transition_thread = None
-
-        with self._sleep_transition_lock:
-            if self._sleep_transition_thread is not None and self._sleep_transition_thread.is_alive():
-                logger.info("Sleep transition already in progress")
-                return False
-
-            self._sleep_transition_thread = threading.Thread(
-                target=_run_transition,
-                name="reachy-sleep-transition",
-                daemon=True,
-            )
-            self._sleep_transition_thread.start()
-            return True
 
     def _daemon_command(self, path: str, params: dict[str, str] | None = None) -> None:
         """Send a daemon command request and wait for the daemon state to settle."""

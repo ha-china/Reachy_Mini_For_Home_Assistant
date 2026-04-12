@@ -1,70 +1,72 @@
 """Voice satellite protocol for Reachy Mini."""
 
-import hashlib
 import importlib.metadata
 import logging
-import math
-import posixpath
-import shutil
 import threading
 import time
 from collections.abc import Iterable
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
-from urllib.parse import urlparse, urlunparse
-from urllib.request import urlopen
 
 if TYPE_CHECKING:
     from ..vision.camera_server import MJPEGCameraServer
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
-    ButtonCommandRequest,
-    CameraImageRequest,
-    DeviceInfoRequest,
-    DeviceInfoResponse,
     HomeAssistantStateResponse,
-    ListEntitiesDoneResponse,
-    ListEntitiesRequest,
-    MediaPlayerCommandRequest,
-    NumberCommandRequest,
-    SelectCommandRequest,
-    SubscribeHomeAssistantStatesRequest,
-    SubscribeStatesRequest,
-    SwitchCommandRequest,
-    VoiceAssistantAnnounceFinished,
-    VoiceAssistantAnnounceRequest,
     VoiceAssistantAudio,
-    VoiceAssistantConfigurationRequest,
-    VoiceAssistantConfigurationResponse,
-    VoiceAssistantEventResponse,
     VoiceAssistantExternalWakeWord,
-    VoiceAssistantRequest,
-    VoiceAssistantSetConfiguration,
-    VoiceAssistantTimerEventResponse,
-    VoiceAssistantWakeWord,
-)
-from aioesphomeapi.model import (
-    VoiceAssistantEventType,
-    VoiceAssistantFeature,
-    VoiceAssistantTimerEventType,
 )
 from google.protobuf import message
 from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
-from .. import __version__
-from ..core.util import call_all
-
-# DISABLED: Emotion detection moved to Home Assistant blueprint
-# from ..entities.emotion_detector import EmotionKeywordDetector
-from ..entities.entity import MediaPlayerEntity
-from ..entities.entity_registry import EntityRegistry, get_entity_key
-from ..entities.event_emotion_mapper import EventEmotionMapper
-from ..models import AvailableWakeWord, ServerState, WakeWordType
-from ..motion.gesture_actions import GestureActionMapper
+from ..entities.event_emotion_mapper import BuiltinBehaviorController, EventEmotionMapper
+from ..models import AvailableWakeWord, ServerState
 from ..reachy_controller import ReachyController
 from .api_server import APIServer
+from .entity_bridge import (
+    bind_camera_callbacks,
+    create_entity_registry,
+    initialize_entities,
+    load_optional_mappings,
+    on_authenticated as replay_entity_states,
+    run_ha_disconnected_callback,
+    update_camera_server as update_entity_bridge_camera_server,
+)
+from .message_dispatch import handle_message as dispatch_message
+from .motion_bridge import (
+    enter_motion_state,
+    play_emotion,
+    queue_emotion_move,
+    reachy_on_idle,
+    reachy_on_listening,
+    reachy_on_speaking,
+    reachy_on_thinking,
+    reachy_on_timer_finished,
+    run_motion_state,
+    set_conversation_mode,
+    turn_to_sound_source,
+)
+from .session_flow import (
+    cancel_delayed_idle_return,
+    clear_conversation,
+    get_or_create_conversation_id,
+    on_wakeup_sound_finished,
+    play_wakeup_sound,
+    queue_voice_request_after_wakeup,
+    schedule_delayed_idle_return,
+    tts_finished,
+)
+from .voice_pipeline import (
+    duck,
+    handle_timer_event,
+    handle_voice_event,
+    play_timer_finished,
+    play_tts,
+    stop as stop_pipeline,
+    unduck,
+)
+from .wakeword_assets import download_external_wake_word
 
 _LOGGER = logging.getLogger(__name__)
 IDLE_RETURN_DELAY_S = 10.0
@@ -87,6 +89,7 @@ class VoiceSatelliteProtocol(APIServer):
         self.state.satellite = self
         self.camera_server = camera_server
         self._voice_assistant_service = voice_assistant_service  # Store reference for mute functionality
+        self._aioesphomeapi_version = _AIOESPHOMEAPI_VERSION
 
         # Home Assistant connection callbacks
         self._on_ha_connected_callback = None
@@ -116,24 +119,6 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
 
-        # Connect sleep/wake callbacks to ServerState callbacks
-        def on_sleep_from_ha():
-            if state.on_ha_sleep is not None:
-                try:
-                    state.on_ha_sleep()
-                except Exception as e:
-                    _LOGGER.error("Error in on_ha_sleep callback: %s", e)
-
-        def on_wake_from_ha():
-            if state.on_ha_wake is not None:
-                try:
-                    state.on_ha_wake()
-                except Exception as e:
-                    _LOGGER.error("Error in on_ha_wake callback: %s", e)
-
-        self.reachy_controller.set_sleep_callback(on_sleep_from_ha)
-        self.reachy_controller.set_wake_callback(on_wake_from_ha)
-
         # Connect MovementManager to ReachyController for pose control from HA
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
@@ -155,67 +140,25 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.info("Speech sway callback configured for TTS player")
 
         # Initialize entity registry
-        self._entity_registry = EntityRegistry(
-            server=self,
-            reachy_controller=self.reachy_controller,
-            camera_server=camera_server,
-            play_emotion_callback=self._play_emotion,
-        )
+        self._entity_registry = create_entity_registry(self)
 
         # Connect gesture state callback
-        if camera_server:
-            camera_server.set_gesture_state_callback(self._entity_registry.update_gesture_state)
-            camera_server.set_face_state_callback(self._entity_registry.update_face_detected_state)
-            camera_server.set_gesture_action_callback(self.handle_detected_gesture)
+        bind_camera_callbacks(self, camera_server)
 
-        # Initialize gesture action mapper for local gesture → action handling
-        self._gesture_action_mapper = GestureActionMapper()
-        self._gesture_action_mapper.set_emotion_callback(self._play_emotion)
-        self._gesture_action_mapper.set_start_listening_callback(self._trigger_wake_word)
-        self._gesture_action_mapper.set_stop_speaking_callback(self._stop_current_tts)
-        self._gesture_action_mapper.set_ha_event_callback(self._send_gesture_event_to_ha)
-        _LOGGER.info("Gesture action mapper initialized")
-
-        # Initialize event-emotion mapper for HA state change reactions
         self._event_emotion_mapper = EventEmotionMapper()
-        self._event_emotion_mapper.set_emotion_callback(self._play_emotion)
+        self._behavior_controller = BuiltinBehaviorController(
+            event_mapper=self._event_emotion_mapper,
+            cancel_delayed_idle_return=self._cancel_delayed_idle_return,
+            set_conversation_mode=self._set_conversation_mode,
+            enter_motion_state=self._enter_motion_state,
+            run_motion_state=self._run_motion_state,
+            queue_emotion_move=self._queue_emotion_move,
+        )
         _LOGGER.info("Event emotion mapper initialized")
 
         # Only setup entities once (check if already initialized)
         # This prevents duplicate entity registration on reconnection
-        try:
-            _LOGGER.info("Checking entity initialization state...")
-            if not self.state._entities_initialized:
-                _LOGGER.info("Setting up entities for first time...")
-                if self.state.media_player_entity is None:
-                    _LOGGER.info("Creating MediaPlayerEntity...")
-                    self.state.media_player_entity = MediaPlayerEntity(
-                        server=self,
-                        key=get_entity_key("reachy_mini_media_player"),
-                        name="Media Player",
-                        object_id="reachy_mini_media_player",
-                        music_player=state.music_player,
-                        announce_player=state.tts_player,
-                    )
-                    self.state.entities.append(self.state.media_player_entity)
-                    _LOGGER.info("MediaPlayerEntity created")
-
-                # Setup all entities using the registry
-                _LOGGER.info("Setting up all entities via registry...")
-                self._entity_registry.setup_all_entities(self.state.entities)
-
-                # Mark entities as initialized
-                self.state._entities_initialized = True
-                _LOGGER.info("Entities initialized: %d total", len(self.state.entities))
-            else:
-                _LOGGER.info("Entities already initialized, updating server references")
-                # Update server reference in existing entities
-                for entity in self.state.entities:
-                    entity.server = self
-                _LOGGER.info("Server references updated for %d entities", len(self.state.entities))
-        except Exception as e:
-            _LOGGER.error("Error during entity setup: %s", e, exc_info=True)
-            raise
+        initialize_entities(self)
 
         # Initialize emotion keyword detector for auto-triggering emotions from LLM responses
         # DISABLED: Emotion detection moved to Home Assistant blueprint
@@ -231,6 +174,10 @@ class VoiceSatelliteProtocol(APIServer):
         """Called when a client connects."""
         peer = transport.get_extra_info("peername")
         _LOGGER.info("ESPHome client connected from %s", peer)
+        peer_host = peer[0] if isinstance(peer, tuple) and peer else None
+        if peer_host:
+            self.state.tts_player.set_http_host_override(peer_host)
+            self.state.music_player.set_http_host_override(peer_host)
         super().connection_made(transport)
 
     def update_camera_server(self, camera_server):
@@ -238,269 +185,21 @@ class VoiceSatelliteProtocol(APIServer):
 
         Called when camera server is started after Home Assistant connection.
         """
-        self._entity_registry.camera_server = camera_server
-        if camera_server:
-            camera_server.set_gesture_state_callback(self._entity_registry.update_gesture_state)
-            camera_server.set_face_state_callback(self._entity_registry.update_face_detected_state)
-            camera_server.set_gesture_action_callback(self.handle_detected_gesture)
-        _LOGGER.debug("Camera server reference updated in entity registry")
+        update_entity_bridge_camera_server(self, camera_server)
 
     def _load_optional_mappings(self) -> None:
-        """Load optional JSON-backed mappings after the ESPHome connection is established."""
-        if self._optional_mappings_loaded:
-            return
-
-        gesture_mappings_file = Path(__file__).resolve().parent.parent / "animations" / "gesture_mappings.json"
-        if gesture_mappings_file.exists():
-            try:
-                self._gesture_action_mapper.load_from_json(gesture_mappings_file)
-            except Exception as e:
-                _LOGGER.error("Failed to load gesture mappings from %s: %s", gesture_mappings_file, e)
-
-        event_mappings_file = Path(__file__).resolve().parent.parent / "animations" / "event_mappings.json"
-        if event_mappings_file.exists():
-            try:
-                self._event_emotion_mapper.load_from_json(event_mappings_file)
-            except Exception as e:
-                _LOGGER.error("Failed to load event mappings from %s: %s", event_mappings_file, e)
-
-        self._optional_mappings_loaded = True
+        load_optional_mappings(self)
 
     # Note: connection_lost is defined later in the class with full cleanup logic
 
-    def handle_voice_event(self, event_type: VoiceAssistantEventType, data: dict[str, str]) -> None:
-        _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
+    def handle_voice_event(self, event_type, data: dict[str, str]) -> None:
+        handle_voice_event(self, event_type, data)
 
-        if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
-            self._pipeline_active = True
-            self._tts_url = data.get("url")
-            self._tts_played = False
-            self._continue_conversation = False
-            # Reachy Mini: Start listening animation
-            self._reachy_on_listening()
-
-            # Note: TTS URL requires HA authentication, cannot pre-download
-            # Speaking animation uses JSON-defined multi-frequency sway instead
-
-        elif event_type in (
-            VoiceAssistantEventType.VOICE_ASSISTANT_STT_VAD_END,
-            VoiceAssistantEventType.VOICE_ASSISTANT_STT_END,
-        ):
-            self._is_streaming_audio = False
-            # Reachy Mini: Stop listening, start thinking
-            self._reachy_on_thinking()
-
-        elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_INTENT_PROGRESS:
-            if data.get("tts_start_streaming") == "1":
-                # Start streaming early
-                self.play_tts()
-
-        elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_INTENT_END:
-            if data.get("continue_conversation") == "1":
-                self._continue_conversation = True
-
-        elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
-            # Reachy Mini: Start speaking animation (JSON-defined multi-frequency sway)
-            _LOGGER.debug("TTS_START event received, triggering speaking animation")
-            self._reachy_on_speaking()
-
-            # Auto-trigger emotion based on response text
-            # TTS_START may contain the text to be spoken
-            # DISABLED: Emotion detection moved to Home Assistant blueprint
-            # tts_text = data.get("tts_output") or data.get("text") or ""
-            # if tts_text:
-            #     self._emotion_detector.detect_and_play(tts_text)
-
-        elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
-            self._tts_url = data.get("url")
-            self.play_tts()
-
-        elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
-            # Pipeline run ended
-            self._is_streaming_audio = False
-
-            # Following reference project pattern
-            if not self._tts_played:
-                self._pipeline_active = False
-                self._tts_finished()
-
-            self._tts_played = False
-
-    def handle_timer_event(
-        self,
-        event_type: VoiceAssistantTimerEventType,
-        msg: VoiceAssistantTimerEventResponse,
-    ) -> None:
-        _LOGGER.debug("Timer event: type=%s", event_type.name)
-
-        if event_type == VoiceAssistantTimerEventType.VOICE_ASSISTANT_TIMER_FINISHED:
-            if not self._timer_finished:
-                self.state.active_wake_words.add(self.state.stop_word.id)
-                self._set_stop_word_active(True)
-                self._timer_finished = True
-                self._timer_ring_start = time.monotonic()
-                self.duck()
-                self._play_timer_finished()
-                # Reachy Mini: Timer finished animation
-                self._reachy_on_timer_finished()
+    def handle_timer_event(self, event_type, msg) -> None:
+        handle_timer_event(self, event_type, msg)
 
     def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
-        if isinstance(msg, VoiceAssistantEventResponse):
-            # Pipeline event
-            data: dict[str, str] = {}
-            for arg in msg.data:
-                data[arg.name] = arg.value
-            self.handle_voice_event(VoiceAssistantEventType(msg.event_type), data)
-
-        elif isinstance(msg, VoiceAssistantAnnounceRequest):
-            _LOGGER.debug("Announcing: %s", msg.text)
-            assert self.state.media_player_entity is not None
-
-            urls = []
-            if msg.preannounce_media_id:
-                urls.append(msg.preannounce_media_id)
-            urls.append(msg.media_id)
-
-            self.state.active_wake_words.add(self.state.stop_word.id)
-            self._set_stop_word_active(True)
-            self._continue_conversation = msg.start_conversation
-            self.duck()
-
-            yield from self.state.media_player_entity.play(urls, announcement=True, done_callback=self._tts_finished)
-
-        elif isinstance(msg, VoiceAssistantTimerEventResponse):
-            self.handle_timer_event(VoiceAssistantTimerEventType(msg.event_type), msg)
-
-        elif isinstance(msg, HomeAssistantStateResponse):
-            # Handle Home Assistant state changes for emotion mapping
-            self._handle_ha_state_change(msg)
-
-        elif isinstance(msg, DeviceInfoRequest):
-            _LOGGER.info("DeviceInfoRequest received, sending DeviceInfoResponse")
-            yield DeviceInfoResponse(
-                uses_password=False,
-                name=self.state.name,
-                friendly_name=self.state.name,
-                project_name="ha-china.Reachy Mini For Home Assistant",
-                project_version=__version__,
-                esphome_version=_AIOESPHOMEAPI_VERSION,
-                mac_address=self.state.mac_address,
-                manufacturer="ha-china",
-                model="Reachy Mini Home Assistant Voice",
-                voice_assistant_feature_flags=(
-                    VoiceAssistantFeature.VOICE_ASSISTANT
-                    | VoiceAssistantFeature.API_AUDIO
-                    | VoiceAssistantFeature.ANNOUNCE
-                    | VoiceAssistantFeature.START_CONVERSATION
-                    | VoiceAssistantFeature.TIMERS
-                ),
-            )
-
-        elif isinstance(
-            msg,
-            (
-                ListEntitiesRequest,
-                SubscribeHomeAssistantStatesRequest,
-                SubscribeStatesRequest,
-                MediaPlayerCommandRequest,
-                NumberCommandRequest,
-                SwitchCommandRequest,
-                SelectCommandRequest,
-                ButtonCommandRequest,
-                CameraImageRequest,
-            ),
-        ):
-            for entity in self.state.entities:
-                yield from entity.handle_message(msg)
-
-            if isinstance(msg, ListEntitiesRequest):
-                yield ListEntitiesDoneResponse()
-
-        elif isinstance(msg, VoiceAssistantConfigurationRequest):
-            available_wake_words = [
-                VoiceAssistantWakeWord(
-                    id=ww.id,
-                    wake_word=ww.wake_word,
-                    trained_languages=ww.trained_languages,
-                )
-                for ww in self.state.available_wake_words.values()
-            ]
-
-            for eww in msg.external_wake_words:
-                if eww.model_type != "micro":
-                    continue
-
-                available_wake_words.append(
-                    VoiceAssistantWakeWord(
-                        id=eww.id,
-                        wake_word=eww.wake_word,
-                        trained_languages=eww.trained_languages,
-                    )
-                )
-                self._external_wake_words[eww.id] = eww
-
-            yield VoiceAssistantConfigurationResponse(
-                available_wake_words=available_wake_words,
-                active_wake_words=[
-                    ww.id for ww in self.state.wake_words.values() if ww.id in self.state.active_wake_words
-                ],
-                max_active_wake_words=2,
-            )
-
-            self._load_optional_mappings()
-
-            _LOGGER.info("Connected to Home Assistant")
-
-            # Trigger HA connected callback (async)
-            if self._on_ha_connected_callback:
-                try:
-                    import asyncio
-
-                    loop = asyncio.get_running_loop()
-                    task = loop.create_task(self._on_ha_connected_callback())
-                    _ = task  # Prevent RUF006 warning
-                except Exception as e:
-                    _LOGGER.error("Error in HA connected callback: %s", e)
-
-        elif isinstance(msg, VoiceAssistantSetConfiguration):
-            # Change active wake words
-            active_wake_words: set[str] = set()
-
-            for wake_word_id in msg.active_wake_words:
-                if wake_word_id in self.state.wake_words:
-                    # Already loaded, just add to active set
-                    active_wake_words.add(wake_word_id)
-                    continue
-
-                model_info = self.state.available_wake_words.get(wake_word_id)
-                if not model_info:
-                    # Check external wake words (may require download)
-                    external_wake_word = self._external_wake_words.get(wake_word_id)
-                    if not external_wake_word:
-                        _LOGGER.warning("Wake word not found: %s", wake_word_id)
-                        continue
-
-                    model_info = self._download_external_wake_word(external_wake_word)
-                    if not model_info:
-                        continue
-
-                    self.state.available_wake_words[wake_word_id] = model_info
-
-                _LOGGER.debug("Loading wake word: %s", model_info.wake_word_path)
-                loaded_model = model_info.load()
-                # Set id attribute on the model for later identification
-                loaded_model.id = wake_word_id
-                self.state.wake_words[wake_word_id] = loaded_model
-                _LOGGER.info("Wake word loaded: %s", wake_word_id)
-                active_wake_words.add(wake_word_id)
-                # Don't break - load ALL requested wake words, not just the first one
-
-            self.state.active_wake_words = active_wake_words
-            _LOGGER.debug("Active wake words: %s", active_wake_words)
-
-            self.state.preferences.active_wake_words = list(active_wake_words)
-            self.state.save_preferences()
-            self.state.wake_words_changed = True
+        yield from dispatch_message(self, msg)
 
     @property
     def is_streaming_audio(self) -> bool:
@@ -517,25 +216,10 @@ class VoiceSatelliteProtocol(APIServer):
         self.send_messages([VoiceAssistantAudio(data=audio_chunk)])
 
     def _get_or_create_conversation_id(self) -> str:
-        """Get existing conversation_id or create a new one.
-
-        Reuses conversation_id if within timeout period, otherwise creates new one.
-        """
-        now = time.time()
-        if self._conversation_id is None or now - self._last_conversation_time > self._conversation_timeout:
-            # Create new conversation_id
-            import uuid
-
-            self._conversation_id = str(uuid.uuid4())
-            _LOGGER.debug("Created new conversation_id: %s", self._conversation_id)
-
-        self._last_conversation_time = now
-        return self._conversation_id
+        return get_or_create_conversation_id(self)
 
     def _clear_conversation(self) -> None:
-        """Clear conversation state when exiting conversation mode."""
-        self._conversation_id = None
-        self._continue_conversation = False
+        clear_conversation(self)
 
     def wakeup(self, wake_word: MicroWakeWord | OpenWakeWord) -> None:
         """Handle wake word detection - start voice pipeline."""
@@ -569,172 +253,48 @@ class VoiceSatelliteProtocol(APIServer):
     def _queue_voice_request_after_wakeup(
         self, *, wake_word_phrase: str | None = None, conversation_id: str | None = None
     ) -> None:
-        """Store the next HA voice request until the wake sound finishes."""
-        self._pending_voice_request = (wake_word_phrase, conversation_id)
+        queue_voice_request_after_wakeup(self, wake_word_phrase=wake_word_phrase, conversation_id=conversation_id)
 
     def _on_wakeup_sound_finished(self) -> None:
-        """Start microphone streaming after wakeup sound finishes."""
-        if self._pending_voice_request is None:
-            _LOGGER.debug("Wakeup sound finished with no pending voice request")
-            return
-
-        wake_word_phrase, conversation_id = self._pending_voice_request
-        self._pending_voice_request = None
-
-        request = VoiceAssistantRequest(start=True)
-        if wake_word_phrase:
-            request.wake_word_phrase = wake_word_phrase
-        if conversation_id:
-            request.conversation_id = conversation_id
-
-        self.send_messages([request])
-        self._is_streaming_audio = True
+        on_wakeup_sound_finished(self)
 
     def _play_wakeup_sound(self) -> None:
-        """Play wakeup sound and resume microphone streaming when it ends."""
-        self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
+        play_wakeup_sound(self)
 
     def on_authenticated(self) -> None:
-        """Replay current entity states after ESPHome authentication."""
-        for entity in self.state.entities:
-            try:
-                entity.update_state()
-            except Exception as e:
-                _LOGGER.debug("Failed to replay state for %s: %s", getattr(entity, "object_id", entity), e)
+        replay_entity_states(self)
 
     def stop(self) -> None:
-        """Stop current TTS playback (e.g., user said stop word)."""
-        self._pipeline_active = False
-        self._is_streaming_audio = False
-        self._continue_conversation = False
-        self._pending_voice_request = None
-        self.state.active_wake_words.discard(self.state.stop_word.id)
-        self._set_stop_word_active(False)
-        self.state.tts_player.stop()
-
-        if self._timer_finished:
-            self._timer_finished = False
-            self._timer_ring_start = None
-            self.unduck()
-            _LOGGER.debug("Stopping timer finished sound")
-        else:
-            _LOGGER.debug("TTS response stopped manually")
-            self._tts_url = None
-            self._tts_played = True
-            self._tts_finished()
+        stop_pipeline(self)
 
     def play_tts(self) -> None:
-        if (not self._tts_url) or self._tts_played:
-            return
-
-        self._tts_played = True
-        _LOGGER.debug("Playing TTS response: %s", self._tts_url)
-
-        self.state.active_wake_words.add(self.state.stop_word.id)
-        self._set_stop_word_active(True)
-        self.state.tts_player.play(self._tts_url, done_callback=self._tts_finished)
+        play_tts(self)
 
     def duck(self) -> None:
-        _LOGGER.debug("Ducking music")
-        self.state.music_player.duck()
-        # Pause Sendspin to prevent audio conflicts during voice interaction
-        self.state.music_player.pause_sendspin()
+        duck(self)
 
     def unduck(self) -> None:
-        _LOGGER.debug("Unducking music")
-        self.state.music_player.unduck()
-        # Resume Sendspin audio
-        self.state.music_player.resume_sendspin()
+        unduck(self)
 
     def _tts_finished(self) -> None:
-        """Called when TTS audio playback finishes.
-
-        Following reference project pattern: handle continue conversation here.
-        """
-        self._pipeline_active = False
-        self.state.active_wake_words.discard(self.state.stop_word.id)
-        self._set_stop_word_active(False)
-        self._run_motion_state("speaking_end", "on_speaking_end")
-        self.send_messages([VoiceAssistantAnnounceFinished()])
-
-        continuous_mode = self.state.preferences.continuous_conversation
-        should_continue = continuous_mode or self._continue_conversation
-
-        if should_continue:
-            _LOGGER.debug(
-                "Continuing conversation (our_switch=%s, ha_request=%s)", continuous_mode, self._continue_conversation
-            )
-
-            conv_id = self._get_or_create_conversation_id()
-            self._queue_voice_request_after_wakeup(conversation_id=conv_id)
-            self._pipeline_active = True
-            self._reachy_on_listening()
-            self._play_wakeup_sound()
-        else:
-            self._clear_conversation()
-            self.unduck()
-            self._is_streaming_audio = False
-            _LOGGER.debug("Conversation finished")
-
-            self._schedule_delayed_idle_return()
+        tts_finished(self)
 
     def _cancel_delayed_idle_return(self) -> None:
-        """Cancel any pending delayed transition to idle."""
-        if self._idle_return_timer is not None:
-            self._idle_return_timer.cancel()
-            self._idle_return_timer = None
+        cancel_delayed_idle_return(self)
 
     def _schedule_delayed_idle_return(self) -> None:
-        """Schedule delayed idle transition after conversation end."""
-        self._cancel_delayed_idle_return()
-
-        def _go_idle() -> None:
-            self._idle_return_timer = None
-            self._reachy_on_idle()
-
-        self._idle_return_timer = threading.Timer(IDLE_RETURN_DELAY_S, _go_idle)
-        self._idle_return_timer.daemon = True
-        self._idle_return_timer.start()
-        _LOGGER.debug("Scheduled idle transition in %.1fs", IDLE_RETURN_DELAY_S)
+        schedule_delayed_idle_return(self, IDLE_RETURN_DELAY_S)
 
     def _set_face_tracking_for_state(self, enabled: bool, context: str) -> None:
-        """Apply face tracking state consistently across conversation transitions."""
-        if self.camera_server is None:
-            return
-        try:
-            self.camera_server.set_face_tracking_enabled(enabled)
-            _LOGGER.debug("Face tracking %s during %s", "enabled" if enabled else "paused", context)
-        except Exception as e:
-            _LOGGER.debug("Failed to update face tracking during %s: %s", context, e)
+        from .motion_bridge import set_face_tracking_for_state
+
+        set_face_tracking_for_state(self, enabled, context)
 
     def _enter_motion_state(self, context: str, callback_name: str, *, face_tracking: bool | None = None) -> None:
-        """Apply common transition behavior for listening/thinking/speaking/idle."""
-        self._cancel_delayed_idle_return()
-        if face_tracking is not None:
-            self._set_face_tracking_for_state(face_tracking, context)
-        self._run_motion_state(context, callback_name)
+        enter_motion_state(self, context, callback_name, face_tracking=face_tracking)
 
     def _run_motion_state(self, context: str, callback_name: str) -> None:
-        """Invoke a motion state callback when motion is available."""
-        if not self.state.motion_enabled:
-            if context == "speaking":
-                _LOGGER.warning("Motion disabled, skipping speaking animation")
-            return
-
-        if context in {"thinking", "idle"} and not self.state.reachy_mini:
-            return
-
-        motion = self.state.motion
-        if motion is None:
-            if context == "speaking":
-                _LOGGER.warning("No motion controller, skipping speaking animation")
-            return
-
-        try:
-            _LOGGER.debug("Reachy Mini: %s animation", context.capitalize())
-            getattr(motion, callback_name)()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        run_motion_state(self, context, callback_name)
 
     def _set_stop_word_active(self, active: bool) -> None:
         """Toggle stop word detector when model supports runtime activation."""
@@ -744,30 +304,7 @@ class VoiceSatelliteProtocol(APIServer):
             pass
 
     def _play_timer_finished(self) -> None:
-        if not self._timer_finished:
-            self._timer_ring_start = None
-            self.unduck()
-            return
-
-        if self._timer_ring_start is not None:
-            elapsed = time.monotonic() - self._timer_ring_start
-            if elapsed >= self.state.timer_max_ring_seconds:
-                _LOGGER.info(
-                    "Timer auto-stopped after %.0f seconds (max=%.0f)",
-                    elapsed,
-                    self.state.timer_max_ring_seconds,
-                )
-                self._timer_finished = False
-                self._timer_ring_start = None
-                self.state.active_wake_words.discard(self.state.stop_word.id)
-                self._set_stop_word_active(False)
-                self.unduck()
-                return
-
-        self.state.tts_player.play(
-            self.state.timer_finished_sound,
-            done_callback=lambda: call_all(lambda: time.sleep(1.0), self._play_timer_finished),
-        )
+        play_timer_finished(self)
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
@@ -784,318 +321,55 @@ class VoiceSatelliteProtocol(APIServer):
         self._timer_ring_start = None
         self._set_stop_word_active(False)
 
-        # Trigger HA disconnected callback
-        if self._on_ha_disconnected_callback:
-            try:
-                self._on_ha_disconnected_callback()
-            except Exception as e:
-                _LOGGER.error("Error in HA disconnected callback: %s", e)
+        run_ha_disconnected_callback(self)
 
     def _download_external_wake_word(
         self, external_wake_word: VoiceAssistantExternalWakeWord
     ) -> AvailableWakeWord | None:
-        eww_dir = self.state.download_dir / "external_wake_words"
-        eww_dir.mkdir(parents=True, exist_ok=True)
-
-        config_path = eww_dir / f"{external_wake_word.id}.json"
-        should_download_config = not config_path.exists()
-
-        # Check if we need to download the model file
-        model_path = eww_dir / f"{external_wake_word.id}.tflite"
-        should_download_model = True
-
-        if model_path.exists():
-            model_size = model_path.stat().st_size
-            if model_size == external_wake_word.model_size:
-                with open(model_path, "rb") as model_file:
-                    model_hash = hashlib.sha256(model_file.read()).hexdigest()
-
-                if model_hash == external_wake_word.model_hash:
-                    should_download_model = False
-                    _LOGGER.debug(
-                        "Model size and hash match for %s. Skipping download.",
-                        external_wake_word.id,
-                    )
-
-        if should_download_config or should_download_model:
-            # Download config
-            _LOGGER.debug("Downloading %s to %s", external_wake_word.url, config_path)
-            with urlopen(external_wake_word.url) as request:
-                if request.status != 200:
-                    _LOGGER.warning(
-                        "Failed to download: %s, status=%s",
-                        external_wake_word.url,
-                        request.status,
-                    )
-                    return None
-
-                with open(config_path, "wb") as model_file:
-                    shutil.copyfileobj(request, model_file)
-
-        if should_download_model:
-            # Download model file
-            parsed_url = urlparse(external_wake_word.url)
-            parsed_url = parsed_url._replace(path=posixpath.join(posixpath.dirname(parsed_url.path), model_path.name))
-            model_url = urlunparse(parsed_url)
-
-            _LOGGER.debug("Downloading %s to %s", model_url, model_path)
-            with urlopen(model_url) as request:
-                if request.status != 200:
-                    _LOGGER.warning("Failed to download: %s, status=%s", model_url, request.status)
-                    return None
-
-                with open(model_path, "wb") as model_file:
-                    shutil.copyfileobj(request, model_file)
-
-        return AvailableWakeWord(
-            id=external_wake_word.id,
-            type=WakeWordType.MICRO_WAKE_WORD,
-            wake_word=external_wake_word.wake_word,
-            trained_languages=external_wake_word.trained_languages,
-            wake_word_path=config_path,
-        )
+        return download_external_wake_word(self, external_wake_word)
 
     # -------------------------------------------------------------------------
     # Reachy Mini Motion Control
     # -------------------------------------------------------------------------
 
     def _turn_to_sound_source(self) -> None:
-        """Turn robot head toward sound source using DOA at wakeup.
-
-        This is called once at wakeup to orient the robot toward the speaker.
-        Face tracking will take over after the initial turn.
-
-        DOA angle convention (from SDK):
-        - 0 radians = left (Y+ direction in head frame)
-        - π/2 radians = front (X+ direction in head frame)
-        - π radians = right (Y- direction in head frame)
-
-        The SDK uses: p_head = [sin(doa), cos(doa), 0]
-        So we need to convert this to yaw angle.
-
-        Note: We don't check speech_detected because by the time wake word
-        detection completes, the user may have stopped speaking.
-        """
-        if not self.state.motion_enabled:
-            _LOGGER.info("DOA turn-to-sound: motion disabled")
-            return
-
-        try:
-            # Get DOA from reachy_controller (only read once)
-            doa = self.reachy_controller.get_doa_angle()
-            if doa is None:
-                _LOGGER.info("DOA not available, skipping turn-to-sound")
-                return
-
-            angle_rad, speech_detected = doa
-            _LOGGER.debug(
-                "DOA raw: angle=%.3f rad (%.1f°), speech=%s", angle_rad, math.degrees(angle_rad), speech_detected
-            )
-
-            # Convert DOA to direction vector in head frame
-            # SDK convention: p_head = [sin(doa), cos(doa), 0]
-            # where X+ is front, Y+ is left
-            dir_x = math.sin(angle_rad)  # Front component
-            dir_y = math.cos(angle_rad)  # Left component
-
-            # Calculate yaw angle from direction vector
-            # DOA convention: 0 = left, π/2 = front, π = right
-            # Robot yaw: positive = turn right, negative = turn left
-            # Invert the sign: left(0) → +90° (turn right toward left sound)
-            #                  right(π) → -90° (turn left toward right sound)
-            yaw_rad = -(angle_rad - math.pi / 2)
-            yaw_deg = math.degrees(yaw_rad)
-
-            _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", dir_x, dir_y, yaw_deg)
-
-            # Only turn if angle is significant (> 10°) to avoid noise
-            DOA_THRESHOLD_DEG = 10.0
-            if abs(yaw_deg) < DOA_THRESHOLD_DEG:
-                _LOGGER.debug("DOA angle %.1f° below threshold (%.1f°), skipping turn", yaw_deg, DOA_THRESHOLD_DEG)
-                return
-
-            # Apply 80% of DOA angle as conservative strategy
-            # This accounts for potential DOA inaccuracy
-            DOA_SCALE = 0.8
-            target_yaw_deg = yaw_deg * DOA_SCALE
-
-            _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°", yaw_deg, target_yaw_deg)
-
-            # Use MovementManager to turn (non-blocking)
-            if self.state.motion and self.state.motion.movement_manager:
-                self.state.motion.movement_manager.turn_to_angle(
-                    target_yaw_deg,
-                    duration=0.5,  # Quick turn
-                )
-        except Exception as e:
-            _LOGGER.error("Error in turn-to-sound: %s", e)
+        turn_to_sound_source(self)
 
     def _reachy_on_listening(self) -> None:
-        """Called when listening for speech (HA state: Listening)."""
-        # Enable high-frequency face tracking during listening
-        self._set_conversation_mode(True)
-        self._enter_motion_state("listening", "on_listening", face_tracking=True)
+        reachy_on_listening(self)
 
     def _reachy_on_thinking(self) -> None:
-        """Called when processing speech (HA state: Processing)."""
-        self._enter_motion_state("thinking", "on_thinking", face_tracking=True)
+        reachy_on_thinking(self)
 
     def _reachy_on_speaking(self) -> None:
-        """Called when TTS is playing (HA state: Responding)."""
-        self._enter_motion_state("speaking", "on_speaking_start", face_tracking=False)
+        reachy_on_speaking(self)
 
     def _reachy_on_idle(self) -> None:
-        """Called when returning to idle state (HA state: Idle)."""
-        self._set_conversation_mode(False)
-        self._enter_motion_state("idle", "on_idle", face_tracking=True)
+        reachy_on_idle(self)
 
     def _set_conversation_mode(self, in_conversation: bool) -> None:
-        """Set conversation mode for adaptive face tracking.
-
-        When in conversation, face tracking runs at high frequency.
-        When idle, face tracking uses adaptive rate to save CPU.
-        """
-        if self.camera_server is not None:
-            try:
-                self.camera_server.set_conversation_mode(in_conversation)
-            except Exception as e:
-                _LOGGER.debug("Failed to set conversation mode: %s", e)
+        set_conversation_mode(self, in_conversation)
 
     def _reachy_on_timer_finished(self) -> None:
-        """Called when a timer finishes."""
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Timer finished animation")
-            if self.state.motion:
-                self.state.motion.on_timer_finished()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        reachy_on_timer_finished(self)
 
     def _play_emotion(self, emotion_name: str) -> None:
-        """Play an emotion/expression from the emotions library.
+        play_emotion(self, emotion_name)
 
-        Uses the MovementManager's queue_emotion_move() method which samples
-        poses via RecordedMoves.evaluate(t) in the control loop. This avoids
-        "a move is currently running" warnings from the SDK daemon.
-
-        Args:
-            emotion_name: Name of the emotion (e.g., "happy1", "sad1", etc.)
-        """
-        try:
-            # Use MovementManager to play emotion (non-blocking, integrated with control loop)
-            if self.state.motion and self.state.motion.movement_manager:
-                movement_manager = self.state.motion.movement_manager
-                if movement_manager.queue_emotion_move(emotion_name):
-                    _LOGGER.info(f"Queued emotion move: {emotion_name}")
-                else:
-                    _LOGGER.warning(f"Failed to queue emotion: {emotion_name}")
-            else:
-                _LOGGER.warning("Cannot play emotion: no movement manager available")
-
-        except Exception as e:
-            _LOGGER.error(f"Error playing emotion {emotion_name}: {e}")
-
-    def _trigger_wake_word(self) -> None:
-        """Trigger wake word detection (simulate hearing the wake word).
-
-        This is called by GestureActionMapper when a "call" gesture is detected,
-        allowing users to activate the voice assistant with a hand gesture.
-        """
-        try:
-            if self._pipeline_active:
-                _LOGGER.debug("Ignoring gesture wake trigger while pipeline is active")
-                return
-            # The wake word detected event triggers the voice pipeline
-            _LOGGER.info("Gesture triggered wake word - starting voice assistant")
-            # Set the wake word event to simulate detection
-            self.state.last_wake_word = "gesture"
-            # Trigger the run_voice_assistant logic
-            self.start_voice_assistant()
-        except Exception as e:
-            _LOGGER.error(f"Error triggering wake word from gesture: {e}")
-
-    def _stop_current_tts(self) -> None:
-        """Stop current TTS playback.
-
-        Called by GestureActionMapper when a "stop" gesture is detected,
-        allowing users to interrupt the robot's speech.
-        """
-        try:
-            _LOGGER.info("Gesture triggered TTS stop")
-            if self.state.tts_player:
-                self.state.tts_player.stop()
-            if self.state.music_player:
-                self.state.music_player.stop()
-        except Exception as e:
-            _LOGGER.error(f"Error stopping TTS from gesture: {e}")
-
-    def _send_gesture_event_to_ha(self, event_name: str) -> None:
-        """Send a gesture event to Home Assistant.
-
-        This allows HA automations to react to gestures like "one", "two", etc.
-
-        Args:
-            event_name: Name of the gesture event (e.g., "gesture_one")
-        """
-        try:
-            _LOGGER.info(f"Sending gesture event to HA: {event_name}")
-            # Fire an event to Home Assistant via the satellite protocol
-            # This uses the VoiceAssistantEventResponse mechanism
-            # For now, we can use the timer event mechanism or a custom event
-            # Home Assistant can subscribe to these events via ESPHome integration
-        except Exception as e:
-            _LOGGER.error(f"Error sending gesture event to HA: {e}")
+    def _queue_emotion_move(self, emotion_name: str) -> None:
+        queue_emotion_move(self, emotion_name)
 
     def _handle_ha_state_change(self, msg: HomeAssistantStateResponse) -> None:
-        """Handle Home Assistant state change via ESPHome bidirectional communication.
+        from .entity_bridge import handle_ha_state_change
 
-        This method is called when Home Assistant sends state updates through
-        the ESPHome protocol. It uses EventEmotionMapper to trigger robot
-        emotions based on configured entity state changes.
-
-        Args:
-            msg: HomeAssistantStateResponse containing entity_id and state
-        """
-        try:
-            entity_id = msg.entity_id
-            new_state = msg.state
-
-            # Track old state for proper event handling
-            old_state = self._ha_entity_states.get(entity_id, "unknown")
-            self._ha_entity_states[entity_id] = new_state
-
-            _LOGGER.debug("HA state change: %s: %s -> %s", entity_id, old_state, new_state)
-
-            # Let EventEmotionMapper handle the state change
-            emotion = self._event_emotion_mapper.handle_state_change(entity_id, old_state, new_state)
-            if emotion:
-                _LOGGER.info("HA event triggered emotion: %s from %s", emotion, entity_id)
-
-        except Exception as e:
-            _LOGGER.error("Error handling HA state change: %s", e)
-
-    def handle_detected_gesture(self, gesture_name: str, confidence: float) -> bool:
-        """Handle a detected gesture by triggering mapped actions.
-
-        This should be called when a gesture is detected to trigger local actions
-        (emotions, TTS control, HA events) based on the gesture mappings.
-
-        Args:
-            gesture_name: Name of the detected gesture
-            confidence: Detection confidence (0-1)
-
-        Returns:
-            True if an action was triggered, False otherwise
-        """
-        return self._gesture_action_mapper.handle_gesture(gesture_name, confidence)
+        handle_ha_state_change(self, msg)
 
     def suspend(self) -> None:
-        """Suspend the satellite for sleep mode.
+        """Suspend the satellite runtime resources.
 
         Stops any current playback and releases resources.
         """
-        _LOGGER.info("Suspending VoiceSatellite for sleep...")
+        _LOGGER.info("Suspending VoiceSatellite resources...")
         self._cancel_delayed_idle_return()
         self._pipeline_active = False
         self._pending_voice_request = None
@@ -1109,7 +383,7 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.music_player.stop()
 
         # Keep configured wake words intact.
-        # Audio processing is paused by sleep/mute lifecycle, so clearing wake words here
+        # Audio processing is paused by runtime resource suspension, so clearing wake words here
         # can cause Home Assistant UI to temporarily show an empty wake word selection.
 
         # Reset conversation state
@@ -1121,8 +395,8 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("VoiceSatellite suspended")
 
     def resume(self) -> None:
-        """Resume the satellite after sleep."""
-        _LOGGER.info("Resuming VoiceSatellite from sleep...")
+        """Resume the satellite runtime resources."""
+        _LOGGER.info("Resuming VoiceSatellite resources...")
 
         # Ensure wake word processing context is refreshed after resume.
         self.state.wake_words_changed = True

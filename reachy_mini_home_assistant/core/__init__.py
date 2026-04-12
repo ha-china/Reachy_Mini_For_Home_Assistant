@@ -1,10 +1,9 @@
 """Core module for Reachy Mini HA Voice.
 
 This module contains fundamental components:
-- DaemonStateMonitor: Monitors robot daemon state including sleep detection
-- SleepAwareService: Base class for services that respond to sleep/wake
-- ServiceManager: Manages multiple SleepAwareService instances
-- SleepManager: Coordinates sleep/wake behavior across the application
+- DaemonStateMonitor: Monitors robot daemon state
+- SleepAwareService: Base class for services that support resource suspend/resume
+- ServiceManager: Manages multiple suspend-aware services
 - Config: Centralized configuration management
 - Exceptions: Custom exception classes
 - HealthMonitor: Service health monitoring
@@ -40,7 +39,6 @@ from .memory_monitor import (
 )
 from .robot_state_monitor import RobotStateMonitor
 from .service_base import RobustOperationMixin, ServiceManager, ServiceState, SleepAwareService
-from .sleep_manager import SleepManager
 from .system_diagnostics import get_system_diagnostics
 from .util import call_all, get_mac
 
@@ -72,7 +70,6 @@ __all__ = [
     "ServiceState",
     "ServiceSuspendedError",
     "SleepAwareService",
-    "SleepManager",
     "call_all",
     "get_health_monitor",
     # Utilities

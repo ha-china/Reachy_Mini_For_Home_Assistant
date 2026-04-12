@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.0.5",
+    "date": "2026-04-12",
+    "changes": [
+      "Build: Bump package version to 1.0.5",
+      "Change: Remove app-managed robot sleep/wake handling because the current Reachy Mini SDK no longer allows mini apps to stay active while the robot enters sleep",
+      "Change: Limit resource suspend/resume to ESPHome-driven runtime toggles such as Home Assistant disconnect, mute, camera disable, and service recovery",
+      "Change: Align pyproject.toml runtime constraints with the current Reachy Mini reference SDK package (reachy-mini>=1.6.3, websockets>=12,<16, Python baseline >=3.10, and uv gstreamer metadata)",
+      "Remove: Delete SleepManager integration and app-side sleep/wake callback flow from the voice assistant runtime",
+      "Remove: Delete Home Assistant sleep control entities and internal robot sleep state tracking from the mini app"
+    ]
+  },
+  {
     "version": "1.0.4",
     "date": "2026-03-19",
     "changes": [

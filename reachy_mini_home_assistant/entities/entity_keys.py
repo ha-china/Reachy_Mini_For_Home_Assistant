@@ -25,9 +25,8 @@ ENTITY_KEYS: dict[str, int] = {
     "gesture_detection_enabled": 107,
     "face_confidence_threshold": 108,
     "camera_disabled": 109,
-    # Phase 2: Sleep/wake controls (200-299)
+    # Phase 2: Runtime controls (200-299)
     "motor_mode": 201,
-    "sleep_control": 202,
     # Phase 3: Pose control (300-399)
     "head_x": 300,
     "head_y": 301,
@@ -83,8 +82,7 @@ ENTITY_KEYS: dict[str, int] = {
     "sys_uptime": 1806,
     "sys_process_cpu": 1807,
     "sys_process_memory": 1808,
-    # Phase 25: Sleep state (1900-1999)
-    "sleep_mode": 1900,
+    # Phase 25: Runtime service state (1900-1999)
     "services_suspended": 1901,
     # Phase 26: DOA tracking control (2000+)
     "doa_tracking_enabled": 2000,

@@ -112,6 +112,7 @@ class SendspinDiscovery:
         self._zeroconf: AsyncZeroconf | None = None
         self._browser: AsyncServiceBrowser | None = None
         self._discovery_task: asyncio.Task | None = None
+        self._started_event: asyncio.Event | None = None
         self._running = False
         self._known_servers: dict[str, str] = {}
 
@@ -128,8 +129,10 @@ class SendspinDiscovery:
 
         _LOGGER.info("Starting Sendspin server discovery...")
         self._loop = asyncio.get_running_loop()
+        self._started_event = asyncio.Event()
         self._running = True
         self._discovery_task = asyncio.create_task(self._discover_loop())
+        await self._started_event.wait()
 
     async def _discover_loop(self) -> None:
         """Background task to discover Sendspin servers."""
@@ -145,6 +148,8 @@ class SendspinDiscovery:
             )
 
             _LOGGER.info("Sendspin discovery started, waiting for servers...")
+            if self._started_event is not None:
+                self._started_event.set()
 
             # Keep running until stopped
             while self._running:
@@ -154,6 +159,8 @@ class SendspinDiscovery:
             _LOGGER.debug("Sendspin discovery cancelled")
         except Exception as e:
             _LOGGER.error("Sendspin discovery error: %s", e)
+            if self._started_event is not None:
+                self._started_event.set()
         finally:
             await self._cleanup()
 
@@ -167,6 +174,7 @@ class SendspinDiscovery:
             self._zeroconf = None
         self._known_servers.clear()
         self._running = False
+        self._started_event = None
 
     async def stop(self) -> None:
         """Stop Sendspin discovery."""

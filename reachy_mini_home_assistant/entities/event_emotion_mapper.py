@@ -1,7 +1,8 @@
-"""Home Assistant event listener and emotion mapping for Reachy Mini.
+"""Built-in Home Assistant reactions and behavior orchestration for Reachy Mini.
 
-This module enables the robot to react emotionally to Home Assistant events,
-creating a more engaging and context-aware experience.
+This module now mirrors the reference-project separation more closely:
+- `EventEmotionMapper` resolves HA state changes into normalized reactions
+- `BuiltinBehaviorController` executes the default zero-config behavior layer
 """
 
 import json
@@ -13,7 +14,13 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from ..animations.animation_config import get_animation_config_section
+
 logger = logging.getLogger(__name__)
+
+_MODULE_DIR = Path(__file__).parent
+_PACKAGE_DIR = _MODULE_DIR.parent
+_UNIFIED_BEHAVIORS_FILE = _PACKAGE_DIR / "animations" / "conversation_animations.json"
 
 
 class EventSource(Enum):
@@ -49,6 +56,15 @@ class EventTrigger:
     new_state: str
     timestamp: float
     emotion: str | None = None
+
+
+SKILL_PLAY_EMOTION = "play_emotion"
+SKILL_TIMER_ALERT = "timer_alert"
+SKILL_ERROR_REACT = "error_react"
+VOICE_PHASE_LISTENING = "listening"
+VOICE_PHASE_THINKING = "thinking"
+VOICE_PHASE_SPEAKING = "speaking"
+VOICE_PHASE_IDLE = "idle"
 
 
 # Default emotion mappings based on common HA entities
@@ -100,7 +116,7 @@ DEFAULT_EVENT_EMOTION_MAP: dict[str, list[EventEmotionMapping]] = {
 
 
 class EventEmotionMapper:
-    """Maps Home Assistant events to robot emotions.
+    """Maps Home Assistant state changes to normalized emotion reactions.
 
     This class handles:
     - Event to emotion mapping based on configuration
@@ -109,10 +125,9 @@ class EventEmotionMapper:
 
     Usage:
         mapper = EventEmotionMapper()
-        mapper.set_emotion_callback(play_emotion)
 
         # When HA state changes:
-        mapper.handle_state_change("binary_sensor.front_door", "off", "on")
+        emotion = mapper.handle_state_change("binary_sensor.front_door", "off", "on")
     """
 
     def __init__(
@@ -128,7 +143,6 @@ class EventEmotionMapper:
         """
         self._mappings: dict[str, list[EventEmotionMapping]] = {}
         self._last_trigger_times: dict[str, float] = {}
-        self._emotion_callback: Callable[[str], None] | None = None
         self._trigger_history: list[EventTrigger] = []
         self._max_history = 100
         self._triggers_this_minute = 0
@@ -144,13 +158,6 @@ class EventEmotionMapper:
 
         # Time function (can be overridden for testing)
         self._now = time.monotonic
-
-    def set_emotion_callback(self, callback: Callable[[str], None]) -> None:
-        """Set callback for emotion triggers.
-
-        The callback receives the emotion name to play.
-        """
-        self._emotion_callback = callback
 
     def add_mapping(self, mapping: EventEmotionMapping) -> None:
         """Add or update an event mapping."""
@@ -231,14 +238,6 @@ class EventEmotionMapper:
         )
         self._record_trigger(trigger)
 
-        # Execute callback
-        if self._emotion_callback and mapping.emotion:
-            logger.info("Event %s triggered emotion: %s", entity_id, mapping.emotion)
-            try:
-                self._emotion_callback(mapping.emotion)
-            except Exception as e:
-                logger.error("Error executing emotion callback: %s", e)
-
         return mapping.emotion
 
     def _check_rate_limit(self, now: float) -> bool:
@@ -279,8 +278,7 @@ class EventEmotionMapper:
             return False
 
         try:
-            with open(json_path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = get_animation_config_section(json_path, "ha_event_behaviors") or {}
 
             settings = data.get("settings", {})
             self._max_triggers_per_minute = settings.get("max_triggers_per_minute", self._max_triggers_per_minute)
@@ -316,9 +314,7 @@ def load_event_mappings(json_path: Path | None = None) -> dict[str, list[EventEm
         Dictionary of entity_id to list of EventEmotionMapping
     """
     if json_path is None:
-        # Default path relative to this module
-        module_dir = Path(__file__).parent.parent
-        json_path = module_dir / "animations" / "event_mappings.json"
+        json_path = _UNIFIED_BEHAVIORS_FILE
 
     if json_path.exists():
         mapper = EventEmotionMapper()
@@ -326,3 +322,82 @@ def load_event_mappings(json_path: Path | None = None) -> dict[str, list[EventEm
             return mapper.get_mappings()
 
     return DEFAULT_EVENT_EMOTION_MAP.copy()
+
+
+class BuiltinBehaviorController:
+    """Execute zero-config built-in reactions.
+
+    This follows the reference-project separation of concerns:
+    protocol layer forwards normalized events here, and this controller
+    decides how to execute the default robot behavior.
+    """
+
+    def __init__(
+        self,
+        *,
+        event_mapper: EventEmotionMapper,
+        cancel_delayed_idle_return: Callable[[], None],
+        set_conversation_mode: Callable[[bool], None],
+        enter_motion_state: Callable[[str, str, bool | None], None],
+        run_motion_state: Callable[[str, str], None],
+        queue_emotion_move: Callable[[str], None],
+    ) -> None:
+        self._event_mapper = event_mapper
+        self._cancel_delayed_idle_return = cancel_delayed_idle_return
+        self._set_conversation_mode = set_conversation_mode
+        self._enter_motion_state = enter_motion_state
+        self._run_motion_state = run_motion_state
+        self._queue_emotion_move = queue_emotion_move
+
+    def handle_voice_phase(self, phase: str) -> None:
+        """Run the built-in robot behavior for a voice phase."""
+        if phase == VOICE_PHASE_LISTENING:
+            self._set_conversation_mode(True)
+            self._enter_motion_state(phase, "on_listening", face_tracking=True)
+            return
+
+        if phase == VOICE_PHASE_THINKING:
+            self._enter_motion_state(phase, "on_thinking", face_tracking=True)
+            return
+
+        if phase == VOICE_PHASE_SPEAKING:
+            self._enter_motion_state(phase, "on_speaking_start", face_tracking=False)
+            return
+
+        if phase == VOICE_PHASE_IDLE:
+            self._set_conversation_mode(False)
+            self._enter_motion_state(phase, "on_idle", face_tracking=True)
+            return
+
+        logger.debug("Unhandled built-in voice phase: %s", phase)
+
+    def execute_skill(
+        self,
+        skill: str,
+        *,
+        emotion_name: str | None = None,
+        event_name: str | None = None,
+        context: str | None = None,
+    ) -> None:
+        """Execute one normalized built-in skill."""
+        if skill == SKILL_PLAY_EMOTION:
+            if emotion_name:
+                self._queue_emotion_move(emotion_name)
+            return
+
+        if skill == SKILL_TIMER_ALERT:
+            self._run_motion_state(context or skill, "on_timer_finished")
+            return
+
+        if skill == SKILL_ERROR_REACT:
+            self._run_motion_state(context or skill, "on_error")
+            return
+
+        logger.debug("Unhandled built-in skill: %s", skill)
+
+    def handle_ha_state_change(self, entity_id: str, old_state: str, new_state: str) -> str | None:
+        """Resolve HA state changes into built-in reactions."""
+        emotion = self._event_mapper.handle_state_change(entity_id, old_state, new_state)
+        if emotion:
+            self.execute_skill(SKILL_PLAY_EMOTION, emotion_name=emotion, context=f"ha:{entity_id}")
+        return emotion

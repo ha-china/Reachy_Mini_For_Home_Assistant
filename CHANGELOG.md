@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.5] - 2026-04-12
+
+### Changed
+- Remove app-managed robot sleep/wake handling because current Reachy Mini SDK no longer supports mini apps remaining active while the robot enters sleep
+- Keep resource suspend/resume limited to ESPHome-driven runtime toggles such as Home Assistant disconnect, mute, camera disable, and service recovery
+- Align `pyproject.toml` runtime constraints with the current Reachy Mini reference SDK package (`reachy-mini>=1.6.3`, `websockets>=12,<16`, Python baseline `>=3.10`, and uv gstreamer metadata)
+
+### Removed
+- Remove `SleepManager` integration and app-side sleep/wake callback flow from the voice assistant runtime
+- Remove Home Assistant sleep control entities and internal robot sleep state tracking from the mini app
+
 ## [1.0.4] - 2026-03-19
 
 ### Fixed

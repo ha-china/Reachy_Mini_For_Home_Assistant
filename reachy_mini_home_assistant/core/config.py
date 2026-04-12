@@ -101,7 +101,7 @@ class CameraConfig:
     idle_threshold: float = 30.0  # Seconds without face -> idle
 
     # Gesture detection runtime tuning
-    gesture_detection_interval: int = 2  # Run every other frame for balanced responsiveness
+    gesture_detection_interval: int = 1  # Run every frame for maximum gesture responsiveness
 
 
 @dataclass
@@ -178,22 +178,6 @@ class DOAConfig:
 
 
 @dataclass
-class SleepConfig:
-    """Configuration for sleep/wake management."""
-
-    # Resume delay after wake
-    resume_delay: float = 30.0  # seconds
-
-    # Services to keep running during sleep
-    keep_alive_services: list = field(
-        default_factory=lambda: [
-            "esphome_server",
-            "entity_registry",
-        ]
-    )
-
-
-@dataclass
 class ShutdownConfig:
     """Configuration for shutdown behavior."""
 
@@ -201,7 +185,6 @@ class ShutdownConfig:
     camera_stop_timeout: float = 3.0  # seconds
     server_close_timeout: float = 3.0  # seconds
     sendspin_stop_timeout: float = 3.0  # seconds
-    sleep_manager_stop_timeout: float = 3.0  # seconds
 
 
 @dataclass
@@ -235,7 +218,6 @@ class Config:
     motion: MotionConfig = MotionConfig()
     audio: AudioConfig = AudioConfig()
     doa: DOAConfig = DOAConfig()
-    sleep: SleepConfig = SleepConfig()
     robot_state: RobotStateConfig = RobotStateConfig()
     shutdown: ShutdownConfig = ShutdownConfig()
     api: APIConfig = APIConfig()
@@ -319,9 +301,6 @@ class Config:
         cls.audio.idle_sleep_active = _env_float("REACHY_AUDIO_IDLE_SLEEP_ACTIVE", cls.audio.idle_sleep_active)
         cls.audio.idle_sleep_sleeping = _env_float("REACHY_AUDIO_IDLE_SLEEP_SLEEPING", cls.audio.idle_sleep_sleeping)
 
-        # Sleep
-        cls.sleep.resume_delay = _env_float("REACHY_SLEEP_RESUME_DELAY", cls.sleep.resume_delay)
-
         # Robot state
         cls.robot_state.check_interval_active = _env_float(
             "REACHY_ROBOT_STATE_CHECK_INTERVAL_ACTIVE", cls.robot_state.check_interval_active
@@ -367,11 +346,6 @@ class Config:
             for key, value in data["doa"].items():
                 if hasattr(cls.doa, key):
                     setattr(cls.doa, key, value)
-
-        if "sleep" in data:
-            for key, value in data["sleep"].items():
-                if hasattr(cls.sleep, key):
-                    setattr(cls.sleep, key, value)
 
         if "robot_state" in data:
             for key, value in data["robot_state"].items():
@@ -448,10 +422,6 @@ class Config:
                 "turn_duration": cls.doa.turn_duration,
                 "max_turn_angle_deg": cls.doa.max_turn_angle_deg,
                 "num_zones": cls.doa.num_zones,
-            },
-            "sleep": {
-                "resume_delay": cls.sleep.resume_delay,
-                "keep_alive_services": cls.sleep.keep_alive_services,
             },
             "robot_state": {
                 "check_interval_active": cls.robot_state.check_interval_active,

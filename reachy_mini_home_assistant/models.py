@@ -101,8 +101,6 @@ class ServerState:
     timer_max_ring_seconds: float = 900.0
     _entities_initialized: bool = False
 
-    # Sleep state (updated by SleepManager) - thread-safe via properties
-    _is_sleeping: bool = False
     _services_suspended: bool = False
 
     # Mute state (controlled from Home Assistant) - thread-safe via properties
@@ -110,10 +108,6 @@ class ServerState:
 
     # Camera state (controlled from Home Assistant) - thread-safe via properties
     _camera_enabled: bool = True
-
-    # Callbacks for sleep/wake from HA buttons (set by VoiceAssistant)
-    on_ha_sleep: object | None = None  # Callable[[], None]
-    on_ha_wake: object | None = None  # Callable[[], None]
 
     # Thread safety
     _state_lock: "threading.Lock | None" = None
@@ -123,23 +117,6 @@ class ServerState:
         import threading
 
         object.__setattr__(self, "_state_lock", threading.Lock())
-
-    @property
-    def is_sleeping(self) -> bool:
-        """Thread-safe getter for is_sleeping."""
-        if self._state_lock is None:
-            return self._is_sleeping
-        with self._state_lock:
-            return self._is_sleeping
-
-    @is_sleeping.setter
-    def is_sleeping(self, value: bool) -> None:
-        """Thread-safe setter for is_sleeping."""
-        if self._state_lock is None:
-            object.__setattr__(self, "_is_sleeping", value)
-        else:
-            with self._state_lock:
-                object.__setattr__(self, "_is_sleeping", value)
 
     @property
     def services_suspended(self) -> bool:

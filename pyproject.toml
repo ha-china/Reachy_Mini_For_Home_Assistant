@@ -1,17 +1,17 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_home_assistant"
-version = "1.0.4"
+version = "1.0.5"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK with gstreamer support (for camera streaming)
-    "reachy-mini>=1.6.0",
+    "reachy-mini>=1.6.3",
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
@@ -28,6 +28,7 @@ dependencies = [
     # ESPHome protocol (communication with Home Assistant)
     "aioesphomeapi>=43.10.1",
     "zeroconf<1",
+    "websockets>=12,<16",
 
     # Motion control (head movements)
     "scipy>=1.15.3,<2.0.0",
@@ -86,6 +87,11 @@ exclude = [
 dev = [
     "ruff==0.15.4",
     "mypy==1.19.1",
+]
+
+[tool.uv]
+dependency-metadata = [
+    { name = "gstreamer-libs", version = "1.28.1", requires-dist = ["gstreamer-msvc-runtime; sys_platform == 'win32'", "setuptools"] },
 ]
 
 [tool.ruff.lint]

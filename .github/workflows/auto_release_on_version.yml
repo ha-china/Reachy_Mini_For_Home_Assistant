@@ -31,7 +31,7 @@ jobs:
           data = tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))
           version = data['project']['version'].strip()
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-              f.write(f"version={version}\\n")
+              f.write(f"version={version}\n")
           print(f"Detected version: {version}")
           PY2
 
@@ -73,7 +73,7 @@ jobs:
               for change in entry.get('changes', []):
                   lines.append(f"- {change}")
 
-          Path('release_notes.md').write_text('\\n'.join(lines) + '\\n', encoding='utf-8')
+          Path('release_notes.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY2
 
       - name: Create GitHub release
