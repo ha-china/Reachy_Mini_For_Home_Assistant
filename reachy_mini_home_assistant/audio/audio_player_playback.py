@@ -4,7 +4,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from .audio_player_local import AudioPlayerLocalMixin
-from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER
+from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
 from .audio_player_stream_decoded import AudioPlayerStreamDecodedMixin
 from .audio_player_stream_pcm import AudioPlayerStreamPCMMixin
 
@@ -51,11 +51,26 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
                         content_type = (response.headers.get("Content-Type") or "").lower()
                         stream_iter = response.iter_content(chunk_size=STREAM_FETCH_CHUNK_SIZE)
 
+                        first_chunk = b""
+                        for chunk in stream_iter:
+                            if chunk:
+                                first_chunk = chunk
+                                cached_audio.extend(chunk)
+                                break
+
+                        if (not content_type) or (content_type == "application/octet-stream"):
+                            sniffed = sniff_audio_content_type(first_chunk)
+                            if sniffed:
+                                content_type = sniffed
+
                         def caching_iter_content(chunk_size: int = STREAM_FETCH_CHUNK_SIZE):
                             del chunk_size
+                            if first_chunk:
+                                yield first_chunk
                             for chunk in stream_iter:
                                 if chunk:
-                                    cached_audio.extend(chunk)
+                                    if chunk is not first_chunk:
+                                        cached_audio.extend(chunk)
                                     yield chunk
 
                         adapted_response = self._iterator_response_adapter(caching_iter_content())
