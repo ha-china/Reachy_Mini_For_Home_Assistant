@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
+    HomeAssistantStateResponse,
     VoiceAssistantAudio,
     VoiceAssistantExternalWakeWord,
 )
