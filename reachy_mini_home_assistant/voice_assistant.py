@@ -1140,6 +1140,16 @@ class VoiceAssistantService:
             _LOGGER.warning("Stop word model not loaded")
             return
 
+        # Keep stop-word arming aligned with actual playback, not only protocol
+        # bookkeeping. This makes spoken "stop" robust even if the HA event
+        # sequence or callback timing briefly desynchronizes the armed state.
+        if self._state.tts_player.is_playing and self._state.stop_word.id not in self._state.active_wake_words:
+            self._state.active_wake_words.add(self._state.stop_word.id)
+            try:
+                self._state.stop_word.is_active = True
+            except Exception:
+                pass
+
         stopped = False
         for micro_input in ctx.micro_inputs:
             if self._state.stop_word.process_streaming(micro_input):

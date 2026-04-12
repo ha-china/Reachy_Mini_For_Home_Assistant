@@ -16,15 +16,13 @@ Key features:
 - Antenna freeze during listening mode with smooth blend back
 """
 
-import json
 import logging
 import math
-import random
 import threading
 import time
 from collections import deque
 from pathlib import Path
-from queue import Empty, Queue
+from queue import Queue
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -33,17 +31,30 @@ from ..audio.doa_tracker import DOAConfig, DOATracker
 from ..core.config import Config
 from .animation_player import AnimationPlayer
 from .antenna import AntennaController
+from .command_runtime import handle_command, poll_commands, start_action
+from .control_runtime import (
+    compose_final_pose,
+    issue_control_command,
+    run_control_loop,
+    update_emotion_move,
+    update_face_tracking,
+)
 from .emotion_moves import EmotionMove, is_emotion_available
-from .pose_composer import (
-    clamp_body_yaw,
-    compose_poses,
-    create_head_pose_matrix,
-    extract_yaw_from_pose,
+from .idle_runtime import (
+    apply_idle_behavior_enabled,
+    apply_idle_rest_pose,
+    clear_idle_activity,
+    clear_idle_animation,
+    schedule_next_idle_action_time,
+    transition_or_apply_idle_rest_pose,
+    update_idle_look_around,
 )
 from .state_machine import (
-    STATE_ANIMATION_MAP,
+    build_idle_pending_action,
+    load_idle_behavior_config,
     MovementState,
     PendingAction,
+    pick_idle_random_action,
     RobotState,
 )
 
@@ -544,68 +555,19 @@ class MovementManager:
         return self._idle_motion_enabled or self._idle_antenna_enabled or self._idle_random_actions_enabled
 
     def _apply_idle_behavior_enabled(self, enabled: bool) -> None:
-        """Apply the unified idle behavior toggle to all idle subsystems."""
-        self._idle_motion_enabled = enabled
-        self._idle_antenna_enabled = enabled
-        self._idle_random_actions_enabled = enabled
-
-        if not enabled:
-            self._clear_idle_activity()
-            self._clear_idle_animation()
-            self.state.anim_antenna_left = 0.0
-            self.state.anim_antenna_right = 0.0
-            self._idle_antenna_smoothed = None
-            self._last_idle_antenna_update = 0.0
-            if self.state.robot_state == RobotState.IDLE:
-                self._transition_or_apply_idle_rest_pose()
-        elif self.state.robot_state == RobotState.IDLE:
-            self._animation_player.set_animation("idle")
-            self.state.target_pitch = 0.0
-            self.state.target_antenna_left = 0.0
-            self.state.target_antenna_right = 0.0
-
-        logger.info("Idle behavior %s", "enabled" if enabled else "disabled")
+        apply_idle_behavior_enabled(self, enabled)
 
     def _apply_idle_rest_pose(self) -> None:
-        """Apply a low-energy idle pose when idle behavior is disabled."""
-        self.state.target_pitch = self._idle_rest_head_pitch_rad
-        self.state.target_yaw = 0.0
-        self.state.target_roll = 0.0
-        self.state.target_x = 0.0
-        self.state.target_y = 0.0
-        self.state.target_z = 0.0
-        self.state.target_antenna_left = self._idle_rest_antenna_left_rad
-        self.state.target_antenna_right = self._idle_rest_antenna_right_rad
-        self.state.anim_antenna_left = 0.0
-        self.state.anim_antenna_right = 0.0
-        self._antenna_controller.reset()
+        apply_idle_rest_pose(self)
 
     def _transition_or_apply_idle_rest_pose(self, duration: float = 2.0) -> None:
-        """Move into idle rest pose, preferring a smooth transition when already idle."""
-        if self.state.robot_state == RobotState.IDLE:
-            self.transition_to_idle_rest(duration=duration)
-        else:
-            self._apply_idle_rest_pose()
+        transition_or_apply_idle_rest_pose(self, duration=duration)
 
     def _clear_idle_activity(self) -> None:
-        """Clear queued idle actions and related transient state."""
-        self.state.next_look_around_time = 0.0
-        self.state.look_around_in_progress = False
-        self._idle_action_queue.clear()
-        if self._pending_action and self._pending_action.name.startswith("idle_action"):
-            self._pending_action = None
+        clear_idle_activity(self)
 
     def _clear_idle_animation(self) -> None:
-        """Stop idle animation offsets immediately."""
-        self._animation_player.stop()
-        self.state.anim_pitch = 0.0
-        self.state.anim_yaw = 0.0
-        self.state.anim_roll = 0.0
-        self.state.anim_x = 0.0
-        self.state.anim_y = 0.0
-        self.state.anim_z = 0.0
-        self.state.anim_antenna_left = 0.0
-        self.state.anim_antenna_right = 0.0
+        clear_idle_animation(self)
 
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
@@ -712,256 +674,40 @@ class MovementManager:
     # Internal: Command processing (runs in control loop)
     # =========================================================================
 
-    @staticmethod
-    def _parse_numeric_range(value: Any, default_min: float, default_max: float) -> tuple[float, float]:
-        """Parse a numeric range from config value."""
-        if isinstance(value, (list, tuple)) and len(value) >= 2:
-            try:
-                min_v = float(value[0])
-                max_v = float(value[1])
-                if min_v > max_v:
-                    min_v, max_v = max_v, min_v
-                return min_v, max_v
-            except (TypeError, ValueError):
-                return default_min, default_max
-
-        if value is None:
-            return default_min, default_max
-
-        try:
-            span = abs(float(value))
-            return -span, span
-        except (TypeError, ValueError):
-            return default_min, default_max
-
     def _schedule_next_idle_action_time(self, now: float) -> None:
-        """Schedule the next idle action trigger time."""
-        interval = random.uniform(self._idle_random_actions_min_interval, self._idle_random_actions_max_interval)
-        self.state.next_look_around_time = now + interval
+        schedule_next_idle_action_time(self, now)
 
     def _load_idle_random_actions_config(self) -> None:
         """Load idle random action definitions from animation config."""
-        self._idle_random_actions = list(_DEFAULT_IDLE_RANDOM_ACTIONS)
-        self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
-        self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
-        self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
-        self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
-        self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
-        self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
+        config = load_idle_behavior_config(
+            config_path=_ANIMATION_CONFIG_FILE,
+            default_rest_pose=DEFAULT_IDLE_REST_POSE,
+            default_actions=_DEFAULT_IDLE_RANDOM_ACTIONS,
+            default_min_interval_s=IDLE_LOOK_AROUND_MIN_INTERVAL,
+            default_max_interval_s=IDLE_LOOK_AROUND_MAX_INTERVAL,
+            default_probability=IDLE_LOOK_AROUND_PROBABILITY,
+            default_yaw_range_deg=IDLE_LOOK_AROUND_YAW_RANGE,
+            default_pitch_range_deg=IDLE_LOOK_AROUND_PITCH_RANGE,
+            default_duration_s=IDLE_LOOK_AROUND_DURATION,
+        )
 
-        if not _ANIMATION_CONFIG_FILE.exists():
-            logger.debug("Idle random actions config file not found: %s", _ANIMATION_CONFIG_FILE)
-            return
-
-        try:
-            with open(_ANIMATION_CONFIG_FILE, encoding="utf-8") as f:
-                config = json.load(f)
-        except Exception as e:
-            logger.warning("Failed to read idle random actions config: %s", e)
-            return
-
-        rest_pose = config.get("idle_rest_pose")
-        if isinstance(rest_pose, dict):
-            try:
-                self._idle_rest_head_pitch_rad = math.radians(
-                    float(rest_pose.get("pitch_deg", DEFAULT_IDLE_REST_POSE["pitch_deg"]))
-                )
-            except (TypeError, ValueError):
-                self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
-
-            try:
-                self._idle_rest_antenna_left_rad = float(
-                    rest_pose.get("antenna_left_rad", DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
-                )
-            except (TypeError, ValueError):
-                self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
-            try:
-                self._idle_rest_antenna_right_rad = float(
-                    rest_pose.get("antenna_right_rad", DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
-                )
-            except (TypeError, ValueError):
-                self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
-
-        section = config.get("idle_random_actions")
-        if not isinstance(section, dict):
-            return
-
-        try:
-            min_interval = float(section.get("min_interval_s", IDLE_LOOK_AROUND_MIN_INTERVAL))
-            max_interval = float(section.get("max_interval_s", IDLE_LOOK_AROUND_MAX_INTERVAL))
-            if min_interval > max_interval:
-                min_interval, max_interval = max_interval, min_interval
-            self._idle_random_actions_min_interval = max(0.5, min_interval)
-            self._idle_random_actions_max_interval = max(self._idle_random_actions_min_interval, max_interval)
-        except (TypeError, ValueError):
-            self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
-            self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
-
-        try:
-            probability = float(section.get("trigger_probability", IDLE_LOOK_AROUND_PROBABILITY))
-        except (TypeError, ValueError):
-            probability = IDLE_LOOK_AROUND_PROBABILITY
-        self._idle_random_actions_probability = max(0.0, min(1.0, probability))
-
-        raw_actions = section.get("actions")
-        if not isinstance(raw_actions, list):
-            return
-
-        parsed_actions: list[dict[str, Any]] = []
-        for idx, action in enumerate(raw_actions):
-            if not isinstance(action, dict):
-                continue
-
-            name = str(action.get("name", f"idle_action_{idx + 1}"))
-            try:
-                weight = float(action.get("weight", 1.0))
-            except (TypeError, ValueError):
-                weight = 1.0
-            if weight <= 0.0:
-                continue
-
-            try:
-                duration_s = max(0.2, float(action.get("duration_s", IDLE_LOOK_AROUND_DURATION)))
-            except (TypeError, ValueError):
-                duration_s = IDLE_LOOK_AROUND_DURATION
-
-            yaw_min, yaw_max = self._parse_numeric_range(
-                action.get("yaw_range_deg"),
-                -IDLE_LOOK_AROUND_YAW_RANGE,
-                IDLE_LOOK_AROUND_YAW_RANGE,
-            )
-            pitch_min, pitch_max = self._parse_numeric_range(
-                action.get("pitch_range_deg"),
-                -IDLE_LOOK_AROUND_PITCH_RANGE,
-                IDLE_LOOK_AROUND_PITCH_RANGE,
-            )
-            roll_min, roll_max = self._parse_numeric_range(action.get("roll_range_deg"), 0.0, 0.0)
-            x_min, x_max = self._parse_numeric_range(action.get("x_range_m"), 0.0, 0.0)
-            y_min, y_max = self._parse_numeric_range(action.get("y_range_m"), 0.0, 0.0)
-            z_min, z_max = self._parse_numeric_range(action.get("z_range_m"), 0.0, 0.0)
-
-            parsed_actions.append(
-                {
-                    "name": name,
-                    "weight": weight,
-                    "duration_s": duration_s,
-                    "yaw_range_deg": (yaw_min, yaw_max),
-                    "pitch_range_deg": (pitch_min, pitch_max),
-                    "roll_range_deg": (roll_min, roll_max),
-                    "x_range_m": (x_min, x_max),
-                    "y_range_m": (y_min, y_max),
-                    "z_range_m": (z_min, z_max),
-                }
-            )
-
-        if parsed_actions:
-            self._idle_random_actions = parsed_actions
+        self._idle_random_actions = config.actions
+        self._idle_rest_head_pitch_rad = config.rest_pose.pitch_rad
+        self._idle_rest_antenna_left_rad = config.rest_pose.antenna_left_rad
+        self._idle_rest_antenna_right_rad = config.rest_pose.antenna_right_rad
+        self._idle_random_actions_min_interval = config.min_interval_s
+        self._idle_random_actions_max_interval = config.max_interval_s
+        self._idle_random_actions_probability = config.trigger_probability
 
     def _pick_idle_random_action(self) -> dict[str, Any]:
         """Pick one idle random action from weighted definitions."""
-        if not self._idle_random_actions:
-            return random.choice(_DEFAULT_IDLE_RANDOM_ACTIONS)
-
-        weights = [max(0.0, float(action.get("weight", 1.0))) for action in self._idle_random_actions]
-        total_weight = sum(weights)
-        if total_weight <= 0.0:
-            return random.choice(self._idle_random_actions)
-        return random.choices(self._idle_random_actions, weights=weights, k=1)[0]
+        return pick_idle_random_action(self._idle_random_actions, _DEFAULT_IDLE_RANDOM_ACTIONS)
 
     def _poll_commands(self) -> None:
-        """Process all pending commands from the queue."""
-        while True:
-            try:
-                cmd, payload = self._command_queue.get_nowait()
-            except Empty:
-                break
-
-            self._handle_command(cmd, payload)
+        poll_commands(self)
 
     def _handle_command(self, cmd: str, payload: Any) -> None:
-        """Handle a single command."""
-        if cmd == "set_state":
-            old_state = self.state.robot_state
-            self.state.robot_state = payload
-            self.state.last_activity_time = self._now()
-
-            # Update animation based on state
-            if payload == RobotState.IDLE and not self._idle_behavior_enabled():
-                animation_name = "none"
-                self._animation_player.stop()
-            else:
-                animation_name = STATE_ANIMATION_MAP.get(payload.value, "idle")
-                self._animation_player.set_animation(animation_name)
-
-            # State transition logic
-            if payload == RobotState.IDLE and old_state != RobotState.IDLE:
-                self.state.idle_start_time = self._now()
-                # Unfreeze antennas when returning to idle
-                self._start_antenna_unfreeze()
-                # Reset idle antenna smoothing state
-                self._idle_antenna_smoothed = None
-                self._last_idle_antenna_update = 0.0
-
-            if payload != RobotState.IDLE:
-                self.state.target_pitch = 0.0
-                self.state.target_yaw = 0.0
-                self.state.target_roll = 0.0
-                self.state.target_x = 0.0
-                self.state.target_y = 0.0
-                self.state.target_z = 0.0
-                self._idle_antenna_smoothed = None
-                self._last_idle_antenna_update = 0.0
-
-            logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
-
-        elif cmd == "action":
-            self._start_action(payload)
-
-        elif cmd == "nod":
-            amplitude_deg, duration = payload
-            self._do_nod(amplitude_deg, duration)
-
-        elif cmd == "shake":
-            amplitude_deg, duration = payload
-            self._do_shake(amplitude_deg, duration)
-
-        elif cmd == "set_pose":
-            # Update target pose from external control (e.g., Home Assistant)
-            if payload.get("x") is not None:
-                self.state.target_x = payload["x"]
-            if payload.get("y") is not None:
-                self.state.target_y = payload["y"]
-            if payload.get("z") is not None:
-                self.state.target_z = payload["z"]
-            if payload.get("roll") is not None:
-                self.state.target_roll = payload["roll"]
-            if payload.get("pitch") is not None:
-                self.state.target_pitch = payload["pitch"]
-            if payload.get("yaw") is not None:
-                self.state.target_yaw = payload["yaw"]
-            # Note: body_yaw is calculated in _compose_final_pose based on head yaw
-            if payload.get("antenna_left") is not None:
-                self.state.target_antenna_left = payload["antenna_left"]
-            if payload.get("antenna_right") is not None:
-                self.state.target_antenna_right = payload["antenna_right"]
-            logger.debug("External pose update: %s", payload)
-
-        elif cmd == "speech_sway":
-            # Update speech-driven sway offsets
-            x, y, z, roll, pitch, yaw = payload
-            self.state.sway_x = x
-            self.state.sway_y = y
-            self.state.sway_z = z
-            self.state.sway_roll = roll
-            self.state.sway_pitch = pitch
-            self.state.sway_yaw = yaw
-
-        elif cmd == "emotion_move":
-            # Start playing an emotion move
-            self._start_emotion_move(payload)
-
-        elif cmd == "set_idle_behavior":
-            self._apply_idle_behavior_enabled(bool(payload))
+        handle_command(self, cmd, payload)
 
     def _start_emotion_move(self, emotion_name: str) -> None:
         """Start playing an emotion move.
@@ -983,20 +729,7 @@ class MovementManager:
             logger.error("Failed to start emotion '%s': %s", emotion_name, e)
 
     def _start_action(self, action: PendingAction) -> None:
-        """Start a new motion action."""
-        self._pending_action = action
-        self._action_start_time = self._now()
-        self._action_start_pose = {
-            "pitch": self.state.target_pitch,
-            "yaw": self.state.target_yaw,
-            "roll": self.state.target_roll,
-            "x": self.state.target_x,
-            "y": self.state.target_y,
-            "z": self.state.target_z,
-            "antenna_left": self.state.target_antenna_left,
-            "antenna_right": self.state.target_antenna_right,
-        }
-        logger.debug("Starting action: %s", action.name)
+        start_action(self, action)
 
     def _do_nod(self, amplitude_deg: float, duration: float) -> None:
         """Execute nod gesture (blocking in control loop context)."""
@@ -1168,198 +901,20 @@ class MovementManager:
             self.state.animation_blend = max(target_blend, current_blend - step)
 
     def _update_face_tracking(self) -> None:
-        """Get face tracking offsets from camera server.
-
-        Reference project applies face tracking offsets directly without
-        smoothing. Smooth interpolation when face is lost is handled by
-        the camera_server.py's _process_face_lost_interpolation().
-
-        Also updates face detection state for animation suppression.
-        """
-        if self._camera_server is not None:
-            try:
-                # Get offsets directly - no EMA smoothing (matches reference project)
-                raw_offsets = self._camera_server.get_face_tracking_offsets()
-
-                # In true static idle mode, keep vision detection active but
-                # do not apply tracking offsets to motion.
-                offsets_for_motion = raw_offsets
-                if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
-                    offsets_for_motion = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-
-                with self._face_tracking_lock:
-                    self._face_tracking_offsets = offsets_for_motion
-
-                # Check if face is detected (any offset is non-zero)
-                offset_magnitude = sum(abs(o) for o in raw_offsets)
-                face_now_detected = offset_magnitude > FACE_DETECTED_THRESHOLD
-
-                # Update face detection state
-                if face_now_detected:
-                    if not self.state.face_detected:
-                        logger.debug("Face detected")
-                    self.state.face_detected = True
-                else:
-                    if self.state.face_detected:
-                        logger.debug("Face lost")
-                    self.state.face_detected = False
-
-            except Exception as e:
-                logger.debug("Error getting face tracking offsets: %s", e)
+        update_face_tracking(self, FACE_DETECTED_THRESHOLD)
 
     def _update_idle_look_around(self) -> None:
-        """Trigger random look-around behavior when idle for a while.
-
-        This adds life-like behavior to the robot by occasionally looking around
-        when not engaged in conversation. Similar to conversation_app's idle behaviors.
-        """
-        if not self._idle_motion_enabled and not self._idle_random_actions_enabled:
-            self.state.next_look_around_time = 0.0
-            self.state.look_around_in_progress = False
-            return
-
-        # Only trigger when in IDLE state
-        if self.state.robot_state != RobotState.IDLE:
-            # Reset timing when not idle
-            self.state.next_look_around_time = 0.0
-            self.state.look_around_in_progress = False
-            return
-
-        # Check if we have an action in progress
-        if self._pending_action is not None:
-            return
-
-        now = self._now()
-        idle_duration = now - self.state.idle_start_time
-
-        # Only start look-around after sufficient inactivity
-        if idle_duration < IDLE_INACTIVITY_THRESHOLD:
-            return
-
-        # Schedule next look-around if not scheduled
-        if self.state.next_look_around_time == 0.0:
-            self._schedule_next_idle_action_time(now)
-            return
-
-        # Check if it's time for look-around
-        if now >= self.state.next_look_around_time and not self.state.look_around_in_progress:
-            if self._idle_random_actions_enabled:
-                if random.random() > self._idle_random_actions_probability:
-                    self._schedule_next_idle_action_time(now)
-                    return
-
-                action_config = self._pick_idle_random_action()
-
-                yaw_min, yaw_max = action_config.get(
-                    "yaw_range_deg", (-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE)
-                )
-                pitch_min, pitch_max = action_config.get(
-                    "pitch_range_deg", (-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE)
-                )
-                roll_min, roll_max = action_config.get("roll_range_deg", (0.0, 0.0))
-                x_min, x_max = action_config.get("x_range_m", (0.0, 0.0))
-                y_min, y_max = action_config.get("y_range_m", (0.0, 0.0))
-                z_min, z_max = action_config.get("z_range_m", (0.0, 0.0))
-                duration = float(action_config.get("duration_s", IDLE_LOOK_AROUND_DURATION))
-
-                idle_action = PendingAction(
-                    name=f"idle_action:{action_config.get('name', 'random')}",
-                    target_yaw=math.radians(random.uniform(float(yaw_min), float(yaw_max))),
-                    target_pitch=math.radians(random.uniform(float(pitch_min), float(pitch_max))),
-                    target_roll=math.radians(random.uniform(float(roll_min), float(roll_max))),
-                    target_x=random.uniform(float(x_min), float(x_max)),
-                    target_y=random.uniform(float(y_min), float(y_max)),
-                    target_z=random.uniform(float(z_min), float(z_max)),
-                    duration=max(0.2, duration),
-                )
-
-                self._idle_action_queue.append(idle_action)
-                self.state.look_around_in_progress = True
-                queued_duration = sum(max(0.0, float(item.duration)) for item in self._idle_action_queue)
-                self.state.next_look_around_time = now + queued_duration
-                self._schedule_next_idle_action_time(self.state.next_look_around_time)
-                return
-
-            # Keep legacy behavior when random actions are disabled.
-            if not self._idle_motion_enabled:
-                self._schedule_next_idle_action_time(now)
-                return
-
-            # Random alternation between breathing-only and look-around.
-            # Breathing animation is always active in idle; skipping look-around
-            # for this cycle shows breathing-only behavior.
-            if random.random() > IDLE_LOOK_AROUND_PROBABILITY:
-                self._schedule_next_idle_action_time(now)
-                return
-
-            # Generate random look direction
-            target_yaw = random.uniform(-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE)
-            target_pitch = random.uniform(-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE)
-
-            # Create look-around action
-            action = PendingAction(
-                name="look_around",
-                target_yaw=math.radians(target_yaw),
-                target_pitch=math.radians(target_pitch),
-                duration=IDLE_LOOK_AROUND_DURATION,
-            )
-
-            # Start the action
-            self._idle_action_queue.append(action)
-            self.state.look_around_in_progress = True
-
-            # Schedule return to center and next look-around
-            queued_duration = sum(max(0.0, float(item.duration)) for item in self._idle_action_queue)
-            self.state.next_look_around_time = now + queued_duration
-            self._schedule_next_idle_action_time(self.state.next_look_around_time)
-
-            logger.debug("Starting look-around: yaw=%.1f°, pitch=%.1f°", target_yaw, target_pitch)
+        update_idle_look_around(
+            self,
+            inactivity_threshold_s=IDLE_INACTIVITY_THRESHOLD,
+            legacy_probability=IDLE_LOOK_AROUND_PROBABILITY,
+            yaw_range_deg=IDLE_LOOK_AROUND_YAW_RANGE,
+            pitch_range_deg=IDLE_LOOK_AROUND_PITCH_RANGE,
+            duration_s=IDLE_LOOK_AROUND_DURATION,
+        )
 
     def _update_emotion_move(self) -> tuple[np.ndarray, tuple[float, float], float] | None:
-        """Update emotion move playback and return pose if active.
-
-        When an emotion move is playing, this method samples the pose from
-        the emotion's evaluate(t) method and returns it. The control loop
-        should use this pose directly instead of composing from other sources.
-
-        Returns:
-            Tuple of (head_pose, (antenna_right, antenna_left), body_yaw) if
-            emotion is playing, None otherwise.
-        """
-        with self._emotion_move_lock:
-            if self._emotion_move is None:
-                return None
-
-            # Calculate time since emotion started
-            elapsed = self._now() - self._emotion_start_time
-
-            # Check if emotion is complete
-            if elapsed >= self._emotion_move.duration:
-                emotion_name = self._emotion_move.emotion_name
-                self._emotion_move = None
-                logger.info("Emotion move complete: %s", emotion_name)
-                return None
-
-            # Sample pose from emotion move
-            try:
-                head_pose, antennas, body_yaw = self._emotion_move.evaluate(elapsed)
-
-                # Convert antennas to tuple (right, left) format
-                if isinstance(antennas, np.ndarray):
-                    antenna_tuple = (float(antennas[0]), float(antennas[1]))
-                else:
-                    antenna_tuple = (float(antennas[0]), float(antennas[1]))
-
-                # Clamp body_yaw to safe range to prevent IK collision warnings
-                # SDK's inverse_kinematics_safe limits body_yaw to ±160°
-                clamped_body_yaw = clamp_body_yaw(float(body_yaw))
-
-                return (head_pose, antenna_tuple, clamped_body_yaw)
-
-            except Exception as e:
-                logger.error("Error sampling emotion pose: %s", e)
-                self._emotion_move = None
-                return None
+        return update_emotion_move(self)
 
     def is_emotion_playing(self) -> bool:
         """Check if an emotion move is currently playing."""
@@ -1367,187 +922,14 @@ class MovementManager:
             return self._emotion_move is not None
 
     def _compose_final_pose(self) -> tuple[np.ndarray, tuple[float, float], float]:
-        """Compose final pose from all sources using pose_composer utilities.
-
-        Body yaw follows head yaw to enable natural head tracking with body rotation.
-        When head turns beyond a threshold, body rotates to follow it.
-
-        Returns:
-            Tuple of (head_pose_4x4, (antenna_right, antenna_left), body_yaw)
-        """
-        # Build primary head pose from target state (using pose_composer utility)
-        primary_head = create_head_pose_matrix(
-            x=self.state.target_x,
-            y=self.state.target_y,
-            z=self.state.target_z,
-            roll=self.state.target_roll,
-            pitch=self.state.target_pitch,
-            yaw=self.state.target_yaw,
-        )
-
-        # Build secondary pose from animation + face tracking + speech sway
-        with self._face_tracking_lock:
-            face_offsets = self._face_tracking_offsets
-
-        # Apply animation blend factor (0 when face detected, 1 when no face)
-        anim_blend = self.state.animation_blend
-        secondary_x = self.state.anim_x * anim_blend + self.state.sway_x + face_offsets[0]
-        secondary_y = self.state.anim_y * anim_blend + self.state.sway_y + face_offsets[1]
-        secondary_z = self.state.anim_z * anim_blend + self.state.sway_z + face_offsets[2]
-        secondary_roll = self.state.anim_roll * anim_blend + self.state.sway_roll + face_offsets[3]
-        secondary_pitch = self.state.anim_pitch * anim_blend + self.state.sway_pitch + face_offsets[4]
-        secondary_yaw = self.state.anim_yaw * anim_blend + self.state.sway_yaw + face_offsets[5]
-
-        # Build secondary pose and compose with primary (using pose_composer utilities)
-        secondary_head = create_head_pose_matrix(
-            x=secondary_x,
-            y=secondary_y,
-            z=secondary_z,
-            roll=secondary_roll,
-            pitch=secondary_pitch,
-            yaw=secondary_yaw,
-        )
-        final_head = compose_poses(primary_head, secondary_head)
-
-        # Antenna pose with freeze blending (using AntennaController)
-        anim_antenna_left = self.state.anim_antenna_left * anim_blend
-        anim_antenna_right = self.state.anim_antenna_right * anim_blend
-
-        target_antenna_left = self.state.target_antenna_left + anim_antenna_left
-        target_antenna_right = self.state.target_antenna_right + anim_antenna_right
-
-        # Apply antenna freeze blending via controller
-        antenna_left, antenna_right = self._antenna_controller.get_blended_positions(
-            target_antenna_left, target_antenna_right
-        )
-
-        if self.state.robot_state != RobotState.IDLE:
-            self._idle_antenna_smoothed = None
-            self._last_idle_antenna_update = 0.0
-
-        # Calculate body_yaw to follow head yaw (using pose_composer utilities)
-        final_head_yaw = extract_yaw_from_pose(final_head)
-        target_body_yaw = clamp_body_yaw(final_head_yaw)
-        if self.state.robot_state == RobotState.IDLE and not self.state.face_detected:
-            target_body_yaw = 0.0
-
-        # Rate-limit body yaw for smooth, continuous turning
-        now = self._now()
-        if self._body_yaw_smoothed is None:
-            self._body_yaw_smoothed = target_body_yaw
-            self._last_body_yaw_update = now
-        else:
-            dt = max(1e-6, now - self._last_body_yaw_update)
-            max_rate_rad_s = math.radians(Config.motion.body_yaw_max_rate_deg_s)
-            if self.state.face_detected or self.state.robot_state != RobotState.IDLE:
-                max_rate_rad_s *= 1.15
-            max_step = max_rate_rad_s * dt
-            delta = target_body_yaw - self._body_yaw_smoothed
-            if abs(delta) <= Config.motion.body_yaw_deadband_rad:
-                self._body_yaw_smoothed = target_body_yaw
-            else:
-                step = max(-max_step, min(max_step, delta))
-                self._body_yaw_smoothed = clamp_body_yaw(self._body_yaw_smoothed + step)
-            self._last_body_yaw_update = now
-
-        return final_head, (antenna_right, antenna_left), self._body_yaw_smoothed
+        return compose_final_pose(self)
 
     # =========================================================================
     # Internal: Robot control (runs in control loop)
     # =========================================================================
 
     def _issue_control_command(self, head_pose: np.ndarray, antennas: tuple[float, float], body_yaw: float) -> None:
-        """Send control command to robot with error throttling and connection health tracking.
-
-        Body yaw follows head yaw for natural tracking. The SDK's automatic_body_yaw
-        mechanism (inverse_kinematics_safe) handles collision prevention.
-
-        Args:
-            head_pose: 4x4 head pose matrix
-            antennas: Tuple of (right_angle, left_angle) in radians
-            body_yaw: Body yaw angle (follows head yaw for natural tracking)
-        """
-        # Skip sending commands during graceful shutdown drain phase
-        # This prevents partial command transmission that can crash daemon
-        if self._draining_event.is_set():
-            return
-
-        # Skip sending commands while emotion animation is playing
-        # This prevents "a move is currently running" warning spam
-        if self._emotion_playing_event.is_set():
-            return
-
-        # Skip sending commands while robot is paused (disconnected/sleeping)
-        # Double-check here to catch race conditions during sleep transition
-        if self._robot_paused_event.is_set():
-            return
-
-        now = self._now()
-
-        # Check if we should skip due to connection loss (but always try periodically)
-        if self._connection_lost:
-            if now - self._last_reconnect_attempt < self._reconnect_attempt_interval:
-                # Skip sending commands to reduce error spam
-                return
-            # Time to try reconnecting
-            self._last_reconnect_attempt = now
-            logger.debug("Attempting to send command after connection loss...")
-
-        try:
-            # Pass calculated body_yaw to set_target
-            # Body yaw is calculated in _compose_final_pose based on head yaw
-            self.robot.set_target(
-                head=head_pose,
-                antennas=list(antennas),
-                body_yaw=body_yaw,
-            )
-
-            # Command succeeded - update connection health
-            self._last_successful_command = now
-            self._consecutive_errors = 0  # Reset error counter
-
-            # Update last sent pose for change detection
-            self._last_sent_head_pose = head_pose.copy()
-            self._last_sent_antennas = antennas
-            self._last_sent_body_yaw = body_yaw
-            self._last_send_time = now
-
-            if self._connection_lost:
-                logger.info("✓ Connection to robot restored")
-                self._connection_lost = False
-                self._reconnect_attempt_interval = self._reconnect_backoff_initial
-                self._suppressed_errors = 0
-
-        except Exception as e:
-            error_msg = str(e)
-            self._consecutive_errors += 1
-
-            # Check if this is a connection error
-            is_connection_error = self._is_connection_error(e)
-
-            if is_connection_error:
-                if not self._connection_lost:
-                    # First time detecting connection loss
-                    if self._consecutive_errors >= self._max_consecutive_errors:
-                        logger.warning(f"Connection unstable after {self._consecutive_errors} errors: {error_msg}")
-                        logger.warning("  Will retry connection every %.1fs...", self._reconnect_attempt_interval)
-                        self._connection_lost = True
-                        self._last_reconnect_attempt = now
-                    else:
-                        # Transient error, log but don't mark as lost yet
-                        err_cnt = self._consecutive_errors
-                        max_err = self._max_consecutive_errors
-                        self._log_error_throttled(f"Transient connection error ({err_cnt}/{max_err}): {error_msg}")
-                else:
-                    # Already in lost state, use throttled logging
-                    self._log_error_throttled(f"Connection still lost: {error_msg}")
-                    self._reconnect_attempt_interval = min(
-                        self._reconnect_backoff_max,
-                        self._reconnect_attempt_interval * self._reconnect_backoff_multiplier,
-                    )
-            else:
-                # Non-connection error - log but don't affect connection state
-                self._log_error_throttled(f"Failed to set robot target: {error_msg}")
+        issue_control_command(self, head_pose, antennas, body_yaw)
 
     def _log_error_throttled(self, message: str) -> None:
         """Log error with throttling to prevent log explosion."""
@@ -1566,70 +948,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        """Main control loop."""
-        logger.info("Movement manager control loop started (%.1f Hz)", self._control_loop_hz)
-
-        last_time = self._now()
-
-        while not self._stop_event.is_set():
-            loop_start = self._now()
-            dt = min(max(0.0, loop_start - last_time), MAX_CONTROL_DT_S)
-            last_time = loop_start
-
-            try:
-                # 1. Process commands from queue (always process to clear queue)
-                self._poll_commands()
-
-                # 2. Check if robot is paused (disconnected/sleeping)
-                if self._robot_paused_event.is_set():
-                    # Robot is disconnected, skip all control commands
-                    # Wait for resume signal (event-driven, wakes immediately on resume)
-                    self._robot_resumed_event.wait(timeout=0.5)
-                    continue
-
-                # 3. Check if emotion move is playing - takes priority over other motions
-                emotion_pose = self._update_emotion_move()
-                if emotion_pose is not None:
-                    # Emotion move is active - use its pose directly
-                    head_pose, antennas, body_yaw = emotion_pose
-                    self._issue_control_command(head_pose, antennas, body_yaw)
-                    # Skip other updates when emotion is playing
-                else:
-                    # Normal motion updates
-                    # 4. Update action interpolation
-                    self._update_action(dt)
-
-                    # 5. Update animation offsets (JSON-driven)
-                    self._update_animation(dt)
-
-                    # 6. Update antenna blend (listening mode freeze/unfreeze)
-                    self._update_antenna_blend(dt)
-
-                    # 7. Update face tracking offsets from camera server
-                    self._update_face_tracking()
-
-                    # 8. Update animation blend (suppress when face detected)
-                    self._update_animation_blend()
-
-                    # 9. Update idle look-around behavior
-                    self._update_idle_look_around()
-
-                    # 10. Compose final pose (returns head_pose matrix, antennas tuple, body_yaw)
-                    head_pose, antennas, body_yaw = self._compose_final_pose()
-
-                    # 11. Send to robot with body_yaw for automatic adjustment
-                    self._issue_control_command(head_pose, antennas, body_yaw)
-
-            except Exception as e:
-                self._log_error_throttled(f"Control loop error: {e}")
-
-            # Adaptive sleep
-            elapsed = self._now() - loop_start
-            sleep_time = max(0.0, self._target_period - elapsed)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
-        logger.info("Movement manager control loop stopped")
+        run_control_loop(self, max_control_dt_s=MAX_CONTROL_DT_S, face_detected_threshold=FACE_DETECTED_THRESHOLD)
 
     # =========================================================================
     # Lifecycle

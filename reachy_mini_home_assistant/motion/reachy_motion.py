@@ -174,6 +174,21 @@ class ReachyMiniMotion:
 
         _LOGGER.debug("Reachy Mini: Idle pose")
 
+    def on_pause_motion(self):
+        """Called when motion should settle immediately.
+
+        Used for zero-config gesture reactions such as the palm gesture.
+        The robot smoothly returns to a neutral pose and then resumes its
+        normal idle behavior.
+        """
+        if self._movement_manager is None:
+            return
+
+        self._is_speaking = False
+        self._movement_manager.reset_to_neutral(duration=0.6)
+        self._movement_manager.set_state(RobotState.IDLE)
+        _LOGGER.debug("Reachy Mini: Motion paused to neutral idle")
+
     def on_timer_finished(self):
         """Called when a timer finishes - alert animation.
 

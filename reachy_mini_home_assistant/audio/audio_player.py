@@ -1603,6 +1603,10 @@ class AudioPlayer:
         self._playlist.clear()
         self.is_playing = False
 
+        # Mirror the reference satellite lifecycle: manual stop should still
+        # complete the playback callback chain exactly once.
+        self._on_playback_finished()
+
     def __del__(self) -> None:
         """Cleanup on garbage collection to prevent listener leaks."""
         try:

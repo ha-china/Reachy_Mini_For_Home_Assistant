@@ -55,21 +55,16 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - 头部跟随检测到的人脸
 - 头部转动时身体随之旋转
 - 自适应帧率：活跃时 15fps，空闲时 2fps
+- 可在 Home Assistant 中运行时开关
 
 ### 手势检测
-检测到的手势及机器人响应：
+检测到的手势会作为实体状态同步到 Home Assistant。
+当前默认运行时不会直接用手势触发机器人动作。
 
-| 手势 | 响应 |
+| 输出 | 说明 |
 |------|------|
-| like（竖大拇指）| 开心情绪 |
-| dislike（拇指朝下）| 难过情绪 |
-| ok | 点头动画 |
-| peace（剪刀手）| 热情情绪 |
-| stop | 停止说话 |
-| call（打电话手势）| 开始聆听 |
-| palm（手掌）| 暂停动作 |
-| fist（握拳）| 愤怒情绪 |
-| one/two/three/four | 发送 HA 事件 |
+| `gesture_detected` | 当前识别到的手势标签 |
+| `gesture_confidence` | 手势识别置信度 |
 
 ### 情绪响应
 机器人可播放 35 种不同情绪：
@@ -78,10 +73,9 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 ### 音频功能
 - 扬声器音量控制（0-100%）
-- 麦克风音量控制（0-100%）
-- AGC 自动增益控制（0-40dB）
-- 噪声抑制（0-100%）
-- 回声消除（内置）
+- 静音开关，可暂停/恢复语音链路
+- 支持唤醒提示音与计时器完成提示音
+- STT/TTS 由 Home Assistant 负责
 
 ### Sendspin 多房间音频
 - 通过 mDNS 自动发现 Sendspin 服务器
@@ -104,16 +98,21 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 |------|------|------|
 | Daemon State | 文本传感器 | 机器人守护进程状态 |
 | Backend Ready | 二进制传感器 | 后端连接状态 |
+| Mute | 开关 | 暂停/恢复语音链路 |
 | Speaker Volume | 数值 (0-100%) | 扬声器音量控制 |
+| Disable Camera | 开关 | 暂停/恢复摄像头服务 |
+| Idle Behavior | 开关 | 统一空闲行为：头部、天线、微动作 |
+| Sendspin | 开关 | 启用/禁用 Sendspin 发现与播放 |
+| Face Tracking | 开关 | 启用/禁用人脸跟踪 |
+| Gesture Detection | 开关 | 启用/禁用手势检测 |
+| Face Confidence | 数值 (0-1) | 人脸跟踪置信度阈值 |
 
-### 阶段 2：电机控制
+### 阶段 2：睡眠与运行状态
 | 实体 | 类型 | 说明 |
 |------|------|------|
-| Motors Enabled | 开关 | 电机电源开/关 |
-| Wake Up | 按钮 | 唤醒机器人 |
-| Go to Sleep | 按钮 | 使机器人睡眠 |
-| Sleep Mode | 二进制传感器 | 当前睡眠状态 |
-| Services Suspended | 二进制传感器 | ML 模型卸载状态 |
+| Sleep Control | 开关 | 打开表示进入睡眠，关闭表示唤醒 |
+| Sleep Mode | 二进制传感器 | 运行中表示唤醒，非运行表示睡眠 |
+| Services Suspended | 二进制传感器 | 运行中表示服务活跃 |
 
 ### 阶段 3：姿态控制
 | 实体 | 类型 | 范围 |
@@ -158,11 +157,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 |------|------|------|
 | Emotion | 选择器 | 选择要播放的情绪（35 个选项）|
 
-### 阶段 9：音频控制
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| Microphone Volume | 数值 (0-100%) | 麦克风增益控制 |
-
 ### 阶段 10：摄像头
 | 实体 | 类型 | 说明 |
 |------|------|------|
@@ -177,14 +171,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - 实时 3D 机器人可视化
 - 交互式机器人状态视图
 - 连接机器人守护进程获取实时更新
-
-### 阶段 12：音频处理
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| AGC Enabled | 开关 | 自动增益控制开/关 |
-| AGC Max Gain | 数值 (0-40dB) | 最大 AGC 增益 |
-| Noise Suppression | 数值 (0-100%) | 噪声抑制级别 |
-| Echo Cancellation Converged | 二进制传感器 | AEC 状态 |
 
 ### 阶段 21：对话
 | 实体 | 类型 | 说明 |
@@ -219,12 +205,14 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 ## 睡眠模式
 
+运行时反应是零配置的：语音阶段、计时器提醒和 HA 状态触发情绪，共用同一套内建行为模型。
+
 ### 进入睡眠
-- 在 Home Assistant 中按"Go to Sleep"按钮
+- 在 Home Assistant 中打开 `Sleep Control` 开关
 - 机器人放松电机、停止摄像头、暂停语音检测
 
 ### 唤醒
-- 在 Home Assistant 中按"Wake Up"按钮
+- 在 Home Assistant 中关闭 `Sleep Control` 开关
 - 或说唤醒词
 - 机器人恢复所有功能
 
@@ -234,7 +222,7 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 | 问题 | 解决方案 |
 |------|----------|
-| 不响应唤醒词 | 增加 AGC Max Gain，减少背景噪音 |
+| 不响应唤醒词 | 检查 Mute 是否关闭，减少背景噪音，并确认已连接 Home Assistant |
 | 人脸追踪不工作 | 确保光线充足，检查 Face Detected 传感器 |
 | 没有音频输出 | 检查 Speaker Volume，验证 HA 中的 TTS 引擎 |
 | 无法连接 HA | 确认在同一网络，检查端口 6053 |
@@ -253,4 +241,4 @@ ESPHome 端口： 6053
 
 ---
 
-*Reachy Mini 语音助手 v0.9.5*
+*Reachy Mini 语音助手 v1.0.4*

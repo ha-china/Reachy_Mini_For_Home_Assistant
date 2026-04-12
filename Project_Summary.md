@@ -33,9 +33,9 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  │  ReSpeaker XVF3800 (16kHz)                                            │  │
 │  │  ┌──────────────┐   ┌──────────────────────────────────────────────┐  │  │
 │  │  │ 4-Mic Array  │ → │ XVF3800 DSP                                  │  │  │
-│  │  └──────────────┘   │ • Echo Cancellation (AEC)                    │  │  │
-│  │                     │ • Noise Suppression (NS)                     │  │  │
-│  │                     │ • Auto Gain Control (AGC, max 30dB)          │  │  │
+│  │  └──────────────┘   │ • Hardware DSP path available                │  │  │
+│  │                     │ • App currently relies on HA STT/TTS         │  │  │
+│  │                     │ • DOA/VAD used by the current runtime        │  │  │
 │  │                     │ • Direction of Arrival (DOA)                 │  │  │
 │  │                     │ • Voice Activity Detection (VAD)             │  │  │
 │  │                     └──────────────────────────────────────────────┘  │  │
@@ -174,9 +174,9 @@ reachy_mini_home_assistant/
 │   ├── face_tracking_interpolator.py  # Smooth face tracking
 │   └── frame_processor.py     # Adaptive frame rate management
 │
-├── audio/                     # Audio Processing
+├── audio/                     # Audio runtime support
 │   ├── audio_player.py        # TTS + Sendspin playback
-│   ├── microphone.py          # ReSpeaker XVF3800 optimization
+│   ├── microphone.py          # Hardware audio helper / legacy tuning code
 │   └── doa_tracker.py         # Direction of Arrival tracking
 │
 ├── entities/                  # Home Assistant Entities
@@ -186,7 +186,7 @@ reachy_mini_home_assistant/
 │   ├── entity_keys.py         # Entity key constants
 │   ├── entity_extensions.py   # Extended entity types
 │   ├── event_emotion_mapper.py # HA event → Emotion mapping
-│   └── emotion_detector.py    # LLM text emotion detection
+│   └── emotion_detector.py    # Disabled runtime path for text emotion detection
 │
 ├── protocol/                  # Protocol Handling
 │   ├── satellite.py           # ESPHome protocol handler
@@ -194,8 +194,7 @@ reachy_mini_home_assistant/
 │   └── zeroconf.py            # mDNS discovery
 │
 ├── animations/               # Animation definitions
-│   ├── conversation_animations.json
-│   └── emotion_keywords.json
+│   └── conversation_animations.json  # Unified built-in behavior resource file
 │
 └── wakewords/                # Wake word models
     ├── okay_nabu.json/.tflite
@@ -208,12 +207,13 @@ reachy_mini_home_assistant/
 
 ### Current Runtime Defaults (v1.0.0)
 
-- `idle_motion_enabled`: OFF
+- `idle_behavior_enabled`: OFF
 - `sendspin_enabled`: OFF
 - `face_tracking_enabled`: OFF
 - `gesture_detection_enabled`: OFF
 - `face_confidence_threshold`: 0.5 (persistent)
 - Idle antenna behavior: torque disabled in `IDLE`, re-enabled when leaving `IDLE`
+- Voice phases and HA-triggered emotions are routed through one built-in zero-config behavior layer
 
 When face/gesture switches are OFF, their models are unloaded to save resources.
 
@@ -248,7 +248,7 @@ When face/gesture switches are OFF, their models are unloaded to save resources.
 - [x] Head motion control (nod, shake, gaze)
 - [x] Antenna animation control
 - [x] Voice state feedback actions
-- [x] YOLO face tracking (replaces DOA sound source localization)
+- [x] YOLO face tracking (complements DOA wakeup orientation)
 - [x] 50Hz unified motion control loop
 
 ### Application Architecture
@@ -307,9 +307,9 @@ reachy_mini_ha_voice/
 │   │   ├── head_tracker.py     # YOLO face detector (367 lines)
 │   │   └── camera_server.py     # MJPEG camera stream server + face tracking (1009 lines)
 │   │
-│   ├── audio/                  # Audio processing modules
+│   ├── audio/                  # Audio runtime modules
 │   │   ├── __init__.py         # Module exports (21 lines)
-│   │   ├── microphone.py       # ReSpeaker microphone optimization (219 lines)
+│   │   ├── microphone.py       # Hardware audio helper / legacy tuning code (219 lines)
 │   │   ├── doa_tracker.py      # Direction of Arrival tracking (206 lines)
 │   │   └── audio_player.py     # TTS + Sendspin playback (679 lines)
 │   │
@@ -321,11 +321,10 @@ reachy_mini_ha_voice/
 │   │   ├── entity_extensions.py  # Extended entity types (258 lines)
 │   │   ├── entity_registry.py  # ESPHome entity registry (844 lines)
 │   │   ├── event_emotion_mapper.py  # HA event to emotion mapping (351 lines)
-│   │   └── emotion_detector.py # LLM emotion keyword detection
+│   │   └── emotion_detector.py # Disabled runtime path for text emotion detection
 │   │
 │   ├── animations/             # Animation definitions
-│   │   ├── conversation_animations.json  # Conversation state animations
-│   │   └── emotion_keywords.json         # Emotion keyword mapping (280+ keywords)
+│   │   └── conversation_animations.json  # Unified animations / gestures / HA events / keyword resources
 │   │
 │   └── wakewords/              # Wake word models
 │       ├── okay_nabu.json/.tflite
@@ -404,10 +403,7 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 | ESPHome Entity Type | Name | SDK API | Range/Options | Description |
 |---------------------|------|---------|---------------|-------------|
 | `Number` | `speaker_volume` | `AudioPlayer.set_volume()` | 0-100 | Speaker volume |
-| `Select` | `motor_mode` | `set_motor_control_mode()` | enabled/disabled/gravity_compensation | Motor mode selection |
-| `Switch` | `motors_enabled` | `enable_motors()` / `disable_motors()` | on/off | Motor torque switch |
-| `Button` | `wake_up` | `mini.wake_up()` | - | Wake robot action |
-| `Button` | `go_to_sleep` | `mini.goto_sleep()` | - | Sleep robot action |
+| `Switch` | `sleep_control` | `request_sleep_state()` | off=awake/on=sleeping | Unified sleep/wake control |
 | `Number` | `head_x` | `goto_target(head=...)` | ±50mm | Head X position control |
 | `Number` | `head_y` | `goto_target(head=...)` | ±50mm | Head Y position control |
 | `Number` | `head_z` | `goto_target(head=...)` | ±50mm | Head Z position control |
@@ -462,22 +458,24 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 | `Sensor` | `imu_gyro_z` | `mini.imu["gyroscope"][2]` | Z-axis angular velocity (rad/s) |
 | `Sensor` | `imu_temperature` | `mini.imu["temperature"]` | IMU temperature (°C) |
 
-#### Phase 8-12: Extended Features
+#### Current Runtime Control and Sensor Entities
 
-| ESPHome Entity Type | Name | Description |
-|---------------------|------|-------------|
-| `Select` | `emotion` | Emotion selector (Happy/Sad/Angry/Fear/Surprise/Disgust) |
-| `Number` | `microphone_volume` | Microphone volume (0-100%) |
-| `Camera` | `camera` | ESPHome Camera entity (live preview) |
-| `Number` | `led_brightness` | LED brightness (0-100%) |
-| `Select` | `led_effect` | LED effect (off/solid/breathing/rainbow/doa) |
-| `Number` | `led_color_r` | LED red component (0-255) |
-| `Number` | `led_color_g` | LED green component (0-255) |
-| `Number` | `led_color_b` | LED blue component (0-255) |
-| `Switch` | `agc_enabled` | Auto gain control switch |
-| `Number` | `agc_max_gain` | AGC max gain (0-30 dB) |
-| `Number` | `noise_suppression` | Noise suppression level (0-100%) |
-| `Binary Sensor` | `echo_cancellation_converged` | Echo cancellation convergence status |
+| Phase | ESPHome Entity Type | Name | Description |
+|------|---------------------|------|-------------|
+| 1 | `Switch` | `mute` | Suspend/resume the voice pipeline |
+| 1 | `Switch` | `camera_disabled` | Suspend/resume camera processing |
+| 1 | `Switch` | `idle_behavior_enabled` | Unified idle motion / antenna / micro-actions toggle |
+| 1 | `Switch` | `sendspin_enabled` | Enable/disable Sendspin playback integration |
+| 1 | `Switch` | `face_tracking_enabled` | Enable/disable face tracking models |
+| 1 | `Switch` | `gesture_detection_enabled` | Enable/disable gesture detection models |
+| 1 | `Number` | `face_confidence_threshold` | Face tracking confidence threshold (0-1) |
+| 2 | `Switch` | `sleep_control` | Unified sleep/wake control |
+| 8 | `Select` | `emotion` | Manual emotion trigger |
+| 10 | `Camera` | `camera` | ESPHome camera entity / live preview |
+| 21 | `Switch` | `continuous_conversation` | Multi-turn conversation mode |
+| 22 | `Text Sensor` | `gesture_detected` | Current detected gesture |
+| 22 | `Sensor` | `gesture_confidence` | Current gesture confidence |
+| 23 | `Binary Sensor` | `face_detected` | Face currently visible |
 
 > **Note**: Head position (x/y/z) and angles (roll/pitch/yaw), body yaw, antenna angles are all **controllable** entities,
 > using `Number` type for bidirectional control. Call `goto_target()` when setting new values, call `get_current_head_pose()` etc. when reading current values.
@@ -490,10 +488,10 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
    - [x] `error_message` - Error message
    - [x] `speaker_volume` - Speaker volume control
 
-2. **Phase 2 - Motor Control** (High Priority) ✅ **Completed**
-   - [x] `motors_enabled` - Motor switch
-   - [x] `motor_mode` - Motor mode selection (enabled/disabled/gravity_compensation)
-   - [x] `wake_up` / `go_to_sleep` - Wake/sleep buttons
+2. **Phase 2 - Sleep and Runtime State** (High Priority) ✅ **Completed**
+   - [x] `sleep_control` - Unified sleep/wake switch
+   - [x] `sleep_mode` - Awake/sleeping state sensor
+   - [x] `services_suspended` - Service suspension state sensor
 
 3. **Phase 3 - Pose Control** (Medium Priority) ✅ **Completed**
    - [x] `head_x/y/z` - Head position control
@@ -525,33 +523,25 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
    - [x] `imu_temperature` - IMU temperature
 
 8. **Phase 8 - Emotion Control** ✅ **Completed**
-   - [x] `emotion` - Emotion selector (Happy/Sad/Angry/Fear/Surprise/Disgust)
+    - [x] `emotion` - Emotion selector (Happy/Sad/Angry/Fear/Surprise/Disgust)
 
-9. **Phase 9 - Audio Control** ✅ **Completed**
-   - [x] `microphone_volume` - Microphone volume control (0-100%)
-
-10. **Phase 10 - Camera Integration** ✅ **Completed**
+9. **Phase 10 - Camera Integration** ✅ **Completed**
     - [x] `camera` - ESPHome Camera entity (live preview)
 
-11. **Phase 11 - LED Control** ❌ **Disabled (LEDs hidden inside robot)**
+10. **Phase 11 - LED Control** ❌ **Disabled (LEDs hidden inside robot)**
     - [ ] `led_brightness` - LED brightness (0-100%) - Commented out
     - [ ] `led_effect` - LED effect (off/solid/breathing/rainbow/doa) - Commented out
     - [ ] `led_color_r/g/b` - LED RGB color (0-255) - Commented out
 
-12. **Phase 12 - Audio Processing Parameters** ✅ **Completed**
-    - [x] `agc_enabled` - Auto gain control switch
-    - [x] `agc_max_gain` - AGC max gain (0-30 dB)
-    - [x] `noise_suppression` - Noise suppression level (0-100%)
-    - [x] `echo_cancellation_converged` - Echo cancellation convergence status (read-only)
-
-13. **Phase 13 - Sendspin Audio Playback Support** ✅ **Completed**
+11. **Phase 13 - Sendspin Audio Playback Support** ✅ **Completed**
     - [x] `sendspin_enabled` - Sendspin switch (Switch)
-    - [x] `sendspin_url` - Sendspin server URL (Text Sensor)
-    - [x] `sendspin_connected` - Sendspin connection status (Binary Sensor)
     - [x] AudioPlayer integrates aiosendspin library
     - [x] TTS audio sent to both local speaker and Sendspin server
 
-14. **Phase 22 - Gesture Detection** ✅ **Completed (v1.0.0 behavior)**
+12. **Phase 21 - Continuous Conversation** ✅ **Completed**
+    - [x] `continuous_conversation` - Conversation continuation switch
+
+13. **Phase 22 - Gesture Detection** ✅ **Completed (v1.0.0 behavior)**
     - [x] `gesture_detected` - Detected gesture name (Text Sensor)
     - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
     - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
@@ -575,36 +565,39 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
       | three | 3️⃣ | three2 | 🤟 |
       | two_up | ✌️☝️ | two_up_inverted | 🔻✌️☝️ |
 
+14. **Phase 23 - Face Detection** ✅ **Completed**
+    - [x] `face_detected` - Face visibility sensor
+
 15. **Phase 24 - System Diagnostics** ✅ **Completed**
-    - [x] `cpu_percent` - CPU usage percentage (Sensor, diagnostic)
-    - [x] `cpu_temperature` - CPU temperature in Celsius (Sensor, diagnostic)
-    - [x] `memory_percent` - Memory usage percentage (Sensor, diagnostic)
-    - [x] `memory_used_gb` - Used memory in GB (Sensor, diagnostic)
-    - [x] `disk_percent` - Disk usage percentage (Sensor, diagnostic)
-    - [x] `disk_free_gb` - Free disk space in GB (Sensor, diagnostic)
-    - [x] `uptime_hours` - System uptime in hours (Sensor, diagnostic)
-    - [x] `process_cpu_percent` - This process CPU usage (Sensor, diagnostic)
-    - [x] `process_memory_mb` - This process memory in MB (Sensor, diagnostic)
+    - [x] `sys_cpu_percent` - CPU usage percentage (Sensor, diagnostic)
+    - [x] `sys_cpu_temperature` - CPU temperature in Celsius (Sensor, diagnostic)
+    - [x] `sys_memory_percent` - Memory usage percentage (Sensor, diagnostic)
+    - [x] `sys_memory_used` - Used memory in GB (Sensor, diagnostic)
+    - [x] `sys_disk_percent` - Disk usage percentage (Sensor, diagnostic)
+    - [x] `sys_disk_free` - Free disk space in GB (Sensor, diagnostic)
+    - [x] `sys_uptime` - System uptime in hours (Sensor, diagnostic)
+    - [x] `sys_process_cpu` - This process CPU usage (Sensor, diagnostic)
+    - [x] `sys_process_memory` - This process memory in MB (Sensor, diagnostic)
 
 ---
 
-## 🎉 Phase 1-13 + Phase 22 + Phase 24 Entities Completed!
+## 🎉 Current Runtime Entity Coverage
 
 **Total Completed: See runtime registry (count evolves with releases)**
-- Phase 1: 4 entities (Basic status and volume)
-- Phase 2: 4 entities (Motor control)
+- Phase 1: 10 entities (status, zero-config runtime switches, volume)
+- Phase 2: 3 entities (sleep and runtime state)
 - Phase 3: 9 entities (Pose control)
 - Phase 4: 3 entities (Gaze control)
-- Phase 5: 2 entities (Audio sensors)
-- Phase 6: 6 entities (Diagnostic information)
+- Phase 5: 3 entities (DOA sensors and tracking switch)
+- Phase 6: 7 entities (Diagnostic information)
 - Phase 7: 7 entities (IMU sensors)
 - Phase 8: 1 entity (Emotion control)
-- Phase 9: 1 entity (Microphone volume)
 - Phase 10: 1 entity (Camera)
 - Phase 11: 0 entities (LED control - Disabled)
-- Phase 12: 4 entities (Audio processing parameters)
-- Phase 13: 3 entities (Sendspin audio output)
+- Phase 13: 1 entity (Sendspin toggle)
+- Phase 21: 1 entity (Continuous conversation)
 - Phase 22: 2 entities (Gesture detection)
+- Phase 23: 1 entity (Face detection)
 - Phase 24: 9 entities (System diagnostics)
 
 
@@ -612,95 +605,33 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 
 ## 🚀 Voice Assistant Enhancement Features Implementation Status
 
-### Phase 14 - Emotion Action Feedback System (Enhanced) ✅
+### Phase 14 - Emotion and Motion Feedback ✅
 
-**Implementation Status**: Full keyword-based emotion detection implemented with 280+ Chinese/English keywords mapped to 35 emotion categories
+**Current Status**: Manual emotion playback and non-blocking motion feedback are implemented. Automatic keyword-based emotion triggering is currently disabled in the runtime.
 
 **Implemented Features**:
 - ✅ Phase 8 Emotion Selector entity (`emotion`)
-- ✅ Basic emotion action playback API (`_play_emotion`)
-- ✅ Emotion mapping: Happy/Sad/Angry/Fear/Surprise/Disgust
-- ✅ Integration with HuggingFace action library (`pollen-robotics/reachy-mini-emotions-library`)
-- ✅ SpeechSway system for natural head micro-movements during conversation (non-blocking)
-- ✅ Tap detection disabled during emotion playback (polls daemon API for completion)
-- ✅ **NEW (v0.8.0)**: Comprehensive emotion keyword detection from conversation text
-- ✅ **NEW (v0.8.0)**: 280+ Chinese and English keywords mapped to 35 emotion categories
-- ✅ **NEW (v0.8.0)**: Auto-trigger expressions based on text patterns in LLM responses
+- ✅ `_play_emotion()` queues emotion moves through `MovementManager`
+- ✅ Wake/listen/think/speak/idle motion transitions are non-blocking
+- ✅ Timer-finished motion feedback is implemented
+- ✅ Gesture detection publishes recognized gesture label and confidence to Home Assistant entities
+- ✅ Voice phases and HA state reactions share one built-in behavior dispatcher
 
-**Emotion Keyword Categories (v0.8.0)**:
-
-| Expression ID | Category | Chinese Keywords | English Keywords |
-|---------------|----------|------------------|------------------|
-| `cheerful1` | Happy | 太棒了、开心、高兴 | great, awesome, happy |
-| `laughing1` | Laughing | 哈哈、笑死、好笑 | haha, lol, funny |
-| `enthusiastic1` | Excited | 兴奋、激动、耶 | excited, yay, cool |
-| `amazed1` | Amazed | 神奇、厉害、牛 | amazing, incredible |
-| `surprised1` | Surprised | 哇、天啊、真的吗 | wow, omg, really |
-| `loving1` | Love | 爱、喜欢、可爱 | love, cute, adore |
-| `grateful1` | Grateful | 谢谢、感谢 | thanks, appreciate |
-| `welcoming1` | Welcome | 欢迎、你好 | hello, welcome |
-| `helpful1` | Helpful | 当然、好的、没问题 | sure, of course |
-| `curious1` | Curious | 好奇、有趣 | curious, interesting |
-| `thoughtful1` | Thinking | 嗯、让我想想 | hmm, let me think |
-| `sad1` | Sad | 难过、伤心、可惜 | sad, unfortunately |
-| `oops1` | Oops | 抱歉、糟糕、哎呀 | sorry, oops |
-| `confused1` | Confused | 困惑、搞不懂 | confused, puzzled |
-| `fear1` | Fear | 害怕、可怕 | afraid, scared |
-| `rage1` | Angry | 生气、愤怒 | angry, mad |
-| `yes1` | Yes | 是的、对、没错 | yes, correct |
-| `no1` | No | 不是、不行 | no, wrong |
-| ... | ... | ... | ... |
-
-**Design Decisions**:
-- 🎯 No auto-play of full emotion actions during conversation to avoid blocking
-- 🎯 Use voice-driven head sway (SpeechSway) for natural motion feedback
-- 🎯 Emotion actions retained as manual trigger feature via ESPHome entity
-- 🎯 Tap detection waits for actual move completion via `/api/move/running` polling
-- 🎯 **NEW**: Keyword detection is case-insensitive and configurable via JSON
-
-**Partially Implemented**:
-- 🟡 Intent recognition and emotion matching (basic keyword matching implemented)
-- ❌ Dance action library integration
-- ❌ Context awareness (e.g., weather query - sunny plays happy, rainy plays sad)
-
-**Code Locations**:
-- `animations/emotion_keywords.json` - **NEW**: Emotion keyword mapping configuration (280+ keywords)
-- `entity_registry.py:633-658` - Emotion Selector entity
-- `protocol/satellite.py:_load_emotion_keywords()` - Load emotion keywords from JSON
-- `protocol/satellite.py:_detect_and_play_emotion()` - Auto-detect emotions from text
-- `protocol/satellite.py:_play_emotion()` - Emotion playback with move UUID tracking
-- `protocol/satellite.py:_wait_for_move_completion()` - Polls daemon API for move completion
-- `motion.py:132-156` - Conversation start motion control (uses SpeechSway)
-- `motion/movement_manager.py:541-595` - Move queue management (allows SpeechSway overlay)
-
-**Actual Behavior**:
+**Current Behavior**:
 
 | Voice Assistant Event | Actual Action | Implementation Status |
 |----------------------|---------------|----------------------|
-| Wake word detected | Turn toward sound source + nod confirmation | ✅ Implemented |
-| Conversation start | Voice-driven head micro-movements (SpeechSway) | ✅ Implemented |
-| During conversation | Continuous voice-driven micro-movements + breathing animation | ✅ Implemented |
-| Conversation end | Return to neutral position + breathing animation | ✅ Implemented |
+| Wake word detected | Turn toward sound source + listening pose | ✅ Implemented |
+| Listening | Attentive listening state | ✅ Implemented |
+| Thinking | Thinking state animation | ✅ Implemented |
+| Speaking | Speech-reactive motion | ✅ Implemented |
+| Timer completed | Alert shake motion | ✅ Implemented |
 | Manual emotion trigger | Play via ESPHome `emotion` entity | ✅ Implemented |
 
-**Technical Details**:
-```python
-# motion/movement_manager.py - Motion layering system
-# 1. Move queue (emotion actions) - Sets base pose
-# 2. Action (nod/shake etc.) - Overlays on base pose
-# 3. SpeechSway - Voice-driven micro-movements, can coexist with Move
-# 4. Breathing - Idle breathing animation
-```
-
-**Original Plan** (Decided not to implement to avoid blocking conversation):
-
-| Voice Assistant Event | Original Planned Action | Reason Not Implemented |
-|----------------------|------------------------|------------------------|
-| Positive response received | Play "happy" action | Full action would block conversation fluency |
-| Negative response received | Play "sad" action | Full action would block conversation fluency |
-| Play music/entertainment | Play "dance" action | Full action would block conversation fluency |
-| Timer completed | Play "alert" action | Full action would block conversation fluency |
-| Error/cannot understand | Play "confused" action | Full action would block conversation fluency |
+**Deliberately Not Active In Runtime**:
+- Automatic emotion keyword detection from assistant text
+- Blocking full-action choreography during conversation
+- Dance/personalization layers that require user configuration
 
 **Manual Emotion Trigger Example**:
 ```yaml
@@ -904,26 +835,14 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 
 > Scope note: Current implementation is intentionally single-face tracking for stability and device performance.
 
-### Phase 19 - Gravity Compensation Interactive Mode (Partial) 🟡
+### Phase 19 - Gravity Compensation Interactive Mode (Historical / Not Current Target)
 
-**Goal**: Allow users to physically touch and guide robot head for "teaching" style interaction.
+This was an exploration direction for manual teaching workflows.
 
-**SDK Support**: `enable_gravity_compensation()` - Motors enter gravity compensation mode, can be manually moved
-
-**Implemented Features**:
-- ✅ Gravity compensation mode switch (`motor_mode` Select entity, option "gravity_compensation")
-- ✅ `reachy_controller.py:236-237` - Gravity compensation API call
-
-**Not Implemented**:
-- ❌ Teaching mode - Record motion trajectory
-- ❌ Save/playback custom actions
-- ❌ Voice command triggered teaching flow
-
-**Application Scenarios**:
-- ❌ User says "Let me teach you a move" → Enter gravity compensation mode
-- ❌ User manually moves head → Record motion trajectory
-- ❌ User says "Remember this" → Save action
-- ❌ User says "Do that action again" → Playback recorded action
+**Current Runtime Position**:
+- The zero-config runtime does not depend on a teaching flow
+- No user-facing teaching interaction is exposed as a core feature
+- If gravity-compensation support is revisited, it should remain optional and not become a required setup path
 
 ### Phase 20 - Environment Awareness Response (Partial) 🟡
 
@@ -950,21 +869,17 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 | Tilted/fallen | Play help action + voice "I fell, help me" | ❌ Not implemented |
 | Long idle | Enter sleep animation | ❌ Not implemented |
 
-### Phase 21 - Home Assistant Scene Integration (Not Implemented) ❌
+### Phase 21 - Home Assistant Orchestration Scope
 
-**Goal**: Trigger robot actions based on Home Assistant scenes/automations.
+The current runtime already exposes the main zero-config controls needed by Home Assistant:
 
-**Implementation**: Via ESPHome service calls
+- `sleep_control`
+- `idle_behavior_enabled`
+- `continuous_conversation`
+- `emotion`
+- gesture / face / diagnostic sensors
 
-**Not Implemented Scenes**:
-
-| HA Scene | Robot Response | Status |
-|----------|----------------|--------|
-| Good morning scene | Play wake action + "Good morning!" | ❌ Not implemented |
-| Good night scene | Play sleep action + "Good night~" | ❌ Not implemented |
-| Someone home | Turn toward door + wave + "Welcome home!" | ❌ Not implemented |
-| Doorbell rings | Turn toward door + alert action | ❌ Not implemented |
-| Play music | Sway with music rhythm | ❌ Not implemented |
+More elaborate scene orchestration remains intentionally outside the core runtime scope unless it can be delivered without introducing user configuration burden.
 
 
 ---
@@ -977,12 +892,12 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 - **ESPHome entities** - Core phases implemented (Phase 11 LED intentionally disabled); exact count evolves by release
 - **Basic voice interaction** - Wake word detection (microWakeWord/openWakeWord), STT/TTS integration
 - **Motion feedback** - Nod, shake, gaze and other basic actions
-- **Audio processing** - AGC, noise suppression, echo cancellation
+- **Audio path** - local wake word / stop word detection plus HA-managed STT/TTS
 - **Camera stream** - MJPEG live preview with ESPHome Camera entity
 
 #### Extended Features (Phase 13-22)
 - **Phase 13** ✅ - Sendspin multi-room audio support
-- **Phase 14** ✅ - Emotion keyword detection (280+ keywords, 35 categories)
+- **Phase 14** ✅ - Manual emotion playback + non-blocking motion feedback
 - **Phase 15** ✅ - Face tracking with body following (DOA + YOLO + body_yaw sync)
 - **Phase 16** ✅ - JSON-driven animation system (50Hz control loop)
 - **Phase 17** ✅ - Antenna sync animation during speech
@@ -990,12 +905,11 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 
 ### 🟡 Partially Implemented Features
 
-- **Phase 19** - Gravity compensation mode switch (teaching flow not implemented)
-- **Phase 20** - IMU sensor entities (trigger logic not implemented)
+- **Phase 20** - IMU sensor entities are exposed; higher-level trigger logic is intentionally minimal
 
 ### ❌ Not Implemented Features
 
-- **Phase 21** - Home Assistant scene integration (morning/night routines)
+- Zero-config scene orchestration beyond the provided runtime switches and blueprint defaults
 
 ---
 
@@ -1004,19 +918,20 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 ### Completed ✅
 - ✅ **Phase 1-12**: Core ESPHome entities and voice assistant
 - ✅ **Phase 13**: Sendspin audio playback
-- ✅ **Phase 14**: Emotion keyword detection and auto-trigger
+- ✅ **Phase 14**: Emotion playback and motion feedback
 - ✅ **Phase 15**: Face tracking with body following
 - ✅ **Phase 16**: JSON-driven animation system
 - ✅ **Phase 17**: Antenna sync animation + v1.0.0 idle antenna behavior refinements
+- ✅ **Phase 21**: Continuous conversation switch
 - ✅ **Phase 22**: Gesture detection
+- ✅ **Phase 23**: Face detection sensor
 - ✅ **Phase 24**: System diagnostics (psutil-based)
 
 ### Partial 🟡
-- 🟡 **Phase 19**: Gravity compensation mode (teaching flow pending)
 - 🟡 **Phase 20**: Environment awareness (IMU entities done, triggers pending)
 
 ### Not Implemented ❌
-- ❌ **Phase 21**: Home Assistant scene integration
+- ❌ Zero-config scene orchestration layer beyond current runtime behavior
 
 ---
 
@@ -1026,20 +941,21 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 |-------|--------|------------|-------|
 | Phase 1-12 | ✅ Complete | 100% | Core ESPHome entities implemented (Phase 11 LED intentionally disabled) |
 | Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
-| Phase 14 | ✅ Complete | 95% | Emotion keyword detection with 280+ keywords, 35 categories |
+| Phase 14 | ✅ Complete | 100% | Manual emotion playback and non-blocking motion feedback |
 | Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head |
 | Phase 16 | ✅ Complete | 100% | JSON-driven animation system (50Hz control loop) |
 | Phase 17 | ✅ Complete | 100% | Antenna sync animation during speech |
 | Phase 18 | ✅ Complete | 100% | Single-face visual gaze interaction with idle scanning |
-| Phase 19 | 🟡 Partial | 40% | Gravity compensation mode switch, missing teaching flow |
+| Phase 19 | Not a current runtime target | - | Historical planning item, not part of the zero-config runtime model |
 | Phase 20 | 🟡 Partial | 30% | IMU sensors exposed, missing trigger logic |
-| Phase 21 | ❌ Not done | 0% | Home Assistant scene integration not implemented |
+| Phase 21 | ✅ Complete | 100% | Continuous conversation switch implemented |
 | Phase 22 | ✅ Complete | 100% | Gesture detection with HaGRID ONNX models |
+| Phase 23 | ✅ Complete | 100% | Face detection sensor exposed |
 | Phase 24 | ✅ Complete | 100% | System diagnostics with psutil (9 sensors) |
 | **v0.9.5** | ✅ Complete | 100% | Modular architecture refactoring |
 | **v1.0.0** | ✅ Complete | 100% | Runtime toggles/persistence (Sendspin, face, gesture, confidence) + idle and gesture stability updates |
 
-**Overall Completion**: **Phase 1-18 + 22 + 24 + v0.9.5/v1.0.0: ~100%** | **Remaining gap: Phase 21 scene integration**
+**Overall Completion**: current zero-config runtime path is functionally complete; remaining gaps are optional orchestration ideas rather than missing core runtime features.
 
 
 ---
@@ -1198,6 +1114,8 @@ Current implementation uses 50Hz control loop for stability and performance. The
 
 ## 🔧 Microphone Sensitivity Optimization (2026-01-07)
 
+> Historical background only. These notes describe earlier low-level microphone tuning experiments and should not be read as current Home Assistant entity capabilities.
+
 ### Problem
 Low microphone sensitivity - Need to be very close for voice recognition.
 
@@ -1237,7 +1155,7 @@ Microphone sensitivity improved from ~30cm to ~2-3m effective range.
 
 ### Feature 1: Audio Settings Persistence
 
-AGC Enabled, AGC Max Gain, Noise Suppression settings now persist to `preferences.json`.
+Historical note: older audio processing preferences were once persisted here. The current app no longer exposes AGC or noise suppression entities.
 
 ### Feature 2: Sendspin Discovery Refactoring
 
@@ -1290,25 +1208,21 @@ YAW_DELTA_MAX = 65°  # Max difference between head and body yaw
 
 ### ESPHome Protocol Implementation Notes
 
-ESPHome protocol communicates with Home Assistant via protobuf messages. The following message types need to be implemented:
+ESPHome protocol communicates with Home Assistant via protobuf messages. The runtime primarily uses switch/number/select/sensor/binary_sensor/text_sensor/camera entities; button-only wake/sleep flows are historical and no longer the main control model.
 
 ```python
 from aioesphomeapi.api_pb2 import (
-    # Number entity (volume/angle control)
+    # Number entity (volume/angle/confidence control)
     ListEntitiesNumberResponse,
     NumberStateResponse,
     NumberCommandRequest,
 
-    # Select entity (motor mode)
+    # Select entity (emotion)
     ListEntitiesSelectResponse,
     SelectStateResponse,
     SelectCommandRequest,
 
-    # Button entity (wake/sleep)
-    ListEntitiesButtonResponse,
-    ButtonCommandRequest,
-
-    # Switch entity (motor switch)
+    # Switch entity (sleep/runtime toggles)
     ListEntitiesSwitchResponse,
     SwitchStateResponse,
     SwitchCommandRequest,
@@ -1359,7 +1273,7 @@ from aioesphomeapi.api_pb2 import (
 > **Optimization Notes**:
 > - `entity_registry.py`: Factory pattern refactoring reduced 285 lines
 > - `camera_server.py`: Using `FaceTrackingInterpolator` module reduced 61 lines
-> - `protocol/satellite.py`: Using `EmotionKeywordDetector` module reduced 21 lines
+> - `protocol/satellite.py`: Runtime paths are now centered on voice state handling and HA event reactions
 > - New modular architecture with 6 sub-packages: `core/`, `motion/`, `vision/`, `audio/`, `entities/`, `protocol/`
 
 ### New Module List (Updated 2026-01-19)
@@ -1392,7 +1306,7 @@ from aioesphomeapi.api_pb2 import (
 | `vision/` | `head_tracker.py` | 367 | YOLO face detector |
 | `vision/` | `camera_server.py` | 1009 | MJPEG camera stream server |
 | `audio/` | `doa_tracker.py` | 206 | Direction of Arrival tracking |
-| `audio/` | `microphone.py` | 219 | ReSpeaker microphone optimization |
+| `audio/` | `microphone.py` | 219 | Hardware audio helper / legacy tuning code |
 | `audio/` | `audio_player.py` | 679 | TTS + Sendspin playback |
 | `entities/` | `entity.py` | 402 | ESPHome base entity |
 | `entities/` | `entity_factory.py` | 440 | Entity factory pattern |
@@ -1437,11 +1351,11 @@ from aioesphomeapi.api_pb2 import (
 #### Phase 4: Feature Enhancements ✅ Complete
 
 - [x] Create `motion/gesture_actions.py` - GestureActionMapper
-- [x] Add `animations/gesture_mappings.json` - Gesture action config
+- [x] Fold gesture behavior config into `animations/conversation_animations.json`
 - [x] Create `audio/doa_tracker.py` - DOATracker
 - [x] Implement sound source tracking with motion control integration
 - [x] Create `entities/event_emotion_mapper.py` - EventEmotionMapper
-- [x] Add `animations/event_mappings.json` - HA event emotion mapping
+- [x] Fold HA event behavior config into `animations/conversation_animations.json`
 - [x] Add DOA tracking toggle HA entity
 
 ### SDK Compatibility Verification ✅ Passed

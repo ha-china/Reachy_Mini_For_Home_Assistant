@@ -8,7 +8,6 @@ on top of other movements. The speaking animation uses multi-frequency
 oscillators for more natural head sway.
 """
 
-import json
 import logging
 import math
 import random
@@ -16,6 +15,8 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+from ..animations.animation_config import load_animation_config
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -121,8 +122,7 @@ class AnimationPlayer:
             _LOGGER.warning("Animations file not found: %s", _ANIMATIONS_FILE)
             return
         try:
-            with open(_ANIMATIONS_FILE, encoding="utf-8") as f:
-                data = json.load(f)
+            data = load_animation_config(_ANIMATIONS_FILE)
 
             settings = data.get("settings", {})
             self._amplitude_scale = settings.get("amplitude_scale", 1.0)

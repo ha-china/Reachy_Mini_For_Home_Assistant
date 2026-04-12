@@ -5,7 +5,6 @@ This module handles all motion-related functionality:
 - ReachyMiniMotion: High-level motion API
 - StateMachine: Movement state management (RobotState, MovementState)
 - Smoothing: Interpolation and transition algorithms
-- GestureActions: Gesture-to-action mapping
 - Antenna: Antenna freeze/unfreeze control
 - PoseComposer: Pose composition utilities
 - EmotionMoves: Emotion animation playback
@@ -21,13 +20,6 @@ from .antenna import (
     calculate_antenna_blend,
 )
 from .emotion_moves import EmotionMove, is_emotion_available, list_available_emotions
-from .gesture_actions import (
-    DEFAULT_GESTURE_MAPPINGS,
-    GestureAction,
-    GestureActionMapper,
-    GestureMapping,
-    load_gesture_mappings,
-)
 from .movement_manager import MovementManager
 from .pose_composer import (
     AntennaComponents,
@@ -57,7 +49,6 @@ from .state_machine import STATE_ANIMATION_MAP, MovementState, PendingAction, Ro
 
 __all__ = [
     "ANTENNA_BLEND_DURATION",
-    "DEFAULT_GESTURE_MAPPINGS",
     "STATE_ANIMATION_MAP",
     # Animation
     "AnimationPlayer",
@@ -67,10 +58,6 @@ __all__ = [
     "AntennaState",
     # Emotion moves
     "EmotionMove",
-    # Gesture actions
-    "GestureAction",
-    "GestureActionMapper",
-    "GestureMapping",
     # Core motion control
     "MovementManager",
     "MovementState",
@@ -100,7 +87,6 @@ __all__ = [
     "lerp",
     "lerp_angle",
     "list_available_emotions",
-    "load_gesture_mappings",
     "normalize_angle",
     "pose_distance",
     "smooth_value",

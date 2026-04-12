@@ -55,21 +55,16 @@ Home Assistant will auto-discover Reachy Mini via mDNS.
 - Head follows detected face
 - Body follows head when turned far
 - Adaptive frame rate: 15fps active, 2fps idle
+- Runtime switchable from Home Assistant
 
 ### Gesture Detection
-Detected gestures and robot responses:
+Detected gestures are published to Home Assistant as entity state updates.
+The default runtime does not trigger built-in robot actions from gestures.
 
-| Gesture | Response |
-|---------|----------|
-| like (thumbs up) | Cheerful emotion |
-| dislike (thumbs down) | Sad emotion |
-| ok | Nod animation |
-| peace | Enthusiastic emotion |
-| stop | Stop speaking |
-| call | Start listening |
-| palm | Pause motion |
-| fist | Rage emotion |
-| one/two/three/four | Send HA event |
+| Output | Description |
+|--------|-------------|
+| `gesture_detected` | Current gesture label |
+| `gesture_confidence` | Detection confidence |
 
 ### Emotion Responses
 The robot can play 35 different emotions:
@@ -78,10 +73,9 @@ The robot can play 35 different emotions:
 
 ### Audio Features
 - Speaker volume control (0-100%)
-- Microphone volume control (0-100%)
-- AGC (Auto Gain Control, 0-40dB)
-- Noise suppression (0-100%)
-- Echo cancellation (built-in)
+- Mute switch for voice pipeline pause/resume
+- Wake sound and timer-finished sound playback
+- Home Assistant handles STT/TTS engines
 
 ### Sendspin Multi-Room Audio
 - Automatic discovery of Sendspin servers via mDNS
@@ -104,16 +98,21 @@ The robot can play 35 different emotions:
 |--------|------|-------------|
 | Daemon State | Text Sensor | Robot daemon status |
 | Backend Ready | Binary Sensor | Backend connection status |
+| Mute | Switch | Suspend/resume voice pipeline |
 | Speaker Volume | Number (0-100%) | Speaker volume control |
+| Disable Camera | Switch | Suspend/resume camera service |
+| Idle Behavior | Switch | Unified idle motion + idle antenna + idle micro-actions |
+| Sendspin | Switch | Enable/disable Sendspin discovery and playback |
+| Face Tracking | Switch | Enable/disable face tracking |
+| Gesture Detection | Switch | Enable/disable gesture detection |
+| Face Confidence | Number (0-1) | Face tracking confidence threshold |
 
-### Phase 2: Motor Control
+### Phase 2: Sleep and Runtime State
 | Entity | Type | Description |
 |--------|------|-------------|
-| Motors Enabled | Switch | Motor power on/off |
-| Wake Up | Button | Wake robot from sleep |
-| Go to Sleep | Button | Put robot to sleep |
-| Sleep Mode | Binary Sensor | Current sleep state |
-| Services Suspended | Binary Sensor | ML models unloaded state |
+| Sleep Control | Switch | Turn on to sleep, turn off to wake |
+| Sleep Mode | Binary Sensor | Running when awake, not running when sleeping |
+| Services Suspended | Binary Sensor | Running when services are active |
 
 ### Phase 3: Pose Control
 | Entity | Type | Range |
@@ -158,11 +157,6 @@ The robot can play 35 different emotions:
 |--------|------|-------------|
 | Emotion | Select | Choose emotion to play (35 options) |
 
-### Phase 9: Audio Control
-| Entity | Type | Description |
-|--------|------|-------------|
-| Microphone Volume | Number (0-100%) | Mic gain control |
-
 ### Phase 10: Camera
 | Entity | Type | Description |
 |--------|------|-------------|
@@ -177,14 +171,6 @@ Features:
 - Real-time 3D robot visualization
 - Interactive view of robot state
 - Connects to robot daemon for live updates
-
-### Phase 12: Audio Processing
-| Entity | Type | Description |
-|--------|------|-------------|
-| AGC Enabled | Switch | Auto gain control on/off |
-| AGC Max Gain | Number (0-40dB) | Maximum AGC gain |
-| Noise Suppression | Number (0-100%) | Noise reduction level |
-| Echo Cancellation Converged | Binary Sensor | AEC status |
 
 ### Phase 21: Conversation
 | Entity | Type | Description |
@@ -219,12 +205,14 @@ Features:
 
 ## Sleep Mode
 
+Runtime reactions are zero-config: voice phases, timer alerts, and HA state-triggered emotions use the same built-in behavior model.
+
 ### Enter Sleep
-- Press "Go to Sleep" button in Home Assistant
+- Turn on the `Sleep Control` switch in Home Assistant
 - Robot relaxes motors, stops camera, pauses voice detection
 
 ### Wake Up
-- Press "Wake Up" button in Home Assistant
+- Turn off the `Sleep Control` switch in Home Assistant
 - Or say the wake word
 - Robot resumes all functions
 
@@ -234,7 +222,7 @@ Features:
 
 | Problem | Solution |
 |---------|----------|
-| Not responding to wake word | Increase AGC Max Gain, reduce background noise |
+| Not responding to wake word | Check Mute is off, reduce background noise, verify Home Assistant is connected |
 | Face tracking not working | Ensure adequate lighting, check Face Detected sensor |
 | No audio output | Check Speaker Volume, verify TTS engine in HA |
 | Can't connect to HA | Verify same network, check port 6053 |
@@ -253,4 +241,4 @@ Camera Port:   8081 (MJPEG)
 
 ---
 
-*Reachy Mini Voice Assistant v0.9.5*
+*Reachy Mini Voice Assistant v1.0.4*
