@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, _LOGGER
+from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
 
 
 class AudioPlayerLocalMixin:
@@ -10,6 +10,10 @@ class AudioPlayerLocalMixin:
         if not audio_bytes:
             return False
         audio_data = bytes(audio_bytes)
+        if (not content_type) or (content_type == "application/octet-stream"):
+            sniffed = sniff_audio_content_type(audio_data[: min(len(audio_data), 64)])
+            if sniffed:
+                content_type = sniffed
         mem_iter = (
             audio_data[i : i + STREAM_FETCH_CHUNK_SIZE] for i in range(0, len(audio_data), STREAM_FETCH_CHUNK_SIZE)
         )

@@ -57,6 +57,7 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._sendspin_queue_thread: threading.Thread | None = None
         self._sendspin_sway_state: dict | None = None
         self._logged_resample = False
+        self._last_sendspin_overflow_log = 0.0
 
     def set_sway_callback(self, callback: Callable[[dict], None] | None) -> None:
         self._sway_callback = callback

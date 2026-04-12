@@ -231,7 +231,10 @@ class AudioPlayerSendspinMixin:
             while self._sendspin_queue_bytes > SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES and self._sendspin_queue:
                 dropped = self._sendspin_queue.popleft()
                 self._sendspin_queue_bytes = max(0, self._sendspin_queue_bytes - dropped.byte_count)
-                _LOGGER.warning("Sendspin buffer overflow, dropping oldest queued audio")
+                now = time.monotonic()
+                if now - getattr(self, "_last_sendspin_overflow_log", 0.0) >= 1.0:
+                    _LOGGER.warning("Sendspin buffer overflow, dropping oldest queued audio")
+                    self._last_sendspin_overflow_log = now
         self._sendspin_queue_event.set()
 
     def _get_sendspin_sway_state(self) -> dict | None:
