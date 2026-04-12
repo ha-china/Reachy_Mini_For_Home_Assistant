@@ -360,7 +360,7 @@ class VoiceAssistantService:
         _LOGGER.info("Services suspended - ESPHome only")
 
     def _resume_non_esphome_services(self, reason: str) -> None:
-        """Resume all non-ESPHome services after sleep/disconnect."""
+        """Resume all non-ESPHome services after runtime suspension."""
         _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
         self._robot_services_paused.clear()
         self._set_service_state(suspended=False)

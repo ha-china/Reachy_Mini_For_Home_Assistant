@@ -142,7 +142,7 @@ def release_ml_models(server: "MJPEGCameraServer") -> None:
 
 
 def suspend_processing(server: "MJPEGCameraServer") -> None:
-    _LOGGER.info("Suspending camera processing for sleep mode...")
+    _LOGGER.info("Suspending camera processing resources...")
     server._frame_rate_manager.suspend()
     server._face_tracking_enabled = False
     server._gesture_detection_enabled = False
@@ -157,7 +157,7 @@ def suspend_processing(server: "MJPEGCameraServer") -> None:
 
 
 def resume_processing(server: "MJPEGCameraServer") -> None:
-    _LOGGER.info("Resuming camera processing after sleep...")
+    _LOGGER.info("Resuming camera processing resources...")
     if server._face_tracking_requested or server._gesture_detection_requested:
         server._frame_rate_manager.resume()
     if server._face_tracking_requested and server._head_tracker is None:
@@ -178,7 +178,7 @@ def suspend(server: "MJPEGCameraServer") -> None:
     if not server._running:
         _LOGGER.debug("Camera server not running, nothing to suspend")
         return
-    _LOGGER.info("Suspending camera server for sleep...")
+    _LOGGER.info("Suspending camera server resources...")
     suspend_processing(server)
     server._running = False
     if server._capture_thread is not None:
@@ -193,12 +193,12 @@ def resume_from_suspend(server: "MJPEGCameraServer") -> None:
     if server._running:
         _LOGGER.debug("Camera server already running")
         return
-    _LOGGER.info("Resuming camera server from sleep...")
+    _LOGGER.info("Resuming camera server resources...")
     server._running = True
     resume_processing(server)
     server._capture_thread = threading.Thread(target=server._capture_frames, daemon=True, name="camera-capture")
     server._capture_thread.start()
-    _LOGGER.info("Camera server resumed from sleep")
+    _LOGGER.info("Camera server resumed")
 
 
 def log_vision_runtime_state(server: "MJPEGCameraServer", source: str) -> None:

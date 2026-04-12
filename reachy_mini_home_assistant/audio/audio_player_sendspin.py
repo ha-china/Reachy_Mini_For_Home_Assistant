@@ -425,7 +425,11 @@ class AudioPlayerSendspinMixin:
             port=SENDSPIN_DEFAULT_PORT,
             on_connection=self._handle_sendspin_listener_connection,
         )
-        await self._sendspin_listener.start()
+        try:
+            await self._sendspin_listener.start()
+        except Exception:
+            self._sendspin_listener = None
+            raise
         _LOGGER.info("Sendspin listener started on port %d", self._sendspin_listener.port)
 
     async def _handle_sendspin_listener_connection(self, ws) -> None:
@@ -475,7 +479,9 @@ class AudioPlayerSendspinMixin:
         try:
             await self._start_sendspin_listener()
         except Exception:
-            _LOGGER.exception("Failed to start Sendspin incoming listener")
+            _LOGGER.warning(
+                "Sendspin incoming listener unavailable; continuing with discovery/client mode", exc_info=True
+            )
 
     async def _on_sendspin_server_found(self, server_url: str) -> None:
         await self._connect_to_server(server_url)

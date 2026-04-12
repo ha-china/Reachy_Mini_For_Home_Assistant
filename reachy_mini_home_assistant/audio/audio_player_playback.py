@@ -159,12 +159,12 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
         self._current_volume = self._unduck_volume
 
     def suspend(self) -> None:
-        _LOGGER.info("Suspending AudioPlayer for sleep...")
+        _LOGGER.info("Suspending AudioPlayer resources...")
         self.stop()
         self._sway_callback = None
-        _LOGGER.info("AudioPlayer suspended")
+        _LOGGER.info("AudioPlayer resources suspended")
 
     def resume(self) -> None:
-        _LOGGER.info("Resuming AudioPlayer from sleep...")
+        _LOGGER.info("Resuming AudioPlayer resources...")
         self._stop_flag.clear()
-        _LOGGER.info("AudioPlayer resumed")
+        _LOGGER.info("AudioPlayer resources resumed")
