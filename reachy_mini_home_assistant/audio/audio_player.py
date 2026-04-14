@@ -57,12 +57,17 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._sendspin_queue_thread: threading.Thread | None = None
         self._sendspin_sway_state: dict | None = None
         self._logged_resample = False
+        self._last_sendspin_overflow_log = 0.0
+        self._http_host_override: str | None = None
 
     def set_sway_callback(self, callback: Callable[[dict], None] | None) -> None:
         self._sway_callback = callback
 
     def set_reachy_mini(self, reachy_mini) -> None:
         self.reachy_mini = reachy_mini
+
+    def set_http_host_override(self, host: str | None) -> None:
+        self._http_host_override = host
 
     def __del__(self) -> None:
         try:

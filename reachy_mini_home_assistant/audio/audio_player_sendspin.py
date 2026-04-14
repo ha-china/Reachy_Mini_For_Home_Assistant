@@ -231,7 +231,10 @@ class AudioPlayerSendspinMixin:
             while self._sendspin_queue_bytes > SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES and self._sendspin_queue:
                 dropped = self._sendspin_queue.popleft()
                 self._sendspin_queue_bytes = max(0, self._sendspin_queue_bytes - dropped.byte_count)
-                _LOGGER.warning("Sendspin buffer overflow, dropping oldest queued audio")
+                now = time.monotonic()
+                if now - getattr(self, "_last_sendspin_overflow_log", 0.0) >= 1.0:
+                    _LOGGER.warning("Sendspin buffer overflow, dropping oldest queued audio")
+                    self._last_sendspin_overflow_log = now
         self._sendspin_queue_event.set()
 
     def _get_sendspin_sway_state(self) -> dict | None:
@@ -425,7 +428,11 @@ class AudioPlayerSendspinMixin:
             port=SENDSPIN_DEFAULT_PORT,
             on_connection=self._handle_sendspin_listener_connection,
         )
-        await self._sendspin_listener.start()
+        try:
+            await self._sendspin_listener.start()
+        except Exception:
+            self._sendspin_listener = None
+            raise
         _LOGGER.info("Sendspin listener started on port %d", self._sendspin_listener.port)
 
     async def _handle_sendspin_listener_connection(self, ws) -> None:
@@ -475,7 +482,9 @@ class AudioPlayerSendspinMixin:
         try:
             await self._start_sendspin_listener()
         except Exception:
-            _LOGGER.exception("Failed to start Sendspin incoming listener")
+            _LOGGER.warning(
+                "Sendspin incoming listener unavailable; continuing with discovery/client mode", exc_info=True
+            )
 
     async def _on_sendspin_server_found(self, server_url: str) -> None:
         await self._connect_to_server(server_url)

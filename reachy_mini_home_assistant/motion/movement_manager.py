@@ -371,7 +371,7 @@ class MovementManager:
             logger.info("MovementManager resumed - robot reconnected")
 
     def suspend(self) -> None:
-        """Suspend the movement manager for sleep mode.
+        """Suspend the movement manager runtime resources.
 
         This stops the control loop thread to release CPU resources.
         The service can be resumed later with resume().
@@ -380,7 +380,7 @@ class MovementManager:
             logger.debug("MovementManager not running, nothing to suspend")
             return
 
-        logger.info("Suspending MovementManager for sleep...")
+        logger.info("Suspending MovementManager resources...")
 
         # First pause the robot operations
         self.pause_for_robot_disconnect()
@@ -403,7 +403,7 @@ class MovementManager:
         logger.info("MovementManager suspended - CPU released")
 
     def resume_from_suspend(self) -> None:
-        """Resume the movement manager after sleep.
+        """Resume the movement manager runtime resources.
 
         This restarts the control loop thread.
         """
@@ -411,7 +411,7 @@ class MovementManager:
             logger.debug("MovementManager already running")
             return
 
-        logger.info("Resuming MovementManager from sleep...")
+        logger.info("Resuming MovementManager resources...")
 
         # Resume robot operations
         self.resume_after_robot_connect()
@@ -433,7 +433,7 @@ class MovementManager:
         )
         self._thread.start()
 
-        logger.info("MovementManager resumed from sleep")
+        logger.info("MovementManager resumed")
 
     def queue_emotion_move(self, emotion_name: str) -> bool:
         """Thread-safe: Queue an emotion move to be played by the control loop.

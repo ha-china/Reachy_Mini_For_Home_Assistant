@@ -174,6 +174,10 @@ class VoiceSatelliteProtocol(APIServer):
         """Called when a client connects."""
         peer = transport.get_extra_info("peername")
         _LOGGER.info("ESPHome client connected from %s", peer)
+        peer_host = peer[0] if isinstance(peer, tuple) and peer else None
+        if peer_host:
+            self.state.tts_player.set_http_host_override(peer_host)
+            self.state.music_player.set_http_host_override(peer_host)
         super().connection_made(transport)
 
     def update_camera_server(self, camera_server):
@@ -361,11 +365,11 @@ class VoiceSatelliteProtocol(APIServer):
         handle_ha_state_change(self, msg)
 
     def suspend(self) -> None:
-        """Suspend the satellite for sleep mode.
+        """Suspend the satellite runtime resources.
 
         Stops any current playback and releases resources.
         """
-        _LOGGER.info("Suspending VoiceSatellite for sleep...")
+        _LOGGER.info("Suspending VoiceSatellite resources...")
         self._cancel_delayed_idle_return()
         self._pipeline_active = False
         self._pending_voice_request = None
@@ -379,7 +383,7 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.music_player.stop()
 
         # Keep configured wake words intact.
-        # Audio processing is paused by sleep/mute lifecycle, so clearing wake words here
+        # Audio processing is paused by runtime resource suspension, so clearing wake words here
         # can cause Home Assistant UI to temporarily show an empty wake word selection.
 
         # Reset conversation state
@@ -391,8 +395,8 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("VoiceSatellite suspended")
 
     def resume(self) -> None:
-        """Resume the satellite after sleep."""
-        _LOGGER.info("Resuming VoiceSatellite from sleep...")
+        """Resume the satellite runtime resources."""
+        _LOGGER.info("Resuming VoiceSatellite resources...")
 
         # Ensure wake word processing context is refreshed after resume.
         self.state.wake_words_changed = True

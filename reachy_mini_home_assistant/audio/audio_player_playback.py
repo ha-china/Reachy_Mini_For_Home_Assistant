@@ -3,8 +3,10 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
+import requests
+
 from .audio_player_local import AudioPlayerLocalMixin
-from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER
+from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, rewrite_local_service_url, sniff_audio_content_type
 from .audio_player_stream_decoded import AudioPlayerStreamDecodedMixin
 from .audio_player_stream_pcm import AudioPlayerStreamPCMMixin
 
@@ -39,23 +41,43 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
     def _play_file(self, file_path: str) -> None:
         try:
             if file_path.startswith(("http://", "https://")):
-                import requests
-
-                source_url = file_path
+                source_url = rewrite_local_service_url(file_path, getattr(self, "_http_host_override", None))
                 streamed = False
                 cached_audio = bytearray()
                 content_type = ""
                 try:
-                    with requests.get(source_url, stream=True, timeout=(5.0, 30.0)) as response:
+                    request_kwargs = {"stream": True, "timeout": (5.0, 30.0)}
+                    try:
+                        response_ctx = requests.get(source_url, **request_kwargs)
+                    except requests.exceptions.SSLError:
+                        request_kwargs["verify"] = False
+                        response_ctx = requests.get(source_url, **request_kwargs)
+
+                    with response_ctx as response:
                         response.raise_for_status()
                         content_type = (response.headers.get("Content-Type") or "").lower()
                         stream_iter = response.iter_content(chunk_size=STREAM_FETCH_CHUNK_SIZE)
 
+                        first_chunk = b""
+                        for chunk in stream_iter:
+                            if chunk:
+                                first_chunk = chunk
+                                cached_audio.extend(chunk)
+                                break
+
+                        if (not content_type) or (content_type == "application/octet-stream"):
+                            sniffed = sniff_audio_content_type(first_chunk)
+                            if sniffed:
+                                content_type = sniffed
+
                         def caching_iter_content(chunk_size: int = STREAM_FETCH_CHUNK_SIZE):
                             del chunk_size
+                            if first_chunk:
+                                yield first_chunk
                             for chunk in stream_iter:
                                 if chunk:
-                                    cached_audio.extend(chunk)
+                                    if chunk is not first_chunk:
+                                        cached_audio.extend(chunk)
                                     yield chunk
 
                         adapted_response = self._iterator_response_adapter(caching_iter_content())
@@ -74,7 +96,7 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
                 if streamed:
                     return
                 _LOGGER.info("TTS playback mode: fallback_memory")
-                played = self._play_cached_audio(cached_audio, content_type)
+                played = self._play_cached_audio(cached_audio, content_type, source_url=source_url)
                 if played:
                     return
                 _LOGGER.error("Failed to play cached TTS audio from memory")
@@ -159,12 +181,12 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
         self._current_volume = self._unduck_volume
 
     def suspend(self) -> None:
-        _LOGGER.info("Suspending AudioPlayer for sleep...")
+        _LOGGER.info("Suspending AudioPlayer resources...")
         self.stop()
         self._sway_callback = None
-        _LOGGER.info("AudioPlayer suspended")
+        _LOGGER.info("AudioPlayer resources suspended")
 
     def resume(self) -> None:
-        _LOGGER.info("Resuming AudioPlayer from sleep...")
+        _LOGGER.info("Resuming AudioPlayer resources...")
         self._stop_flag.clear()
-        _LOGGER.info("AudioPlayer resumed")
+        _LOGGER.info("AudioPlayer resources resumed")

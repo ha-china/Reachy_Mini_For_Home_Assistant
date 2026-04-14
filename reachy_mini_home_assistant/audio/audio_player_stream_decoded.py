@@ -226,6 +226,8 @@ class AudioPlayerStreamDecodedMixin:
                 return True
             if decode_error:
                 return False
+            if pushed_any:
+                return True
             completed_cleanly = feed_done.is_set() and eos_seen
             if not completed_cleanly:
                 return False

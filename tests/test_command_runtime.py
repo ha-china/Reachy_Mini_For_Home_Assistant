@@ -16,9 +16,10 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         body = match.group("body")
 
         self.assertNotIn("manager.state.target_yaw = 0.0", body)
-        self.assertNotIn("manager.state.target_pitch = 0.0", body)
-        self.assertNotIn("manager.state.target_roll = 0.0", body)
         self.assertIn("Preserve the current pose anchor", body)
+        self.assertIn("manager.state.target_pitch = 0.0", body)
+        self.assertIn("manager.state.target_roll = 0.0", body)
+        self.assertIn("old_state == RobotState.IDLE and not manager._idle_behavior_enabled()", body)
 
 
 class VoicePipelineStopTests(unittest.TestCase):
@@ -80,3 +81,13 @@ class VoicePipelineStopTests(unittest.TestCase):
         self.assertEqual(len(unduck_calls), 1)
         self.assertEqual(len(stop_calls), 1)
         self.assertEqual(protocol._tts_finished_calls, 0)
+
+
+class CommandRuntimeStateQueueTests(unittest.TestCase):
+    def test_poll_commands_coalesces_back_to_back_state_updates(self):
+        path = Path("reachy_mini_home_assistant/motion/command_runtime.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn('if cmd == "set_state":', content)
+        self.assertIn('if next_cmd == "set_state":', content)
+        self.assertIn("payload = next_payload", content)

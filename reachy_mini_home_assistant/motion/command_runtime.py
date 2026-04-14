@@ -22,6 +22,18 @@ def poll_commands(manager: "MovementManager") -> None:
             cmd, payload = manager._command_queue.get_nowait()
         except Empty:
             break
+
+        if cmd == "set_state":
+            while True:
+                try:
+                    next_cmd, next_payload = manager._command_queue.get_nowait()
+                except Empty:
+                    break
+                if next_cmd == "set_state":
+                    payload = next_payload
+                    continue
+                handle_command(manager, next_cmd, next_payload)
+
         handle_command(manager, cmd, payload)
 
 
@@ -48,6 +60,15 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
             # Preserve the current pose anchor during an active conversation.
             # This keeps wakeup turn-to-sound orientation until the session
             # actually ends and `on_idle()` decides how to settle the robot.
+            # When idle behavior is disabled, leaving IDLE also needs to clear
+            # the low-energy rest pose so listening/thinking/speaking can lift
+            # the head again while still keeping the current yaw anchor.
+            if old_state == RobotState.IDLE and not manager._idle_behavior_enabled():
+                manager.state.target_x = 0.0
+                manager.state.target_y = 0.0
+                manager.state.target_z = 0.0
+                manager.state.target_roll = 0.0
+                manager.state.target_pitch = 0.0
             manager._idle_antenna_smoothed = None
             manager._last_idle_antenna_update = 0.0
 
