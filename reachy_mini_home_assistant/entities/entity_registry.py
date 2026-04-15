@@ -159,12 +159,18 @@ class EntityRegistry:
 
         prefs = self._get_preferences()
         if prefs is None:
-            self.camera_server.set_face_tracking_enabled(False)
-            self.camera_server.set_gesture_detection_enabled(False)
+            self.camera_server.apply_runtime_vision_state(
+                face_requested=False,
+                gesture_requested=False,
+                models_allowed=False,
+            )
             return
 
-        self.camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
-        self.camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
+        self.camera_server.apply_runtime_vision_state(
+            face_requested=bool(prefs.face_tracking_enabled),
+            gesture_requested=bool(prefs.gesture_detection_enabled),
+            models_allowed=self._idle_behavior_allows_vision(),
+        )
 
     def _get_pref_bool(self, key: str, default: bool = False) -> bool:
         prefs = self._get_preferences()
