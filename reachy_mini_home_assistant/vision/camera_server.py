@@ -32,6 +32,7 @@ from .camera_processing import (
     unregister_stream_client,
 )
 from .camera_runtime import (
+    apply_runtime_vision_state,
     load_gesture_detector,
     load_head_tracker,
     log_vision_runtime_state,
@@ -209,6 +210,16 @@ class MJPEGCameraServer:
 
     def resume_processing(self) -> None:
         resume_processing(self)
+
+    def apply_runtime_vision_state(
+        self, *, face_requested: bool, gesture_requested: bool, models_allowed: bool
+    ) -> None:
+        apply_runtime_vision_state(
+            self,
+            face_requested=face_requested,
+            gesture_requested=gesture_requested,
+            models_allowed=models_allowed,
+        )
 
     def suspend(self) -> None:
         suspend(self)
