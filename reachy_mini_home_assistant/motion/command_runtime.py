@@ -69,6 +69,8 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
                 manager.state.target_z = 0.0
                 manager.state.target_roll = 0.0
                 manager.state.target_pitch = 0.0
+                manager.state.target_antenna_left = 0.0
+                manager.state.target_antenna_right = 0.0
             manager._idle_antenna_smoothed = None
             manager._last_idle_antenna_update = 0.0
 

@@ -19,6 +19,8 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         self.assertIn("Preserve the current pose anchor", body)
         self.assertIn("manager.state.target_pitch = 0.0", body)
         self.assertIn("manager.state.target_roll = 0.0", body)
+        self.assertIn("manager.state.target_antenna_left = 0.0", body)
+        self.assertIn("manager.state.target_antenna_right = 0.0", body)
         self.assertIn("old_state == RobotState.IDLE and not manager._idle_behavior_enabled()", body)
 
 
