@@ -112,6 +112,11 @@ class IdleRestPose:
     """Low-energy rest pose used when idle behavior is disabled."""
 
     pitch_rad: float
+    yaw_rad: float
+    roll_rad: float
+    x_m: float
+    y_m: float
+    z_m: float
     antenna_left_rad: float
     antenna_right_rad: float
 
@@ -165,6 +170,11 @@ def load_idle_behavior_config(
     actions = list(default_actions)
     rest_pose = IdleRestPose(
         pitch_rad=math.radians(float(default_rest_pose["pitch_deg"])),
+        yaw_rad=math.radians(float(default_rest_pose.get("yaw_deg", 0.0))),
+        roll_rad=math.radians(float(default_rest_pose.get("roll_deg", 0.0))),
+        x_m=float(default_rest_pose.get("x_m", 0.0)),
+        y_m=float(default_rest_pose.get("y_m", 0.0)),
+        z_m=float(default_rest_pose.get("z_m", 0.0)),
         antenna_left_rad=float(default_rest_pose["antenna_left_rad"]),
         antenna_right_rad=float(default_rest_pose["antenna_right_rad"]),
     )
@@ -188,6 +198,30 @@ def load_idle_behavior_config(
             rest_pose.pitch_rad = math.radians(
                 float(rest_pose_section.get("pitch_deg", default_rest_pose["pitch_deg"]))
             )
+        except (TypeError, ValueError):
+            pass
+        try:
+            rest_pose.yaw_rad = math.radians(
+                float(rest_pose_section.get("yaw_deg", default_rest_pose.get("yaw_deg", 0.0)))
+            )
+        except (TypeError, ValueError):
+            pass
+        try:
+            rest_pose.roll_rad = math.radians(
+                float(rest_pose_section.get("roll_deg", default_rest_pose.get("roll_deg", 0.0)))
+            )
+        except (TypeError, ValueError):
+            pass
+        try:
+            rest_pose.x_m = float(rest_pose_section.get("x_m", default_rest_pose.get("x_m", 0.0)))
+        except (TypeError, ValueError):
+            pass
+        try:
+            rest_pose.y_m = float(rest_pose_section.get("y_m", default_rest_pose.get("y_m", 0.0)))
+        except (TypeError, ValueError):
+            pass
+        try:
+            rest_pose.z_m = float(rest_pose_section.get("z_m", default_rest_pose.get("z_m", 0.0)))
         except (TypeError, ValueError):
             pass
         try:

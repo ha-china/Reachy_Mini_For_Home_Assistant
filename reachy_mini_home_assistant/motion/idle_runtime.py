@@ -40,11 +40,11 @@ def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> No
 
 def apply_idle_rest_pose(manager: "MovementManager") -> None:
     manager.state.target_pitch = manager._idle_rest_head_pitch_rad
-    manager.state.target_yaw = 0.0
-    manager.state.target_roll = 0.0
-    manager.state.target_x = 0.0
-    manager.state.target_y = 0.0
-    manager.state.target_z = 0.0
+    manager.state.target_yaw = manager._idle_rest_head_yaw_rad
+    manager.state.target_roll = manager._idle_rest_head_roll_rad
+    manager.state.target_x = manager._idle_rest_x_m
+    manager.state.target_y = manager._idle_rest_y_m
+    manager.state.target_z = manager._idle_rest_z_m
     manager.state.target_antenna_left = manager._idle_rest_antenna_left_rad
     manager.state.target_antenna_right = manager._idle_rest_antenna_right_rad
     manager.state.anim_antenna_left = 0.0
