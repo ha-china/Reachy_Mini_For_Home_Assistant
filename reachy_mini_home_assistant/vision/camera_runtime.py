@@ -174,6 +174,24 @@ def resume_processing(server: "MJPEGCameraServer") -> None:
     log_vision_runtime_state(server, "Resumed")
 
 
+def apply_runtime_vision_state(
+    server: "MJPEGCameraServer",
+    *,
+    face_requested: bool,
+    gesture_requested: bool,
+    models_allowed: bool,
+) -> None:
+    server._face_tracking_requested = bool(face_requested)
+    server._gesture_detection_requested = bool(gesture_requested)
+
+    if not models_allowed:
+        suspend_processing(server)
+        log_vision_runtime_state(server, "Runtime vision disabled")
+        return
+
+    resume_processing(server)
+
+
 def suspend(server: "MJPEGCameraServer") -> None:
     if not server._running:
         _LOGGER.debug("Camera server not running, nothing to suspend")
