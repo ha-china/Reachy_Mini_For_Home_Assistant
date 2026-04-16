@@ -93,3 +93,15 @@ class CommandRuntimeStateQueueTests(unittest.TestCase):
         self.assertIn('if cmd == "set_state":', content)
         self.assertIn('if next_cmd == "set_state":', content)
         self.assertIn("payload = next_payload", content)
+
+
+class IdleRestPoseSourceTests(unittest.TestCase):
+    def test_transition_to_idle_rest_uses_full_rest_pose(self):
+        path = Path("reachy_mini_home_assistant/motion/movement_manager.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn("target_yaw=self._idle_rest_head_yaw_rad", content)
+        self.assertIn("target_roll=self._idle_rest_head_roll_rad", content)
+        self.assertIn("target_x=self._idle_rest_x_m", content)
+        self.assertIn("target_y=self._idle_rest_y_m", content)
+        self.assertIn("target_z=self._idle_rest_z_m", content)
