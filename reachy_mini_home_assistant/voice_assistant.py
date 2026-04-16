@@ -60,7 +60,7 @@ class AudioProcessingContext:
 # Smaller chunks = faster VAD response
 # ESPHome typical range: 256-512 samples
 # Going smaller improves latency but increases CPU/network overhead
-AUDIO_BLOCK_SIZE = 256  # samples at 16kHz = 16ms (optimized for low latency)
+AUDIO_BLOCK_SIZE = 512  # samples at 16kHz = 32ms (lower CPU while keeping wake latency reasonable)
 MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 40  # Max 40 chunks (~640ms) to prevent memory leak
 
 
@@ -293,6 +293,95 @@ class VoiceAssistantService:
         except Exception as e:
             _LOGGER.warning("Failed to apply Sendspin toggle (%s): %s", enabled, e)
 
+    def set_idle_behavior_enabled(self, enabled: bool) -> None:
+        """Apply idle behavior runtime changes that affect camera services."""
+        if self._state is None:
+            return
+
+        self._state.preferences.idle_behavior_enabled = bool(enabled)
+
+        async def _apply() -> None:
+            await self._reconcile_camera_runtime(reason="idle_behavior_toggle")
+
+        try:
+            loop = self._event_loop
+            if loop is not None and loop.is_running():
+                asyncio.run_coroutine_threadsafe(_apply(), loop)
+            else:
+                task = asyncio.create_task(_apply())
+                task.add_done_callback(lambda _task: None)
+        except Exception as e:
+            _LOGGER.warning("Failed to apply idle behavior toggle (%s): %s", enabled, e)
+
+    async def _start_camera_server_if_needed(self) -> None:
+        if self._state is None:
+            return
+        if not self.camera_enabled or not self._state.camera_enabled:
+            return
+        if not bool(self._state.preferences.idle_behavior_enabled):
+            return
+        if self._camera_server is not None:
+            prefs = self._state.preferences
+            self._camera_server.apply_runtime_vision_state(
+                face_requested=bool(prefs.face_tracking_enabled),
+                gesture_requested=bool(prefs.gesture_detection_enabled),
+                models_allowed=True,
+            )
+            self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
+            return
+
+        self._camera_server = MJPEGCameraServer(
+            reachy_mini=self.reachy_mini,
+            host=self.host,
+            port=self.camera_port,
+            fps=15,
+            quality=80,
+            enable_face_tracking=bool(self._state.preferences.face_tracking_enabled),
+            enable_gesture_detection=bool(self._state.preferences.gesture_detection_enabled),
+            gstreamer_lock=self._gstreamer_lock,
+        )
+
+        prefs = self._state.preferences
+        self._camera_server.apply_runtime_vision_state(
+            face_requested=bool(prefs.face_tracking_enabled),
+            gesture_requested=bool(prefs.gesture_detection_enabled),
+            models_allowed=True,
+        )
+        self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
+        await self._camera_server.start()
+
+        self._state._camera_server = self._camera_server
+        if self._state.satellite:
+            self._state.satellite.update_camera_server(self._camera_server)
+        if self._motion is not None:
+            self._motion.set_camera_server(self._camera_server)
+        _LOGGER.info("Camera server started on %s:%s", self.host, self.camera_port)
+
+    async def _stop_camera_server_if_running(self, *, reason: str) -> None:
+        if self._camera_server is None:
+            return
+        await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
+        self._camera_server = None
+        if self._state is not None:
+            self._state._camera_server = None
+            if self._state.satellite:
+                self._state.satellite.update_camera_server(None)
+        if self._motion is not None:
+            self._motion.set_camera_server(None)
+        _LOGGER.info("Camera server stopped (%s)", reason)
+
+    async def _reconcile_camera_runtime(self, *, reason: str) -> None:
+        if self._state is None:
+            return
+        should_run_camera = self.camera_enabled and self._state.camera_enabled and self._ha_connected
+        should_run_camera = should_run_camera and bool(self._state.preferences.idle_behavior_enabled)
+
+        if should_run_camera:
+            await self._start_camera_server_if_needed()
+            return
+
+        await self._stop_camera_server_if_running(reason=reason)
+
     def _probe_audio_capture_ready(self, media, timeout_s: float = 1.5) -> bool:
         """Check whether microphone samples become available shortly after startup."""
         deadline = time.monotonic() + timeout_s
@@ -470,43 +559,10 @@ class VoiceAssistantService:
         self._ha_connected = True
         self._ha_connection_established = True
 
-        # Start camera server if enabled and not already started
-        if self.camera_enabled and self._state.camera_enabled and self._camera_server is None:
-            try:
-                self._camera_server = MJPEGCameraServer(
-                    reachy_mini=self.reachy_mini,
-                    host=self.host,
-                    port=self.camera_port,
-                    fps=15,
-                    quality=80,
-                    enable_face_tracking=bool(self._state.preferences.face_tracking_enabled)
-                    and bool(self._state.preferences.idle_behavior_enabled),
-                    enable_gesture_detection=bool(self._state.preferences.gesture_detection_enabled)
-                    and bool(self._state.preferences.idle_behavior_enabled),
-                    gstreamer_lock=self._gstreamer_lock,
-                )
-
-                prefs = self._state.preferences
-                self._camera_server.apply_runtime_vision_state(
-                    face_requested=bool(prefs.face_tracking_enabled),
-                    gesture_requested=bool(prefs.gesture_detection_enabled),
-                    models_allowed=bool(prefs.idle_behavior_enabled),
-                )
-                self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
-
-                await self._camera_server.start()
-
-                self._state._camera_server = self._camera_server
-
-                if self._state.satellite:
-                    self._state.satellite.update_camera_server(self._camera_server)
-
-                if self._motion is not None:
-                    self._motion.set_camera_server(self._camera_server)
-
-                _LOGGER.info("Camera server started on %s:%s", self.host, self.camera_port)
-            except Exception as e:
-                _LOGGER.error("Failed to start camera server: %s", e)
+        try:
+            await self._reconcile_camera_runtime(reason="ha_connected")
+        except Exception as e:
+            _LOGGER.error("Failed to reconcile camera runtime: %s", e)
 
         # Resume services if they were suspended due to HA disconnection
         if self._state.services_suspended:
@@ -1031,8 +1087,16 @@ class VoiceAssistantService:
         # Detect wake words
         self._detect_wake_words(ctx)
 
-        # Detect stop word
-        self._detect_stop_word(ctx)
+        stop_context_active = (
+            self._state.tts_player.is_playing
+            or self._state.satellite._pipeline_active
+            or self._state.satellite._timer_finished
+        )
+
+        # Stop-word inference is only useful while there is active playback or
+        # a live voice pipeline/timer to interrupt.
+        if stop_context_active:
+            self._detect_stop_word(ctx)
 
     def _process_features(self, ctx: AudioProcessingContext, audio_chunk: bytes) -> None:
         """Process audio features for wake word detection."""
