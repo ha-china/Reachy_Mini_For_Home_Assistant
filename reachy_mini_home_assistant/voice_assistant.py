@@ -1081,10 +1081,16 @@ class VoiceAssistantService:
             _LOGGER.warning("Stop word model not loaded")
             return
 
-        # Keep stop-word arming aligned with actual playback, not only protocol
-        # bookkeeping. This makes spoken "stop" robust even if the HA event
-        # sequence or callback timing briefly desynchronizes the armed state.
-        if self._state.tts_player.is_playing and self._state.stop_word.id not in self._state.active_wake_words:
+        stop_context_active = (
+            self._state.tts_player.is_playing
+            or self._state.satellite._pipeline_active
+            or self._state.satellite._timer_finished
+        )
+
+        # Keep the stop model armed whenever playback/pipeline interruption is
+        # meaningful. The active wake-word membership and model activation can
+        # drift apart across HA event transitions, so re-arm both here.
+        if stop_context_active:
             self._state.active_wake_words.add(self._state.stop_word.id)
             try:
                 self._state.stop_word.is_active = True
@@ -1097,11 +1103,6 @@ class VoiceAssistantService:
                 stopped = True
                 break  # Stop at first detection
 
-        stop_context_active = (
-            self._state.tts_player.is_playing
-            or self._state.satellite._pipeline_active
-            or self._state.satellite._timer_finished
-        )
         if stopped and stop_context_active and (not self._state.is_muted):
             _LOGGER.info("Stop word detected - stopping playback")
             self._state.satellite.stop()

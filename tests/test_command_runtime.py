@@ -116,4 +116,6 @@ class StopWordSourceTests(unittest.TestCase):
         self.assertIn("self._state.tts_player.is_playing", content)
         self.assertIn("self._state.satellite._pipeline_active", content)
         self.assertIn("self._state.satellite._timer_finished", content)
+        self.assertIn("self._state.active_wake_words.add(self._state.stop_word.id)", content)
+        self.assertIn("self._state.stop_word.is_active = True", content)
         self.assertNotIn("stop_armed = self._state.stop_word.id in self._state.active_wake_words", content)
