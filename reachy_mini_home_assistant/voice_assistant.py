@@ -1097,7 +1097,11 @@ class VoiceAssistantService:
                 stopped = True
                 break  # Stop at first detection
 
-        stop_armed = self._state.stop_word.id in self._state.active_wake_words
-        if stopped and stop_armed and (not self._state.is_muted):
+        stop_context_active = (
+            self._state.tts_player.is_playing
+            or self._state.satellite._pipeline_active
+            or self._state.satellite._timer_finished
+        )
+        if stopped and stop_context_active and (not self._state.is_muted):
             _LOGGER.info("Stop word detected - stopping playback")
             self._state.satellite.stop()
