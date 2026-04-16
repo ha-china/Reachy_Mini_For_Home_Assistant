@@ -110,6 +110,11 @@ IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around star
 IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
 DEFAULT_IDLE_REST_POSE = {
     "pitch_deg": 0.0,
+    "yaw_deg": 0.0,
+    "roll_deg": 0.0,
+    "x_m": 0.0,
+    "y_m": 0.0,
+    "z_m": 0.0,
     "antenna_left_rad": 0.0,
     "antenna_right_rad": 0.0,
 }
@@ -259,6 +264,11 @@ class MovementManager:
         # Idle random actions toggle (pure movement, no audio)
         self._idle_random_actions_enabled = False
         self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
+        self._idle_rest_head_yaw_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["yaw_deg"]))
+        self._idle_rest_head_roll_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["roll_deg"]))
+        self._idle_rest_x_m = float(DEFAULT_IDLE_REST_POSE["x_m"])
+        self._idle_rest_y_m = float(DEFAULT_IDLE_REST_POSE["y_m"])
+        self._idle_rest_z_m = float(DEFAULT_IDLE_REST_POSE["z_m"])
         self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
         self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
@@ -504,11 +514,11 @@ class MovementManager:
         action = PendingAction(
             name="idle_rest",
             target_pitch=self._idle_rest_head_pitch_rad,
-            target_yaw=0.0,
-            target_roll=0.0,
-            target_x=0.0,
-            target_y=0.0,
-            target_z=0.0,
+            target_yaw=self._idle_rest_head_yaw_rad,
+            target_roll=self._idle_rest_head_roll_rad,
+            target_x=self._idle_rest_x_m,
+            target_y=self._idle_rest_y_m,
+            target_z=self._idle_rest_z_m,
             target_antenna_left=self._idle_rest_antenna_left_rad,
             target_antenna_right=self._idle_rest_antenna_right_rad,
             duration=duration,
@@ -693,6 +703,11 @@ class MovementManager:
 
         self._idle_random_actions = config.actions
         self._idle_rest_head_pitch_rad = config.rest_pose.pitch_rad
+        self._idle_rest_head_yaw_rad = config.rest_pose.yaw_rad
+        self._idle_rest_head_roll_rad = config.rest_pose.roll_rad
+        self._idle_rest_x_m = config.rest_pose.x_m
+        self._idle_rest_y_m = config.rest_pose.y_m
+        self._idle_rest_z_m = config.rest_pose.z_m
         self._idle_rest_antenna_left_rad = config.rest_pose.antenna_left_rad
         self._idle_rest_antenna_right_rad = config.rest_pose.antenna_right_rad
         self._idle_random_actions_min_interval = config.min_interval_s
