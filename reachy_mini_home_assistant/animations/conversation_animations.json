@@ -43,11 +43,16 @@
                                      }
                    },
     "idle_rest_pose":  {
-                           "description":  "Low-energy static pose when idle behavior is disabled",
-                           "pitch_deg":  22.0,
-                           "antenna_left_rad":  3.05,
-                           "antenna_right_rad":  -3.05
-                       },
+                            "description":  "Low-energy static pose when idle behavior is disabled",
+                            "pitch_deg":  24.39,
+                            "yaw_deg":  0.0,
+                            "roll_deg":  0.0,
+                            "x_m":  -0.021,
+                            "y_m":  0.001,
+                            "z_m":  -0.044,
+                            "antenna_left_rad":  3.05,
+                            "antenna_right_rad":  -3.05
+                        },
     "emotions":  {
                      "happy":  {
                                    "description":  "Happy/joyful expression - bouncy head movement with excited antennas",
