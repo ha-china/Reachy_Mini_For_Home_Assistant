@@ -28,7 +28,7 @@ dependencies = [
     # ESPHome protocol (communication with Home Assistant)
     "aioesphomeapi>=43.10.1",
     "zeroconf<1",
-    "websockets>=12,<16",
+    "websockets>=12,<17",
 
     # Motion control (head movements)
     "scipy>=1.15.3,<2.0.0",
