@@ -186,3 +186,23 @@ def get_camera_frame(server: "MJPEGCameraServer") -> np.ndarray | None:
     except Exception as e:
         _LOGGER.debug("Failed to get camera frame: %s", e)
         return None
+
+
+def encode_snapshot_frame(server: "MJPEGCameraServer") -> bytes | None:
+    frame = get_camera_frame(server)
+    if frame is None:
+        return None
+
+    try:
+        success, jpeg_data = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, server.quality])
+        if not success:
+            return None
+
+        encoded = jpeg_data.tobytes()
+        with server._frame_lock:
+            server._last_frame = encoded
+            server._last_frame_time = time.time()
+        return encoded
+    except Exception as e:
+        _LOGGER.debug("Failed to encode snapshot frame: %s", e)
+        return None

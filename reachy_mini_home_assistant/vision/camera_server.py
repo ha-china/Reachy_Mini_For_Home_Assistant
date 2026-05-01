@@ -22,6 +22,7 @@ from ..core.config import Config
 from .camera_http import handle_client, handle_index, handle_snapshot, handle_stream
 from .camera_processing import (
     capture_frames,
+    encode_snapshot_frame,
     get_camera_frame,
     has_stream_clients,
     process_face_lost_interpolation,
@@ -402,7 +403,13 @@ class MJPEGCameraServer:
     def get_snapshot(self) -> bytes | None:
         """Get the latest frame as JPEG bytes."""
         with self._frame_lock:
-            return self._last_frame
+            if self._last_frame is not None:
+                return self._last_frame
+
+        if not self._running:
+            return None
+
+        return encode_snapshot_frame(self)
 
     async def _handle_client(
         self,
