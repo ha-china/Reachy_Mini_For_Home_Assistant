@@ -1,4 +1,4 @@
-# Reachy Mini for Home Assistant - Project Plan (Current snapshot: v1.0.0)
+# Reachy Mini for Home Assistant - Project Plan (Current snapshot: v1.0.6)
 
 ## Project Overview
 
@@ -10,18 +10,22 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 3. [reachy_mini_conversation_app](reference/reachy_mini_conversation_app) - Reachy Mini conversation app for reference
 4. [reachy-mini-desktop-app](reference/reachy-mini-desktop-app) - Reachy Mini desktop app for reference
 5. [sendspin](reference/sendspin-cli/) - Sendspin client for reference
+6. [aiosendspin](reference/aiosendspin/) - Sendspin protocol client library reference
+7. [dynamic_gestures](reference/dynamic_gestures/) - Dynamic gesture reference
+8. [SimpleDances](reference/SimpleDances/) - Local reference snapshot
 
 ## Core Design Principles
 
 1. **Zero Configuration** - Users only need to install the app, no manual configuration required
 2. **Native Hardware** - Use robot's built-in microphone and speaker
-3. **Home Assistant Centralized Management** - All configuration done on Home Assistant side
+3. **Home Assistant Centralized Management** - STT/TTS/intent configuration stays on Home Assistant side
 4. **Motion Feedback** - Provide head movement and antenna animation feedback during voice interaction
 5. **Project Constraints** - Strictly follow [Reachy Mini SDK](reachy_mini) architecture design and constraints
 6. **Code Quality** - Follow Python development standards with consistent code style, clear structure, complete comments, comprehensive documentation, high test coverage, high code quality, readability, maintainability, extensibility, and reusability
 7. **Feature Priority** - Voice conversation with Home Assistant is highest priority; other features are auxiliary and must not affect voice conversation functionality or response speed
 8. **No LED Functions** - LEDs are hidden inside the robot; all LED control is ignored
 9. **Preserve Functionality** - Any code modifications should optimize while preserving completed features; do not remove features to solve problems. When issues occur, prioritize solving problems after referencing examples, not adding various log outputs
+10. **No App-Managed Sleep/Wake** - The app no longer manages robot sleep/wake transitions; current SDK behavior is treated as source of truth
 
 ## Technical Architecture
 
@@ -101,9 +105,9 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── GESTURE DETECTION ────────────────────────┐  │
-│  │  HaGRID ONNX Models + GestureSmoother (v1.0.0)                     │  │
+│  │  HaGRID ONNX Models                                                │  │
 │  │  • 18 gesture classes (call, like, dislike, fist, ok, palm, etc.)    │  │
-│  │  • GestureSmoother fast-confirm + grace clear                        │  │
+│  │  • Runtime result publishing only                                    │  │
 │  │  • Batch detection: all hands (not just highest confidence)         │  │
 │  │  • Detection cadence: adaptive scheduler + minimum processing FPS    │  │
 │  │  • No confidence filtering - all detections passed to Home Assistant│  │
@@ -132,52 +136,58 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Software Module Architecture (v1.0.0)
+### Software Module Architecture (v1.0.6)
 
 ```
 reachy_mini_home_assistant/
 │
-├── main.py                    # Application entry point
+├── main.py                    # ReachyMiniApp entry point
+├── __main__.py                # Standalone CLI entry point
 ├── voice_assistant.py         # Voice assistant service orchestrator
 ├── reachy_controller.py       # Reachy Mini SDK wrapper
-├── models.py                  # Data models
+├── models.py                  # Data models / preferences / server state
 │
 ├── core/                      # Core Infrastructure
 │   ├── config.py              # Centralized nested configuration
-│   ├── service_base.py        # SleepAwareService base class
-│   ├── sleep_manager.py       # Sleep/Wake lifecycle management
-│   ├── daemon_monitor.py      # Daemon state monitoring
-│   ├── health_monitor.py      # Service health checking
-│   ├── memory_monitor.py      # Memory usage monitoring
-│   ├── robot_state_monitor.py # Robot connection state monitoring
+│   ├── service_base.py        # Suspend/resume-aware service helpers
 │   ├── system_diagnostics.py  # System diagnostics
 │   ├── exceptions.py          # Custom exception classes
 │   └── util.py                # Utility functions
 │
 ├── motion/                    # Motion Control
 │   ├── movement_manager.py    # 50Hz unified motion control loop
-│   ├── antenna.py             # Antenna animation control
+│   ├── command_runtime.py     # Command queue handling / state transitions
+│   ├── control_runtime.py     # Control-loop runtime helpers
+│   ├── idle_runtime.py        # Idle behavior / idle rest handling
+│   ├── antenna.py             # Antenna control / freeze logic
 │   ├── pose_composer.py       # Pose composition from multiple sources
-│   ├── gesture_actions.py     # Gesture → Robot action mapping
 │   ├── smoothing.py           # Motion smoothing algorithms
-│   ├── state_machine.py       # Robot state definitions
+│   ├── state_machine.py       # Robot state definitions / idle config parsing
 │   ├── animation_player.py    # Animation player
 │   ├── emotion_moves.py       # Emotion moves
 │   ├── speech_sway.py         # Speech-driven head micro-movements
 │   └── reachy_motion.py       # Reachy motion API
 │
 ├── vision/                    # Vision Processing
-│   ├── camera_server.py       # MJPEG camera stream server
+│   ├── camera_server.py       # MJPEG camera stream server facade
+│   ├── camera_runtime.py      # Camera lifecycle helpers
+│   ├── camera_processing.py   # Frame capture / AI processing helpers
+│   ├── camera_http.py         # HTTP handlers for stream/snapshot
 │   ├── head_tracker.py        # YOLO face detector
 │   ├── gesture_detector.py    # HaGRID gesture detection
-│   ├── gesture_smoother.py    # Gesture history tracking and confirmation (v1.0.0)
 │   ├── face_tracking_interpolator.py  # Smooth face tracking
 │   └── frame_processor.py     # Adaptive frame rate management
 │
 ├── audio/                     # Audio runtime support
-│   ├── audio_player.py        # TTS + Sendspin playback
-│   ├── microphone.py          # Hardware audio helper / legacy tuning code
-│   └── doa_tracker.py         # Direction of Arrival tracking
+│   ├── audio_player.py                # AudioPlayer facade
+│   ├── audio_player_shared.py         # Shared audio/sendspin constants + helpers
+│   ├── audio_player_playback.py       # Playback orchestration / lifecycle
+│   ├── audio_player_local.py          # Local file + fallback playback
+│   ├── audio_player_stream_pcm.py     # PCM streaming playback
+│   ├── audio_player_stream_decoded.py # Decoded/GStreamer streaming playback
+│   ├── audio_player_sendspin.py       # Sendspin runtime integration
+│   ├── microphone.py                  # Hardware audio helper / legacy tuning code
+│   └── doa_tracker.py                 # Direction of Arrival tracking
 │
 ├── entities/                  # Home Assistant Entities
 │   ├── entity.py              # ESPHome base entity
@@ -185,13 +195,21 @@ reachy_mini_home_assistant/
 │   ├── entity_factory.py      # Entity creation factory
 │   ├── entity_keys.py         # Entity key constants
 │   ├── entity_extensions.py   # Extended entity types
+│   ├── runtime_entity_setup.py # Runtime/control entity wiring
+│   ├── sensor_entity_setup.py # Sensor/diagnostic entity wiring
 │   ├── event_emotion_mapper.py # HA event → Emotion mapping
 │   └── emotion_detector.py    # Disabled runtime path for text emotion detection
 │
 ├── protocol/                  # Protocol Handling
-│   ├── satellite.py           # ESPHome protocol handler
+│   ├── satellite.py           # ESPHome protocol handler facade
 │   ├── api_server.py          # HTTP API server
-│   └── zeroconf.py            # mDNS discovery
+│   ├── zeroconf.py            # mDNS discovery
+│   ├── entity_bridge.py       # Protocol/entity bridge helpers
+│   ├── message_dispatch.py    # ESPHome message dispatch
+│   ├── motion_bridge.py       # Voice → motion bridge
+│   ├── session_flow.py        # Conversation lifecycle helpers
+│   ├── voice_pipeline.py      # Voice event handling / TTS / stop / ducking
+│   └── wakeword_assets.py     # Wake word asset helpers
 │
 ├── animations/               # Animation definitions
 │   └── conversation_animations.json  # Unified built-in behavior resource file
@@ -205,23 +223,27 @@ reachy_mini_home_assistant/
 ```
 
 
-### Current Runtime Defaults (v1.0.0)
+### Current Runtime Defaults (v1.0.6)
 
-- `idle_behavior_enabled`: OFF
+- `idle_behavior_enabled`: user-controlled
 - `sendspin_enabled`: OFF
 - `face_tracking_enabled`: OFF
 - `gesture_detection_enabled`: OFF
 - `face_confidence_threshold`: 0.5 (persistent)
+- `continuous_conversation`: user-controlled
+- `Idle Behavior = OFF` means a parked no-animation state aligned to configured idle rest pose
+- When `Idle Behavior = OFF`, camera server is stopped entirely to save resources
+- When `Idle Behavior = ON`, camera server can run and `/snapshot` supports on-demand frame capture when cache is empty
 - Idle antenna behavior: torque disabled in `IDLE`, re-enabled when leaving `IDLE`
 - Voice phases and HA-triggered emotions are routed through one built-in zero-config behavior layer
 
 When face/gesture switches are OFF, their models are unloaded to save resources.
 
-### Current Audio Startup Note (SDK 1.4.1)
+### Current Audio Startup Note (SDK 1.7.0)
 
-- On some boots, SDK media init may fall back to OpenAL (`gstopenalsrc`) and fail microphone capture if source card probing is not ready.
-- App behavior in v1.0.0 is fail-fast for missing microphone capture to avoid silent degraded startup.
-- This is tracked as an SDK/media backend startup readiness issue rather than an OpenAI pipeline issue.
+- The app now aligns to the current Reachy Mini SDK media model instead of carrying older compatibility paths.
+- Camera snapshots can be fetched on demand when the MJPEG cache is empty and the camera server is still running.
+- Audio block size is currently `512` samples to reduce CPU overhead versus the earlier `256`-sample path.
 
 ### Latest Incremental Update (2026-03-04) - Viewer-Aware Camera Streaming
 
@@ -267,21 +289,22 @@ reachy_mini_ha_voice/
 │   ├── voice_assistant.py      # Voice assistant service (1270 lines)
 │   ├── protocol/               # ESPHome protocol handling
 │   │   ├── __init__.py         # Module exports (13 lines)
-│   │   ├── satellite.py        # ESPHome protocol handler (1022 lines)
-│   │   ├── api_server.py       # HTTP API server (172 lines)
-│   │   └── zeroconf.py         # mDNS discovery
+│   │   ├── satellite.py        # ESPHome protocol handler facade
+│   │   ├── api_server.py       # HTTP API server
+│   │   ├── zeroconf.py         # mDNS discovery
+│   │   ├── entity_bridge.py    # Protocol/entity bridge helpers
+│   │   ├── message_dispatch.py # ESPHome message dispatch
+│   │   ├── motion_bridge.py    # Voice → motion bridge
+│   │   ├── session_flow.py     # Conversation lifecycle helpers
+│   │   ├── voice_pipeline.py   # Voice event handling / TTS / stop / ducking
+│   │   └── wakeword_assets.py  # Wake word asset helpers
 │   ├── models.py               # Data models
 │   └── reachy_controller.py    # Reachy Mini controller wrapper (961 lines)
 │   │
 │   ├── core/                   # Core infrastructure modules
 │   │   ├── __init__.py         # Module exports
 │   │   ├── config.py           # Centralized configuration (368 lines)
-│   │   ├── daemon_monitor.py   # Daemon state monitoring (377 lines)
-│   │   ├── service_base.py     # SleepAwareService base class (552 lines)
-│   │   ├── sleep_manager.py    # Sleep/Wake coordination (278 lines)
-│   │   ├── health_monitor.py   # Service health checking (305 lines)
-│   │   ├── memory_monitor.py   # Memory usage monitoring (282 lines)
-│   │   ├── robot_state_monitor.py  # Robot connection state monitoring (300 lines)
+│   │   ├── service_base.py     # Suspend/resume-aware service helpers
 │   │   ├── system_diagnostics.py   # System diagnostics (250 lines)
 │   │   └── exceptions.py       # Custom exception classes (68 lines)
 │   │   └── util.py             # Utility functions (28 lines)
@@ -290,7 +313,9 @@ reachy_mini_ha_voice/
 │   │   ├── __init__.py         # Module exports
 │   │   ├── antenna.py          # Antenna freeze/unfreeze control
 │   │   ├── pose_composer.py    # Pose composition utilities
-│   │   ├── gesture_actions.py  # Gesture to action mapping
+│   │   ├── command_runtime.py  # Command queue handling / state transitions
+│   │   ├── control_runtime.py  # Control-loop runtime helpers
+│   │   ├── idle_runtime.py     # Idle behavior / idle rest handling
 │   │   ├── smoothing.py        # Smoothing/transition algorithms
 │   │   ├── state_machine.py    # State machine definitions
 │   │   ├── animation_player.py # Animation player
@@ -302,16 +327,24 @@ reachy_mini_ha_voice/
 │   │   ├── __init__.py         # Module exports (30 lines)
 │   │   ├── frame_processor.py  # Adaptive frame rate management (227 lines)
 │   │   ├── face_tracking_interpolator.py  # Face lost interpolation (253 lines)
-│   │   ├── gesture_smoother.py  # Gesture history tracking (80 lines)
-│   │   ├── gesture_detector.py  # HaGRID gesture detection (285 lines)
-│   │   ├── head_tracker.py     # YOLO face detector (367 lines)
-│   │   └── camera_server.py     # MJPEG camera stream server + face tracking (1009 lines)
+│   │   ├── gesture_detector.py  # HaGRID gesture detection
+│   │   ├── head_tracker.py     # YOLO face detector
+│   │   ├── camera_runtime.py   # Camera lifecycle helpers
+│   │   ├── camera_processing.py # Frame capture / AI processing helpers
+│   │   ├── camera_http.py      # HTTP handlers for stream/snapshot
+│   │   └── camera_server.py     # MJPEG camera stream server facade
 │   │
 │   ├── audio/                  # Audio runtime modules
 │   │   ├── __init__.py         # Module exports (21 lines)
-│   │   ├── microphone.py       # Hardware audio helper / legacy tuning code (219 lines)
-│   │   ├── doa_tracker.py      # Direction of Arrival tracking (206 lines)
-│   │   └── audio_player.py     # TTS + Sendspin playback (679 lines)
+│   │   ├── microphone.py       # Hardware audio helper / legacy tuning code
+│   │   ├── doa_tracker.py      # Direction of Arrival tracking
+│   │   ├── audio_player.py     # AudioPlayer facade
+│   │   ├── audio_player_shared.py # Shared audio/sendspin constants + helpers
+│   │   ├── audio_player_playback.py # Playback orchestration / lifecycle
+│   │   ├── audio_player_local.py # Local file + fallback playback
+│   │   ├── audio_player_stream_pcm.py # PCM streaming playback
+│   │   ├── audio_player_stream_decoded.py # Decoded/GStreamer streaming playback
+│   │   └── audio_player_sendspin.py # Sendspin runtime integration
 │   │
 │   ├── entities/               # Home Assistant entity modules
 │   │   ├── __init__.py         # Module exports (38 lines)
@@ -319,8 +352,10 @@ reachy_mini_ha_voice/
 │   │   ├── entity_factory.py   # Entity factory pattern (440 lines)
 │   │   ├── entity_keys.py      # Entity key constants (155 lines)
 │   │   ├── entity_extensions.py  # Extended entity types (258 lines)
-│   │   ├── entity_registry.py  # ESPHome entity registry (844 lines)
-│   │   ├── event_emotion_mapper.py  # HA event to emotion mapping (351 lines)
+│   │   ├── entity_registry.py  # ESPHome entity registry
+│   │   ├── runtime_entity_setup.py # Runtime/control entity wiring
+│   │   ├── sensor_entity_setup.py # Sensor/diagnostic entity wiring
+│   │   ├── event_emotion_mapper.py  # HA event to emotion mapping
 │   │   └── emotion_detector.py # Disabled runtime path for text emotion detection
 │   │
 │   ├── animations/             # Animation definitions
@@ -346,24 +381,27 @@ reachy_mini_ha_voice/
 
 ```toml
 dependencies = [
-    "reachy-mini[gstreamer]>=1.4.1",
-    "reachy-mini-motor-controller>=1.5.5",
+    "reachy-mini>=1.7.0",
     "soundfile>=0.13.0",
-    "numpy>=2.0.0,<=2.2.5",
+    "numpy>=2.2.5,<=2.2.5",
     "opencv-python>=4.12.0.88",
     "pymicro-wakeword>=2.0.0,<3.0.0",
     "pyopen-wakeword>=1.0.0,<2.0.0",
     "aioesphomeapi>=43.10.1",
-    "zeroconf<1",
-    "scipy>=1.14.0",
+    "zeroconf>=0.131,<1",
+    "websockets>=12,<16",
+    "aiohttp",
+    "scipy>=1.15.3,<2.0.0",
     "ultralytics",
     "supervision",
-    "aiosendspin>=2.0.1",
+    "aiosendspin>=5.1,<6.0",
     "onnxruntime>=1.18.0",
     "torch==2.5.1",
     "torchvision==0.20.1",
     "pillow<12.0",
     "pydantic<=2.12.5",
+    "requests>=2.33.0",
+    "gstreamer-bundle==1.28.1; sys_platform != 'linux'",
 ]
 ```
 
@@ -403,7 +441,7 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 | ESPHome Entity Type | Name | SDK API | Range/Options | Description |
 |---------------------|------|---------|---------------|-------------|
 | `Number` | `speaker_volume` | `AudioPlayer.set_volume()` | 0-100 | Speaker volume |
-| `Switch` | `sleep_control` | `request_sleep_state()` | off=awake/on=sleeping | Unified sleep/wake control |
+| `Switch` | `idle_behavior_enabled` | `set_idle_behavior_enabled()` | off=parked/on=idle runtime enabled | Unified idle behavior toggle |
 | `Number` | `head_x` | `goto_target(head=...)` | ±50mm | Head X position control |
 | `Number` | `head_y` | `goto_target(head=...)` | ±50mm | Head Y position control |
 | `Number` | `head_z` | `goto_target(head=...)` | ±50mm | Head Z position control |
@@ -463,13 +501,13 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 | Phase | ESPHome Entity Type | Name | Description |
 |------|---------------------|------|-------------|
 | 1 | `Switch` | `mute` | Suspend/resume the voice pipeline |
-| 1 | `Switch` | `camera_disabled` | Suspend/resume camera processing |
+| 1 | `Switch` | `camera_disabled` | Disable/enable camera runtime |
 | 1 | `Switch` | `idle_behavior_enabled` | Unified idle motion / antenna / micro-actions toggle |
 | 1 | `Switch` | `sendspin_enabled` | Enable/disable Sendspin playback integration |
 | 1 | `Switch` | `face_tracking_enabled` | Enable/disable face tracking models |
 | 1 | `Switch` | `gesture_detection_enabled` | Enable/disable gesture detection models |
 | 1 | `Number` | `face_confidence_threshold` | Face tracking confidence threshold (0-1) |
-| 2 | `Switch` | `sleep_control` | Unified sleep/wake control |
+| 2 | `Binary Sensor` | `services_suspended` | Runtime suspension state |
 | 8 | `Select` | `emotion` | Manual emotion trigger |
 | 10 | `Camera` | `camera` | ESPHome camera entity / live preview |
 | 21 | `Switch` | `continuous_conversation` | Multi-turn conversation mode |
@@ -488,10 +526,9 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
    - [x] `error_message` - Error message
    - [x] `speaker_volume` - Speaker volume control
 
-2. **Phase 2 - Sleep and Runtime State** (High Priority) ✅ **Completed**
-   - [x] `sleep_control` - Unified sleep/wake switch
-   - [x] `sleep_mode` - Awake/sleeping state sensor
+2. **Phase 2 - Runtime State** (High Priority) ✅ **Completed**
    - [x] `services_suspended` - Service suspension state sensor
+   - [x] App-managed sleep/wake entities removed from the current runtime
 
 3. **Phase 3 - Pose Control** (Medium Priority) ✅ **Completed**
    - [x] `head_x/y/z` - Head position control
@@ -536,17 +573,17 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 11. **Phase 13 - Sendspin Audio Playback Support** ✅ **Completed**
     - [x] `sendspin_enabled` - Sendspin switch (Switch)
     - [x] AudioPlayer integrates aiosendspin library
-    - [x] TTS audio sent to both local speaker and Sendspin server
+    - [x] Local music/sendspin path coexists with voice playback and is auto-paused during conversation
 
 12. **Phase 21 - Continuous Conversation** ✅ **Completed**
     - [x] `continuous_conversation` - Conversation continuation switch
 
-13. **Phase 22 - Gesture Detection** ✅ **Completed (v1.0.0 behavior)**
+13. **Phase 22 - Gesture Detection** ✅ **Completed (current runtime behavior)**
     - [x] `gesture_detected` - Detected gesture name (Text Sensor)
     - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
     - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
     - [x] Real-time state push to Home Assistant
-    - [x] GestureSmoother fast confirm + grace clear behavior
+    - [x] Runtime gesture result publishing only (no gesture-driven robot actions)
     - [x] Runtime toggle supported (default OFF, model unload on disable)
     - [x] Batch detection: returns all detected hands (not just highest confidence)
     - [x] Minimum processing cadence preserved for responsiveness
@@ -585,7 +622,7 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 
 **Total Completed: See runtime registry (count evolves with releases)**
 - Phase 1: 10 entities (status, zero-config runtime switches, volume)
-- Phase 2: 3 entities (sleep and runtime state)
+- Phase 2: runtime state entities only (`services_suspended`; sleep entities removed)
 - Phase 3: 9 entities (Pose control)
 - Phase 4: 3 entities (Gaze control)
 - Phase 5: 3 entities (DOA sensors and tracking switch)
@@ -873,7 +910,7 @@ This was an exploration direction for manual teaching workflows.
 
 The current runtime already exposes the main zero-config controls needed by Home Assistant:
 
-- `sleep_control`
+- `services_suspended`
 - `idle_behavior_enabled`
 - `continuous_conversation`
 - `emotion`
@@ -913,7 +950,7 @@ More elaborate scene orchestration remains intentionally outside the core runtim
 
 ---
 
-## Feature Priority Summary (Updated v1.0.0)
+## Feature Priority Summary (Updated v1.0.6)
 
 ### Completed ✅
 - ✅ **Phase 1-12**: Core ESPHome entities and voice assistant
@@ -925,7 +962,7 @@ More elaborate scene orchestration remains intentionally outside the core runtim
 - ✅ **Phase 21**: Continuous conversation switch
 - ✅ **Phase 22**: Gesture detection
 - ✅ **Phase 23**: Face detection sensor
-- ✅ **Phase 24**: System diagnostics (psutil-based)
+- ✅ **Phase 24**: System diagnostics entities
 
 ### Partial 🟡
 - 🟡 **Phase 20**: Environment awareness (IMU entities done, triggers pending)
@@ -951,7 +988,7 @@ More elaborate scene orchestration remains intentionally outside the core runtim
 | Phase 21 | ✅ Complete | 100% | Continuous conversation switch implemented |
 | Phase 22 | ✅ Complete | 100% | Gesture detection with HaGRID ONNX models |
 | Phase 23 | ✅ Complete | 100% | Face detection sensor exposed |
-| Phase 24 | ✅ Complete | 100% | System diagnostics with psutil (9 sensors) |
+| Phase 24 | ✅ Complete | 100% | System diagnostics entities (9 sensors) |
 | **v0.9.5** | ✅ Complete | 100% | Modular architecture refactoring |
 | **v1.0.0** | ✅ Complete | 100% | Runtime toggles/persistence (Sendspin, face, gesture, confidence) + idle and gesture stability updates |
 
@@ -1027,7 +1064,7 @@ def _get_cached_head_pose(self):
 ### Future Optimization Suggestions
 1. ⏳ Dynamic frequency adjustment - 50Hz during motion, 5Hz when idle
 2. ⏳ Batch state queries - Get all states at once
-3. ⏳ Performance monitoring and alerts - Real-time daemon health monitoring
+3. ⏳ Further runtime efficiency tuning after real usage profiling
 
 ---
 
@@ -1281,18 +1318,15 @@ from aioesphomeapi.api_pb2 import (
 | Directory | Module | Lines | Description |
 |-----------|--------|-------|-------------|
 | `core/` | `config.py` | 454 | Centralized nested configuration |
-| `core/` | `daemon_monitor.py` | 377 | Daemon state monitoring + Sleep detection |
-| `core/` | `service_base.py` | 552 | SleepAwareService + RobustOperationMixin |
-| `core/` | `sleep_manager.py` | 278 | Sleep/Wake coordination |
-| `core/` | `health_monitor.py` | 305 | Service health checking |
-| `core/` | `memory_monitor.py` | 282 | Memory usage monitoring |
-| `core/` | `robot_state_monitor.py` | 300 | Robot connection state monitoring |
+| `core/` | `service_base.py` | 552 | Suspend/resume service helpers + RobustOperationMixin |
 | `core/` | `system_diagnostics.py` | 250 | System diagnostics |
 | `core/` | `exceptions.py` | 68 | Custom exception classes |
 | `core/` | `util.py` | 28 | Utility functions |
 | `motion/` | `antenna.py` | - | Antenna freeze/unfreeze control |
 | `motion/` | `pose_composer.py` | - | Pose composition utilities |
-| `motion/` | `gesture_actions.py` | - | Gesture to action mapping |
+| `motion/` | `command_runtime.py` | - | Command queue handling / state transitions |
+| `motion/` | `control_runtime.py` | - | Control-loop runtime helpers |
+| `motion/` | `idle_runtime.py` | - | Idle behavior / idle rest handling |
 | `motion/` | `state_machine.py` | - | State machine definitions |
 | `motion/` | `smoothing.py` | - | Smoothing/transition algorithms |
 | `motion/` | `animation_player.py` | - | Animation player |
@@ -1301,13 +1335,13 @@ from aioesphomeapi.api_pb2 import (
 | `motion/` | `reachy_motion.py` | - | Reachy motion API |
 | `vision/` | `frame_processor.py` | 227 | Adaptive frame rate management |
 | `vision/` | `face_tracking_interpolator.py` | 253 | Face lost interpolation |
-| `vision/` | `gesture_smoother.py` | 80 | Gesture history tracking |
+| `vision/` | `gesture_smoother.py` | 80 | Historical gesture smoothing module; current runtime no longer depends on it |
 | `vision/` | `gesture_detector.py` | 285 | HaGRID gesture detection |
 | `vision/` | `head_tracker.py` | 367 | YOLO face detector |
-| `vision/` | `camera_server.py` | 1009 | MJPEG camera stream server |
+| `vision/` | `camera_server.py` | 1009 | MJPEG camera stream server facade |
 | `audio/` | `doa_tracker.py` | 206 | Direction of Arrival tracking |
 | `audio/` | `microphone.py` | 219 | Hardware audio helper / legacy tuning code |
-| `audio/` | `audio_player.py` | 679 | TTS + Sendspin playback |
+| `audio/` | `audio_player.py` | facade | AudioPlayer facade (split into playback/sendspin/local streaming modules) |
 | `entities/` | `entity.py` | 402 | ESPHome base entity |
 | `entities/` | `entity_factory.py` | 440 | Entity factory pattern |
 | `entities/` | `entity_keys.py` | 155 | Entity key constants |
@@ -1319,14 +1353,11 @@ from aioesphomeapi.api_pb2 import (
 
 ### Improvement Plan Status
 
-#### Phase 1: Sleep State Management ✅ Complete
+#### Phase 1: Runtime Suspend/Resume Foundation ✅ Complete
 
-- [x] Create `core/daemon_monitor.py` - DaemonStateMonitor
-- [x] Create `core/service_base.py` - SleepAwareService interface
-- [x] Create `core/sleep_manager.py` - SleepManager
-- [x] All services implement `suspend()`/`resume()` methods
-- [x] Add Sleep state sensor to HA
-- [ ] Test complete Sleep/Wake cycle
+- [x] Create `core/service_base.py` - runtime suspend/resume service helpers
+- [x] All required services implement `suspend()` / `resume()` methods where needed
+- [x] Historical app-managed sleep/wake flow was later removed to align with the current SDK
 
 #### Phase 2: Code Modularization ✅ Complete
 
@@ -1344,14 +1375,14 @@ from aioesphomeapi.api_pb2 import (
 - [x] `CameraServer` implements Context Manager pattern
 - [x] Improve `CameraServer` resource cleanup
 - [x] Fix MJPEG client tracking (proper register/unregister)
-- [x] Add `core/health_monitor.py` - Service health checking
-- [x] Add `core/memory_monitor.py` - Memory usage monitoring
+- [x] Historical health/memory monitor modules were added during earlier SDK instability periods
+- [x] Health/memory monitor modules were later removed after runtime simplification
 - [ ] Long-running stability test (24h+)
 
 #### Phase 4: Feature Enhancements ✅ Complete
 
-- [x] Create `motion/gesture_actions.py` - GestureActionMapper
-- [x] Fold gesture behavior config into `animations/conversation_animations.json`
+- [x] Historical gesture-action runtime path explored
+- [x] Gesture runtime later simplified to publish recognition results only
 - [x] Create `audio/doa_tracker.py` - DOATracker
 - [x] Implement sound source tracking with motion control integration
 - [x] Create `entities/event_emotion_mapper.py` - EventEmotionMapper
@@ -1380,27 +1411,27 @@ The codebase has been restructured into a modular architecture with 5 sub-packag
 
 | Package | Purpose | Key Modules |
 |---------|---------|-------------|
-| `core/` | Core infrastructure | `config.py`, `service_base.py`, `sleep_manager.py`, `health_monitor.py` |
-| `motion/` | Motion control | `antenna.py`, `pose_composer.py`, `gesture_actions.py`, `smoothing.py` |
+| `core/` | Core infrastructure | `config.py`, `service_base.py`, `system_diagnostics.py` |
+| `motion/` | Motion control | `antenna.py`, `pose_composer.py`, `command_runtime.py`, `control_runtime.py`, `idle_runtime.py`, `smoothing.py` |
 | `vision/` | Vision processing | `frame_processor.py`, `face_tracking_interpolator.py` |
 | `audio/` | Audio processing | `microphone.py`, `doa_tracker.py` |
 | `entities/` | HA entity management | `entity_factory.py`, `entity_keys.py`, `event_emotion_mapper.py` |
 
 ### New Features
 
-1. **Direct Sleep/Wake Callbacks**
-   - HA sleep/wake buttons directly call `suspend()`/`resume()` on services
-   - More reliable than polling-based approach
+1. **Historical note**
+   - Earlier versions explored direct sleep/wake callbacks and polling-based state handling
+   - Current runtime no longer uses app-managed sleep/wake callbacks
 
-2. **Synchronous Camera Resume**
-   - `camera_server.resume_from_suspend()` is now synchronous
-   - Ensures camera is ready before voice assistant starts listening
+2. **Camera runtime evolution**
+   - Camera lifecycle was later split into dedicated runtime/processing/http helpers
+   - Current runtime can fully stop camera service when `Idle Behavior` is disabled
 
 ### Audio Optimizations
 
 | Parameter | Before | After | Improvement |
 |-----------|--------|-------|-------------|
-| Audio chunk size | 1024 samples | 256 samples | 64ms → 16ms latency |
+| Audio chunk size | 1024 samples | 512 samples | 64ms → 32ms latency with lower CPU load |
 | Audio loop delay | 10ms | 1ms | Faster VAD response |
 | Stereo→Mono | Mean of channels | First channel | Cleaner signal |
 
