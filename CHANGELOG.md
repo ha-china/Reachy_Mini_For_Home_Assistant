@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to the Reachy Mini HA Voice project will be documented in this file.
 
@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SDK Port 8000 Blocking** - Use amixer directly for volume control to avoid SDK HTTP API blocking
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
+
+## [1.0.6] - 2026-04-12
+
+### Changed
+- Align `pyproject.toml` with the current Reachy Mini SDK baseline by requiring `reachy-mini>=1.7.0`, `Python>=3.12`, `zeroconf>=0.131,<1`, `aiohttp`, `websockets>=12,<16`, and `gstreamer-bundle==1.28.1` on non-Linux platforms
+- Align Sendspin client dependency with the current upstream line via `aiosendspin>=5.1,<6.0`
+
+### Fixed
+- Fetch camera snapshot frames on demand when the MJPEG cache is empty so Home Assistant camera proxy requests keep working with the Reachy Mini SDK 1.7.0 media pull model
+
+### Optimized
+- Stop the camera server entirely when `Idle Behavior` is disabled instead of only unloading vision models, so idle-without-animation behaves more like a low-resource sleep state
 
 ## [1.0.5] - 2026-04-12
 
@@ -223,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Direct callbacks for HA sleep/wake buttons to suspend/resume services
 
 ### Optimized
-- Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms → 16ms)
+- Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms 鈫?16ms)
 - Audio loop delay reduced from 10ms to 1ms for faster VAD response
 - Stereo to mono conversion uses first channel instead of mean for cleaner signal
 

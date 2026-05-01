@@ -1,17 +1,17 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_home_assistant"
-version = "1.0.5"
+version = "1.0.6"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK with gstreamer support (for camera streaming)
-    "reachy-mini>=1.6.3",
+    "reachy-mini>=1.7.0",
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
@@ -27,8 +27,9 @@ dependencies = [
 
     # ESPHome protocol (communication with Home Assistant)
     "aioesphomeapi>=43.10.1",
-    "zeroconf<1",
-    "websockets>=12,<17",
+    "zeroconf>=0.131,<1",
+    "websockets>=12,<16",
+    "aiohttp",
 
     # Motion control (head movements)
     "scipy>=1.15.3,<2.0.0",
@@ -38,7 +39,7 @@ dependencies = [
     "supervision",
 
     # Sendspin synchronized audio (optional, for multi-room playback)
-    "aiosendspin>=4.4.0",
+    "aiosendspin>=5.1,<6.0",
 
     # Gesture detection (ONNX runtime for HaGRID models)
     "onnxruntime>=1.18.0",
@@ -51,6 +52,7 @@ dependencies = [
     "pillow<12.0",
     "pydantic<=2.12.5",
     "requests>=2.33.0",
+    "gstreamer-bundle==1.28.1; sys_platform != 'linux'",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
 
@@ -85,8 +87,8 @@ exclude = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.15.11",
-    "mypy==1.20.1",
+    "ruff==0.15.4",
+    "mypy==1.20.0",
 ]
 
 [tool.uv]
