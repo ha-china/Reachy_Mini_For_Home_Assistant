@@ -105,3 +105,24 @@ class IdleRestPoseSourceTests(unittest.TestCase):
         self.assertIn("target_x=self._idle_rest_x_m", content)
         self.assertIn("target_y=self._idle_rest_y_m", content)
         self.assertIn("target_z=self._idle_rest_z_m", content)
+
+
+class StopWordSourceTests(unittest.TestCase):
+    def test_stop_word_uses_runtime_context_not_active_wakeword_membership(self):
+        path = Path("reachy_mini_home_assistant/voice_assistant.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn("stop_context_active = (", content)
+        self.assertIn("self._state.tts_player.is_playing", content)
+        self.assertIn("self._state.satellite._pipeline_active", content)
+        self.assertIn("self._state.satellite._timer_finished", content)
+        self.assertIn("self._state.active_wake_words.add(self._state.stop_word.id)", content)
+        self.assertIn("self._state.stop_word.is_active = True", content)
+        self.assertNotIn("stop_armed = self._state.stop_word.id in self._state.active_wake_words", content)
+
+    def test_stop_word_inference_only_runs_in_interruptible_context(self):
+        path = Path("reachy_mini_home_assistant/voice_assistant.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn("AUDIO_BLOCK_SIZE = 512", content)
+        self.assertIn("if stop_context_active:", content)

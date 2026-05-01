@@ -10,7 +10,6 @@ import asyncio
 import logging
 import threading
 
-from .core import get_health_monitor, get_memory_monitor
 from .protocol.zeroconf import get_default_friendly_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,22 +85,7 @@ async def main() -> None:
         # Create stop event for graceful shutdown
         stop_event = threading.Event()
 
-        # Initialize monitoring services
-        health_monitor = get_health_monitor()
-        memory_monitor = get_memory_monitor()
-
-        # Register service health checks
-        health_monitor.register_checker(
-            "voice_assistant",
-            lambda: service.is_running,
-            interval=30.0,
-        )
-
         try:
-            # Start monitoring
-            health_monitor.start()
-            memory_monitor.start()
-
             await service.start()
 
             _LOGGER.info("=" * 50)
@@ -124,10 +108,6 @@ async def main() -> None:
         except KeyboardInterrupt:
             _LOGGER.info("Shutting down...")
         finally:
-            # Stop monitoring services
-            health_monitor.stop()
-            memory_monitor.stop()
-
             await service.stop()
             _LOGGER.info("Voice assistant stopped")
 
