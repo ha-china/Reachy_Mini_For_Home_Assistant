@@ -1,7 +1,7 @@
 [
   {
     "version": "1.0.6",
-    "date": "2026-04-12",
+    "date": "2026-05-01",
     "changes": [
       "Build: Bump package version to 1.0.6",
       "Change: Align pyproject.toml with the current Reachy Mini SDK baseline (reachy-mini>=1.7.0, Python>=3.12, zeroconf>=0.131,<1, aiohttp, websockets>=12,<16, and gstreamer-bundle==1.28.1 on non-Linux)",

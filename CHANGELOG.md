@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
-## [1.0.6] - 2026-04-12
+## [1.0.6] - 2026-05-01
 
 ### Changed
 - Align `pyproject.toml` with the current Reachy Mini SDK baseline by requiring `reachy-mini>=1.7.0`, `Python>=3.12`, `zeroconf>=0.131,<1`, `aiohttp`, `websockets>=12,<16`, and `gstreamer-bundle==1.28.1` on non-Linux platforms
