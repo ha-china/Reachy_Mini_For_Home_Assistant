@@ -10,6 +10,7 @@ import numpy as np
 
 from .audio_player_shared import (
     MOVEMENT_LATENCY_S,
+    SENDSPIN_HIGH_WATERMARK_BYTES,
     SENDSPIN_LATE_DROP_GRACE_US,
     SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES,
     SENDSPIN_SCHEDULE_AHEAD_LIMIT_US,
@@ -237,6 +238,27 @@ class AudioPlayerSendspinMixin:
                     self._last_sendspin_overflow_log = now
         self._sendspin_queue_event.set()
 
+    def _should_backpressure_sendspin_chunk(self, play_time_us: int, byte_count: int) -> bool:
+        with self._sendspin_queue_lock:
+            queued_bytes = self._sendspin_queue_bytes
+        if queued_bytes + byte_count < SENDSPIN_HIGH_WATERMARK_BYTES:
+            return False
+
+        now_us = time.monotonic_ns() // 1000
+        queued_ahead_us = max(0, play_time_us - now_us)
+        if queued_ahead_us < 500_000:
+            return False
+
+        now = time.monotonic()
+        if now - getattr(self, "_last_sendspin_overflow_log", 0.0) >= 1.0:
+            _LOGGER.warning(
+                "Sendspin backpressure active, skipping queued audio (queued=%d bytes, ahead=%d ms)",
+                queued_bytes,
+                queued_ahead_us // 1000,
+            )
+            self._last_sendspin_overflow_log = now
+        return True
+
     def _get_sendspin_sway_state(self) -> dict | None:
         if self._sway_callback is None:
             return None
@@ -403,7 +425,7 @@ class AudioPlayerSendspinMixin:
         self._reset_sendspin_stream_state(stop_output=True)
 
     def pause_sendspin(self) -> None:
-        if self._sendspin_paused:
+        if self._sendspin_paused and not self._sendspin_stream_active:
             return
         self._sendspin_paused = True
         self._reset_sendspin_stream_state(stop_output=True)
@@ -413,7 +435,6 @@ class AudioPlayerSendspinMixin:
         if not self._sendspin_paused:
             return
         self._sendspin_paused = False
-        self._clear_sendspin_queue()
         self._sendspin_queue_event.set()
         _LOGGER.debug("Sendspin audio resumed")
 
@@ -522,11 +543,14 @@ class AudioPlayerSendspinMixin:
         if self._sendspin_client is not client or self._sendspin_paused or self.reachy_mini is None:
             return
         try:
-            self._sendspin_audio_format = fmt
-            audio_float = self._decode_sendspin_audio(audio_data, fmt)
             play_time_us = int(client.compute_play_time(server_timestamp_us))
             now_us = time.monotonic_ns() // 1000
             play_time_us = min(play_time_us, now_us + SENDSPIN_SCHEDULE_AHEAD_LIMIT_US)
+            if self._should_backpressure_sendspin_chunk(play_time_us, len(audio_data)):
+                return
+
+            self._sendspin_audio_format = fmt
+            audio_float = self._decode_sendspin_audio(audio_data, fmt)
             sway_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
             if sway_sample_rate <= 0:
                 sway_sample_rate = fmt.pcm_format.sample_rate

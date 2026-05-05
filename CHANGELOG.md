@@ -235,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Direct callbacks for HA sleep/wake buttons to suspend/resume services
 
 ### Optimized
-- Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms → 16ms)
+- Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms 鈫?16ms)
 - Audio loop delay reduced from 10ms to 1ms for faster VAD response
 - Stereo to mono conversion uses first channel instead of mean for cleaner signal
 
