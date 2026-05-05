@@ -97,10 +97,8 @@ class AudioPlayerLocalMixin:
                     data, sample_rate = sf.read(file_path)
                     if duration is None and sample_rate > 0:
                         duration = len(data) / sample_rate
-                    from ..motion.speech_sway import SpeechSwayRT
-
-                    sway = SpeechSwayRT()
-                    sway_frames = sway.feed(data, sample_rate)
+                    sway = self._new_sway_analyzer()
+                    sway_frames = self._compute_sway_frames(sway, data, sample_rate)
                 except Exception:
                     sway_frames = []
             self.reachy_mini.media.play_sound(file_path)
@@ -143,10 +141,4 @@ class AudioPlayerLocalMixin:
                     next_sleep = min(next_sleep, max(0.0, next_sway_ts - now))
                 time.sleep(next_sleep)
         finally:
-            if self._sway_callback:
-                try:
-                    self._sway_callback(
-                        {"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0}
-                    )
-                except Exception:
-                    pass
+            self._reset_sway_output()

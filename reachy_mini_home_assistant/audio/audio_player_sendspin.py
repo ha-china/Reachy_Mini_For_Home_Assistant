@@ -209,13 +209,8 @@ class AudioPlayerSendspinMixin:
 
     def _reset_sendspin_sway_state(self, *, reset_output: bool) -> None:
         self._sendspin_sway_state = None
-        if reset_output and self._sway_callback is not None:
-            try:
-                self._sway_callback(
-                    {"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0}
-                )
-            except Exception:
-                _LOGGER.debug("Failed to reset Sendspin sway state", exc_info=True)
+        if reset_output:
+            self._reset_sway_output()
 
     def _reset_sendspin_stream_state(self, *, stop_output: bool) -> None:
         self._clear_sendspin_queue()
@@ -263,13 +258,12 @@ class AudioPlayerSendspinMixin:
         if self._sway_callback is None:
             return None
         if self._sendspin_sway_state is None:
-            try:
-                from ..motion.speech_sway import SpeechSwayRT
-
-                self._sendspin_sway_state = {"sway": SpeechSwayRT()}
-            except Exception:
-                _LOGGER.debug("Failed to initialize Sendspin sway analyzer", exc_info=True)
+            analyzer = self._new_sway_analyzer()
+            if analyzer is None:
+                _LOGGER.debug("Failed to initialize Sendspin sway analyzer")
                 self._sendspin_sway_state = None
+            else:
+                self._sendspin_sway_state = {"sway": analyzer}
         return self._sendspin_sway_state
 
     def _queue_sendspin_sway(self, play_time_us: int, pcm: np.ndarray, sample_rate: int) -> None:
@@ -277,8 +271,7 @@ class AudioPlayerSendspinMixin:
         if ctx is None:
             return
         try:
-            sway = ctx["sway"]
-            results = sway.feed(pcm, sample_rate)
+            results = self._compute_sway_frames(ctx["sway"], pcm, sample_rate)
             if not results:
                 return
             latency_us = int(MOVEMENT_LATENCY_S * 1_000_000)
