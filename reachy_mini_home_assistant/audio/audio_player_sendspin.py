@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 try:
     from aiosendspin.client import SendspinClient
     from aiosendspin.client.client import AudioFormat, PCMFormat
+    from aiosendspin.models.core import DeviceInfo
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles
 
@@ -36,6 +37,7 @@ except Exception as e:
     AudioFormat = None  # type: ignore[assignment]
     SendspinClient = None  # type: ignore[assignment]
     ClientHelloPlayerSupport = None  # type: ignore[assignment]
+    DeviceInfo = None  # type: ignore[assignment]
     SupportedAudioFormat = None  # type: ignore[assignment]
     AudioCodec = None  # type: ignore[assignment]
     PlayerCommand = None  # type: ignore[assignment]
@@ -348,6 +350,10 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
             client_id=self._sendspin_client_id,
             client_name="Reachy Mini",
             roles=[Roles.PLAYER],
+            device_info=DeviceInfo(
+                product_name="Reachy Mini",
+                manufacturer="Pollen Robotics",
+            ),
             player_support=player_support,
             initial_volume=max(0, min(100, round(self._unduck_volume * 100.0))),
             initial_muted=self._sendspin_muted,
