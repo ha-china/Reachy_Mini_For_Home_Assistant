@@ -1,4 +1,17 @@
 [  {
+    "version": "1.0.7",
+    "date": "2026-05-05",
+    "changes": [
+      "Build: Bump package version to 1.0.7",
+      "Change: Align audio runtime with current SDK patterns by splitting local TTS playback from Sendspin-capable music playback and moving wakeword/stopword loading into shared helpers",
+      "Change: Raise the Reachy Mini SDK baseline to reachy-mini>=1.7.1",
+      "Fix: Keep wakeup and TTS playback on the local player path while binding both local and Sendspin players to shared speech sway helpers",
+      "Fix: Synchronize Idle Behavior shutdown with ESPHome face and gesture switches plus runtime state updates",
+      "Fix: Remove obsolete runtime monitor modules that are no longer needed with the current SDK behavior",
+      "Optimize: Tighten Sendspin buffering with proactive backpressure and cleaner local queue handling"
+    ]
+  },
+  {
     "version": "1.0.6",
     "date": "2026-05-01",
     "changes": [

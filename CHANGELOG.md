@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.7] - 2026-05-05
+
+### Changed
+- Align audio runtime with current SDK patterns by splitting local TTS playback from Sendspin-capable music playback and moving wakeword/stopword loading into shared helpers
+- Raise the Reachy Mini SDK baseline to `reachy-mini>=1.7.1`
+
+### Fixed
+- Keep wakeup/TTS playback on the local player path while binding both local and Sendspin players to shared speech sway helpers
+- Synchronize `Idle Behavior` shutdown with ESPHome face/gesture switches and runtime state updates
+- Remove obsolete runtime monitor modules that are no longer needed with the current SDK behavior
+
+### Optimized
+- Tighten Sendspin buffering with proactive backpressure and cleaner local queue handling
+
 ## [1.0.6] - 2026-05-01
 
 ### Changed
