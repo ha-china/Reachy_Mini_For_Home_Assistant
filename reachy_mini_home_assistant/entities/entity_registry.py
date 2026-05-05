@@ -63,6 +63,8 @@ class EntityRegistry:
         self._face_detected_entity: BinarySensorEntity | None = None
         self._gesture_entity: TextSensorEntity | None = None
         self._gesture_confidence_entity: SensorEntity | None = None
+        self._face_tracking_switch_entity: SwitchEntity | None = None
+        self._gesture_detection_switch_entity: SwitchEntity | None = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -210,6 +212,12 @@ class EntityRegistry:
         self._apply_vision_runtime_state()
 
         if not enabled:
+            if self._face_tracking_switch_entity is not None:
+                self._face_tracking_switch_entity._value = False
+                self._face_tracking_switch_entity.update_state()
+            if self._gesture_detection_switch_entity is not None:
+                self._gesture_detection_switch_entity._value = False
+                self._gesture_detection_switch_entity.update_state()
             if self._face_detected_entity is not None:
                 self._face_detected_entity._state = False
                 self._face_detected_entity.update_state()
