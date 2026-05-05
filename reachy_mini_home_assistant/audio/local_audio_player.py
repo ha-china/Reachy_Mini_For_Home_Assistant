@@ -6,12 +6,13 @@ import threading
 from typing import TYPE_CHECKING
 
 from .audio_player_playback import AudioPlayerPlaybackMixin
+from .audio_player_shared import AudioPlayerSwayMixin
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-class LocalAudioPlayer(AudioPlayerPlaybackMixin):
+class LocalAudioPlayer(AudioPlayerSwayMixin, AudioPlayerPlaybackMixin):
     """Audio player for local/TTS playback without Sendspin runtime state."""
 
     def __init__(self, reachy_mini=None, gstreamer_lock=None) -> None:
