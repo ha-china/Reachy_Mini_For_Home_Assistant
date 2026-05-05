@@ -3,7 +3,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import socket
+import time
 from urllib.parse import urlparse, urlunparse
+
+import numpy as np
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,6 +15,7 @@ SWAY_FRAME_DT_S = 0.05
 STREAM_FETCH_CHUNK_SIZE = 2048
 UNTHROTTLED_PREROLL_S = 0.35
 SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES = 32_000_000
+SENDSPIN_HIGH_WATERMARK_BYTES = 24_000_000
 SENDSPIN_LATE_DROP_GRACE_US = 150_000
 SENDSPIN_SCHEDULE_AHEAD_LIMIT_US = 2_000_000
 
@@ -53,6 +57,63 @@ def rewrite_local_service_url(url: str, host_override: str | None) -> str:
         return urlunparse(parsed._replace(netloc=netloc))
     except Exception:
         return url
+
+
+class AudioPlayerSwayMixin:
+    def _new_sway_analyzer(self):
+        try:
+            from ..motion.speech_sway import SpeechSwayRT
+
+            return SpeechSwayRT()
+        except Exception:
+            return None
+
+    def _compute_sway_frames(self, analyzer, pcm: np.ndarray, sample_rate: int) -> list[dict]:
+        if analyzer is None:
+            return []
+        try:
+            return analyzer.feed(pcm, sample_rate) or []
+        except Exception:
+            return []
+
+    def _reset_sway_output(self) -> None:
+        if getattr(self, "_sway_callback", None) is None:
+            return
+        try:
+            self._sway_callback({"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0})
+        except Exception:
+            pass
+
+    def _init_stream_sway_context(self) -> dict | None:
+        if getattr(self, "_sway_callback", None) is None:
+            return None
+        analyzer = self._new_sway_analyzer()
+        if analyzer is None:
+            return None
+        return {"sway": analyzer, "base_ts": time.monotonic(), "frames_done": 0}
+
+    def _feed_stream_sway(self, ctx: dict | None, pcm: np.ndarray, sample_rate: int) -> None:
+        if ctx is None or getattr(self, "_sway_callback", None) is None:
+            return
+        try:
+            results = self._compute_sway_frames(ctx["sway"], pcm, sample_rate)
+            if not results:
+                return
+            base_ts = float(ctx["base_ts"])
+            for item in results:
+                target = base_ts + MOVEMENT_LATENCY_S + ctx["frames_done"] * SWAY_FRAME_DT_S
+                now = time.monotonic()
+                if target > now:
+                    time.sleep(min(0.02, target - now))
+                self._sway_callback(item)
+                ctx["frames_done"] += 1
+        except Exception:
+            pass
+
+    def _finalize_stream_sway(self, ctx: dict | None) -> None:
+        if ctx is None or getattr(self, "_sway_callback", None) is None:
+            return
+        self._reset_sway_output()
 
 
 def get_stable_client_id() -> str:

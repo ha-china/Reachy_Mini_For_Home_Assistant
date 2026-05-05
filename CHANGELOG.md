@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to the Reachy Mini HA Voice project will be documented in this file.
 
@@ -15,7 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
-## [1.0.6] - 2026-04-12
+## [1.0.7] - 2026-05-05
+
+### Changed
+- Align audio runtime with current SDK patterns by splitting local TTS playback from Sendspin-capable music playback and moving wakeword/stopword loading into shared helpers
+- Raise the Reachy Mini SDK baseline to `reachy-mini>=1.7.1`
+
+### Fixed
+- Keep wakeup/TTS playback on the local player path while binding both local and Sendspin players to shared speech sway helpers
+- Synchronize `Idle Behavior` shutdown with ESPHome face/gesture switches and runtime state updates
+- Remove obsolete runtime monitor modules that are no longer needed with the current SDK behavior
+
+### Optimized
+- Tighten Sendspin buffering with proactive backpressure and cleaner local queue handling
+
+## [1.0.6] - 2026-05-01
 
 ### Changed
 - Align `pyproject.toml` with the current Reachy Mini SDK baseline by requiring `reachy-mini>=1.7.0`, `Python>=3.12`, `zeroconf>=0.131,<1`, `aiohttp`, `websockets>=12,<16`, and `gstreamer-bundle==1.28.1` on non-Linux platforms
@@ -235,7 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Direct callbacks for HA sleep/wake buttons to suspend/resume services
 
 ### Optimized
-- Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms 鈫?16ms)
+- Audio processing latency - reduced chunk size from 1024 to 256 samples (64ms -> 16ms)
 - Audio loop delay reduced from 10ms to 1ms for faster VAD response
 - Stereo to mono conversion uses first channel instead of mean for cleaner signal
 

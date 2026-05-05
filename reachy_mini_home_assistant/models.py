@@ -33,6 +33,7 @@ class AvailableWakeWord:
     wake_word: str
     trained_languages: list[str]
     wake_word_path: Path
+    probability_cutoff: float = 0.7
 
     def load(self) -> "MicroWakeWord | OpenWakeWord":
         if self.type == WakeWordType.MICRO_WAKE_WORD:

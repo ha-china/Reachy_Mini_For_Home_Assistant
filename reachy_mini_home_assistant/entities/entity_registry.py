@@ -63,6 +63,8 @@ class EntityRegistry:
         self._face_detected_entity: BinarySensorEntity | None = None
         self._gesture_entity: TextSensorEntity | None = None
         self._gesture_confidence_entity: SensorEntity | None = None
+        self._face_tracking_switch_entity: SwitchEntity | None = None
+        self._gesture_detection_switch_entity: SwitchEntity | None = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -198,9 +200,33 @@ class EntityRegistry:
         prefs = self._get_preferences()
         if prefs is not None:
             prefs.set_idle_behavior_enabled(enabled)
+            if not enabled:
+                prefs.face_tracking_enabled = False
+                prefs.gesture_detection_enabled = False
             self._save_preferences()
 
+        voice_assistant = self.server._voice_assistant_service
+        if voice_assistant is not None:
+            voice_assistant.set_idle_behavior_enabled(enabled)
+
         self._apply_vision_runtime_state()
+
+        if not enabled:
+            if self._face_tracking_switch_entity is not None:
+                self._face_tracking_switch_entity._value = False
+                self._face_tracking_switch_entity.update_state()
+            if self._gesture_detection_switch_entity is not None:
+                self._gesture_detection_switch_entity._value = False
+                self._gesture_detection_switch_entity.update_state()
+            if self._face_detected_entity is not None:
+                self._face_detected_entity._state = False
+                self._face_detected_entity.update_state()
+            if self._gesture_entity is not None:
+                self._gesture_entity._value = "none"
+                self._gesture_entity.update_state()
+            if self._gesture_confidence_entity is not None:
+                self._gesture_confidence_entity._state = 0.0
+                self._gesture_confidence_entity.update_state()
 
     def _make_preference_switch(
         self,

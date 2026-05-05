@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .audio_player_shared import (
+    AudioPlayerSwayMixin,
     MOVEMENT_LATENCY_S,
+    SENDSPIN_HIGH_WATERMARK_BYTES,
     SENDSPIN_LATE_DROP_GRACE_US,
     SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES,
     SENDSPIN_SCHEDULE_AHEAD_LIMIT_US,
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
 try:
     from aiosendspin.client import SendspinClient
     from aiosendspin.client.client import AudioFormat, PCMFormat
+    from aiosendspin.models.core import DeviceInfo
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles
 
@@ -34,6 +37,7 @@ except Exception as e:
     AudioFormat = None  # type: ignore[assignment]
     SendspinClient = None  # type: ignore[assignment]
     ClientHelloPlayerSupport = None  # type: ignore[assignment]
+    DeviceInfo = None  # type: ignore[assignment]
     SupportedAudioFormat = None  # type: ignore[assignment]
     AudioCodec = None  # type: ignore[assignment]
     PlayerCommand = None  # type: ignore[assignment]
@@ -60,7 +64,7 @@ class _QueuedSendspinSwayFrame:
     sway: dict[str, float]
 
 
-class AudioPlayerSendspinMixin:
+class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
     @property
     def sendspin_available(self) -> bool:
         return SENDSPIN_AVAILABLE
@@ -208,13 +212,8 @@ class AudioPlayerSendspinMixin:
 
     def _reset_sendspin_sway_state(self, *, reset_output: bool) -> None:
         self._sendspin_sway_state = None
-        if reset_output and self._sway_callback is not None:
-            try:
-                self._sway_callback(
-                    {"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0}
-                )
-            except Exception:
-                _LOGGER.debug("Failed to reset Sendspin sway state", exc_info=True)
+        if reset_output:
+            self._reset_sway_output()
 
     def _reset_sendspin_stream_state(self, *, stop_output: bool) -> None:
         self._clear_sendspin_queue()
@@ -237,17 +236,37 @@ class AudioPlayerSendspinMixin:
                     self._last_sendspin_overflow_log = now
         self._sendspin_queue_event.set()
 
+    def _should_backpressure_sendspin_chunk(self, play_time_us: int, byte_count: int) -> bool:
+        with self._sendspin_queue_lock:
+            queued_bytes = self._sendspin_queue_bytes
+        if queued_bytes + byte_count < SENDSPIN_HIGH_WATERMARK_BYTES:
+            return False
+
+        now_us = time.monotonic_ns() // 1000
+        queued_ahead_us = max(0, play_time_us - now_us)
+        if queued_ahead_us < 500_000:
+            return False
+
+        now = time.monotonic()
+        if now - getattr(self, "_last_sendspin_overflow_log", 0.0) >= 1.0:
+            _LOGGER.warning(
+                "Sendspin backpressure active, skipping queued audio (queued=%d bytes, ahead=%d ms)",
+                queued_bytes,
+                queued_ahead_us // 1000,
+            )
+            self._last_sendspin_overflow_log = now
+        return True
+
     def _get_sendspin_sway_state(self) -> dict | None:
         if self._sway_callback is None:
             return None
         if self._sendspin_sway_state is None:
-            try:
-                from ..motion.speech_sway import SpeechSwayRT
-
-                self._sendspin_sway_state = {"sway": SpeechSwayRT()}
-            except Exception:
-                _LOGGER.debug("Failed to initialize Sendspin sway analyzer", exc_info=True)
+            analyzer = self._new_sway_analyzer()
+            if analyzer is None:
+                _LOGGER.debug("Failed to initialize Sendspin sway analyzer")
                 self._sendspin_sway_state = None
+            else:
+                self._sendspin_sway_state = {"sway": analyzer}
         return self._sendspin_sway_state
 
     def _queue_sendspin_sway(self, play_time_us: int, pcm: np.ndarray, sample_rate: int) -> None:
@@ -255,8 +274,7 @@ class AudioPlayerSendspinMixin:
         if ctx is None:
             return
         try:
-            sway = ctx["sway"]
-            results = sway.feed(pcm, sample_rate)
+            results = self._compute_sway_frames(ctx["sway"], pcm, sample_rate)
             if not results:
                 return
             latency_us = int(MOVEMENT_LATENCY_S * 1_000_000)
@@ -332,6 +350,10 @@ class AudioPlayerSendspinMixin:
             client_id=self._sendspin_client_id,
             client_name="Reachy Mini",
             roles=[Roles.PLAYER],
+            device_info=DeviceInfo(
+                product_name="Reachy Mini",
+                manufacturer="Pollen Robotics",
+            ),
             player_support=player_support,
             initial_volume=max(0, min(100, round(self._unduck_volume * 100.0))),
             initial_muted=self._sendspin_muted,
@@ -403,7 +425,7 @@ class AudioPlayerSendspinMixin:
         self._reset_sendspin_stream_state(stop_output=True)
 
     def pause_sendspin(self) -> None:
-        if self._sendspin_paused:
+        if self._sendspin_paused and not self._sendspin_stream_active:
             return
         self._sendspin_paused = True
         self._reset_sendspin_stream_state(stop_output=True)
@@ -413,7 +435,6 @@ class AudioPlayerSendspinMixin:
         if not self._sendspin_paused:
             return
         self._sendspin_paused = False
-        self._clear_sendspin_queue()
         self._sendspin_queue_event.set()
         _LOGGER.debug("Sendspin audio resumed")
 
@@ -522,11 +543,14 @@ class AudioPlayerSendspinMixin:
         if self._sendspin_client is not client or self._sendspin_paused or self.reachy_mini is None:
             return
         try:
-            self._sendspin_audio_format = fmt
-            audio_float = self._decode_sendspin_audio(audio_data, fmt)
             play_time_us = int(client.compute_play_time(server_timestamp_us))
             now_us = time.monotonic_ns() // 1000
             play_time_us = min(play_time_us, now_us + SENDSPIN_SCHEDULE_AHEAD_LIMIT_US)
+            if self._should_backpressure_sendspin_chunk(play_time_us, len(audio_data)):
+                return
+
+            self._sendspin_audio_format = fmt
+            audio_float = self._decode_sendspin_audio(audio_data, fmt)
             sway_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
             if sway_sample_rate <= 0:
                 sway_sample_rate = fmt.pcm_format.sample_rate

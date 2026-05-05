@@ -8,7 +8,6 @@ with Home Assistant via ESPHome protocol.
 """
 
 import asyncio
-import json
 import logging
 import threading
 import time
@@ -23,11 +22,13 @@ import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
+from .audio.local_audio_player import LocalAudioPlayer
 from .core import Config
 from .core.util import get_mac
-from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
+from .models import Preferences, ServerState
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
+from .protocol.wakeword_assets import find_available_wake_words, get_wake_word_dirs, load_stop_model, load_wake_models
 from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
 from .vision.camera_server import MJPEGCameraServer
 
@@ -130,7 +131,8 @@ class VoiceAssistantService:
         await self._verify_required_files()
 
         # Load wake words
-        available_wake_words = self._load_available_wake_words()
+        wake_word_dirs = get_wake_word_dirs(_WAKEWORDS_DIR, _LOCAL_DIR)
+        available_wake_words = find_available_wake_words(wake_word_dirs, stop_model_id="stop")
         _LOGGER.debug("Available wake words: %s", list(available_wake_words.keys()))
 
         # Load preferences
@@ -138,14 +140,18 @@ class VoiceAssistantService:
         preferences = self._load_preferences(preferences_path)
 
         # Load wake word models
-        wake_models, active_wake_words = self._load_wake_models(available_wake_words, preferences)
+        wake_models, active_wake_words = load_wake_models(
+            available_wake_words,
+            preferences.active_wake_words,
+            self.wake_model,
+        )
 
         # Load stop model
-        stop_model = self._load_stop_model()
+        stop_model = load_stop_model(wake_word_dirs, stop_model_id="stop")
 
         # Create audio players with Reachy Mini reference and GStreamer lock
         music_player = AudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
-        tts_player = AudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
+        tts_player = LocalAudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
 
         # Create server state
         self._state = ServerState(
@@ -184,37 +190,43 @@ class VoiceAssistantService:
 
         # Start Reachy Mini media system
         try:
-            # Check if media system is already running to avoid conflicts
             media = self.reachy_mini.media
-            if media.audio is not None:
-                # Clean stale media state from previous app sessions (daemon is persistent)
-                try:
-                    media.stop_recording()
-                except Exception:
-                    pass
-                try:
-                    media.stop_playing()
-                except Exception:
-                    pass
-                time.sleep(0.2)
+            daemon_status = self.reachy_mini.client.get_status()
 
-                media.start_recording()
-                _LOGGER.info("Started Reachy Mini recording")
-                media.start_playing()
-                _LOGGER.info("Started Reachy Mini playback")
+            if getattr(self.reachy_mini, "media_released", False):
+                raise RuntimeError("Reachy Mini media has been released externally; this app requires SDK-owned media")
 
-                # Deterministic startup validation: fail fast instead of repeated
-                # fallback/recovery loops that hide root causes.
-                if not self._probe_audio_capture_ready(media, timeout_s=1.5):
-                    raise RuntimeError("Audio capture probe failed after media startup")
+            if getattr(daemon_status, "no_media", False):
+                raise RuntimeError("Reachy Mini daemon is running with no_media=True; this app requires SDK media")
 
-                _LOGGER.info("Reachy Mini media system initialized")
+            if media.audio is None:
+                raise RuntimeError("Reachy Mini audio backend is unavailable")
 
-                # Body yaw now follows head yaw in movement_manager.py
-                # This enables natural body rotation when tracking faces
+            if self.camera_enabled and getattr(self._state, "camera_enabled", True) and media.camera is None:
+                raise RuntimeError("Reachy Mini camera backend is unavailable while camera runtime is enabled")
+
+            try:
+                media.stop_recording()
+            except Exception:
+                pass
+            try:
+                media.stop_playing()
+            except Exception:
+                pass
+            time.sleep(0.2)
+
+            media.start_recording()
+            _LOGGER.info("Started Reachy Mini recording")
+            media.start_playing()
+            _LOGGER.info("Started Reachy Mini playback")
+
+            if not self._probe_audio_capture_ready(media, timeout_s=1.5):
+                raise RuntimeError("Audio capture probe failed after media startup")
+
+            _LOGGER.info("Reachy Mini media system initialized")
 
         except Exception as e:
-            _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
+            raise RuntimeError(f"Failed to initialize Reachy Mini media: {e}") from e
 
         # Start motion controller (5Hz control loop)
         self._motion.start()
@@ -687,50 +699,6 @@ class VoiceAssistantService:
     def _find_missing_files(base_dir: Path, filenames: list[str]) -> list[str]:
         return [filename for filename in filenames if not (base_dir / filename).exists()]
 
-    def _load_available_wake_words(self) -> dict[str, AvailableWakeWord]:
-        """Load available wake word configurations."""
-        available_wake_words: dict[str, AvailableWakeWord] = {}
-
-        # Load order: OpenWakeWord first, then MicroWakeWord, then external
-        # Later entries override earlier ones, so MicroWakeWord takes priority
-        wake_word_dirs = [
-            _WAKEWORDS_DIR / "openWakeWord",  # OpenWakeWord (lowest priority)
-            _LOCAL_DIR / "external_wake_words",  # External wake words
-            _WAKEWORDS_DIR,  # MicroWakeWord (highest priority)
-        ]
-
-        for wake_word_dir in wake_word_dirs:
-            if not wake_word_dir.exists():
-                continue
-
-            for config_path in wake_word_dir.glob("*.json"):
-                model_id = config_path.stem
-                if model_id == "stop":
-                    continue
-
-                try:
-                    with open(config_path, encoding="utf-8") as f:
-                        config = json.load(f)
-
-                    model_type = WakeWordType(config.get("type", "micro"))
-
-                    if model_type == WakeWordType.OPEN_WAKE_WORD:
-                        wake_word_path = config_path.parent / config["model"]
-                    else:
-                        wake_word_path = config_path
-
-                    available_wake_words[model_id] = AvailableWakeWord(
-                        id=model_id,
-                        type=model_type,
-                        wake_word=config.get("wake_word", model_id),
-                        trained_languages=config.get("trained_languages", []),
-                        wake_word_path=wake_word_path,
-                    )
-                except Exception as e:
-                    _LOGGER.warning("Failed to load wake word %s: %s", config_path, e)
-
-        return available_wake_words
-
     def _load_preferences(self, preferences_path: Path) -> Preferences:
         """Load user preferences."""
         if preferences_path.exists():
@@ -745,87 +713,6 @@ class VoiceAssistantService:
                 _LOGGER.warning("Failed to load preferences: %s", e)
 
         return Preferences()
-
-    def _load_wake_models(
-        self,
-        available_wake_words: dict[str, AvailableWakeWord],
-        preferences: Preferences,
-    ):
-        """Load wake word models."""
-
-        wake_models: dict[str, MicroWakeWord | OpenWakeWord] = {}
-        active_wake_words: set[str] = set()
-
-        if preferences.active_wake_words:
-            for wake_word_id in preferences.active_wake_words:
-                self._try_add_wake_model(wake_models, active_wake_words, available_wake_words, wake_word_id)
-
-        # Load default model if none loaded
-        if not wake_models:
-            self._try_add_wake_model(
-                wake_models,
-                active_wake_words,
-                available_wake_words,
-                self.wake_model,
-                unknown_level="error",
-                failure_level="error",
-                log_default=True,
-            )
-
-        return wake_models, active_wake_words
-
-    def _try_add_wake_model(
-        self,
-        wake_models: dict[str, MicroWakeWord | OpenWakeWord],
-        active_wake_words: set[str],
-        available_wake_words: dict[str, AvailableWakeWord],
-        wake_word_id: str,
-        *,
-        unknown_level: str = "warning",
-        failure_level: str = "warning",
-        log_default: bool = False,
-    ) -> None:
-        wake_word = available_wake_words.get(wake_word_id)
-        if wake_word is None:
-            getattr(_LOGGER, unknown_level)("Unknown wake word: %s", wake_word_id)
-            return
-
-        try:
-            if log_default:
-                _LOGGER.debug("Loading default wake model: %s", wake_word_id)
-            else:
-                _LOGGER.debug("Loading wake model: %s", wake_word_id)
-            loaded_model = wake_word.load()
-            loaded_model.id = wake_word_id
-            wake_models[wake_word_id] = loaded_model
-            active_wake_words.add(wake_word_id)
-        except Exception as e:
-            message = "Failed to load default wake model: %s" if log_default else "Failed to load wake model %s: %s"
-            if log_default:
-                getattr(_LOGGER, failure_level)(message, e)
-            else:
-                getattr(_LOGGER, failure_level)(message, wake_word_id, e)
-
-    def _load_stop_model(self):
-        """Load the stop word model."""
-        from pymicro_wakeword import MicroWakeWord
-
-        stop_config = _WAKEWORDS_DIR / "stop.json"
-        if stop_config.exists():
-            try:
-                model = MicroWakeWord.from_config(stop_config)
-                # Don't override the model ID - use the one from config
-                _LOGGER.info("Loaded stop model with ID: %s, config: %s", model.id, stop_config)
-                return model
-            except Exception as e:
-                _LOGGER.error("Failed to load stop model from %s: %s", stop_config, e)
-                import traceback
-
-                traceback.print_exc()
-
-        # Stop model not available - disable stop functionality
-        _LOGGER.error("Stop model not available at %s - stop functionality will be disabled", stop_config)
-        return None
 
     def _process_audio(self) -> None:
         """Process audio from Reachy Mini's microphone."""
