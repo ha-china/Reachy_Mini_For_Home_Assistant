@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .audio_player_shared import (
+    AudioPlayerSwayMixin,
     MOVEMENT_LATENCY_S,
     SENDSPIN_HIGH_WATERMARK_BYTES,
     SENDSPIN_LATE_DROP_GRACE_US,
@@ -61,7 +62,7 @@ class _QueuedSendspinSwayFrame:
     sway: dict[str, float]
 
 
-class AudioPlayerSendspinMixin:
+class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
     @property
     def sendspin_available(self) -> bool:
         return SENDSPIN_AVAILABLE
