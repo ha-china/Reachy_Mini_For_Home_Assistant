@@ -1,9 +1,7 @@
-"""Gesture smoothing and confirmation system.
+"""Gesture smoothing system.
 
-This module implements gesture tracking using history tracking
-without confidence filtering, following the reference implementation.
-
-Reference: @reference/dynamic_gestures/main_controller.py
+This project favors fast recognition. Positive gestures confirm immediately,
+while clearing back to ``none`` is delayed slightly to avoid flicker.
 """
 
 import logging
@@ -13,23 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 class GestureSmoother:
-    """Smooths gesture detections using history tracking.
+    """Smooths gesture detections with instant positive confirmation and delayed clear."""
 
-    Unlike the reference implementation which uses KalmanBoxTracker + OCSort,
-    this simpler version uses history tracking without spatial tracking.
-
-    Key principles from reference:
-    1. NO confidence filtering - pass all detections
-    2. Use history to stabilize gesture output
-    3. Return the most frequently detected gesture in recent frames
-
-    Usage:
-        smoother = GestureSmoother()
-        detected_gesture, confidence = gesture_detector.detect(frame)
-        confirmed_gesture = smoother.update(detected_gesture, confidence)
-    """
-
-    def __init__(self, history_size: int = 5, clear_grace_updates: int = 3):
+    def __init__(self, history_size: int = 4, clear_grace_updates: int = 2):
         """Initialize gesture smoother.
 
         Args:
@@ -46,11 +30,6 @@ class GestureSmoother:
     def update(self, gesture: str, confidence: float) -> str:
         """Update with new gesture detection and return confirmed gesture.
 
-        This follows the reference implementation's approach:
-        - Track all detections without filtering
-        - Return the most frequent gesture in recent history
-        - If "none" is dominant, return "none"
-
         Args:
             gesture: Gesture name (e.g., "like", "peace", "none")
             confidence: Detection confidence (0.0-1.0)
@@ -61,7 +40,6 @@ class GestureSmoother:
         # Add to history
         self._history.append((gesture, confidence))
 
-        # Fast path: non-none detections should feel immediate.
         if gesture != "none":
             self._none_streak = 0
             self._confirmed_gesture = gesture
@@ -72,25 +50,5 @@ class GestureSmoother:
         if self._confirmed_gesture != "none" and self._none_streak <= self.clear_grace_updates:
             return self._confirmed_gesture
 
-        # Count occurrences of each gesture in history
-        gesture_counts: dict[str, int] = {}
-        for g, _ in self._history:
-            gesture_counts[g] = gesture_counts.get(g, 0) + 1
-
-        # Find the most frequent gesture
-        if not gesture_counts:
-            return "none"
-
-        # Get gesture with highest count
-        most_frequent = max(gesture_counts, key=gesture_counts.get)
-
-        # If "none" is most frequent, return "none"
-        if most_frequent == "none":
-            self._confirmed_gesture = "none"
-        else:
-            # Otherwise return the most frequent non-none gesture
-            # This is more responsive than requiring consecutive matches
-            self._confirmed_gesture = most_frequent
-            self._none_streak = 0
-
+        self._confirmed_gesture = "none"
         return self._confirmed_gesture

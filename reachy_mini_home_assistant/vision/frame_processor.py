@@ -40,8 +40,8 @@ class FrameRateConfig:
     idle_threshold: float = 30.0  # Switch to idle after 30s without face
 
     # Gesture detection interval (every N frames)
-    # Reduced from 3 to 1 for higher sensitivity (gesture smoother handles confirmation)
     gesture_detection_interval: int = 1
+    gesture_target_fps: float = 15.0
 
 
 @dataclass
@@ -58,6 +58,7 @@ class ProcessingState:
 
     # Counters
     gesture_frame_counter: int = 0
+    last_gesture_check_time: float = 0.0
 
     # AI state
     ai_enabled: bool = True
@@ -205,17 +206,25 @@ class AdaptiveFrameRateManager:
     def should_run_gesture_detection(self) -> bool:
         """Determine if gesture detection should run this frame.
 
-        Gesture detection runs less frequently than face detection.
+        Gesture detection keeps its own minimum cadence so idle face-tracking
+        slowdown does not make gesture interaction feel unresponsive.
         """
         if not self.state.ai_enabled:
             return False
 
         self.state.gesture_frame_counter += 1
-        if self.state.gesture_frame_counter >= self.config.gesture_detection_interval:
-            self.state.gesture_frame_counter = 0
-            return True
+        now = self._now()
+        min_interval = 1.0 / max(1.0, self.config.gesture_target_fps)
 
-        return False
+        if self.state.gesture_frame_counter < self.config.gesture_detection_interval:
+            return False
+
+        if now - self.state.last_gesture_check_time < min_interval:
+            return False
+
+        self.state.gesture_frame_counter = 0
+        self.state.last_gesture_check_time = now
+        return True
 
     def get_sleep_interval(self) -> float:
         """Get sleep interval between frames.
