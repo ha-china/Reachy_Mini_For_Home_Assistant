@@ -39,7 +39,7 @@ dependencies = [
     "supervision",
 
     # Sendspin synchronized audio (optional, for multi-room playback)
-    "aiosendspin>=5.1,<6.0",
+    "aiosendspin>=5.2,<6.0",
 
     # Gesture detection (ONNX runtime for HaGRID models)
     "onnxruntime>=1.18.0",

@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .audio_player_shared import (
-    AudioPlayerSwayMixin,
+    _LOGGER,
     MOVEMENT_LATENCY_S,
     SENDSPIN_HIGH_WATERMARK_BYTES,
     SENDSPIN_LATE_DROP_GRACE_US,
     SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES,
     SENDSPIN_SCHEDULE_AHEAD_LIMIT_US,
     SWAY_FRAME_DT_S,
-    _LOGGER,
+    AudioPlayerSwayMixin,
 )
 
 if TYPE_CHECKING:
@@ -85,7 +85,10 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
     def _get_sendspin_effective_volume(self) -> float:
         if self._sendspin_muted:
             return 0.0
-        return self._current_volume * (self._sendspin_remote_volume / 100.0)
+        # Player volume commands should control the local playback level directly.
+        # `_current_volume` already reflects the active local volume/duck state, so
+        # applying `_sendspin_remote_volume` again would double-scale playback.
+        return self._current_volume
 
     def _ensure_sendspin_worker(self) -> None:
         if self._sendspin_queue_thread is not None and self._sendspin_queue_thread.is_alive():
@@ -600,7 +603,8 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
         try:
             if player_payload.command == PlayerCommand.VOLUME and player_payload.volume is not None:
                 self._sendspin_remote_volume = max(0, min(100, int(player_payload.volume)))
-                _LOGGER.debug("Sendspin remote volume set to %d", self._sendspin_remote_volume)
+                self.set_volume(self._sendspin_remote_volume)
+                _LOGGER.debug("Sendspin player volume set to %d", self._sendspin_remote_volume)
             elif player_payload.command == PlayerCommand.MUTE and player_payload.mute is not None:
                 self._sendspin_muted = bool(player_payload.mute)
                 if self._sendspin_muted:
