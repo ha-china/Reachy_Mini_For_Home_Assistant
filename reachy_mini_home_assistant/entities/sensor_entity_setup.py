@@ -171,6 +171,12 @@ def setup_detection_entities(registry: "EntityRegistry", entities: list) -> None
     )
     entities.append(registry._gesture_confidence_entity)
 
+    def _is_face_detected() -> bool:
+        motion = registry.server.state.motion
+        if motion is not None and motion.movement_manager is not None:
+            return bool(motion.movement_manager.state.face_detected)
+        return False
+
     registry._face_detected_entity = BinarySensorEntity(
         server=registry.server,
         key=get_entity_key("face_detected"),
@@ -178,7 +184,7 @@ def setup_detection_entities(registry: "EntityRegistry", entities: list) -> None
         object_id="face_detected",
         icon="mdi:face-recognition",
         device_class="occupancy",
-        value_getter=lambda: registry.camera_server.is_face_detected() if registry.camera_server else False,
+        value_getter=_is_face_detected,
     )
     entities.append(registry._face_detected_entity)
 

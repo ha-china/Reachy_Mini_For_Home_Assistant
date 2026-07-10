@@ -335,11 +335,9 @@ class VoiceAssistantService:
         if self._camera_server is not None:
             prefs = self._state.preferences
             self._camera_server.apply_runtime_vision_state(
-                face_requested=bool(prefs.face_tracking_enabled),
                 gesture_requested=bool(prefs.gesture_detection_enabled),
                 models_allowed=True,
             )
-            self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
             return
 
         self._camera_server = MJPEGCameraServer(
@@ -348,18 +346,15 @@ class VoiceAssistantService:
             port=self.camera_port,
             fps=15,
             quality=80,
-            enable_face_tracking=bool(self._state.preferences.face_tracking_enabled),
             enable_gesture_detection=bool(self._state.preferences.gesture_detection_enabled),
             gstreamer_lock=self._gstreamer_lock,
         )
 
         prefs = self._state.preferences
         self._camera_server.apply_runtime_vision_state(
-            face_requested=bool(prefs.face_tracking_enabled),
             gesture_requested=bool(prefs.gesture_detection_enabled),
             models_allowed=True,
         )
-        self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
         await self._camera_server.start()
 
         self._state._camera_server = self._camera_server

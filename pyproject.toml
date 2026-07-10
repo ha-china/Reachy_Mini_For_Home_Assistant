@@ -34,19 +34,11 @@ dependencies = [
     # Motion control (head movements)
     "scipy>=1.15.3,<2.0.0",
 
-    # Face tracking (YOLO-based head detection)
-    "ultralytics>=8.0.0",
-    "supervision>=0.18.0",
-
     # Sendspin synchronized audio (optional, for multi-room playback)
     "aiosendspin>=6.0,<7.0",
 
     # Gesture detection (ONNX runtime for HaGRID models)
     "onnxruntime>=1.18.0",
-
-    # PyTorch (for vision models)
-    "torch==2.5.1",
-    "torchvision==0.20.1",
 
     # Compatibility with system packages (gradio, etc.)
     "pillow>=10.0,<12.0",
@@ -66,7 +58,7 @@ include-package-data = true
 where = ["."]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx", "*.pt"]
+"*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx"]
 
 # ============================================================================
 # Ruff - Fast Python linter and formatter

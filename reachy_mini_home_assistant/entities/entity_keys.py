@@ -23,7 +23,6 @@ ENTITY_KEYS: dict[str, int] = {
     "sendspin_enabled": 105,
     "face_tracking_enabled": 106,
     "gesture_detection_enabled": 107,
-    "face_confidence_threshold": 108,
     "camera_disabled": 109,
     # Phase 2: Runtime controls (200-299)
     "motor_mode": 201,

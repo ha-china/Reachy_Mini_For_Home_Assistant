@@ -1,7 +1,9 @@
 """Reachy Mini motion control integration.
 
 This module provides a high-level motion API that delegates to the
-MovementManager for unified 5Hz control with face tracking.
+MovementManager for unified control loop execution. Face tracking is owned
+by the SDK's daemon-side head tracker, which blends its aim into the IK
+output independently of this layer.
 """
 
 import logging
@@ -43,15 +45,15 @@ class ReachyMiniMotion:
             self._movement_manager.robot = reachy_mini
 
     def set_camera_server(self, camera_server):
-        """Set the camera server for face tracking.
+        """Set the camera server reference (gesture state streaming).
 
-        Args:
-            camera_server: MJPEGCameraServer instance with face tracking enabled
+        Face tracking is no longer handled by the camera server — it is
+        delegated to the SDK's daemon-side head tracker.
         """
         self._camera_server = camera_server
         if self._movement_manager is not None:
             self._movement_manager.set_camera_server(camera_server)
-            _LOGGER.info("Camera server connected for face tracking")
+            _LOGGER.debug("Camera server reference set on movement manager")
 
     def start(self):
         """Start the movement manager control loop."""

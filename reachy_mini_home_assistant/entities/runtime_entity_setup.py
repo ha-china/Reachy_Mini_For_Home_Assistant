@@ -157,29 +157,6 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
     )
     entities.append(registry._gesture_detection_switch_entity)
 
-    def get_face_confidence_threshold() -> float:
-        return registry._get_pref_float("face_confidence_threshold", 0.5)
-
-    def set_face_confidence_threshold(value: float) -> None:
-        value = max(0.0, min(1.0, float(value)))
-        registry._set_pref_float("face_confidence_threshold", value)
-        if registry.camera_server is not None:
-            registry.camera_server.set_face_confidence_threshold(value)
-
-    entities.append(
-        registry._make_preference_number(
-            key_name="face_confidence_threshold",
-            name="Face Confidence",
-            object_id="face_confidence_threshold",
-            icon="mdi:target",
-            getter=get_face_confidence_threshold,
-            setter=set_face_confidence_threshold,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        )
-    )
-
     _LOGGER.debug("Phase 1 entities registered")
 
 

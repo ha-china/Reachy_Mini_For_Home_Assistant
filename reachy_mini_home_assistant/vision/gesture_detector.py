@@ -113,14 +113,15 @@ _NAME_TO_GESTURE = {
 
 class GestureDetector:
     def __init__(self):
-        models_dir = Path(__file__).parent / "models"
+        models_dir = Path(__file__).resolve().parents[1] / "models"
         self._detector_path = models_dir / "hand_detector.onnx"
         self._classifier_path = models_dir / "crops_classifier.onnx"
         if not self._detector_path.exists() or not self._classifier_path.exists():
             raise FileNotFoundError(
-                "Gesture model files are missing in vision/models. "
+                "Gesture model files are missing. "
                 "Please reinstall reachy_mini_home_assistant and ensure "
-                "hand_detector.onnx and crops_classifier.onnx are present."
+                "hand_detector.onnx and crops_classifier.onnx are present in "
+                f"{models_dir}."
             )
         self._detector = None
         self._classifier = None

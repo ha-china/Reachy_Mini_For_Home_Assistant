@@ -32,7 +32,6 @@ def bind_camera_callbacks(protocol: "VoiceSatelliteProtocol", camera_server) -> 
     if not camera_server:
         return
     camera_server.set_gesture_state_callback(protocol._entity_registry.update_gesture_state)
-    camera_server.set_face_state_callback(protocol._entity_registry.update_face_detected_state)
 
 
 def initialize_entities(protocol: "VoiceSatelliteProtocol") -> None:

@@ -83,22 +83,10 @@ class CameraConfig:
     port: int = 8081
 
     # Frame capture
-    fps_high: int = 15  # Active mode: smooth face tracking
-    fps_low: int = 10  # Low power: periodic face check
-    fps_idle: float = 5  # Ultra-low power: minimal CPU
+    fps_high: int = 15  # MJPEG stream target FPS
 
     # JPEG encoding
     quality: int = 80
-
-    # Face tracking runtime tuning
-    face_confidence_threshold: float = 0.5  # Min confidence for face detection (0.3 too low, causes false positives)
-    face_lost_delay: float = 2.0  # Wait before returning to neutral
-    interpolation_duration: float = 1.0  # Time to return to neutral
-    offset_scale: float = 0.6  # Face offset multiplier
-
-    # Power management
-    low_power_threshold: float = 5.0  # Seconds without face -> low power
-    idle_threshold: float = 30.0  # Seconds without face -> idle
 
     # Gesture detection runtime tuning
     gesture_detection_interval: int = 1  # Run every frame for maximum gesture responsiveness
