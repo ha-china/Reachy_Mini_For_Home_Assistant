@@ -845,109 +845,107 @@ class VoiceAssistantService:
     def _get_reachy_audio_chunk(self) -> bytes | None:
         """Get fixed-size audio chunk from Reachy Mini's microphone.
 
-        Returns exactly AUDIO_BLOCK_SIZE samples each time, buffering
-        internally to ensure consistent chunk sizes for streaming.
+        Aggressively fills the internal deque buffer by pulling audio samples
+        from the SDK in a tight loop (the SDK's 20 ms appsink timeout acts as
+        the natural throttle).  Returns ``AUDIO_BLOCK_SIZE`` PCM bytes once
+        enough mono float32 samples have accumulated.
+
+        Unlike a single-shot poll, this loop keeps the stream gapless ---
+        critical for downstream VAD/STT which reset on gaps or missing chunks.
 
         Returns:
-            PCM audio bytes of fixed size, or None if not enough data.
+            PCM audio bytes of fixed size, or ``None`` if services are paused.
         """
-        # Check if services are paused (e.g., during sleep/disconnect)
         if self._robot_services_paused.is_set():
             return None
 
-        # Get new audio data from SDK
-        audio_data = self.reachy_mini.media.get_audio_sample()
+        self._fill_audio_buffer()
+        if len(self._audio_buffer) < AUDIO_BLOCK_SIZE:
+            return None
 
-        # Debug: Log SDK audio data statistics and sample rate (once at startup)
-        if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
-            if not hasattr(self, "_audio_sample_rate_logged"):
-                self._audio_sample_rate_logged = True
-                try:
-                    input_rate = self.reachy_mini.media.get_input_audio_samplerate()
-                    _LOGGER.info(
-                        "Audio input: sample_rate=%d Hz, shape=%s, dtype=%s (expected 16000 Hz)",
-                        input_rate,
-                        audio_data.shape,
-                        audio_data.dtype,
-                    )
-                    if input_rate != 16000:
-                        _LOGGER.warning(
-                            "Audio sample rate mismatch! Got %d Hz, expected 16000 Hz. "
-                            "STT may be slow or inaccurate. Consider resampling.",
-                            input_rate,
-                        )
-                except Exception as e:
-                    _LOGGER.warning("Could not get audio sample rate: %s", e)
+        chunk = [self._audio_buffer.popleft() for _ in range(AUDIO_BLOCK_SIZE)]
+        chunk_array = np.array(chunk, dtype=np.float32)
+        pcm_bytes = (np.clip(chunk_array, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+        return pcm_bytes
 
-        # Append new data to buffer if valid
-        if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
+    def _fill_audio_buffer(self) -> None:
+        """Pull audio samples from the SDK in a tight loop until the deque holds
+        at least ``AUDIO_BLOCK_SIZE`` mono float32 samples.
+        """
+        max_polls = 20  # safety valve to avoid busy-looping if appsink drains
+        for _ in range(max_polls):
+            if len(self._audio_buffer) >= AUDIO_BLOCK_SIZE:
+                return
+            audio_data = self.reachy_mini.media.get_audio_sample()
+            if audio_data is None:
+                continue
+            if not isinstance(audio_data, np.ndarray) or audio_data.size == 0:
+                continue
+            self._ensure_input_rate_logged(audio_data)
+            self._buffer_audio_sample(audio_data)
+
+    def _ensure_input_rate_logged(self, audio_data: np.ndarray) -> None:
+        if hasattr(self, "_audio_sample_rate_logged"):
+            return
+        self._audio_sample_rate_logged = True
+        try:
+            input_rate = self.reachy_mini.media.get_input_audio_samplerate()
+            _LOGGER.info(
+                "Audio input: sample_rate=%d Hz, shape=%s, dtype=%s (expected 16000 Hz)",
+                input_rate,
+                audio_data.shape,
+                audio_data.dtype,
+            )
+            if input_rate != 16000:
+                _LOGGER.warning(
+                    "Audio sample rate mismatch! Got %d Hz, expected 16000 Hz. "
+                    "STT may be slow or inaccurate. Consider resampling.",
+                    input_rate,
+                )
+        except Exception as e:
+            _LOGGER.warning("Could not get audio sample rate: %s", e)
+
+    def _buffer_audio_sample(self, audio_data: np.ndarray) -> None:
+        try:
+            if audio_data.dtype.kind in ("S", "U", "O", "V", "b"):
+                return
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32, copy=False)
+            audio_data = np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0)
+            if audio_data.ndim == 2 and audio_data.shape[1] >= 2:
+                audio_data = audio_data[:, 0]
+            elif audio_data.ndim == 2:
+                return  # single-channel stereo container, already mono from reshape
+            if audio_data.ndim != 1:
+                return
+            audio_data = self._resample_if_needed(audio_data)
+            self._audio_buffer.extend(audio_data)
+        except (TypeError, ValueError):
+            pass
+
+    def _resample_if_needed(self, audio_data: np.ndarray) -> np.ndarray:
+        if not hasattr(self, "_input_sample_rate_fixed"):
+            self._input_sample_rate_fixed = True
             try:
-                if audio_data.dtype.kind not in ("S", "U", "O", "V", "b"):
-                    # Convert to float32 only if needed (SDK already returns float32)
-                    if audio_data.dtype != np.float32:
-                        audio_data = audio_data.astype(np.float32, copy=False)
+                self._input_sample_rate = self.reachy_mini.media.get_input_audio_samplerate()
+                if self._input_sample_rate != 16000:
+                    _LOGGER.warning(
+                        "Sample rate %d != 16000 Hz. "
+                        "Performance may be degraded. "
+                        "Consider forcing 16kHz in hardware config.",
+                        self._input_sample_rate,
+                    )
+            except Exception:
+                self._input_sample_rate = 16000
+        if self._input_sample_rate == 16000 or self._input_sample_rate <= 0:
+            return audio_data
+        from scipy.signal import resample
 
-                    # Clean NaN/Inf values early to prevent downstream errors
-                    audio_data = np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0)
-
-                    # Convert stereo to mono (use first channel for better quality)
-                    if audio_data.ndim == 2 and audio_data.shape[1] >= 2:
-                        # Use first channel instead of mean - cleaner signal
-                        # Remove .copy() to avoid unnecessary array duplication
-                        audio_data = audio_data[:, 0]
-                    elif audio_data.ndim == 2:
-                        # Remove .copy() to avoid unnecessary array duplication
-                        audio_data = audio_data[:, 0]
-
-                    # Resample if needed (SDK may return non-16kHz audio)
-                    if audio_data.ndim == 1:
-                        # Initialize sample rate once (not every chunk)
-                        if not hasattr(self, "_input_sample_rate_fixed"):
-                            try:
-                                self._input_sample_rate = self.reachy_mini.media.get_input_audio_samplerate()
-                                if self._input_sample_rate != 16000:
-                                    _LOGGER.warning(
-                                        f"Sample rate {self._input_sample_rate} != 16000 Hz. "
-                                        "Performance may be degraded. "
-                                        "Consider forcing 16kHz in hardware config."
-                                    )
-                            except Exception:
-                                self._input_sample_rate = 16000
-
-                            self._input_sample_rate_fixed = True  # Mark as fixed
-
-                        # Resample to 16kHz if needed
-                        if self._input_sample_rate != 16000 and self._input_sample_rate > 0:
-                            from scipy.signal import resample
-
-                            new_length = int(len(audio_data) * 16000 / self._input_sample_rate)
-                            if new_length > 0:
-                                audio_data = resample(audio_data, new_length)
-                                audio_data = np.nan_to_num(
-                                    audio_data,
-                                    nan=0.0,
-                                    posinf=1.0,
-                                    neginf=-1.0,
-                                ).astype(np.float32, copy=False)
-
-                        # Extend deque (deque automatically handles overflow with maxlen)
-                        # This avoids creating new arrays like np.concatenate does
-                        self._audio_buffer.extend(audio_data)
-
-            except (TypeError, ValueError):
-                pass
-
-        # Return fixed-size chunk if we have enough data
-        if len(self._audio_buffer) >= AUDIO_BLOCK_SIZE:
-            # Extract chunk and remove from buffer
-            chunk = [self._audio_buffer.popleft() for _ in range(AUDIO_BLOCK_SIZE)]
-
-            # Convert to PCM bytes (16-bit signed, little-endian)
-            chunk_array = np.array(chunk, dtype=np.float32)
-            pcm_bytes = (np.clip(chunk_array, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
-            return pcm_bytes
-
-        return None
+        new_length = int(len(audio_data) * 16000 / self._input_sample_rate)
+        if new_length <= 0:
+            return audio_data
+        audio_data = resample(audio_data, new_length)
+        return np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0).astype(np.float32, copy=False)
 
     def _convert_to_pcm(self, audio_chunk_array: np.ndarray) -> bytes:
         """Convert float32 audio array to 16-bit PCM bytes."""
