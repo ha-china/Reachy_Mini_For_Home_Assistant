@@ -11,13 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-# Import SDK interpolation utilities (same as conversation_app)
-try:
-    from reachy_mini.utils.interpolation import linear_pose_interpolation
-
-    SDK_INTERPOLATION_AVAILABLE = True
-except ImportError:
-    SDK_INTERPOLATION_AVAILABLE = False
+from reachy_mini.utils.interpolation import linear_pose_interpolation
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -135,7 +129,7 @@ class FaceTrackingInterpolator:
         # Interpolate to neutral (identity matrix)
         if self._interpolation_start_pose is not None:
             neutral_pose = np.eye(4, dtype=np.float32)
-            interpolated_pose = self._linear_pose_interpolation(self._interpolation_start_pose, neutral_pose, t)
+            interpolated_pose = linear_pose_interpolation(self._interpolation_start_pose, neutral_pose, t)
 
             # Extract translation and rotation
             translation = interpolated_pose[:3, 3]
@@ -155,39 +149,6 @@ class FaceTrackingInterpolator:
             self._last_face_detected_time = None
             self._interpolation_start_time = None
             self._interpolation_start_pose = None
-
-    def _linear_pose_interpolation(self, start: np.ndarray, end: np.ndarray, t: float) -> np.ndarray:
-        """Linear interpolation between two 4x4 pose matrices.
-
-        Uses SDK's linear_pose_interpolation if available, otherwise falls back
-        to manual SLERP implementation.
-        """
-        if SDK_INTERPOLATION_AVAILABLE:
-            return linear_pose_interpolation(start, end, t)
-
-        # Fallback: manual interpolation
-        # Interpolate translation
-        start_trans = start[:3, 3]
-        end_trans = end[:3, 3]
-        interp_trans = start_trans * (1 - t) + end_trans * t
-
-        # Interpolate rotation using SLERP
-        start_rot = R.from_matrix(start[:3, :3])
-        end_rot = R.from_matrix(end[:3, :3])
-
-        # Use scipy's slerp
-        from scipy.spatial.transform import Slerp
-
-        key_rots = R.from_quat(np.array([start_rot.as_quat(), end_rot.as_quat()]))
-        slerp = Slerp([0, 1], key_rots)
-        interp_rot = slerp(t)
-
-        # Build result matrix
-        result = np.eye(4, dtype=np.float32)
-        result[:3, :3] = interp_rot.as_matrix()
-        result[:3, 3] = interp_trans
-
-        return result
 
     def get_offsets(self) -> tuple[float, float, float, float, float, float]:
         """Get current face tracking offsets.

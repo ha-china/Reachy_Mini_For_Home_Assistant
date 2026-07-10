@@ -123,21 +123,20 @@ class VoiceSatelliteProtocol(APIServer):
         if state.motion is not None and state.motion.movement_manager is not None:
             self.reachy_controller.set_movement_manager(state.motion.movement_manager)
 
-            # Setup speech sway callback for audio-driven head motion
-            def sway_callback(sway: dict) -> None:
+            # Setup SDK-driven head wobbling for audio-synchronized head motion
+            # The SDK's HeadWobbler hooks into the GStreamer audio pipeline tee
+            # and dispatches PTS-aligned sway offsets via this callback.
+            def wobbling_callback(offsets: tuple[float, float, float, float, float, float]) -> None:
                 mm = state.motion.movement_manager
                 if mm is not None:
-                    mm.set_speech_sway(
-                        sway.get("x_m", 0.0),
-                        sway.get("y_m", 0.0),
-                        sway.get("z_m", 0.0),
-                        sway.get("roll_rad", 0.0),
-                        sway.get("pitch_rad", 0.0),
-                        sway.get("yaw_rad", 0.0),
-                    )
+                    x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad = offsets
+                    mm.set_speech_sway(x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad)
 
-            state.tts_player.set_sway_callback(sway_callback)
-            _LOGGER.info("Speech sway callback configured for TTS player")
+            try:
+                state.reachy_mini.media.enable_wobbling(wobbling_callback)
+                _LOGGER.info("SDK head wobbler configured for MovementManager")
+            except Exception:
+                _LOGGER.warning("SDK head wobbling unavailable; head motion during TTS disabled", exc_info=True)
 
         # Initialize entity registry
         self._entity_registry = create_entity_registry(self)

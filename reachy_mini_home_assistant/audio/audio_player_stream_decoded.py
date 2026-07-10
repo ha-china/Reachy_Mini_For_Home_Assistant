@@ -110,7 +110,6 @@ class AudioPlayerStreamDecodedMixin:
         pushed_any = False
         played_frames = 0
         stream_start = time.monotonic()
-        sway_ctx = self._init_stream_sway_context()
         bytes_per_frame = 2 * target_channels
         feed_done = threading.Event()
         decode_error = False
@@ -181,7 +180,6 @@ class AudioPlayerStreamDecodedMixin:
                             continue
                         pushed_any = True
                         played_frames += int(pcm.shape[0])
-                        self._feed_stream_sway(sway_ctx, pcm, target_sr)
                     finally:
                         sample = None
                 elif eos_seen and feed_done.is_set():
@@ -235,7 +233,6 @@ class AudioPlayerStreamDecodedMixin:
             _LOGGER.debug("Error during GStreamer stream decode: %s", e)
             pushed_any = False
         finally:
-            self._finalize_stream_sway(sway_ctx)
             try:
                 pipeline.set_state(Gst.State.NULL)
             except Exception:

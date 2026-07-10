@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
+from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
 
 
 class AudioPlayerLocalMixin:
@@ -79,9 +79,13 @@ class AudioPlayerLocalMixin:
         return ".bin"
 
     def _play_local_file(self, file_path: str) -> None:
+        # When SDK head wobbling is enabled, the GStreamer audio tee splits
+        # playback automatically to both speaker and wobbler appsink. The
+        # SDK's HeadWobbler handles PTS-aligned sway scheduling via the
+        # callback registered by VoiceAssistantService; this class only owns
+        # the playback lifecycle and duration wait.
         try:
             duration: float | None = None
-            sway_frames: list[dict] = []
             try:
                 import soundfile as sf
 
@@ -90,26 +94,12 @@ class AudioPlayerLocalMixin:
                     duration = float(info.frames) / float(info.samplerate)
             except Exception:
                 duration = None
-            if self._sway_callback is not None:
-                try:
-                    import soundfile as sf
-
-                    data, sample_rate = sf.read(file_path)
-                    if duration is None and sample_rate > 0:
-                        duration = len(data) / sample_rate
-                    sway = self._new_sway_analyzer()
-                    sway_frames = self._compute_sway_frames(sway, data, sample_rate)
-                except Exception:
-                    sway_frames = []
             self.reachy_mini.media.play_sound(file_path)
             start_time = time.monotonic()
-            frame_duration = 0.05
-            frame_idx = 0
             has_duration = (duration is not None) and (duration > 0)
             duration_s = duration if has_duration and duration is not None else 0.0
             max_duration = (duration_s * 1.5) if has_duration else 60.0
             playback_timeout = start_time + max_duration
-            sway_base_ts = start_time + MOVEMENT_LATENCY_S
             while True:
                 now = time.monotonic()
                 if now > playback_timeout:
@@ -123,22 +113,7 @@ class AudioPlayerLocalMixin:
                     if (now - start_time) >= duration_s:
                         break
                 else:
-                    try:
-                        if not bool(self.reachy_mini.media.is_playing()):
-                            break
-                    except Exception:
-                        pass
-                if self._sway_callback and frame_idx < len(sway_frames):
-                    target_frame = frame_idx
-                    while target_frame < len(sway_frames) and now >= (sway_base_ts + target_frame * frame_duration):
-                        target_frame += 1
-                    while frame_idx < target_frame and frame_idx < len(sway_frames):
-                        self._sway_callback(sway_frames[frame_idx])
-                        frame_idx += 1
-                next_sleep = 0.02
-                if self._sway_callback and frame_idx < len(sway_frames):
-                    next_sway_ts = sway_base_ts + frame_idx * frame_duration
-                    next_sleep = min(next_sleep, max(0.0, next_sway_ts - now))
-                time.sleep(next_sleep)
-        finally:
-            self._reset_sway_output()
+                    time.sleep(0.05)
+                time.sleep(0.02)
+        except Exception as e:
+            _LOGGER.error("Error playing local audio file: %s", e)

@@ -69,7 +69,6 @@ class AudioPlayerStreamPCMMixin:
         pushed_any = False
         played_frames = 0
         stream_start = time.monotonic()
-        sway_ctx = self._init_stream_sway_context()
         bytes_per_frame = 2 * channels
         for chunk in response.iter_content(chunk_size=STREAM_FETCH_CHUNK_SIZE):
             if self._stop_flag.is_set():
@@ -97,6 +96,4 @@ class AudioPlayerStreamPCMMixin:
                 continue
             pushed_any = True
             played_frames += int(pcm.shape[0])
-            self._feed_stream_sway(sway_ctx, pcm, target_sr)
-        self._finalize_stream_sway(sway_ctx)
         return pushed_any

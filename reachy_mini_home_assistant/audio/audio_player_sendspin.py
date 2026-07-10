@@ -10,13 +10,10 @@ import numpy as np
 
 from .audio_player_shared import (
     _LOGGER,
-    MOVEMENT_LATENCY_S,
     SENDSPIN_HIGH_WATERMARK_BYTES,
     SENDSPIN_LATE_DROP_GRACE_US,
     SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES,
     SENDSPIN_SCHEDULE_AHEAD_LIMIT_US,
-    SWAY_FRAME_DT_S,
-    AudioPlayerSwayMixin,
 )
 
 if TYPE_CHECKING:
@@ -58,13 +55,7 @@ class _QueuedSendspinChunk:
     byte_count: int
 
 
-@dataclass(slots=True)
-class _QueuedSendspinSwayFrame:
-    target_time_us: int
-    sway: dict[str, float]
-
-
-class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
+class AudioPlayerSendspinMixin:
     @property
     def sendspin_available(self) -> bool:
         return SENDSPIN_AVAILABLE
@@ -120,56 +111,27 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
                 continue
             with self._sendspin_queue_lock:
                 chunk = self._sendspin_queue[0] if self._sendspin_queue else None
-                sway_frame = self._sendspin_sway_queue[0] if self._sendspin_sway_queue else None
-            if chunk is None and sway_frame is None:
+            if chunk is None:
                 self._sendspin_queue_event.wait(timeout=0.1)
                 self._sendspin_queue_event.clear()
                 continue
             now_us = time.monotonic_ns() // 1000
-            next_audio_us = chunk.play_time_us if chunk is not None else None
-            next_sway_us = sway_frame.target_time_us if sway_frame is not None else None
-            next_event_us = min(ts for ts in (next_audio_us, next_sway_us) if ts is not None)
-            delay_us = next_event_us - now_us
+            delay_us = chunk.play_time_us - now_us
             if delay_us > 2_000:
                 self._sendspin_queue_event.wait(timeout=min(delay_us / 1_000_000.0, 0.05))
                 self._sendspin_queue_event.clear()
                 continue
-            handle_sway = False
             with self._sendspin_queue_lock:
-                chunk = self._sendspin_queue[0] if self._sendspin_queue else None
-                sway_frame = self._sendspin_sway_queue[0] if self._sendspin_sway_queue else None
-                now_us = time.monotonic_ns() // 1000
-                next_audio_us = chunk.play_time_us if chunk is not None else None
-                next_sway_us = sway_frame.target_time_us if sway_frame is not None else None
-                if next_audio_us is None and next_sway_us is None:
-                    continue
-                if next_audio_us is None:
-                    handle_sway = True
-                elif next_sway_us is None:
-                    handle_sway = False
-                else:
-                    handle_sway = next_sway_us < next_audio_us
-                if handle_sway:
-                    sway_frame = self._sendspin_sway_queue.popleft()
-                else:
-                    chunk = self._sendspin_queue.popleft()
+                chunk = self._sendspin_queue.popleft() if self._sendspin_queue else None
+                if chunk is not None:
                     self._sendspin_queue_bytes = max(0, self._sendspin_queue_bytes - chunk.byte_count)
-            if handle_sway:
-                self._apply_sendspin_sway_frame(sway_frame)
+            if chunk is None:
                 continue
             late_by_us = now_us - chunk.play_time_us
             if late_by_us > SENDSPIN_LATE_DROP_GRACE_US:
                 _LOGGER.debug("Dropping late Sendspin chunk (%d ms late)", late_by_us // 1000)
                 continue
             self._push_sendspin_audio_sample(chunk.audio_float)
-
-    def _apply_sendspin_sway_frame(self, sway_frame: _QueuedSendspinSwayFrame) -> None:
-        if self._sway_callback is None or self._sendspin_paused:
-            return
-        try:
-            self._sway_callback(sway_frame.sway)
-        except Exception:
-            _LOGGER.debug("Failed to apply Sendspin sway frame", exc_info=True)
 
     def _push_sendspin_audio_sample(self, audio_float: np.ndarray) -> None:
         if self.reachy_mini is None:
@@ -196,7 +158,7 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
         if self.reachy_mini is None:
             return
         try:
-            self.reachy_mini.media.audio.clear_output_buffer()
+            self.reachy_mini.media.audio.clear_player()
         except Exception:
             _LOGGER.debug("Failed to clear output buffer", exc_info=True)
         if self._sendspin_playback_started:
@@ -210,17 +172,10 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
         with self._sendspin_queue_lock:
             self._sendspin_queue.clear()
             self._sendspin_queue_bytes = 0
-            self._sendspin_sway_queue.clear()
         self._sendspin_queue_event.set()
-
-    def _reset_sendspin_sway_state(self, *, reset_output: bool) -> None:
-        self._sendspin_sway_state = None
-        if reset_output:
-            self._reset_sway_output()
 
     def _reset_sendspin_stream_state(self, *, stop_output: bool) -> None:
         self._clear_sendspin_queue()
-        self._reset_sendspin_sway_state(reset_output=True)
         self._sendspin_audio_format = None
         self._logged_resample = False
         if stop_output:
@@ -259,37 +214,6 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
             )
             self._last_sendspin_overflow_log = now
         return True
-
-    def _get_sendspin_sway_state(self) -> dict | None:
-        if self._sway_callback is None:
-            return None
-        if self._sendspin_sway_state is None:
-            analyzer = self._new_sway_analyzer()
-            if analyzer is None:
-                _LOGGER.debug("Failed to initialize Sendspin sway analyzer")
-                self._sendspin_sway_state = None
-            else:
-                self._sendspin_sway_state = {"sway": analyzer}
-        return self._sendspin_sway_state
-
-    def _queue_sendspin_sway(self, play_time_us: int, pcm: np.ndarray, sample_rate: int) -> None:
-        ctx = self._get_sendspin_sway_state()
-        if ctx is None:
-            return
-        try:
-            results = self._compute_sway_frames(ctx["sway"], pcm, sample_rate)
-            if not results:
-                return
-            latency_us = int(MOVEMENT_LATENCY_S * 1_000_000)
-            hop_us = int(SWAY_FRAME_DT_S * 1_000_000)
-            with self._sendspin_queue_lock:
-                for idx, item in enumerate(results):
-                    self._sendspin_sway_queue.append(
-                        _QueuedSendspinSwayFrame(target_time_us=play_time_us + latency_us + idx * hop_us, sway=item)
-                    )
-        except Exception:
-            _LOGGER.debug("Failed to queue Sendspin sway frames", exc_info=True)
-        self._sendspin_queue_event.set()
 
     def _decode_pcm_bytes(self, audio_data: bytes, pcm_format: PCMFormat) -> np.ndarray:
         if pcm_format.bit_depth == 16:
@@ -554,11 +478,7 @@ class AudioPlayerSendspinMixin(AudioPlayerSwayMixin):
 
             self._sendspin_audio_format = fmt
             audio_float = self._decode_sendspin_audio(audio_data, fmt)
-            sway_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
-            if sway_sample_rate <= 0:
-                sway_sample_rate = fmt.pcm_format.sample_rate
             self._queue_sendspin_audio(play_time_us, audio_float, len(audio_data))
-            self._queue_sendspin_sway(play_time_us, audio_float, sway_sample_rate)
         except Exception:
             _LOGGER.exception("Error handling Sendspin audio chunk")
 

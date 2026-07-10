@@ -44,7 +44,6 @@ from .smoothing import (
     pose_distance,
     smooth_value,
 )
-from .speech_sway import SpeechSwayRT, analyze_audio_for_sway
 from .state_machine import STATE_ANIMATION_MAP, MovementState, PendingAction, RobotState
 
 __all__ = [
@@ -67,9 +66,7 @@ __all__ = [
     "ReachyMiniMotion",
     # State machine
     "RobotState",
-    # Speech sway
-    "SpeechSwayRT",
-    "analyze_audio_for_sway",
+    # Speech sway is now handled by the SDK's HeadWobbler via media_manager.enable_wobbling()
     "blend_poses",
     "calculate_antenna_blend",
     "clamp",

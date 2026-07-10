@@ -60,17 +60,11 @@ async def start(server: "MJPEGCameraServer") -> None:
         backend = server.reachy_mini.media.backend
         backend_name = {
             MediaBackend.NO_MEDIA: "No Media",
-            MediaBackend.GSTREAMER: "GStreamer",
-            MediaBackend.GSTREAMER_NO_VIDEO: "GStreamer (No Video)",
-            MediaBackend.DEFAULT: "Default",
-            MediaBackend.DEFAULT_NO_VIDEO: "Default (No Video)",
-            MediaBackend.SOUNDDEVICE_OPENCV: "SoundDevice + OpenCV",
-            MediaBackend.SOUNDDEVICE_NO_VIDEO: "SoundDevice (No Video)",
+            MediaBackend.LOCAL: "Local (GStreamer)",
             MediaBackend.WEBRTC: "WebRTC",
+            MediaBackend.DEFAULT: "Default",
         }.get(backend, str(backend))
         _LOGGER.info("Detected media backend: %s", backend_name)
-    except ImportError:
-        _LOGGER.debug("MediaBackend enum not available")
     except Exception as e:
         _LOGGER.debug("Failed to detect media backend: %s", e)
 

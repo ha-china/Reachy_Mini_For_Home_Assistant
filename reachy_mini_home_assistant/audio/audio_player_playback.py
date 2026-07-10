@@ -9,7 +9,6 @@ from .audio_player_local import AudioPlayerLocalMixin
 from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, rewrite_local_service_url, sniff_audio_content_type
 from .audio_player_stream_decoded import AudioPlayerStreamDecodedMixin
 from .audio_player_stream_pcm import AudioPlayerStreamPCMMixin
-from .audio_player_wobble import AudioPlayerWobbleMixin
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -19,7 +18,6 @@ class AudioPlayerPlaybackMixin(
     AudioPlayerLocalMixin,
     AudioPlayerStreamDecodedMixin,
     AudioPlayerStreamPCMMixin,
-    AudioPlayerWobbleMixin,
 ):
     def play(
         self, url: str | list[str], done_callback: Callable[[], None] | None = None, stop_first: bool = True
@@ -189,7 +187,6 @@ class AudioPlayerPlaybackMixin(
     def suspend(self) -> None:
         _LOGGER.info("Suspending AudioPlayer resources...")
         self.stop()
-        self._sway_callback = None
         _LOGGER.info("AudioPlayer resources suspended")
 
     def resume(self) -> None:

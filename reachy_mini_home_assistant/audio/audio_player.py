@@ -32,7 +32,6 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._current_volume: float = 1.0
         self._stop_flag = threading.Event()
         self._playback_thread: threading.Thread | None = None
-        self._sway_callback: Callable[[dict], None] | None = None
 
         self._sendspin_client_id = get_stable_client_id()
         self._sendspin_client: SendspinClient | None = None
@@ -50,18 +49,13 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._sendspin_muted = False
         self._sendspin_queue = deque()
         self._sendspin_queue_bytes = 0
-        self._sendspin_sway_queue = deque()
         self._sendspin_queue_lock = threading.Lock()
         self._sendspin_queue_event = threading.Event()
         self._sendspin_queue_stop = threading.Event()
         self._sendspin_queue_thread: threading.Thread | None = None
-        self._sendspin_sway_state: dict | None = None
         self._logged_resample = False
         self._last_sendspin_overflow_log = 0.0
         self._http_host_override: str | None = None
-
-    def set_sway_callback(self, callback: Callable[[dict], None] | None) -> None:
-        self._sway_callback = callback
 
     def set_reachy_mini(self, reachy_mini) -> None:
         self.reachy_mini = reachy_mini
