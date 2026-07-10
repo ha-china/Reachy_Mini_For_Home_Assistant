@@ -8,6 +8,7 @@ with Home Assistant via ESPHome protocol.
 """
 
 import asyncio
+import json
 import logging
 import threading
 import time
