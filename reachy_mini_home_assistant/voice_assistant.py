@@ -647,6 +647,11 @@ class VoiceAssistantService:
         if self._camera_server and self._state.camera_enabled:
             await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
             self._camera_server = None
+        # Disable SDK head wobbler before closing media
+        try:
+            self.reachy_mini.media.disable_wobbling()
+        except Exception:
+            pass
         # Close SDK media resources to prevent memory leaks (even if camera is disabled)
         try:
             self.reachy_mini.media.close()

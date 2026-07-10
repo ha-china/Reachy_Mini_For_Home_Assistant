@@ -10,11 +10,34 @@ import logging
 import sys
 import threading
 
+import numpy as np
 from reachy_mini import ReachyMiniApp
+from reachy_mini.reachy_mini import SLEEP_HEAD_POSE
+from reachy_mini.utils.interpolation import distance_between_poses
 
 from .voice_assistant import VoiceAssistantService
 
 logger = logging.getLogger(__name__)
+
+_SLEEP_HEAD_TRANSLATION_TOLERANCE_M = 0.05
+_SLEEP_HEAD_ROTATION_TOLERANCE_RAD = 0.35
+
+
+def _wake_up_if_sleeping(reachy_mini) -> None:
+    """Run the SDK wake-up movement if the robot starts from the sleep pose."""
+    try:
+        head_pose = reachy_mini.get_current_head_pose()
+    except Exception as e:
+        logger.warning("Could not read robot pose before startup wake-up check: %s", e)
+        return
+
+    try:
+        distances = distance_between_poses(np.asarray(head_pose), SLEEP_HEAD_POSE)
+        if float(distances[0]) <= _SLEEP_HEAD_TRANSLATION_TOLERANCE_M and float(distances[1]) <= _SLEEP_HEAD_ROTATION_TOLERANCE_RAD:
+            logger.info("Robot is in sleep pose; running wake-up movement.")
+            reachy_mini.wake_up()
+    except Exception as e:
+        logger.warning("Startup wake-up check failed: %s", e)
 
 
 class ReachyMiniHaVoice(ReachyMiniApp):
@@ -64,6 +87,8 @@ class ReachyMiniHaVoice(ReachyMiniApp):
             stop_event: Event to signal graceful shutdown
         """
         logger.info("Starting Reachy Mini for Home Assistant...")
+
+        _wake_up_if_sleeping(reachy_mini)
 
         # Create and run the HA service
         service = VoiceAssistantService(reachy_mini)
