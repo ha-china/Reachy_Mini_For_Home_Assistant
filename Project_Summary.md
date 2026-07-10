@@ -1,10 +1,17 @@
-# Reachy Mini for Home Assistant - Project Plan (Current snapshot: v1.0.6)
+# Reachy Mini for Home Assistant - Project Plan
 
 ## Project Overview
 
 Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi robot, communicating with Home Assistant via ESPHome protocol.
 
+Current package:
+- `reachy_mini_home_assistant`
+
+Current version:
+- `1.0.7`
+
 ## Local Reference Directories (DO NOT modify any files in reference directories)
+
 1. [linux-voice-assistant](reference/linux-voice-assistant) - Linux-based Home Assistant voice assistant app for reference
 2. [Reachy Mini SDK](reference/reachy_mini) - Reachy Mini SDK local directory for reference
 3. [reachy_mini_conversation_app](reference/reachy_mini_conversation_app) - Reachy Mini conversation app for reference
@@ -18,1422 +25,843 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 
 1. **Zero Configuration** - Users only need to install the app, no manual configuration required
 2. **Native Hardware** - Use robot's built-in microphone and speaker
-3. **Home Assistant Centralized Management** - STT/TTS/intent configuration stays on Home Assistant side
+3. **Home Assistant Centralized Management** - STT, TTS, and intent configuration stay on the Home Assistant side
 4. **Motion Feedback** - Provide head movement and antenna animation feedback during voice interaction
-5. **Project Constraints** - Strictly follow [Reachy Mini SDK](reachy_mini) architecture design and constraints
-6. **Code Quality** - Follow Python development standards with consistent code style, clear structure, complete comments, comprehensive documentation, high test coverage, high code quality, readability, maintainability, extensibility, and reusability
+5. **Project Constraints** - Strictly follow Reachy Mini SDK architecture design and current SDK constraints
+6. **Code Quality** - Follow Python development standards with consistent code style, clear structure, and maintainability
 7. **Feature Priority** - Voice conversation with Home Assistant is highest priority; other features are auxiliary and must not affect voice conversation functionality or response speed
 8. **No LED Functions** - LEDs are hidden inside the robot; all LED control is ignored
-9. **Preserve Functionality** - Any code modifications should optimize while preserving completed features; do not remove features to solve problems. When issues occur, prioritize solving problems after referencing examples, not adding various log outputs
+9. **Preserve Functionality** - Any code modifications should optimize while preserving completed features; do not remove features to solve problems
 10. **No App-Managed Sleep/Wake** - The app no longer manages robot sleep/wake transitions; current SDK behavior is treated as source of truth
 
 ## Technical Architecture
 
-```
-鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
-鈹?                             Reachy Mini (ARM64)                            鈹?
-鈹?                                                                            鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ AUDIO INPUT 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹? 鈹? ReSpeaker XVF3800 (16kHz)                                            鈹? 鈹?
-鈹? 鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹? 鈹?
-鈹? 鈹? 鈹?4-Mic Array  鈹?鈫?鈹?XVF3800 DSP                                  鈹? 鈹? 鈹?
-鈹? 鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹?鈥?Hardware DSP path available                鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?鈥?App currently relies on HA STT/TTS         鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?鈥?DOA/VAD used by the current runtime        鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?鈥?Direction of Arrival (DOA)                 鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?鈥?Voice Activity Detection (VAD)             鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹? 鈹?
-鈹? 鈹?                                     鈹?                               鈹? 鈹?
-鈹? 鈹?                                     鈻?                               鈹? 鈹?
-鈹? 鈹?                    鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?Wake Word Detection (microWakeWord)          鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?鈥?"Okay Nabu" / "Hey Jarvis"                 鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹?鈥?Stop word detection                        鈹? 鈹? 鈹?
-鈹? 鈹?                    鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹? 鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹?                                                                            鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ AUDIO OUTPUT 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹? 鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?   鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹? 鈹?
-鈹? 鈹? 鈹?TTS Player               鈹?   鈹?Music Player (Sendspin)          鈹?鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Voice assistant speech 鈹?   鈹?鈥?Multi-room audio streaming     鈹?鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Sound effects          鈹?   鈹?鈥?Auto-discovery via mDNS        鈹?鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Priority over music    鈹?   鈹?鈥?Auto-pause during conversation 鈹?鈹? 鈹?
-鈹? 鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?   鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹? 鈹?
-鈹? 鈹?                鈹?                             鈹?                     鈹? 鈹?
-鈹? 鈹?                鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?                     鈹? 鈹?
-鈹? 鈹?                               鈻?                                     鈹? 鈹?
-鈹? 鈹?                鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹? 鈹?
-鈹? 鈹?                鈹?ReSpeaker Speaker (16kHz)                        鈹? 鈹? 鈹?
-鈹? 鈹?                鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹? 鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹?                                                                            鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ VISION & TRACKING 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹? 鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?   鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹? 鈹?
-鈹? 鈹? 鈹?Camera (VPU accelerated) 鈹?鈫? 鈹?YOLO Face Detection              鈹?鈹? 鈹?
-鈹? 鈹? 鈹?鈥?MJPEG stream server    鈹?   鈹?鈥?AdamCodd/YOLOv11n-face         鈹?鈹? 鈹?
-鈹? 鈹? 鈹?鈥?ESPHome Camera entity  鈹?   鈹?鈥?Adaptive frame rate:           鈹?鈹? 鈹?
-鈹? 鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?   鈹?  - 15fps: conversation/face     鈹?鈹? 鈹?
-鈹? 鈹?                                 鈹?  - 2fps: idle (power saving)    鈹?鈹? 鈹?
-鈹? 鈹?                                 鈹?鈥?look_at_image() pose calc      鈹?鈹? 鈹?
-鈹? 鈹?                                 鈹?鈥?Smooth return after face lost  鈹?鈹? 鈹?
-鈹? 鈹?                                 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹? 鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹?                                                                            鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ MOTION CONTROL 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹? 鈹? MovementManager (50Hz Control Loop)                                  鈹? 鈹?
-鈹? 鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?Motion Layers (Priority: Move > Action > SpeechSway > Breath)  鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈹?Move Queue 鈹?鈹?Actions    鈹?鈹?SpeechSway 鈹?鈹?Breathing    鈹? 鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈹?(Emotions) 鈹?鈹?(Nod/Shake)鈹?鈹?(Voice VAD)鈹?鈹?(Idle anim)  鈹? 鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?  鈹? 鈹?
-鈹? 鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹? 鈹?
-鈹? 鈹?                                                                      鈹? 鈹?
-鈹? 鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?Face Tracking Offsets (Secondary Pose Overlay)                 鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Pitch offset: +9掳 (down compensation)                        鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Yaw offset: -7掳 (right compensation)                         鈹?  鈹? 鈹?
-鈹? 鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹? 鈹?
-鈹? 鈹?                                                                      鈹? 鈹?
-鈹? 鈹?  State Machine: on_wakeup 鈫?on_listening 鈫?on_speaking 鈫?on_idle     鈹? 鈹?
-鈹? 鈹?                                                                      鈹? 鈹?
-鈹? 鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?Body Following                                                鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Body yaw syncs with head yaw for natural tracking            鈹?  鈹? 鈹?
-鈹? 鈹? 鈹?鈥?Extracted from final head pose matrix                        鈹?  鈹? 鈹?
-鈹? 鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?  鈹? 鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹?                                                                            鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ GESTURE DETECTION 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹? 鈹? HaGRID ONNX Models                                                鈹? 鈹?
-鈹? 鈹? 鈥?18 gesture classes (call, like, dislike, fist, ok, palm, etc.)    鈹? 鈹?
-鈹? 鈹? 鈥?Runtime result publishing only                                    鈹? 鈹?
-鈹? 鈹? 鈥?Batch detection: all hands (not just highest confidence)         鈹? 鈹?
-鈹? 鈹? 鈥?Detection cadence: adaptive scheduler + minimum processing FPS    鈹? 鈹?
-鈹? 鈹? 鈥?No confidence filtering - all detections passed to Home Assistant鈹? 鈹?
-鈹? 鈹? 鈥?Runtime switchable (default OFF, model unloaded when disabled)    鈹? 鈹?
-鈹? 鈹? 鈥?Real-time state push to Home Assistant                            鈹? 鈹?
-鈹? 鈹? 鈥?No conflicts with face tracking (shared frame, independent)       鈹? 鈹?
-鈹? 鈹? 鈥?SDK integration: MediaBackend detection, proper resource cleanup 鈹? 鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹?                                                                            鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ ESPHOME SERVER 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹? 鈹? Port 6053 (mDNS auto-discovery)                                      鈹? 鈹?
-鈹? 鈹? 鈥?Entity count evolves by release (sensors, controls, media, camera) 鈹? 鈹?
-鈹? 鈹? 鈥?Voice Assistant pipeline integration                               鈹? 鈹?
-鈹? 鈹? 鈥?Real-time state synchronization                                    鈹? 鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹?
-鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
-                                       鈹?
-                                       鈹?ESPHome Protocol (protobuf)
-                                       鈻?
-鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
-鈹?                           Home Assistant                                   鈹?
-鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹?
-鈹? 鈹?STT Engine       鈹? 鈹?Intent Processing鈹? 鈹?TTS Engine                 鈹?鈹?
-鈹? 鈹?(User configured)鈹? 鈹?(Conversation)   鈹? 鈹?(User configured)          鈹?鈹?
-鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹? 鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹?
-鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+### Current Runtime Architecture (v1.0.7)
+
+The current system is built around one main runtime service with motion, vision, audio, and Home Assistant entity subsystems.
+
+```text
+ReachyMiniHaVoice (main.py)
+  -> VoiceAssistantService (voice_assistant.py)
+     -> VoiceSatelliteProtocol server (protocol/satellite.py)
+     -> Reachy Mini motion runtime (motion/)
+     -> Camera and vision runtime (vision/)
+     -> Local speech player + optional Sendspin player (audio/)
+     -> Home Assistant entities and state publishing (entities/)
 ```
 
-### Software Module Architecture (v1.0.6)
+### Runtime Entry And Service Ownership
 
-```
-reachy_mini_home_assistant/
-鈹?
-鈹溾攢鈹€ main.py                    # ReachyMiniApp entry point
-鈹溾攢鈹€ __main__.py                # Standalone CLI entry point
-鈹溾攢鈹€ voice_assistant.py         # Voice assistant service orchestrator
-鈹溾攢鈹€ reachy_controller.py       # Reachy Mini SDK wrapper
-鈹溾攢鈹€ models.py                  # Data models / preferences / server state
-鈹?
-鈹溾攢鈹€ core/                      # Core Infrastructure
-鈹?  鈹溾攢鈹€ config.py              # Centralized nested configuration
-鈹?  鈹溾攢鈹€ service_base.py        # Suspend/resume-aware service helpers
-鈹?  鈹溾攢鈹€ system_diagnostics.py  # System diagnostics
-鈹?  鈹溾攢鈹€ exceptions.py          # Custom exception classes
-鈹?  鈹斺攢鈹€ util.py                # Utility functions
-鈹?
-鈹溾攢鈹€ motion/                    # Motion Control
-鈹?  鈹溾攢鈹€ movement_manager.py    # 50Hz unified motion control loop
-鈹?  鈹溾攢鈹€ command_runtime.py     # Command queue handling / state transitions
-鈹?  鈹溾攢鈹€ control_runtime.py     # Control-loop runtime helpers
-鈹?  鈹溾攢鈹€ idle_runtime.py        # Idle behavior / idle rest handling
-鈹?  鈹溾攢鈹€ antenna.py             # Antenna control / freeze logic
-鈹?  鈹溾攢鈹€ pose_composer.py       # Pose composition from multiple sources
-鈹?  鈹溾攢鈹€ smoothing.py           # Motion smoothing algorithms
-鈹?  鈹溾攢鈹€ state_machine.py       # Robot state definitions / idle config parsing
-鈹?  鈹溾攢鈹€ animation_player.py    # Animation player
-鈹?  鈹溾攢鈹€ emotion_moves.py       # Emotion moves
-鈹?  鈹溾攢鈹€ speech_sway.py         # Speech-driven head micro-movements
-鈹?  鈹斺攢鈹€ reachy_motion.py       # Reachy motion API
-鈹?
-鈹溾攢鈹€ vision/                    # Vision Processing
-鈹?  鈹溾攢鈹€ camera_server.py       # MJPEG camera stream server facade
-鈹?  鈹溾攢鈹€ camera_runtime.py      # Camera lifecycle helpers
-鈹?  鈹溾攢鈹€ camera_processing.py   # Frame capture / AI processing helpers
-鈹?  鈹溾攢鈹€ camera_http.py         # HTTP handlers for stream/snapshot
-鈹?  鈹溾攢鈹€ head_tracker.py        # YOLO face detector
-鈹?  鈹溾攢鈹€ gesture_detector.py    # HaGRID gesture detection
-鈹?  鈹溾攢鈹€ face_tracking_interpolator.py  # Smooth face tracking
-鈹?  鈹斺攢鈹€ frame_processor.py     # Adaptive frame rate management
-鈹?
-鈹溾攢鈹€ audio/                     # Audio runtime support
-鈹?  鈹溾攢鈹€ audio_player.py                # AudioPlayer facade
-鈹?  鈹溾攢鈹€ audio_player_shared.py         # Shared audio/sendspin constants + helpers
-鈹?  鈹溾攢鈹€ audio_player_playback.py       # Playback orchestration / lifecycle
-鈹?  鈹溾攢鈹€ audio_player_local.py          # Local file + fallback playback
-鈹?  鈹溾攢鈹€ audio_player_stream_pcm.py     # PCM streaming playback
-鈹?  鈹溾攢鈹€ audio_player_stream_decoded.py # Decoded/GStreamer streaming playback
-鈹?  鈹溾攢鈹€ audio_player_sendspin.py       # Sendspin runtime integration
-鈹?  鈹溾攢鈹€ microphone.py                  # Hardware audio helper / legacy tuning code
-鈹?  鈹斺攢鈹€ doa_tracker.py                 # Direction of Arrival tracking
-鈹?
-鈹溾攢鈹€ entities/                  # Home Assistant Entities
-鈹?  鈹溾攢鈹€ entity.py              # ESPHome base entity
-鈹?  鈹溾攢鈹€ entity_registry.py     # ESPHome entity registry
-鈹?  鈹溾攢鈹€ entity_factory.py      # Entity creation factory
-鈹?  鈹溾攢鈹€ entity_keys.py         # Entity key constants
-鈹?  鈹溾攢鈹€ entity_extensions.py   # Extended entity types
-鈹?  鈹溾攢鈹€ runtime_entity_setup.py # Runtime/control entity wiring
-鈹?  鈹溾攢鈹€ sensor_entity_setup.py # Sensor/diagnostic entity wiring
-鈹?  鈹溾攢鈹€ event_emotion_mapper.py # HA event 鈫?Emotion mapping
-鈹?  鈹斺攢鈹€ emotion_detector.py    # Disabled runtime path for text emotion detection
-鈹?
-鈹溾攢鈹€ protocol/                  # Protocol Handling
-鈹?  鈹溾攢鈹€ satellite.py           # ESPHome protocol handler facade
-鈹?  鈹溾攢鈹€ api_server.py          # HTTP API server
-鈹?  鈹溾攢鈹€ zeroconf.py            # mDNS discovery
-鈹?  鈹溾攢鈹€ entity_bridge.py       # Protocol/entity bridge helpers
-鈹?  鈹溾攢鈹€ message_dispatch.py    # ESPHome message dispatch
-鈹?  鈹溾攢鈹€ motion_bridge.py       # Voice 鈫?motion bridge
-鈹?  鈹溾攢鈹€ session_flow.py        # Conversation lifecycle helpers
-鈹?  鈹溾攢鈹€ voice_pipeline.py      # Voice event handling / TTS / stop / ducking
-鈹?  鈹斺攢鈹€ wakeword_assets.py     # Wake word asset helpers
-鈹?
-鈹溾攢鈹€ animations/               # Animation definitions
-鈹?  鈹斺攢鈹€ conversation_animations.json  # Unified built-in behavior resource file
-鈹?
-鈹斺攢鈹€ wakewords/                # Wake word models
-    鈹溾攢鈹€ okay_nabu.json/.tflite
-    鈹溾攢鈹€ hey_jarvis.json/.tflite
-    鈹溾攢鈹€ alexa.json/.tflite
-    鈹溾攢鈹€ hey_luna.json/.tflite
-    鈹斺攢鈹€ stop.json/.tflite
-```
+Current startup path:
 
+1. `ReachyMiniHaVoice` in `main.py` is the Reachy Mini app entry point
+2. `run()` creates one `VoiceAssistantService`
+3. `VoiceAssistantService.start()` initializes runtime directories, loads wake word assets, loads preferences, builds server state, starts SDK media, starts the motion runtime, starts the audio processing thread, starts the ESPHome server, and registers mDNS discovery
+4. Sendspin discovery is started only if enabled in stored preferences
+5. The camera runtime is not started unconditionally at boot; it is reconciled later based on Home Assistant connection state, camera enable state, and idle behavior state
 
-### Current Runtime Defaults (v1.0.6)
+This means the real root of the current runtime is `VoiceAssistantService`, not the protocol class and not the camera server.
 
-- `idle_behavior_enabled`: user-controlled
-- `sendspin_enabled`: OFF
-- `face_tracking_enabled`: OFF
-- `gesture_detection_enabled`: OFF
-- `face_confidence_threshold`: 0.5 (persistent)
-- `continuous_conversation`: user-controlled
-- `Idle Behavior = OFF` means a parked no-animation state aligned to configured idle rest pose
-- When `Idle Behavior = OFF`, camera server is stopped entirely to save resources
-- When `Idle Behavior = ON`, camera server can run and `/snapshot` supports on-demand frame capture when cache is empty
-- Idle antenna behavior: torque disabled in `IDLE`, re-enabled when leaving `IDLE`
-- Voice phases and HA-triggered emotions are routed through one built-in zero-config behavior layer
+### Core Runtime Objects
 
-When face/gesture switches are OFF, their models are unloaded to save resources.
+Current always-important runtime objects:
 
-### Current Audio Startup Note (SDK 1.7.0)
+| Object | Defined in | Current role |
+|---|---|---|
+| `ReachyMiniHaVoice` | `main.py` | App wrapper used by Reachy Mini SDK |
+| `VoiceAssistantService` | `voice_assistant.py` | Main runtime orchestrator |
+| `ServerState` | `models.py` | Shared mutable runtime state passed into protocol and entity layers |
+| `VoiceSatelliteProtocol` | `protocol/satellite.py` | One ESPHome voice assistant protocol connection handler |
+| `MovementManager` | `motion/movement_manager.py` | Unified movement and pose composition loop |
+| `MJPEGCameraServer` | `vision/camera_server.py` | Camera HTTP server plus face and gesture runtime |
+| `LocalAudioPlayer` | `audio/local_audio_player.py` | Local speech, wakeup, and timer playback |
+| `AudioPlayer` | `audio/audio_player.py` | Music-capable playback facade with optional Sendspin support |
 
-- The app now aligns to the current Reachy Mini SDK media model instead of carrying older compatibility paths.
-- Camera snapshots can be fetched on demand when the MJPEG cache is empty and the camera server is still running.
-- Audio block size is currently `512` samples to reduce CPU overhead versus the earlier `256`-sample path.
+### Audio Input Path
 
-### Latest Incremental Update (2026-03-04) - Viewer-Aware Camera Streaming
+The current audio input architecture is centered in `VoiceAssistantService`.
 
-- MJPEG encoding/push is now viewer-aware: when no `/stream` client is connected, continuous MJPEG encoding is skipped to reduce CPU usage.
-- Face tracking and gesture detection still run without active stream viewers, so AI behavior remains available.
-- `/snapshot` now supports on-demand frame encode when no cached stream frame exists.
-- Stream output no longer forces fixed 1080p/25fps; it follows camera backend defaults (resolution/FPS) and only falls back when backend FPS is unavailable.
-- Transition from "watching" to "not watching" returns to adaptive idle pacing for resource saving.
+Actual runtime path:
 
-## Completed Features
+1. `VoiceAssistantService.start()` validates SDK media availability
+2. The service starts SDK recording and playback through `reachy_mini.media`
+3. `_process_audio` in `voice_assistant.py` runs on a dedicated thread
+4. That thread reads microphone samples from the SDK media backend
+5. The same thread performs local wake word and stop word inference
+6. When a voice session is active, the protocol object is used to forward audio chunks to Home Assistant
 
-### Core Features
-- [x] ESPHome protocol server implementation
-- [x] mDNS service discovery (auto-discovered by Home Assistant)
-- [x] Local wake word detection (microWakeWord)
-- [x] Continuous conversation mode (controlled via Home Assistant switch)
-- [x] Audio stream transmission to Home Assistant
-- [x] TTS audio playback
-- [x] Stop word detection
+Important current constraint:
 
-### Reachy Mini Integration
-- [x] Use Reachy Mini SDK microphone input
-- [x] Use Reachy Mini SDK speaker output
-- [x] Head motion control (nod, shake, gaze)
-- [x] Antenna animation control
-- [x] Voice state feedback actions
-- [x] YOLO face tracking (complements DOA wakeup orientation)
-- [x] 50Hz unified motion control loop
+- Audio capture, local wake detection, and protocol audio forwarding are tied together through `VoiceAssistantService`; they are not separate daemons or separately owned services
 
-### Application Architecture
-- [x] Compliant with Reachy Mini App architecture
+### Voice Protocol Path
 
+The current Home Assistant voice path is centered in `VoiceSatelliteProtocol` and helper modules under `protocol/`.
 
+Actual structure:
 
-## File List
+1. `VoiceAssistantService` creates an asyncio server using `VoiceSatelliteProtocol`
+2. Each protocol instance receives the shared `ServerState`, optional camera server, and a back-reference to `VoiceAssistantService`
+3. `protocol/message_dispatch.py` routes incoming protobuf messages
+4. `protocol/session_flow.py` manages wakeup sequencing, wakeup sound completion, pending voice request flow, and delayed idle return helpers
+5. `protocol/voice_pipeline.py` manages TTS playback, timer playback, ducking, unducking, and stop behavior
+6. `protocol/motion_bridge.py` maps voice assistant phases to robot motion callbacks
+7. `protocol/entity_bridge.py` connects protocol state with entity setup and camera callbacks
 
-```
-reachy_mini_ha_voice/
-鈹溾攢鈹€ reachy_mini_ha_voice/
-鈹?  鈹溾攢鈹€ __init__.py             # Package initialization (v0.9.9)
-鈹?  鈹溾攢鈹€ __main__.py             # Command line entry
-鈹?  鈹溾攢鈹€ main.py                 # ReachyMiniApp entry
-鈹?  鈹溾攢鈹€ voice_assistant.py      # Voice assistant service (1270 lines)
-鈹?  鈹溾攢鈹€ protocol/               # ESPHome protocol handling
-鈹?  鈹?  鈹溾攢鈹€ __init__.py         # Module exports (13 lines)
-鈹?  鈹?  鈹溾攢鈹€ satellite.py        # ESPHome protocol handler facade
-鈹?  鈹?  鈹溾攢鈹€ api_server.py       # HTTP API server
-鈹?  鈹?  鈹溾攢鈹€ zeroconf.py         # mDNS discovery
-鈹?  鈹?  鈹溾攢鈹€ entity_bridge.py    # Protocol/entity bridge helpers
-鈹?  鈹?  鈹溾攢鈹€ message_dispatch.py # ESPHome message dispatch
-鈹?  鈹?  鈹溾攢鈹€ motion_bridge.py    # Voice 鈫?motion bridge
-鈹?  鈹?  鈹溾攢鈹€ session_flow.py     # Conversation lifecycle helpers
-鈹?  鈹?  鈹溾攢鈹€ voice_pipeline.py   # Voice event handling / TTS / stop / ducking
-鈹?  鈹?  鈹斺攢鈹€ wakeword_assets.py  # Wake word asset helpers
-鈹?  鈹溾攢鈹€ models.py               # Data models
-鈹?  鈹斺攢鈹€ reachy_controller.py    # Reachy Mini controller wrapper (961 lines)
-鈹?  鈹?
-鈹?  鈹溾攢鈹€ core/                   # Core infrastructure modules
-鈹?  鈹?  鈹溾攢鈹€ __init__.py         # Module exports
-鈹?  鈹?  鈹溾攢鈹€ config.py           # Centralized configuration (368 lines)
-鈹?  鈹?  鈹溾攢鈹€ service_base.py     # Suspend/resume-aware service helpers
-鈹?  鈹?  鈹溾攢鈹€ system_diagnostics.py   # System diagnostics (250 lines)
-鈹?  鈹?  鈹斺攢鈹€ exceptions.py       # Custom exception classes (68 lines)
-鈹?  鈹?  鈹斺攢鈹€ util.py             # Utility functions (28 lines)
-鈹?  鈹?
-鈹?  鈹溾攢鈹€ motion/                 # Motion control modules
-鈹?  鈹?  鈹溾攢鈹€ __init__.py         # Module exports
-鈹?  鈹?  鈹溾攢鈹€ antenna.py          # Antenna freeze/unfreeze control
-鈹?  鈹?  鈹溾攢鈹€ pose_composer.py    # Pose composition utilities
-鈹?  鈹?  鈹溾攢鈹€ command_runtime.py  # Command queue handling / state transitions
-鈹?  鈹?  鈹溾攢鈹€ control_runtime.py  # Control-loop runtime helpers
-鈹?  鈹?  鈹溾攢鈹€ idle_runtime.py     # Idle behavior / idle rest handling
-鈹?  鈹?  鈹溾攢鈹€ smoothing.py        # Smoothing/transition algorithms
-鈹?  鈹?  鈹溾攢鈹€ state_machine.py    # State machine definitions
-鈹?  鈹?  鈹溾攢鈹€ animation_player.py # Animation player
-鈹?  鈹?  鈹溾攢鈹€ emotion_moves.py    # Emotion moves
-鈹?  鈹?  鈹溾攢鈹€ speech_sway.py      # Speech-driven head micro-movements (338 lines)
-鈹?  鈹?  鈹斺攢鈹€ reachy_motion.py    # Reachy motion API
-鈹?  鈹?
-鈹?  鈹溾攢鈹€ vision/                 # Vision processing modules
-鈹?  鈹?  鈹溾攢鈹€ __init__.py         # Module exports (30 lines)
-鈹?  鈹?  鈹溾攢鈹€ frame_processor.py  # Adaptive frame rate management (227 lines)
-鈹?  鈹?  鈹溾攢鈹€ face_tracking_interpolator.py  # Face lost interpolation (253 lines)
-鈹?  鈹?  鈹溾攢鈹€ gesture_detector.py  # HaGRID gesture detection
-鈹?  鈹?  鈹溾攢鈹€ head_tracker.py     # YOLO face detector
-鈹?  鈹?  鈹溾攢鈹€ camera_runtime.py   # Camera lifecycle helpers
-鈹?  鈹?  鈹溾攢鈹€ camera_processing.py # Frame capture / AI processing helpers
-鈹?  鈹?  鈹溾攢鈹€ camera_http.py      # HTTP handlers for stream/snapshot
-鈹?  鈹?  鈹斺攢鈹€ camera_server.py     # MJPEG camera stream server facade
-鈹?  鈹?
-鈹?  鈹溾攢鈹€ audio/                  # Audio runtime modules
-鈹?  鈹?  鈹溾攢鈹€ __init__.py         # Module exports (21 lines)
-鈹?  鈹?  鈹溾攢鈹€ microphone.py       # Hardware audio helper / legacy tuning code
-鈹?  鈹?  鈹溾攢鈹€ doa_tracker.py      # Direction of Arrival tracking
-鈹?  鈹?  鈹溾攢鈹€ audio_player.py     # AudioPlayer facade
-鈹?  鈹?  鈹溾攢鈹€ audio_player_shared.py # Shared audio/sendspin constants + helpers
-鈹?  鈹?  鈹溾攢鈹€ audio_player_playback.py # Playback orchestration / lifecycle
-鈹?  鈹?  鈹溾攢鈹€ audio_player_local.py # Local file + fallback playback
-鈹?  鈹?  鈹溾攢鈹€ audio_player_stream_pcm.py # PCM streaming playback
-鈹?  鈹?  鈹溾攢鈹€ audio_player_stream_decoded.py # Decoded/GStreamer streaming playback
-鈹?  鈹?  鈹斺攢鈹€ audio_player_sendspin.py # Sendspin runtime integration
-鈹?  鈹?
-鈹?  鈹溾攢鈹€ entities/               # Home Assistant entity modules
-鈹?  鈹?  鈹溾攢鈹€ __init__.py         # Module exports (38 lines)
-鈹?  鈹?  鈹溾攢鈹€ entity.py           # ESPHome base entity (402 lines)
-鈹?  鈹?  鈹溾攢鈹€ entity_factory.py   # Entity factory pattern (440 lines)
-鈹?  鈹?  鈹溾攢鈹€ entity_keys.py      # Entity key constants (155 lines)
-鈹?  鈹?  鈹溾攢鈹€ entity_extensions.py  # Extended entity types (258 lines)
-鈹?  鈹?  鈹溾攢鈹€ entity_registry.py  # ESPHome entity registry
-鈹?  鈹?  鈹溾攢鈹€ runtime_entity_setup.py # Runtime/control entity wiring
-鈹?  鈹?  鈹溾攢鈹€ sensor_entity_setup.py # Sensor/diagnostic entity wiring
-鈹?  鈹?  鈹溾攢鈹€ event_emotion_mapper.py  # HA event to emotion mapping
-鈹?  鈹?  鈹斺攢鈹€ emotion_detector.py # Disabled runtime path for text emotion detection
-鈹?  鈹?
-鈹?  鈹溾攢鈹€ animations/             # Animation definitions
-鈹?  鈹?  鈹斺攢鈹€ conversation_animations.json  # Unified animations / gestures / HA events / keyword resources
-鈹?  鈹?
-鈹?  鈹斺攢鈹€ wakewords/              # Wake word models
-鈹?      鈹溾攢鈹€ okay_nabu.json/.tflite
-鈹?      鈹溾攢鈹€ hey_jarvis.json/.tflite (openWakeWord)
-鈹?      鈹溾攢鈹€ alexa.json/.tflite
-鈹?      鈹溾攢鈹€ hey_luna.json/.tflite
-鈹?      鈹斺攢鈹€ stop.json/.tflite   # Stop word detection
-鈹?
-鈹溾攢鈹€ sounds/                     # Sound effect files (auto-download)
-鈹?  鈹溾攢鈹€ wake_word_triggered.flac
-鈹?  鈹斺攢鈹€ timer_finished.flac
-鈹溾攢鈹€ pyproject.toml              # Project configuration
-鈹溾攢鈹€ README.md                   # Documentation
-鈹溾攢鈹€ changelog.json              # Version changelog
-鈹斺攢鈹€ PROJECT_PLAN.md             # Project plan
+Current protocol state held inside `VoiceSatelliteProtocol` includes:
+
+- whether audio streaming is active
+- pending TTS URL
+- timer playback state
+- pending wakeup-triggered voice request
+- continuous conversation state
+- conversation ID and timeout tracking
+- delayed return-to-idle timer
+- per-connection Home Assistant entity state cache
+
+### Motion Control Architecture
+
+The current motion system is not just a set of direct SDK calls. It is a composed control runtime centered on `MovementManager`.
+
+Actual structure:
+
+1. `VoiceAssistantService` creates `ReachyMiniMotion`, which exposes `movement_manager`
+2. `movement_manager.py` owns the long-running control loop thread
+3. External requests are pushed into a command queue instead of directly mutating robot state from many threads
+4. The loop composes final head pose, antenna pose, and body yaw before sending commands
+5. Command polling and state transition handling are split into `command_runtime.py`
+6. Control emission helpers are split into `control_runtime.py`
+7. Idle behavior logic is split into `idle_runtime.py`
+8. Smoothing and pose composition are split into `smoothing.py` and `pose_composer.py`
+
+Current motion inputs that feed the final composed pose:
+
+- explicit pose commands from Home Assistant entities
+- robot state transitions such as listening, thinking, speaking, and idle
+- emotion or action moves
+- speech sway from playback
+- face tracking offsets from the camera runtime
+- idle behavior and idle random actions
+- DOA-triggered turn-to-sound behavior
+
+Current DOA integration:
+
+- `MovementManager` owns a `DOATracker`
+- wakeup turn-to-sound behavior is invoked from the protocol layer
+- DOA is part of current runtime behavior, but it is not a separate architecture layer
+
+### Vision And Camera Architecture
+
+The current camera system is conditional and service-managed, not always-on.
+
+Actual lifecycle:
+
+1. `VoiceAssistantService` decides whether the camera runtime should exist
+2. `_reconcile_camera_runtime()` starts or stops `MJPEGCameraServer` depending on:
+   - app camera enable flag
+   - Home Assistant connection state
+   - stored idle behavior preference
+3. `MJPEGCameraServer` owns the HTTP camera surface and capture thread
+4. Runtime helper modules split camera responsibilities:
+   - `camera_runtime.py` for lifecycle and model load/unload helpers
+   - `camera_processing.py` for frame capture, AI processing, and stream helpers
+   - `camera_http.py` for `/`, `/stream`, and `/snapshot` handlers
+5. Face tracking and gesture detection are optional capabilities inside the same camera runtime
+
+Current important behavior:
+
+- camera runtime can be fully stopped when idle behavior is off
+- the stream is viewer-aware to reduce MJPEG work when no client is connected
+- `/snapshot` can encode on demand
+- face and gesture models can be independently requested through runtime preferences
+
+### Audio Output Architecture
+
+The current playback design intentionally separates local speech playback from Sendspin-capable playback.
+
+Actual split:
+
+1. `LocalAudioPlayer` is stored in `ServerState.tts_player`
+2. `AudioPlayer` is stored in `ServerState.music_player`
+3. TTS, wakeup, and timer sounds go through the local player path
+4. Sendspin discovery, connection, buffering, remote commands, and synchronized playback live in the music player path
+5. `VoiceSatelliteProtocol` configures a speech sway callback on the TTS player so audio playback can drive head micro-movements
+
+Current audio module split:
+
+- `audio_player_playback.py` handles generic playback lifecycle
+- `audio_player_local.py` handles local file and in-memory fallback playback
+- `audio_player_stream_pcm.py` handles streamed PCM playback
+- `audio_player_stream_decoded.py` handles decoded streamed audio playback
+- `audio_player_sendspin.py` handles Sendspin integration
+- `audio_player_shared.py` holds shared constants and helpers
+
+### Entity And Control Architecture
+
+The current entity architecture is built from setup helpers rather than one giant registry file.
+
+Actual structure:
+
+1. `VoiceSatelliteProtocol` creates the entity registry through `entity_bridge.py`
+2. `initialize_entities()` wires entities only once per shared server state
+3. `runtime_entity_setup.py` registers runtime control entities such as:
+   - `speaker_volume`
+   - `mute`
+   - `camera_disabled`
+   - `idle_behavior_enabled`
+   - `sendspin_enabled`
+   - `face_tracking_enabled`
+   - `gesture_detection_enabled`
+   - `face_confidence_threshold`
+   - `emotion`
+   - `continuous_conversation`
+4. `sensor_entity_setup.py` registers state, observation, and diagnostic entities
+5. `entity_registry.py` keeps references to live entity objects and pushes updates back to Home Assistant
+
+Current important behavior:
+
+- many switches are backed by persisted preferences
+- vision-related switches call back into camera runtime state application
+- `mute` directly suspends or resumes voice services through `VoiceAssistantService`
+- `sendspin_enabled` directly toggles Sendspin discovery and connection through `VoiceAssistantService`
+
+### Runtime Suspension Architecture
+
+The current system has two suspension scopes, both owned by `VoiceAssistantService`.
+
+Voice-only suspension:
+
+- `_suspend_voice_services()` and `_resume_voice_services()`
+- used for mute-like behavior
+- stops or resumes media and protocol voice path while leaving camera and motion available
+
+Non-ESPHome service suspension:
+
+- `_suspend_non_esphome_services()` and `_resume_non_esphome_services()`
+- can suspend camera, motion, audio players, satellite runtime, and media system together while keeping the outer ESPHome presence alive
+
+This is the real current architecture for runtime pause behavior. It is not based on the removed app-managed sleep/wake design.
+
+### Runtime State Flow
+
+The current conversation flow is driven by wake detection plus protocol state.
+
+```text
+idle
+  -> local wake word detected
+  -> wakeup sound and optional turn-to-sound
+  -> listening
+  -> thinking
+  -> speaking
+  -> delayed return or direct return to idle
 ```
 
-## Dependencies
+Current interruption paths:
 
-```toml
-dependencies = [
-    "reachy-mini>=1.7.0",
-    "soundfile>=0.13.0",
-    "numpy>=2.2.5,<=2.2.5",
-    "opencv-python>=4.12.0.88",
-    "pymicro-wakeword>=2.0.0,<3.0.0",
-    "pyopen-wakeword>=1.0.0,<2.0.0",
-    "aioesphomeapi>=43.10.1",
-    "zeroconf>=0.131,<1",
-    "websockets>=12,<16",
-    "aiohttp",
-    "scipy>=1.15.3,<2.0.0",
-    "ultralytics",
-    "supervision",
-    "aiosendspin>=5.1,<6.0",
-    "onnxruntime>=1.18.0",
-    "torch==2.5.1",
-    "torchvision==0.20.1",
-    "pillow<12.0",
-    "pydantic<=2.12.5",
-    "requests>=2.33.0",
-    "gstreamer-bundle==1.28.1; sys_platform != 'linux'",
-]
-```
+- stop word during interruptible context
+- timer ring interruption flow
+- Home Assistant disconnection
+- mute-driven voice suspension
+
+### System Boundaries
+
+The current system boundary is:
+
+- Reachy Mini SDK owns robot media and hardware access
+- this app owns wake logic, playback logic, motion feedback, optional camera AI, and Home Assistant entity behavior
+- Home Assistant owns speech recognition, intent handling, and response generation
+
+That is the current project architecture reflected by the codebase.
 
 ## Usage Flow
 
-1. **Install App**
-   - Install `reachy_mini_ha_voice` from Reachy Mini App Store
+1. Install the app as a Reachy Mini app
+2. Start the app on the robot
+3. The app initializes SDK media, loads wake word assets, and starts the ESPHome server on port `6053`
+4. Home Assistant discovers the robot automatically through mDNS, or it can be added manually as an ESPHome device
+5. The user says a wake phrase such as `Okay Nabu`
+6. The app streams audio to Home Assistant and waits for conversation events or TTS audio in return
+7. Reachy Mini plays local speech audio, applies motion feedback, and returns to idle when the interaction finishes
 
-2. **Start App**
-   - App auto-starts ESPHome server (port 6053)
-   - Auto-downloads required models and sounds
+Manual runtime controls are exposed through Home Assistant entities, including mute, idle behavior, continuous conversation, camera control, face tracking, gesture detection, and Sendspin enablement
 
-3. **Connect Home Assistant**
-   - Home Assistant auto-discovers device (mDNS)
-   - Or manually add: Settings 閳?Devices & Services 閳?Add Integration 閳?ESPHome
+## Current Runtime Defaults
 
-4. **Use Voice Assistant**
-   - Say "Okay Nabu" to wake
-   - Speak command
-   - Reachy Mini provides motion feedback
+- `sendspin_enabled`: off by default
+- `face_tracking_enabled`: off by default
+- `gesture_detection_enabled`: off by default
+- `continuous_conversation`: user-controlled
+- `idle_behavior_enabled`: user-controlled
+- `face_confidence_threshold`: persistent user setting, default runtime threshold `0.5`
 
-## ESPHome Entity Planning
+Behavior notes:
+- When idle behavior is off, the camera server is stopped to reduce resource usage
+- When face or gesture features are disabled, their models are unloaded
+- Camera snapshots can be generated on demand when stream cache is empty
+- TTS playback stays on the local player path even when Sendspin support is enabled
+- Sendspin music playback is paused during voice assistant activity
+- The app no longer owns sleep/wake state transitions; current SDK behavior is treated as authoritative
+- Audio block size is `512` samples in the current runtime
 
-Based on deep analysis of Reachy Mini SDK, the following entities are exposed to Home Assistant:
+## Voice And Motion Behavior
 
-### Implemented Entities
+Conversation-related motion behavior:
 
-| Entity Type | Name | Description |
-|-------------|------|-------------|
-| Media Player | `media_player` | Audio playback control |
-| Voice Assistant | `voice_assistant` | Voice assistant pipeline |
+- Wakeup can turn the head toward the current sound source using DOA information
+- Listening, thinking, speaking, and idle phases each map to specific motion states
+- Head, body yaw, antenna motion, breathing, and speech sway are combined through the motion stack
+- Built-in emotion moves and Home Assistant-triggered behaviors run through a shared behavior layer
 
-### Implemented Control Entities (Read/Write)
+Idle behavior notes:
 
-#### Phase 1-3: Basic Controls and Pose
+- Idle behavior is user-controlled and persisted through preferences
+- When idle behavior is off, the robot stays in a parked low-resource state
+- When idle behavior is on, the motion runtime may use breathing, idle rest poses, and other configured behavior resources
 
-| ESPHome Entity Type | Name | SDK API | Range/Options | Description |
-|---------------------|------|---------|---------------|-------------|
-| `Number` | `speaker_volume` | `AudioPlayer.set_volume()` | 0-100 | Speaker volume |
-| `Switch` | `idle_behavior_enabled` | `set_idle_behavior_enabled()` | off=parked/on=idle runtime enabled | Unified idle behavior toggle |
-| `Number` | `head_x` | `goto_target(head=...)` | 卤50mm | Head X position control |
-| `Number` | `head_y` | `goto_target(head=...)` | 卤50mm | Head Y position control |
-| `Number` | `head_z` | `goto_target(head=...)` | 卤50mm | Head Z position control |
-| `Number` | `head_roll` | `goto_target(head=...)` | -40掳 ~ +40掳 | Head roll angle control |
-| `Number` | `head_pitch` | `goto_target(head=...)` | -40掳 ~ +40掳 | Head pitch angle control |
-| `Number` | `head_yaw` | `goto_target(head=...)` | -180掳 ~ +180掳 | Head yaw angle control |
-| `Number` | `body_yaw` | `goto_target(body_yaw=...)` | -160掳 ~ +160掳 | Body yaw angle control |
-| `Number` | `antenna_left` | `goto_target(antennas=...)` | -90掳 ~ +90掳 | Left antenna angle control |
-| `Number` | `antenna_right` | `goto_target(antennas=...)` | -90掳 ~ +90掳 | Right antenna angle control |
+## Vision And Tracking Behavior
 
-#### Phase 4: Gaze Control
+Camera and AI behavior:
 
-| ESPHome Entity Type | Name | SDK API | Range/Options | Description |
-|---------------------|------|---------|---------------|-------------|
-| `Number` | `look_at_x` | `look_at_world(x, y, z)` | World coordinates | Gaze point X coordinate |
-| `Number` | `look_at_y` | `look_at_world(x, y, z)` | World coordinates | Gaze point Y coordinate |
-| `Number` | `look_at_z` | `look_at_world(x, y, z)` | World coordinates | Gaze point Z coordinate |
+- The MJPEG stream is viewer-aware to avoid unnecessary continuous encoding work
+- `/snapshot` can encode on demand when no cached frame is available
+- Face tracking and gesture detection can continue independently of active stream viewers when their runtimes are enabled
+- Face tracking uses a detector plus smoothing/interpolation helpers
+- Gesture detection uses ONNX models and a gesture smoother for stable result publishing
 
+Current feature toggles:
 
-### Implemented Sensor Entities (Read-only)
+- `camera_disabled`
+- `face_tracking_enabled`
+- `gesture_detection_enabled`
+- `face_confidence_threshold`
 
-#### Phase 1 & 5: Basic Status and Audio Sensors
+## Current Architecture
 
-| ESPHome Entity Type | Name | SDK API | Description |
-|---------------------|------|---------|-------------|
-| `Text Sensor` | `daemon_state` | `DaemonStatus.state` | Daemon status |
-| `Binary Sensor` | `backend_ready` | `backend_status.ready` | Backend ready status |
-| `Text Sensor` | `error_message` | `DaemonStatus.error` | Current error message |
-| `Sensor` | `doa_angle` | `DoAInfo.angle` | Sound source direction angle (鎺? |
-| `Binary Sensor` | `speech_detected` | `DoAInfo.speech_detected` | Speech detection status |
+Top-level package layout:
 
-#### Phase 6: Diagnostic Information
-
-| ESPHome Entity Type | Name | SDK API | Description |
-|---------------------|------|---------|-------------|
-| `Sensor` | `control_loop_frequency` | `control_loop_stats` | Control loop frequency (Hz) |
-| `Text Sensor` | `sdk_version` | `DaemonStatus.version` | SDK version |
-| `Text Sensor` | `robot_name` | `DaemonStatus.robot_name` | Robot name |
-| `Binary Sensor` | `wireless_version` | `DaemonStatus.wireless_version` | Wireless version flag |
-| `Binary Sensor` | `simulation_mode` | `DaemonStatus.simulation_enabled` | Simulation mode flag |
-| `Text Sensor` | `wlan_ip` | `DaemonStatus.wlan_ip` | Wireless IP address |
-
-#### Phase 7: IMU Sensors (Wireless version only)
-
-| ESPHome Entity Type | Name | SDK API | Description |
-|---------------------|------|---------|-------------|
-| `Sensor` | `imu_accel_x` | `mini.imu["accelerometer"][0]` | X-axis acceleration (m/s铏? |
-| `Sensor` | `imu_accel_y` | `mini.imu["accelerometer"][1]` | Y-axis acceleration (m/s铏? |
-| `Sensor` | `imu_accel_z` | `mini.imu["accelerometer"][2]` | Z-axis acceleration (m/s铏? |
-| `Sensor` | `imu_gyro_x` | `mini.imu["gyroscope"][0]` | X-axis angular velocity (rad/s) |
-| `Sensor` | `imu_gyro_y` | `mini.imu["gyroscope"][1]` | Y-axis angular velocity (rad/s) |
-| `Sensor` | `imu_gyro_z` | `mini.imu["gyroscope"][2]` | Z-axis angular velocity (rad/s) |
-| `Sensor` | `imu_temperature` | `mini.imu["temperature"]` | IMU temperature (鎺矯) |
-
-#### Current Runtime Control and Sensor Entities
-
-| Phase | ESPHome Entity Type | Name | Description |
-|------|---------------------|------|-------------|
-| 1 | `Switch` | `mute` | Suspend/resume the voice pipeline |
-| 1 | `Switch` | `camera_disabled` | Disable/enable camera runtime |
-| 1 | `Switch` | `idle_behavior_enabled` | Unified idle motion / antenna / micro-actions toggle |
-| 1 | `Switch` | `sendspin_enabled` | Enable/disable Sendspin playback integration |
-| 1 | `Switch` | `face_tracking_enabled` | Enable/disable face tracking models |
-| 1 | `Switch` | `gesture_detection_enabled` | Enable/disable gesture detection models |
-| 1 | `Number` | `face_confidence_threshold` | Face tracking confidence threshold (0-1) |
-| 2 | `Binary Sensor` | `services_suspended` | Runtime suspension state |
-| 8 | `Select` | `emotion` | Manual emotion trigger |
-| 10 | `Camera` | `camera` | ESPHome camera entity / live preview |
-| 21 | `Switch` | `continuous_conversation` | Multi-turn conversation mode |
-| 22 | `Text Sensor` | `gesture_detected` | Current detected gesture |
-| 22 | `Sensor` | `gesture_confidence` | Current gesture confidence |
-| 23 | `Binary Sensor` | `face_detected` | Face currently visible |
-
-> **Note**: Head position (x/y/z) and angles (roll/pitch/yaw), body yaw, antenna angles are all **controllable** entities,
-> using `Number` type for bidirectional control. Call `goto_target()` when setting new values, call `get_current_head_pose()` etc. when reading current values.
-
-### Implementation Priority
-
-1. **Phase 1 - Basic Status and Volume** (High Priority) 閴?**Completed**
-   - [x] `daemon_state` - Daemon status sensor
-   - [x] `backend_ready` - Backend ready status
-   - [x] `error_message` - Error message
-   - [x] `speaker_volume` - Speaker volume control
-
-2. **Phase 2 - Runtime State** (High Priority) 鉁?**Completed**
-   - [x] `services_suspended` - Service suspension state sensor
-   - [x] App-managed sleep/wake entities removed from the current runtime
-
-3. **Phase 3 - Pose Control** (Medium Priority) 閴?**Completed**
-   - [x] `head_x/y/z` - Head position control
-   - [x] `head_roll/pitch/yaw` - Head angle control
-   - [x] `body_yaw` - Body yaw angle control
-   - [x] `antenna_left/right` - Antenna angle control
-
-4. **Phase 4 - Gaze Control** (Medium Priority) 閴?**Completed**
-   - [x] `look_at_x/y/z` - Gaze point coordinate control
-
-5. **Phase 5 - DOA (Direction of Arrival)** 閴?**Re-added for wakeup turn-to-sound**
-   - [x] `doa_angle` - Sound source direction (degrees, 0-180鎺? where 0鎺?left, 90鎺?front, 180鎺?right)
-   - [x] `speech_detected` - Speech detection status
-   - [x] Turn-to-sound at wakeup (robot turns toward speaker when wake word detected)
-   - [x] Direction correction: `yaw = 锜?2 - doa` (fixed left/right inversion)
-   - Note: DOA only read once at wakeup to avoid daemon pressure; face tracking takes over after
-
-6. **Phase 6 - Diagnostic Information** (Low Priority) 閴?**Completed**
-   - [x] `control_loop_frequency` - Control loop frequency
-   - [x] `sdk_version` - SDK version
-   - [x] `robot_name` - Robot name
-   - [x] `wireless_version` - Wireless version flag
-   - [x] `simulation_mode` - Simulation mode flag
-   - [x] `wlan_ip` - Wireless IP address
-
-7. **Phase 7 - IMU Sensors** (Optional, wireless version only) 閴?**Completed**
-   - [x] `imu_accel_x/y/z` - Accelerometer
-   - [x] `imu_gyro_x/y/z` - Gyroscope
-   - [x] `imu_temperature` - IMU temperature
-
-8. **Phase 8 - Emotion Control** 閴?**Completed**
-    - [x] `emotion` - Emotion selector (Happy/Sad/Angry/Fear/Surprise/Disgust)
-
-9. **Phase 10 - Camera Integration** 閴?**Completed**
-    - [x] `camera` - ESPHome Camera entity (live preview)
-
-10. **Phase 11 - LED Control** 閴?**Disabled (LEDs hidden inside robot)**
-    - [ ] `led_brightness` - LED brightness (0-100%) - Commented out
-    - [ ] `led_effect` - LED effect (off/solid/breathing/rainbow/doa) - Commented out
-    - [ ] `led_color_r/g/b` - LED RGB color (0-255) - Commented out
-
-11. **Phase 13 - Sendspin Audio Playback Support** 閴?**Completed**
-    - [x] `sendspin_enabled` - Sendspin switch (Switch)
-    - [x] AudioPlayer integrates aiosendspin library
-    - [x] Local music/sendspin path coexists with voice playback and is auto-paused during conversation
-
-12. **Phase 21 - Continuous Conversation** 閴?**Completed**
-    - [x] `continuous_conversation` - Conversation continuation switch
-
-13. **Phase 22 - Gesture Detection** 鉁?**Completed (current runtime behavior)**
-    - [x] `gesture_detected` - Detected gesture name (Text Sensor)
-    - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
-    - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
-    - [x] Real-time state push to Home Assistant
-    - [x] Runtime gesture result publishing only (no gesture-driven robot actions)
-    - [x] Runtime toggle supported (default OFF, model unload on disable)
-    - [x] Batch detection: returns all detected hands (not just highest confidence)
-    - [x] Minimum processing cadence preserved for responsiveness
-    - [x] No conflicts with face tracking (shared frame, independent processing)
-    - [x] SDK integration: MediaBackend detection, proper resource cleanup on shutdown
-    - [x] 18 supported gestures:
-      | Gesture | Emoji | Gesture | Emoji |
-      |---------|-------|---------|-------|
-      | call | 棣冾樉 | like | 棣冩啢 |
-      | dislike | 棣冩啣 | mute | 棣冦亱 |
-      | fist | 閴?| ok | 棣冩啠 |
-      | four | 棣冩瀾閿?| one | 閳芥繐绗?|
-      | palm | 閴?| peace | 閴佸矉绗?|
-      | peace_inverted | 棣冩暰閴佸矉绗?| rock | 棣冾樈 |
-      | stop | 棣冩磧 | stop_inverted | 棣冩暰棣冩磧 |
-      | three | 3閿斿繆鍎?| three2 | 棣冾檮 |
-      | two_up | 閴佸矉绗嶉埥婵撶瑣 | two_up_inverted | 棣冩暰閴佸矉绗嶉埥婵撶瑣 |
-
-14. **Phase 23 - Face Detection** 閴?**Completed**
-    - [x] `face_detected` - Face visibility sensor
-
-15. **Phase 24 - System Diagnostics** 閴?**Completed**
-    - [x] `sys_cpu_percent` - CPU usage percentage (Sensor, diagnostic)
-    - [x] `sys_cpu_temperature` - CPU temperature in Celsius (Sensor, diagnostic)
-    - [x] `sys_memory_percent` - Memory usage percentage (Sensor, diagnostic)
-    - [x] `sys_memory_used` - Used memory in GB (Sensor, diagnostic)
-    - [x] `sys_disk_percent` - Disk usage percentage (Sensor, diagnostic)
-    - [x] `sys_disk_free` - Free disk space in GB (Sensor, diagnostic)
-    - [x] `sys_uptime` - System uptime in hours (Sensor, diagnostic)
-    - [x] `sys_process_cpu` - This process CPU usage (Sensor, diagnostic)
-    - [x] `sys_process_memory` - This process memory in MB (Sensor, diagnostic)
-
----
-
-## 棣冨竴 Current Runtime Entity Coverage
-
-**Total Completed: See runtime registry (count evolves with releases)**
-- Phase 1: 10 entities (status, zero-config runtime switches, volume)
-- Phase 2: runtime state entities only (`services_suspended`; sleep entities removed)
-- Phase 3: 9 entities (Pose control)
-- Phase 4: 3 entities (Gaze control)
-- Phase 5: 3 entities (DOA sensors and tracking switch)
-- Phase 6: 7 entities (Diagnostic information)
-- Phase 7: 7 entities (IMU sensors)
-- Phase 8: 1 entity (Emotion control)
-- Phase 10: 1 entity (Camera)
-- Phase 11: 0 entities (LED control - Disabled)
-- Phase 13: 1 entity (Sendspin toggle)
-- Phase 21: 1 entity (Continuous conversation)
-- Phase 22: 2 entities (Gesture detection)
-- Phase 23: 1 entity (Face detection)
-- Phase 24: 9 entities (System diagnostics)
-
-
----
-
-## 棣冩畬 Voice Assistant Enhancement Features Implementation Status
-
-### Phase 14 - Emotion and Motion Feedback 閴?
-**Current Status**: Manual emotion playback and non-blocking motion feedback are implemented. Automatic keyword-based emotion triggering is currently disabled in the runtime.
-
-**Implemented Features**:
-- 閴?Phase 8 Emotion Selector entity (`emotion`)
-- 閴?`_play_emotion()` queues emotion moves through `MovementManager`
-- 閴?Wake/listen/think/speak/idle motion transitions are non-blocking
-- 閴?Timer-finished motion feedback is implemented
-- 閴?Gesture detection publishes recognized gesture label and confidence to Home Assistant entities
-- 閴?Voice phases and HA state reactions share one built-in behavior dispatcher
-
-**Current Behavior**:
-
-| Voice Assistant Event | Actual Action | Implementation Status |
-|----------------------|---------------|----------------------|
-| Wake word detected | Turn toward sound source + listening pose | 閴?Implemented |
-| Listening | Attentive listening state | 閴?Implemented |
-| Thinking | Thinking state animation | 閴?Implemented |
-| Speaking | Speech-reactive motion | 閴?Implemented |
-| Timer completed | Alert shake motion | 閴?Implemented |
-| Manual emotion trigger | Play via ESPHome `emotion` entity | 閴?Implemented |
-
-**Deliberately Not Active In Runtime**:
-- Automatic emotion keyword detection from assistant text
-- Blocking full-action choreography during conversation
-- Dance/personalization layers that require user configuration
-
-**Manual Emotion Trigger Example**:
-```yaml
-# Home Assistant automation example - Manual emotion trigger
-automation:
-  - alias: "Reachy Good Morning Greeting"
-    trigger:
-      - platform: time
-        at: "07:00:00"
-    action:
-      - service: select.select_option
-        target:
-          entity_id: select.reachy_mini_emotion
-        data:
-          option: "Happy"
+```text
+reachy_mini_home_assistant/
+  __main__.py
+  main.py
+  models.py
+  reachy_controller.py
+  voice_assistant.py
+  animations/
+  audio/
+  core/
+  entities/
+  handlers/
+  models/
+  motion/
+  protocol/
+  sounds/
+  static/
+  vision/
+  voice/
+  wakewords/
 ```
 
-### Phase 15 - Face Tracking (Complements DOA Turn-to-Sound) 閴?**Completed**
+Key modules:
 
-**Goal**: Implement natural face tracking so robot looks at speaker during conversation.
+- `main.py` - Reachy Mini app entry point
+- `voice_assistant.py` - runtime orchestration, media startup, audio thread management
+- `reachy_controller.py` - SDK-facing control wrapper
+- `models.py` - shared state and preference models
 
-**Design Decision**:
-- 閴?DOA (Direction of Arrival): Used once at wakeup to turn toward sound source
-- 閴?YOLO face detection: Takes over after initial turn for continuous tracking
-- 閴?Body follows head rotation: Body yaw automatically syncs with head yaw for natural tracking
-- Reason: DOA provides quick initial orientation, face tracking provides accurate continuous tracking, body following enables natural whole-body tracking similar to human behavior
+Core infrastructure:
 
-**Wakeup Turn-to-Sound Flow**:
-1. Wake word detected 閳?Read DOA angle once (avoid daemon pressure)
-2. If DOA angle > 10鎺? Turn head toward sound source (80% of angle, conservative)
-3. Face tracking takes over for continuous tracking during conversation
+- `core/config.py` - centralized configuration
+- `core/service_base.py` - suspend/resume-aware service helpers
+- `core/system_diagnostics.py` - runtime diagnostics
+- `core/exceptions.py` - custom exception definitions
+- `core/util.py` - common helpers
 
-**Implemented Features**:
+Protocol layer:
 
-| Feature | Description | Implementation Location | Status |
-|---------|-------------|------------------------|--------|
-| DOA turn-to-sound | Turn toward speaker at wakeup | `protocol/satellite.py:_turn_to_sound_source()` | 閴?Implemented |
-| YOLO face detection | Uses `AdamCodd/YOLOv11n-face-detection` model | `vision/head_tracker.py` | 閴?Implemented |
-| Adaptive frame rate tracking | 15fps during conversation, 2fps when idle without face | `camera_server.py` | 閴?Implemented |
-| look_at_image() | Calculate target pose from face position | `camera_server.py` | 閴?Implemented |
-| Smooth return to neutral | Smooth return within 1 second after face lost | `camera_server.py` | 閴?Implemented |
-| face_tracking_offsets | As secondary pose overlay to motion control | `movement_manager.py` | 閴?Implemented |
-| Body follows head rotation | Body yaw syncs with head yaw extracted from final pose matrix | `motion/movement_manager.py:_compose_final_pose()` | 閴?Implemented (v0.8.3) |
-| DOA entities | `doa_angle` and `speech_detected` exposed to Home Assistant | `entity_registry.py` | 閴?Implemented |
-| face_detected entity | Binary sensor for face detection state | `entity_registry.py` | 閴?Implemented |
-| Model download retry | 3 retries, 5 second interval | `head_tracker.py` | 閴?Implemented |
-| Conversation mode integration | Auto-switch tracking frequency on voice assistant state change | `satellite.py` | 閴?Implemented |
+- `protocol/satellite.py` - ESPHome protocol facade
+- `protocol/api_server.py` - protocol HTTP surface
+- `protocol/entity_bridge.py` - entity/protocol glue
+- `protocol/message_dispatch.py` - ESPHome message dispatch
+- `protocol/motion_bridge.py` - voice-to-motion transition helpers
+- `protocol/session_flow.py` - conversation lifecycle helpers
+- `protocol/voice_pipeline.py` - voice event, TTS, stop, ducking flow
+- `protocol/wakeword_assets.py` - wake word asset loading helpers
+- `protocol/zeroconf.py` - mDNS discovery
 
-**Resource Optimization (v0.5.1, updated v0.6.2)**:
-- During conversation (listening/thinking/speaking): High-frequency tracking 15fps
-- Idle with face detected: High-frequency tracking 15fps
-- Idle without face for 5s: Low-power mode 2fps
-- Idle without face for 30s: Ultra-low power mode 0.5fps (every 2 seconds)
-- Gesture detection is switch-controlled and can run independently of face tracking
-- Immediately restore high-frequency tracking when face detected
+Motion layer:
 
-**Code Locations**:
-- `protocol/satellite.py:_turn_to_sound_source()` - DOA turn-to-sound at wakeup
-- `vision/head_tracker.py` - YOLO face detector (`HeadTracker` class)
-- `vision/camera_server.py:_capture_frames()` - Adaptive frame rate face tracking
-- `vision/camera_server.py:set_conversation_mode()` - Conversation mode switch API
-- `protocol/satellite.py:_set_conversation_mode()` - Voice assistant state integration
-- `motion/movement_manager.py:set_face_tracking_offsets()` - Face tracking offset API
-- `motion/movement_manager.py:_compose_final_pose()` - Body yaw follows head yaw (v0.8.3)
+- `motion/movement_manager.py` - unified motion control loop
+- `motion/command_runtime.py` - command queue and state transitions
+- `motion/control_runtime.py` - control loop helpers
+- `motion/idle_runtime.py` - idle behavior handling
+- `motion/pose_composer.py` - multi-source pose composition
+- `motion/smoothing.py` - pose smoothing
+- `motion/speech_sway.py` - speech-driven head micro-movements
+- `motion/animation_player.py` - animation playback
+- `motion/emotion_moves.py` - built-in emotion actions
+- `motion/antenna.py` - antenna behavior control
+- `motion/reachy_motion.py` - motion API wrapper
+- `motion/state_machine.py` - motion state definitions
 
-**Technical Details**:
-```python
-# vision/camera_server.py - Adaptive frame rate face tracking
-class MJPEGCameraServer:
-    def __init__(self):
-        self._fps_high = 15  # During conversation/face detected
-        self._fps_low = 2    # Idle without face (5-30s)
-        self._fps_idle = 0.5 # Ultra-low power (>30s without face)
-        self._low_power_threshold = 5.0   # 5s without face switches to low power
-        self._idle_threshold = 30.0       # 30s without face switches to idle mode
+Vision layer:
 
-    def _should_run_ai_inference(self, current_time):
-        # Conversation mode: Always high-frequency tracking
-        if self._in_conversation:
-            return True
-        # High-frequency mode: Track every frame
-        if self._current_fps == self._fps_high:
-            return True
-        # Low/idle power mode: Periodic detection
-        return time.since_last_check >= 1/self._current_fps
+- `vision/camera_server.py` - MJPEG camera server facade
+- `vision/camera_runtime.py` - camera lifecycle helpers
+- `vision/camera_processing.py` - frame capture and processing helpers
+- `vision/camera_http.py` - stream and snapshot handlers
+- `vision/head_tracker.py` - face detector
+- `vision/face_tracking_interpolator.py` - smooth face tracking transitions
+- `vision/gesture_detector.py` - gesture detection runtime
+- `vision/gesture_smoother.py` - gesture result stabilization
+- `vision/frame_processor.py` - adaptive frame pacing
 
-# protocol/satellite.py - Voice assistant state integration
-def _reachy_on_listening(self):
-    self._set_conversation_mode(True)  # Start conversation, high-frequency tracking
+Audio layer:
 
-def _reachy_on_idle(self):
-    self._set_conversation_mode(False)  # End conversation, adaptive tracking
+- `audio/audio_player.py` - music/sendspin playback facade
+- `audio/local_audio_player.py` - local speech playback facade
+- `audio/audio_player_playback.py` - playback lifecycle helpers
+- `audio/audio_player_local.py` - local file and fallback playback helpers
+- `audio/audio_player_stream_pcm.py` - streamed PCM playback
+- `audio/audio_player_stream_decoded.py` - decoded stream playback
+- `audio/audio_player_sendspin.py` - Sendspin integration
+- `audio/audio_player_shared.py` - shared constants and helpers
+- `audio/audio_player_wobble.py` - speech sway analysis helpers
+- `audio/doa_tracker.py` - direction-of-arrival tracking
 
-# motion/movement_manager.py - Body follows head rotation (v0.8.3)
-# This enables natural body rotation when tracking faces, similar to how
-# the reference project's sweep_look tool synchronizes body_yaw with head_yaw.
-def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
-    # ... compose head pose from all motion sources ...
+Entity layer:
 
-    # Extract yaw from final head pose rotation matrix
-    # The rotation matrix uses xyz euler convention
-    final_rotation = R.from_matrix(final_head[:3, :3])
-    _, _, final_head_yaw = final_rotation.as_euler('xyz')
+- `entities/entity.py` - base ESPHome entity types
+- `entities/entity_factory.py` - entity construction
+- `entities/entity_registry.py` - runtime registry
+- `entities/entity_extensions.py` - extended entity implementations
+- `entities/entity_keys.py` - entity key constants
+- `entities/runtime_entity_setup.py` - runtime and control entities
+- `entities/sensor_entity_setup.py` - sensor and diagnostic entities
+- `entities/event_emotion_mapper.py` - Home Assistant event to emotion mapping
+- `entities/emotion_detector.py` - currently disabled text emotion path
 
-    # Body follows head yaw directly
-    # SDK's automatic_body_yaw (inverse_kinematics_safe) only handles collision
-    # prevention by clamping relative angle to max 65鎺? not active following
-    body_yaw = final_head_yaw
+## Detailed File List
 
-    return final_head, (antenna_right, antenna_left), body_yaw
+Top-level repository structure:
+
+```text
+reachy_mini_ha_voice/
+  CHANGELOG.md
+  Project_Summary.md
+  README.md
+  changelog.json
+  pyproject.toml
+  docs/
+  home_assistant_blueprints/
+  reachy_mini_home_assistant/
+  reference/
+  scripts/
+  tests/
 ```
 
-**Body Following Head Rotation (v0.8.3)**:
-- SDK's `automatic_body_yaw` is only **collision protection**, not active body following
-- The `inverse_kinematics_safe` function with `max_relative_yaw=65鎺砢 only prevents head-body collision
-- To enable natural body following, `body_yaw` must be explicitly set to match `head_yaw`
-- Body yaw is extracted from final head pose matrix using scipy's `R.from_matrix().as_euler('xyz')`
-- This matches the reference project's `sweep_look.py` behavior where `target_body_yaw = head_yaw`
+Application package structure:
 
+```text
+reachy_mini_home_assistant/
+  __init__.py
+  __main__.py
+  main.py
+  models.py
+  reachy_controller.py
+  voice_assistant.py
+  animations/
+    animation_config.py
+    conversation_animations.json
+  audio/
+    audio_player.py
+    local_audio_player.py
+    audio_player_playback.py
+    audio_player_local.py
+    audio_player_stream_pcm.py
+    audio_player_stream_decoded.py
+    audio_player_sendspin.py
+    audio_player_shared.py
+    audio_player_wobble.py
+    doa_tracker.py
+  core/
+    config.py
+    exceptions.py
+    service_base.py
+    system_diagnostics.py
+    util.py
+  entities/
+    entity.py
+    entity_extensions.py
+    entity_factory.py
+    entity_keys.py
+    entity_registry.py
+    event_emotion_mapper.py
+    runtime_entity_setup.py
+    sensor_entity_setup.py
+    emotion_detector.py
+  motion/
+    animation_player.py
+    antenna.py
+    command_runtime.py
+    control_runtime.py
+    emotion_moves.py
+    idle_runtime.py
+    movement_manager.py
+    pose_composer.py
+    reachy_motion.py
+    smoothing.py
+    speech_sway.py
+    state_machine.py
+  protocol/
+    api_server.py
+    entity_bridge.py
+    message_dispatch.py
+    motion_bridge.py
+    satellite.py
+    session_flow.py
+    voice_pipeline.py
+    wakeword_assets.py
+    zeroconf.py
+  sounds/
+  static/
+  vision/
+    camera_http.py
+    camera_processing.py
+    camera_runtime.py
+    camera_server.py
+    face_tracking_interpolator.py
+    frame_processor.py
+    gesture_detector.py
+    gesture_smoother.py
+    head_tracker.py
+  wakewords/
+```
 
-### Phase 16 - Cartoon Style Motion Mode (Partial) 棣冪厸
+## Implemented Feature Areas
 
-**Goal**: Use SDK interpolation techniques for more expressive robot movements.
+Core voice assistant:
+- ESPHome voice assistant server
+- mDNS auto-discovery
+- Local wake word detection
+- Stop word detection
+- Audio streaming to Home Assistant
+- Local TTS playback
+- Continuous conversation toggle
 
-**SDK Support**: `InterpolationTechnique` enum
-- `LINEAR` - Linear, mechanical feel
-- `MIN_JERK` - Minimum jerk, natural and smooth (default)
-- `EASE_IN_OUT` - Ease in-out, elegant
-- `CARTOON` - Cartoon style, with bounce effect, lively and cute
+Reachy Mini integration:
+- SDK microphone input
+- SDK speaker output
+- Head, body yaw, and antenna motion control
+- Speech-phase motion feedback
+- Built-in emotion and animation support
 
-**Implemented Features**:
-- 閴?50Hz unified control loop (`motion/movement_manager.py`) - Current stable frequency
-- 閴?JSON-driven animation system (`AnimationPlayer`) - Inspired by SimpleDances project
-- 閴?Conversation state animations (idle/listening/thinking/speaking)
-- 閴?Pose change detection - Only send commands on significant changes (threshold 0.005)
-- 閴?State query caching - 2s TTL, reduces daemon load
-- 閴?Smooth interpolation (ease in-out curve)
-- 閴?Command queue mode - Thread-safe external API
-- 閴?Error throttling - Prevents log explosion
-- 閴?Connection health monitoring - Auto-detect and recover from connection loss
+Vision and tracking:
+- Home Assistant camera entity
+- MJPEG stream server
+- On-demand snapshots
+- Face tracking
+- Gesture detection with runtime enable/disable
 
-**Animation System (v0.5.13)**:
-- `AnimationPlayer` class loads animations from `conversation_animations.json`
-- Each animation defines: pitch/yaw/roll amplitudes, position offsets, antenna movements, frequency
-- Smooth transitions between animations (configurable duration)
-- State-to-animation mapping: idle閳姕dle, listening閳姡istening, thinking閳姲hinking, speaking閳姱peaking
+Audio enhancements:
+- Local speech playback path
+- Optional Sendspin synchronized audio playback
+- Ducking during conversation
+- Shared sway behavior for speech and audio playback
 
-**Not Implemented**:
-- 閴?Dynamic interpolation technique switching (CARTOON/EASE_IN_OUT etc.)
-- 閴?Exaggerated cartoon bounce effects
+Diagnostics and control:
+- Runtime suspend/resume state
+- System diagnostics entities
+- Camera/face/gesture/sendspin switches
+- Idle behavior switch
 
-**Code Locations**:
-- `motion/animation_player.py` - AnimationPlayer class
-- `animations/conversation_animations.json` - Animation definitions
-- `motion/movement_manager.py` - 50Hz control loop with animation integration
+## Home Assistant Entity Coverage
 
-**Scene Implementation Status**:
+The exact entity count evolves over time, but the current runtime exposes entities in these groups:
 
-| Scene | Recommended Interpolation | Effect | Status |
-|-------|--------------------------|--------|--------|
-| Wake nod | `CARTOON` | Lively bounce effect | 閴?Not implemented |
-| Thinking head up | `EASE_IN_OUT` | Elegant transition | 閴?Implemented (smooth interpolation) |
-| Speaking micro-movements | `MIN_JERK` | Natural and fluid | 閴?Implemented (SpeechSway) |
-| Error head shake | `CARTOON` | Exaggerated denial | 閴?Not implemented |
-| Return to neutral | `MIN_JERK` | Smooth return | 閴?Implemented |
-| Idle breathing | - | Subtle sense of life | 閴?Implemented (BreathingAnimation) |
+1. Voice assistant and media entities
+2. Runtime switches and preferences
+3. Head, body, and antenna pose control entities
+4. Gaze target entities
+5. DOA and speech-related sensors
+6. Face tracking and gesture sensors
+7. Camera entity
+8. System diagnostic sensors
+9. Emotion and behavior control entities
 
-### Phase 17 - Antenna Sync Animation During Speech (Completed) 閴?
-**Goal**: Antennas sway with audio rhythm during TTS playback, simulating "speaking" effect.
+Representative control entities:
 
-**Implemented Features**:
-- 閴?JSON-driven animation system with antenna movements
-- 閴?Different antenna patterns: "both" (sync), "wiggle" (opposite phase)
-- 閴?State-specific antenna animations (listening/thinking/speaking)
-- 閴?Smooth transitions between animation states
-- 閴?v1.0.0 idle refinement: idle antenna sway disabled while conversation-state antenna behaviors are retained
-- 閴?v1.0.0 hardware refinement: antenna torque disabled in `IDLE` to reduce idle chatter/noise
-
-**Code Locations**:
-- `motion/animation_player.py` - AnimationPlayer with antenna offset calculation
-- `animations/conversation_animations.json` - Antenna amplitude and pattern definitions
-- `motion/movement_manager.py` - Antenna offset composition in final pose
-
-### Phase 18 - Visual Gaze Interaction (Single-face only) 閴?
-**Goal**: Use camera to detect faces for eye contact.
-
-**SDK Support**:
-- `look_at_image(u, v)` - Look at point in image
-- `look_at_world(x, y, z)` - Look at world coordinate point
-- `media.get_frame()` - Get camera frame (閴?Already implemented in `vision/camera_server.py:146`)
-
-**Current Status**:
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| Face detection | YOLO-based face detection (`AdamCodd/YOLOv11n-face-detection`) | 閴?Implemented |
-| Eye tracking | Robot tracks detected face during conversation/active mode | 閴?Implemented |
-| Idle scanning | Random look-around in idle cycles (switch-controlled) | 閴?Implemented |
-
-> Scope note: Current implementation is intentionally single-face tracking for stability and device performance.
-
-### Phase 19 - Gravity Compensation Interactive Mode (Historical / Not Current Target)
-
-This was an exploration direction for manual teaching workflows.
-
-**Current Runtime Position**:
-- The zero-config runtime does not depend on a teaching flow
-- No user-facing teaching interaction is exposed as a core feature
-- If gravity-compensation support is revisited, it should remain optional and not become a required setup path
-
-### Phase 20 - Environment Awareness Response (Partial) 棣冪厸
-
-**Goal**: Use IMU sensors to sense environment changes and respond.
-
-**SDK Support**:
-- 閴?`mini.imu["accelerometer"]` - Accelerometer (Phase 7 implemented as entity)
-- 閴?`mini.imu["gyroscope"]` - Gyroscope (Phase 7 implemented as entity)
-
-**Implemented Features**:
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| Continuous conversation | Controlled via Home Assistant switch | 閴?Implemented |
-| IMU sensor entities | Accelerometer and gyroscope exposed to HA | 閴?Implemented |
-
-> **Note**: Tap-to-wake feature was removed in v0.5.16 due to false triggers from robot movement. Continuous conversation is now controlled via Home Assistant switch.
-
-**Not Implemented**:
-
-| Detection Event | Response Action | Status |
-|-----------------|-----------------|--------|
-| Being shaken | Play dizzy action + voice "Don't shake me~" | 閴?Not implemented |
-| Tilted/fallen | Play help action + voice "I fell, help me" | 閴?Not implemented |
-| Long idle | Enter sleep animation | 閴?Not implemented |
-
-### Phase 21 - Home Assistant Orchestration Scope
-
-The current runtime already exposes the main zero-config controls needed by Home Assistant:
-
-- `services_suspended`
+- `speaker_volume`
+- `mute`
 - `idle_behavior_enabled`
 - `continuous_conversation`
+- `sendspin_enabled`
+- `camera_disabled`
+- `face_tracking_enabled`
+- `gesture_detection_enabled`
+- `face_confidence_threshold`
+- `head_x`, `head_y`, `head_z`
+- `head_roll`, `head_pitch`, `head_yaw`
+- `body_yaw`
+- `antenna_left`, `antenna_right`
+- `look_at_x`, `look_at_y`, `look_at_z`
 - `emotion`
-- gesture / face / diagnostic sensors
 
-More elaborate scene orchestration remains intentionally outside the core runtime scope unless it can be delivered without introducing user configuration burden.
+Representative sensor entities:
 
+- `daemon_state`
+- `backend_ready`
+- `error_message`
+- `doa_angle`
+- `speech_detected`
+- `services_suspended`
+- `gesture_detected`
+- `gesture_confidence`
+- `face_detected`
+- `sdk_version`
+- `robot_name`
+- `wlan_ip`
+- system diagnostic entities such as CPU, memory, disk, uptime, and process metrics
 
----
+## ESPHome Entity Planning And Current Mapping
 
-## 棣冩惓 Feature Implementation Summary
+Implemented core entities:
 
-### 閴?Completed Features
+| Entity Type | Name | Purpose |
+|---|---|---|
+| Media Player | `media_player` | Audio playback control |
+| Voice Assistant | `voice_assistant` | Voice assistant pipeline integration |
 
-#### Core Voice Assistant (Phase 1-12)
-- **ESPHome entities** - Core phases implemented (Phase 11 LED intentionally disabled); exact count evolves by release
-- **Basic voice interaction** - Wake word detection (microWakeWord/openWakeWord), STT/TTS integration
-- **Motion feedback** - Nod, shake, gaze and other basic actions
-- **Audio path** - local wake word / stop word detection plus HA-managed STT/TTS
-- **Camera stream** - MJPEG live preview with ESPHome Camera entity
+Implemented control entities:
 
-#### Extended Features (Phase 13-22)
-- **Phase 13** 閴?- Sendspin multi-room audio support
-- **Phase 14** 閴?- Manual emotion playback + non-blocking motion feedback
-- **Phase 15** 閴?- Face tracking with body following (DOA + YOLO + body_yaw sync)
-- **Phase 16** 閴?- JSON-driven animation system (50Hz control loop)
-- **Phase 17** 閴?- Antenna sync animation during speech
-- **Phase 22** 閴?- Gesture detection (HaGRID ONNX, 18 gestures)
+| Entity Type | Name | Description |
+|---|---|---|
+| Number | `speaker_volume` | Speaker volume control |
+| Switch | `mute` | Suspend or resume the voice pipeline |
+| Switch | `idle_behavior_enabled` | Unified idle motion and idle behavior toggle |
+| Switch | `camera_disabled` | Disable or enable camera runtime |
+| Switch | `sendspin_enabled` | Enable or disable Sendspin playback integration |
+| Switch | `face_tracking_enabled` | Enable or disable face tracking |
+| Switch | `gesture_detection_enabled` | Enable or disable gesture detection |
+| Number | `face_confidence_threshold` | Face tracking confidence threshold |
+| Switch | `continuous_conversation` | Multi-turn conversation mode |
+| Select | `emotion` | Manual emotion trigger |
+| Number | `head_x`, `head_y`, `head_z` | Head position control |
+| Number | `head_roll`, `head_pitch`, `head_yaw` | Head angle control |
+| Number | `body_yaw` | Body yaw control |
+| Number | `antenna_left`, `antenna_right` | Antenna angle control |
+| Number | `look_at_x`, `look_at_y`, `look_at_z` | Gaze target control |
 
-### 棣冪厸 Partially Implemented Features
+Implemented sensor entities:
 
-- **Phase 20** - IMU sensor entities are exposed; higher-level trigger logic is intentionally minimal
+| Entity Type | Name | Description |
+|---|---|---|
+| Text Sensor | `daemon_state` | Daemon state |
+| Binary Sensor | `backend_ready` | Backend ready status |
+| Text Sensor | `error_message` | Current error message |
+| Sensor | `doa_angle` | Sound source direction angle |
+| Binary Sensor | `speech_detected` | Speech detection status |
+| Binary Sensor | `services_suspended` | Runtime suspension state |
+| Text Sensor | `gesture_detected` | Current detected gesture |
+| Sensor | `gesture_confidence` | Current gesture confidence |
+| Binary Sensor | `face_detected` | Face visibility state |
+| Text Sensor | `sdk_version` | SDK version |
+| Text Sensor | `robot_name` | Robot name |
+| Text Sensor | `wlan_ip` | Wireless IP address |
+| Camera | `camera` | Live preview and snapshots |
 
-### 閴?Not Implemented Features
+System diagnostic entities include CPU, temperature, memory, disk, uptime, and process metrics.
 
-- Zero-config scene orchestration beyond the provided runtime switches and blueprint defaults
+Notes:
 
----
+- Head position, head angles, body yaw, and antenna angles are all controllable runtime entities
+- Gaze target entities are exposed as world-coordinate controls
+- LED entities are intentionally not part of the current supported runtime surface
 
-## Feature Priority Summary (Updated v1.0.6)
+## Current Feature Status
 
-### Completed 鉁?
-- 鉁?**Phase 1-12**: Core ESPHome entities and voice assistant
-- 鉁?**Phase 13**: Sendspin audio playback
-- 鉁?**Phase 14**: Emotion playback and motion feedback
-- 鉁?**Phase 15**: Face tracking with body following
-- 鉁?**Phase 16**: JSON-driven animation system
-- 鉁?**Phase 17**: Antenna sync animation + v1.0.0 idle antenna behavior refinements
-- 鉁?**Phase 21**: Continuous conversation switch
-- 鉁?**Phase 22**: Gesture detection
-- 鉁?**Phase 23**: Face detection sensor
-- 鉁?**Phase 24**: System diagnostics entities
+Implemented core capabilities:
 
-### Partial 棣冪厸
-- 棣冪厸 **Phase 20**: Environment awareness (IMU entities done, triggers pending)
+- ESPHome voice assistant integration
+- Local wake word detection
+- Stop word interruption
+- TTS playback
+- Continuous conversation toggle
+- Reachy Mini motion feedback
+- Camera streaming and snapshots
+- Face tracking
+- Gesture detection
+- Sendspin integration
+- Runtime diagnostics and Home Assistant controls
 
-### Not Implemented 閴?- 閴?Zero-config scene orchestration layer beyond current runtime behavior
+Important current constraints:
 
----
+- STT, TTS voice generation, and intent handling stay on the Home Assistant side
+- Optional features must not block or slow down core conversation behavior
+- App-managed sleep/wake lifecycle has been removed because it no longer matches current SDK expectations
+- LEDs are intentionally not part of the supported feature surface
 
-## 棣冩惐 Completion Statistics
+## Implementation Priority Status
 
-| Phase | Status | Completion | Notes |
-|-------|--------|------------|-------|
-| Phase 1-12 | 閴?Complete | 100% | Core ESPHome entities implemented (Phase 11 LED intentionally disabled) |
-| Phase 13 | 閴?Complete | 100% | Sendspin audio playback support |
-| Phase 14 | 閴?Complete | 100% | Manual emotion playback and non-blocking motion feedback |
-| Phase 15 | 閴?Complete | 100% | Face tracking with DOA, YOLO detection, body follows head |
-| Phase 16 | 閴?Complete | 100% | JSON-driven animation system (50Hz control loop) |
-| Phase 17 | 閴?Complete | 100% | Antenna sync animation during speech |
-| Phase 18 | 閴?Complete | 100% | Single-face visual gaze interaction with idle scanning |
-| Phase 19 | Not a current runtime target | - | Historical planning item, not part of the zero-config runtime model |
-| Phase 20 | 馃煛 Partial | 30% | IMU sensors exposed, missing trigger logic |
-| Phase 21 | 鉁?Complete | 100% | Continuous conversation switch implemented |
-| Phase 22 | 鉁?Complete | 100% | Gesture detection with HaGRID ONNX models |
-| Phase 23 | 鉁?Complete | 100% | Face detection sensor exposed |
-| Phase 24 | 鉁?Complete | 100% | System diagnostics entities (9 sensors) |
-| **v0.9.5** | 鉁?Complete | 100% | Modular architecture refactoring |
-| **v1.0.0** | 鉁?Complete | 100% | Runtime toggles/persistence (Sendspin, face, gesture, confidence) + idle and gesture stability updates |
+Phase-by-phase status carried forward in current terminology:
 
-**Overall Completion**: current zero-config runtime path is functionally complete; remaining gaps are optional orchestration ideas rather than missing core runtime features.
+| Phase | Area | Status | Notes |
+|---|---|---|---|
+| 1 | Basic status and volume | Completed | Core runtime switches and volume are exposed |
+| 2 | Runtime state | Completed | `services_suspended` remains; app-managed sleep entities were removed |
+| 3 | Pose control | Completed | Head, body yaw, and antenna controls are exposed |
+| 4 | Gaze control | Completed | `look_at_x/y/z` supported |
+| 5 | DOA integration | Completed | Used for wakeup turn-to-sound and exposed through sensors |
+| 6 | Diagnostic information | Completed | SDK and runtime diagnostics exposed |
+| 7 | IMU sensors | Completed | Exposed where supported by the robot/runtime |
+| 8 | Emotion control | Completed | Manual emotion trigger via select entity |
+| 10 | Camera integration | Completed | Camera entity plus MJPEG runtime |
+| 11 | LED control | Disabled by design | Not part of supported user-facing scope |
+| 13 | Sendspin support | Completed | Optional synchronized playback path |
+| 14 | Emotion and motion feedback | Completed | Manual emotion plus conversation-phase feedback |
+| 15 | Face tracking | Completed | DOA wakeup turn plus face tracking runtime |
+| 16 | Animation system | Completed | JSON-driven animation behavior integrated |
+| 17 | Antenna sync during speech | Completed | Included in current animation/motion runtime |
+| 18 | Visual gaze interaction | Completed | Current single-face-oriented runtime behavior |
+| 19 | Gravity compensation teaching | Not a current runtime target | Historical exploration only |
+| 20 | Environment awareness | Partial | IMU exposure exists; higher-level reactions remain limited |
+| 21 | Continuous conversation | Completed | Runtime switch exposed |
+| 22 | Gesture detection | Completed | Runtime detection and state publishing implemented |
+| 23 | Face detection sensor | Completed | Binary sensor exposed |
+| 24 | System diagnostics | Completed | Diagnostic sensor set exposed |
 
+## Detailed Feature Notes
 
----
+### Emotion And Motion Feedback
 
-## 棣冩暋 Daemon Crash Fix (2025-01-05)
+Current implemented behavior:
 
-### Problem Description
-During long-term operation, `reachy_mini daemon` would crash, causing robot to become unresponsive.
+- Manual emotion playback through the `emotion` select entity
+- Wake, listening, thinking, speaking, idle, and timer-complete state transitions drive local motion changes
+- Conversation-phase reactions are non-blocking and route through the motion system rather than taking over the whole app runtime
+- Home Assistant-triggered event behavior is mapped through the built-in behavior layer
 
-### Root Cause
-1. **50Hz control loop** - Current stable frequency for motion control
-2. **Frequent state queries** - Every entity state read calls `get_status()`, `get_current_head_pose()` etc.
-3. **Missing change detection** - Even when pose hasn't changed, continues sending same commands
-4. **Zenoh message queue blocking** - Accumulated 150+ messages per second, daemon cannot process in time
+Deliberately not active in the current runtime:
 
-### Fix Solution
+- Automatic emotion inference from assistant text output
+- User-configured choreography layers that would break zero-config expectations
 
-#### 1. Control loop frequency (motion/movement_manager.py)
-```python
-# Evolution: 100Hz -> 20Hz -> 10Hz -> 50Hz (current)
-# Current stable frequency for production use
-CONTROL_LOOP_FREQUENCY_HZ = 50  # Current stable frequency
+### Face Tracking
+
+Current model:
+
+- DOA is used once at wakeup to orient toward the speaker
+- Face tracking then provides continuous visual tracking when enabled
+- Body yaw follows head orientation for more natural tracking behavior
+- Adaptive frame pacing is used to balance responsiveness and resource use
+
+Implemented aspects:
+
+- Face detector runtime
+- Face tracking smoothing and interpolation
+- Conversation-aware tracking behavior
+- Face visibility state publishing to Home Assistant
+
+### Animation And Speech Sway
+
+Current animation model:
+
+- Animation definitions are driven from `conversation_animations.json`
+- Motion state transitions use the animation system plus direct motion overlays
+- Speech sway provides small head motion during speech playback
+- Idle behavior can combine rest pose, breathing, antenna behavior, and other built-in patterns
+
+### Gesture Detection
+
+Current gesture behavior:
+
+- ONNX-based hand and gesture models are bundled in the project
+- Detection can be enabled or disabled at runtime
+- Results are published to Home Assistant entities
+- Runtime behavior is state publishing only; gesture-driven robot actions are intentionally not the main path
+
+### Sendspin Audio Playback
+
+Current Sendspin behavior:
+
+- Optional integration for synchronized audio playback
+- Separate from local TTS playback path
+- Automatically paused or ducked around voice assistant activity as needed
+- Uses the current `aiosendspin` integration line and local buffering/backpressure handling
+
+## Historical And Compatibility Notes
+
+Important historical context that still matters:
+
+- The project previously carried more legacy compatibility code and app-managed sleep/wake behavior; current runtime intentionally removed those paths
+- Camera runtime evolved from a single large module into split runtime, processing, and HTTP helper modules
+- Audio runtime evolved from one mixed player path into clearer local speech and Sendspin-capable music paths
+- The document previously contained large box-drawing diagrams and heavily versioned planning sections; those were the main source of encoding corruption and were replaced with plain Markdown structure
+
+## Tests Present
+
+Current test files in `tests/`:
+
+- `test_animation_config.py`
+- `test_camera_gesture_processing.py`
+- `test_command_runtime.py`
+- `test_emotion_detector.py`
+
+Current coverage is focused on animation config, command runtime behavior, gesture/camera processing, and emotion-related logic.
+
+## Dependency Baseline
+
+Current important runtime dependencies:
+
+```toml
+reachy-mini>=1.7.1
+soundfile>=0.13.0
+numpy>=2.2.5,<=2.2.5
+opencv-python>=4.12.0.88
+pymicro-wakeword>=2.0.0,<3.0.0
+pyopen-wakeword>=1.0.0,<2.0.0
+aioesphomeapi>=43.10.1
+zeroconf>=0.131,<1
+websockets>=12,<16
+aiohttp
+scipy>=1.15.3,<2.0.0
+ultralytics
+supervision
+aiosendspin>=5.2,<6.0
+onnxruntime>=1.18.0
+torch==2.5.1
+torchvision==0.20.1
+pillow<12.0
+pydantic<=2.12.5
+requests>=2.33.0
 ```
 
-#### 2. Add pose change detection (movement_manager.py)
-```python
-# Only send commands on significant pose changes
-if self._last_sent_pose is not None:
-    max_diff = max(abs(pose[k] - self._last_sent_pose.get(k, 0.0)) for k in pose.keys())
-    if max_diff < 0.001:  # Threshold: 0.001 rad or 0.001 m
-        return  # Skip sending
-```
+## Current State Notes
 
-#### 3. State query caching (reachy_controller.py)
-```python
-# Cache daemon status query results
-self._cache_ttl = 0.1  # 100ms TTL
-self._last_status_query = 0.0
+Recent project direction reflected by the current codebase:
 
-def _get_cached_status(self):
-    now = time.time()
-    if now - self._last_status_query < self._cache_ttl:
-        return self._state_cache.get('status')  # Use cache
-    # ... query and update cache
-```
+- The app is aligned with current Reachy Mini SDK media behavior
+- Legacy compatibility paths have largely been removed
+- TTS and Sendspin playback paths are separated for clearer runtime behavior
+- Camera streaming is viewer-aware to reduce unnecessary CPU usage
+- Idle-off mode is treated as a low-resource parked runtime rather than a legacy sleep mode
 
-#### 4. Head pose query caching (reachy_controller.py)
-```python
-# Cache get_current_head_pose() and get_current_joint_positions() results
-def _get_cached_head_pose(self):
-    # Reuse cached results within 100ms
-```
+Recent version milestones relevant to the current state:
 
-### Fix Results
+- `1.0.5` removed app-managed sleep/wake integration and aligned with newer SDK behavior
+- `1.0.6` aligned the dependency baseline with newer SDK releases and improved camera snapshot/runtime handling
+- `1.0.7` split local TTS playback from Sendspin-capable music playback and tightened shared audio runtime behavior
+- Current uncommitted direction includes additional Sendspin alignment on the `aiosendspin 5.2` line
 
-| Metric | Before Fix | After Fix | Improvement |
-|--------|------------|-----------|-------------|
-| Control message frequency | ~100 msg/s | ~20 msg/s | 閳?80% |
-| State query frequency | ~50 msg/s | ~5 msg/s | 閳?90% |
-| Total Zenoh messages | ~150 msg/s | ~25 msg/s | 閳?83% |
-| Daemon CPU load | Sustained high load | Normal load | Significantly reduced |
-| Expected stability | Crash within hours | Stable for days | Major improvement |
+## Notes For Future Updates
 
-### Related Files
-- `DAEMON_CRASH_FIX_PLAN.md` - Detailed fix plan and test plan
-- `movement_manager.py` - Control loop optimization
-- `reachy_controller.py` - State query caching
+This document should describe the current implementation, not an idealized roadmap. If a feature is disabled, optional, or runtime-gated, document it that way instead of presenting it as always active.
 
-### Future Optimization Suggestions
-1. 鈴?Dynamic frequency adjustment - 50Hz during motion, 5Hz when idle
-2. 鈴?Batch state queries - Get all states at once
-3. 鈴?Further runtime efficiency tuning after real usage profiling
+## Maintenance Guidance
 
----
+When updating this document:
 
-## 棣冩暋 Daemon Crash Deep Fix (2026-01-07)
-
-> **Update (2026-01-30)**: Current implementation uses 50Hz control loop for stability and performance. The control loop frequency aligns with daemon backend processing capacity. The pose change threshold (0.005) and state cache TTL (2s) optimizations remain in place to reduce unnecessary Zenoh messages.
-
-### Problem Description
-During long-term operation, `reachy_mini daemon` still crashes, previous fix not thorough enough.
-
-### Root Cause Analysis
-
-Through deep analysis of SDK source code:
-
-1. **Each `set_target()` sends 3 Zenoh messages**
-   - `set_target_head_pose()` - 1 message
-   - `set_target_antenna_joint_positions()` - 1 message  
-   - `set_target_body_yaw()` - 1 message
-
-2. **Daemon control loop is 50Hz**
-   - See `reachy_mini/daemon/backend/robot/backend.py`: `control_loop_frequency = 50.0`
-   - If message send frequency exceeds 50Hz, daemon may not process in time
-
-3. **Previous 20Hz control loop still too high**
-   - 20Hz 鑴?3 messages = 60 messages/second
-   - Already exceeds daemon's 50Hz processing capacity
-
-4. **Pose change threshold too small (0.002)**
-   - Breathing animation, speech sway, face tracking continuously produce tiny changes
-   - Almost every loop triggers `set_target()`
-
-### Fix Solution
-
-#### 1. Control loop frequency history (motion/movement_manager.py)
-```python
-# Evolution: 100Hz -> 20Hz -> 10Hz -> 50Hz (current)
-# Current stable frequency for production use
-CONTROL_LOOP_FREQUENCY_HZ = 50  # Current (2026-01-30)
-```
-
-#### 2. Increase pose change threshold (movement_manager.py)
-```python
-# Increased from 0.002 to 0.005
-# 0.005 rad 閳?0.29 degrees, still smooth enough
-self._pose_change_threshold = 0.005
-```
-
-#### 3. Reduce camera/face tracking frequency (camera_server.py)
-```python
-# Reduced from 15fps to 10fps
-fps: int = 10
-```
-
-#### 4. Increase state cache TTL (reachy_controller.py)
-```python
-# Increased from 1 second to 2 seconds
-self._cache_ttl = 2.0
-```
-
-### Fix Results
-
-> **Note**: Current implementation uses 50Hz control loop as of 2026-01-30. The table below shows historical evolution.
-
-| Metric | Before (20Hz) | After (10Hz) | Current (50Hz) |
-|--------|---------------|--------------|-----------------|
-| Control loop frequency | 20 Hz | 10 Hz | 50 Hz (current) |
-| Max Zenoh messages | 60 msg/s | 30 msg/s | ~50 msg/s (optimized) |
-| Actual messages (with change detection) | ~40 msg/s | ~15 msg/s | ~30 msg/s |
-| Face tracking frequency | 15 Hz | 10 Hz | Adaptive (2-15 Hz) |
-| State cache TTL | 1 second | 2 seconds | 2 seconds |
-| Expected stability | Crash within hours | Stable operation | Stable (daemon updated) |
-
-### Key Finding
-
-Current implementation uses 50Hz control loop for stability and performance. The control loop frequency aligns with daemon backend processing capacity.
-
-### Related Files
-- `motion/movement_manager.py` - Control loop frequency and pose threshold
-- `vision/camera_server.py` - Face tracking frequency
-- `reachy_controller.py` - State cache TTL
-
-
----
-
-## 棣冩暋 Microphone Sensitivity Optimization (2026-01-07)
-
-> Historical background only. These notes describe earlier low-level microphone tuning experiments and should not be read as current Home Assistant entity capabilities.
-
-### Problem
-Low microphone sensitivity - Need to be very close for voice recognition.
-
-### Solution
-Comprehensive ReSpeaker XVF3800 microphone optimization:
-
-| Parameter | Default | Optimized | Notes |
-|-----------|---------|-----------|-------|
-| AGC | Off | On | Auto volume normalization |
-| AGC max gain | ~15dB | 30dB | Better distant speech pickup |
-| AGC target level | -25dB | -18dB | Stronger output signal |
-| Microphone gain | 1.0x | 2.0x | Base gain doubled |
-| Noise suppression | ~0.5 | 0.15 | Reduced speech mis-suppression |
-
-### Result
-Microphone sensitivity improved from ~30cm to ~2-3m effective range.
-
----
-
-## 棣冩暋 v0.5.1 Bug Fixes (2026-01-08)
-
-### Issue 1: Music Not Resuming After Voice Conversation
-
-**Fix**: Sendspin now connects to `music_player` instead of `tts_player`
-
-### Issue 2: Audio Conflict During Voice Assistant Wakeup
-
-**Fix**: Added `pause_sendspin()` and `resume_sendspin()` methods to `audio/audio_player.py`
-
-### Issue 3: Sendspin Sample Rate Optimization
-
-**Fix**: Prioritize 16kHz in Sendspin supported formats (hardware limitation)
-
----
-
-## 棣冩暋 v0.5.15 Updates (2026-01-11)
-
-### Feature 1: Audio Settings Persistence
-
-Historical note: older audio processing preferences were once persisted here. The current app no longer exposes AGC or noise suppression entities.
-
-### Feature 2: Sendspin Discovery Refactoring
-
-Moved mDNS discovery to `zeroconf.py` for better separation of concerns.
-
-
----
-
-### SDK Data Structure Reference
-
-```python
-# Motor control mode
-class MotorControlMode(str, Enum):
-    Enabled = "enabled"              # Torque on, position control
-    Disabled = "disabled"            # Torque off
-    GravityCompensation = "gravity_compensation"  # Gravity compensation mode
-
-# Daemon state
-class DaemonState(Enum):
-    NOT_INITIALIZED = "not_initialized"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    ERROR = "error"
-
-# Full state
-class FullState:
-    control_mode: MotorControlMode
-    head_pose: XYZRPYPose  # x, y, z (m), roll, pitch, yaw (rad)
-    head_joints: list[float]  # 7 joint angles
-    body_yaw: float
-    antennas_position: list[float]  # [right, left]
-    doa: DoAInfo  # angle (rad), speech_detected (bool)
-
-# IMU data (wireless version only)
-imu_data = {
-    "accelerometer": [x, y, z],  # m/s铏?
-    "gyroscope": [x, y, z],      # rad/s
-    "quaternion": [w, x, y, z],  # Attitude quaternion
-    "temperature": float         # 鎺矯
-}
-
-# Safety limits
-HEAD_PITCH_ROLL_LIMIT = [-40鎺? +40鎺砞
-HEAD_YAW_LIMIT = [-180鎺? +180鎺砞
-BODY_YAW_LIMIT = [-160鎺? +160鎺砞
-YAW_DELTA_MAX = 65鎺? # Max difference between head and body yaw
-```
-
-### ESPHome Protocol Implementation Notes
-
-ESPHome protocol communicates with Home Assistant via protobuf messages. The runtime primarily uses switch/number/select/sensor/binary_sensor/text_sensor/camera entities; button-only wake/sleep flows are historical and no longer the main control model.
-
-```python
-from aioesphomeapi.api_pb2 import (
-    # Number entity (volume/angle/confidence control)
-    ListEntitiesNumberResponse,
-    NumberStateResponse,
-    NumberCommandRequest,
-
-    # Select entity (emotion)
-    ListEntitiesSelectResponse,
-    SelectStateResponse,
-    SelectCommandRequest,
-
-    # Switch entity (sleep/runtime toggles)
-    ListEntitiesSwitchResponse,
-    SwitchStateResponse,
-    SwitchCommandRequest,
-
-    # Sensor entity (numeric sensors)
-    ListEntitiesSensorResponse,
-    SensorStateResponse,
-
-    # Binary Sensor entity (boolean sensors)
-    ListEntitiesBinarySensorResponse,
-    BinarySensorStateResponse,
-
-    # Text Sensor entity (text sensors)
-    ListEntitiesTextSensorResponse,
-    TextSensorStateResponse,
-)
-```
-
-## Reference Projects
-
-- [OHF-Voice/linux-voice-assistant](https://github.com/OHF-Voice/linux-voice-assistant)
-- [pollen-robotics/reachy_mini](https://github.com/pollen-robotics/reachy_mini)
-- [reachy_mini_conversation_app](https://github.com/pollen-robotics/reachy_mini_conversation_app)
-- [sendspin-cli](https://github.com/Sendspin/sendspin-cli)
-- [home-assistant-voice](https://github.com/esphome/home-assistant-voice-pe/blob/dev/home-assistant-voice.yaml)
-
----
-
-## 棣冩暋 Code Refactoring & Improvement Plan (v0.9.5)
-
-> Comprehensive improvement plan based on code analysis
-> Target Platform: Raspberry Pi CM4 (4GB RAM, 4-core CPU)
-
-### Code Size Statistics (Updated 2026-01-19)
-
-| File | Original | Current | Status |
-|------|----------|---------|--------|
-| `movement_manager.py` | 1205 | 1260 | 閳跨媴绗?Modularized but still large |
-| `voice_assistant.py` | 1097 | 1270 | 閴?Enhanced with new features |
-| `satellite.py` | 1003 | 1022 | 閴?Optimized (-2%) |
-| `camera_server.py` | 1070 | 1009 | 閴?Optimized (-6%) |
-| `reachy_controller.py` | 878 | 961 | 閴?Enhanced |
-| `entity_registry.py` | 1129 | 844 | 閴?Optimized (-25%) |
-| `audio_player.py` | 599 | 679 | 閴?Acceptable |
-| `core/service_base.py` | - | 552 | 棣冨晭 New module |
-| `entities/entity_factory.py` | - | 440 | 棣冨晭 New module |
-
-> **Optimization Notes**:
-> - `entity_registry.py`: Factory pattern refactoring reduced 285 lines
-> - `camera_server.py`: Using `FaceTrackingInterpolator` module reduced 61 lines
-> - `protocol/satellite.py`: Runtime paths are now centered on voice state handling and HA event reactions
-> - New modular architecture with 6 sub-packages: `core/`, `motion/`, `vision/`, `audio/`, `entities/`, `protocol/`
-
-### New Module List (Updated 2026-01-19)
-
-| Directory | Module | Lines | Description |
-|-----------|--------|-------|-------------|
-| `core/` | `config.py` | 454 | Centralized nested configuration |
-| `core/` | `service_base.py` | 552 | Suspend/resume service helpers + RobustOperationMixin |
-| `core/` | `system_diagnostics.py` | 250 | System diagnostics |
-| `core/` | `exceptions.py` | 68 | Custom exception classes |
-| `core/` | `util.py` | 28 | Utility functions |
-| `motion/` | `antenna.py` | - | Antenna freeze/unfreeze control |
-| `motion/` | `pose_composer.py` | - | Pose composition utilities |
-| `motion/` | `command_runtime.py` | - | Command queue handling / state transitions |
-| `motion/` | `control_runtime.py` | - | Control-loop runtime helpers |
-| `motion/` | `idle_runtime.py` | - | Idle behavior / idle rest handling |
-| `motion/` | `state_machine.py` | - | State machine definitions |
-| `motion/` | `smoothing.py` | - | Smoothing/transition algorithms |
-| `motion/` | `animation_player.py` | - | Animation player |
-| `motion/` | `emotion_moves.py` | - | Emotion moves |
-| `motion/` | `speech_sway.py` | 338 | Speech-driven head micro-movements |
-| `motion/` | `reachy_motion.py` | - | Reachy motion API |
-| `vision/` | `frame_processor.py` | 227 | Adaptive frame rate management |
-| `vision/` | `face_tracking_interpolator.py` | 253 | Face lost interpolation |
-| `vision/` | `gesture_smoother.py` | 80 | Historical gesture smoothing module; current runtime no longer depends on it |
-| `vision/` | `gesture_detector.py` | 285 | HaGRID gesture detection |
-| `vision/` | `head_tracker.py` | 367 | YOLO face detector |
-| `vision/` | `camera_server.py` | 1009 | MJPEG camera stream server facade |
-| `audio/` | `doa_tracker.py` | 206 | Direction of Arrival tracking |
-| `audio/` | `microphone.py` | 219 | Hardware audio helper / legacy tuning code |
-| `audio/` | `audio_player.py` | facade | AudioPlayer facade (split into playback/sendspin/local streaming modules) |
-| `entities/` | `entity.py` | 402 | ESPHome base entity |
-| `entities/` | `entity_factory.py` | 440 | Entity factory pattern |
-| `entities/` | `entity_keys.py` | 155 | Entity key constants |
-| `entities/` | `entity_extensions.py` | 258 | Extended entity types |
-| `entities/` | `event_emotion_mapper.py` | 351 | HA event to emotion mapping |
-| `protocol/` | `satellite.py` | 1022 | ESPHome protocol handler |
-| `protocol/` | `api_server.py` | 172 | HTTP API server |
-| `protocol/` | `zeroconf.py` | - | mDNS discovery |
-
-### Improvement Plan Status
-
-#### Phase 1: Runtime Suspend/Resume Foundation 鉁?Complete
-
-- [x] Create `core/service_base.py` - runtime suspend/resume service helpers
-- [x] All required services implement `suspend()` / `resume()` methods where needed
-- [x] Historical app-managed sleep/wake flow was later removed to align with the current SDK
-
-#### Phase 2: Code Modularization 閴?Complete
-
-- [x] Create new directory structure (`core/`, `motion/`, `audio/`, `vision/`, `entities/`)
-- [x] Extract from `movement_manager.py` 閳?`motion/antenna.py`, `motion/pose_composer.py`
-- [x] Extract from `camera_server.py` 閳?`vision/frame_processor.py`, `vision/face_tracking_interpolator.py`
-- [x] Extract from `entity_registry.py` 閳?`entities/entity_factory.py`, `entities/entity_keys.py`
-- [x] Create `core/config.py` for centralized configuration
-- [x] Ensure no circular dependencies
-
-#### Phase 3: Stability & Performance 閴?Complete
-
-- [x] Create `core/exceptions.py` - Custom exception classes
-- [x] Implement `RobustOperationMixin` - Unified error handling
-- [x] `CameraServer` implements Context Manager pattern
-- [x] Improve `CameraServer` resource cleanup
-- [x] Fix MJPEG client tracking (proper register/unregister)
-- [x] Historical health/memory monitor modules were added during earlier SDK instability periods
-- [x] Health/memory monitor modules were later removed after runtime simplification
-- [ ] Long-running stability test (24h+)
-
-#### Phase 4: Feature Enhancements 閴?Complete
-
-- [x] Historical gesture-action runtime path explored
-- [x] Gesture runtime later simplified to publish recognition results only
-- [x] Create `audio/doa_tracker.py` - DOATracker
-- [x] Implement sound source tracking with motion control integration
-- [x] Create `entities/event_emotion_mapper.py` - EventEmotionMapper
-- [x] Fold HA event behavior config into `animations/conversation_animations.json`
-- [x] Add DOA tracking toggle HA entity
-
-### SDK Compatibility Verification 閴?Passed
-
-| API Call | Status | Notes |
-|----------|--------|-------|
-| `set_target(head, antennas, body_yaw)` | 閴?| Correct usage |
-| `goto_target()` | 閴?| Correct usage |
-| `look_at_image(u: int, v: int)` | 閴?| Fixed float閳姕nt |
-| `create_head_pose(degrees=False)` | 閴?| Using radians |
-| `compose_world_offset()` | 閴?| SDK function correctly called |
-| `linear_pose_interpolation()` | 閴?| Has fallback implementation |
-| Body yaw range | 閴?| Clamped to 鍗?60鎺?|
-
----
-
-## 棣冩暋 v0.9.5 Updates (2026-01-19)
-
-### Major Changes: Modular Architecture Refactoring
-
-The codebase has been restructured into a modular architecture with 5 sub-packages:
-
-| Package | Purpose | Key Modules |
-|---------|---------|-------------|
-| `core/` | Core infrastructure | `config.py`, `service_base.py`, `system_diagnostics.py` |
-| `motion/` | Motion control | `antenna.py`, `pose_composer.py`, `command_runtime.py`, `control_runtime.py`, `idle_runtime.py`, `smoothing.py` |
-| `vision/` | Vision processing | `frame_processor.py`, `face_tracking_interpolator.py` |
-| `audio/` | Audio processing | `microphone.py`, `doa_tracker.py` |
-| `entities/` | HA entity management | `entity_factory.py`, `entity_keys.py`, `event_emotion_mapper.py` |
-
-### New Features
-
-1. **Historical note**
-   - Earlier versions explored direct sleep/wake callbacks and polling-based state handling
-   - Current runtime no longer uses app-managed sleep/wake callbacks
-
-2. **Camera runtime evolution**
-   - Camera lifecycle was later split into dedicated runtime/processing/http helpers
-   - Current runtime can fully stop camera service when `Idle Behavior` is disabled
-
-### Audio Optimizations
-
-| Parameter | Before | After | Improvement |
-|-----------|--------|-------|-------------|
-| Audio chunk size | 1024 samples | 512 samples | 64ms 鈫?32ms latency with lower CPU load |
-| Audio loop delay | 10ms | 1ms | Faster VAD response |
-| Stereo閳墷ono | Mean of channels | First channel | Cleaner signal |
-
-### Code Quality Improvements
-
-- Removed all legacy/compatibility code
-- Centralized configuration in nested dataclasses
-- NaN/Inf cleaning in audio pipeline
-- Rotation clamping in face tracking to prevent IK collisions
+1. Prefer current code structure over historical descriptions
+2. Remove outdated version snapshots rather than stacking them
+3. Avoid box-drawing diagrams that are likely to suffer encoding corruption
+4. Keep dependency versions aligned with `pyproject.toml`
+5. Keep feature statements aligned with current runtime defaults, not planned behavior

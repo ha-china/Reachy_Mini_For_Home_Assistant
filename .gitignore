@@ -68,10 +68,7 @@ htmlcov/
 # models/ - ignore external models directory
 models/
 # Package bundled models
-!reachy_mini_ha_voice/models/
-reachy_mini_ha_voice/models/*.tflite
-reachy_mini_ha_voice/models/*.onnx
-reachy_mini_ha_voice/models/*.pt
+!reachy_mini_home_assistant/models/
 
 # SDK Reference (local development only)
 reference/
