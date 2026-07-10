@@ -158,12 +158,7 @@ class AudioPlayerSendspinMixin:
         if self.reachy_mini is None:
             return
         try:
-            audio = getattr(self.reachy_mini.media, "audio", None)
-            if audio is not None:
-                if hasattr(audio, "clear_player"):
-                    audio.clear_player()
-                elif hasattr(audio, "clear_output_buffer"):
-                    audio.clear_output_buffer()
+            self.reachy_mini.media.audio.clear_player()
         except Exception:
             _LOGGER.debug("Failed to clear output buffer", exc_info=True)
         if self._sendspin_playback_started:
