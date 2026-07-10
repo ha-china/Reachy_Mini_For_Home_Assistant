@@ -1024,12 +1024,13 @@ class MovementManager:
     def _reset_to_neutral_blocking(self) -> None:
         """Reset robot to neutral position (blocking)."""
         try:
-            neutral_pose = np.eye(4)
+            from reachy_mini.reachy_mini import INIT_HEAD_POSE, INIT_ANTENNAS_JOINT_POSITIONS
+
             self.robot.goto_target(
-                head=neutral_pose,
-                antennas=[0.0, 0.0],
+                head=INIT_HEAD_POSE,
+                antennas=INIT_ANTENNAS_JOINT_POSITIONS,
                 body_yaw=0.0,
-                duration=0.3,  # Faster reset
+                duration=0.3,
             )
             logger.info("Robot reset to neutral position")
         except Exception as e:
