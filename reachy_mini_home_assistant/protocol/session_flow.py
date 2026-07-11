@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 from aioesphomeapi.api_pb2 import VoiceAssistantAnnounceFinished, VoiceAssistantRequest  # type: ignore[attr-defined]
 
+from ..core.config import Config
+
 if TYPE_CHECKING:
     from .satellite import VoiceSatelliteProtocol
 
@@ -75,17 +77,45 @@ def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
         logger.debug(
             "Continuing conversation (our_switch=%s, ha_request=%s)", continuous_mode, protocol._continue_conversation
         )
-        conv_id = get_or_create_conversation_id(protocol)
-        queue_voice_request_after_wakeup(protocol, conversation_id=conv_id)
+        protocol._continue_conversation = False
+        # Keep the pipeline active during the settle delay so the mic stays closed
+        # and does not capture the tail end of the TTS audio from the speaker.
         protocol._pipeline_active = True
-        protocol._reachy_on_listening()
-        play_wakeup_sound(protocol)
+        settle_delay = Config.voice.continue_conversation_settle_delay
+        logger.debug("Continuing conversation after %.2fs settle delay", settle_delay)
+        cancel_delayed_continue_conversation(protocol)
+        protocol._continue_conversation_timer = threading.Timer(settle_delay, _start_continued_conversation, args=[protocol])
+        protocol._continue_conversation_timer.daemon = True
+        protocol._continue_conversation_timer.start()
     else:
+        protocol._continue_conversation = False
         clear_conversation(protocol)
         protocol.unduck()
         protocol._is_streaming_audio = False
         logger.debug("Conversation finished")
         protocol._schedule_delayed_idle_return()
+
+
+def _start_continued_conversation(protocol: "VoiceSatelliteProtocol") -> None:
+    """Resume listening after the settle delay elapses."""
+    protocol._continue_conversation_timer = None
+    if protocol.state.is_muted:
+        logger.debug("Skipping continued conversation: muted")
+        protocol._pipeline_active = False
+        protocol.unduck()
+        return
+    conv_id = get_or_create_conversation_id(protocol)
+    queue_voice_request_after_wakeup(protocol, conversation_id=conv_id)
+    protocol._reachy_on_listening()
+    play_wakeup_sound(protocol)
+    logger.debug("Continued conversation started")
+
+
+def cancel_delayed_continue_conversation(protocol: "VoiceSatelliteProtocol") -> None:
+    """Cancel a pending continued-conversation timer if one is active."""
+    if protocol._continue_conversation_timer is not None:
+        protocol._continue_conversation_timer.cancel()
+        protocol._continue_conversation_timer = None
 
 
 def cancel_delayed_idle_return(protocol: "VoiceSatelliteProtocol") -> None:

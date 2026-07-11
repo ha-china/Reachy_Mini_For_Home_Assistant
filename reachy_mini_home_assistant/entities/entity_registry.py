@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 
 from ..models import Preferences
 from .entity import BinarySensorEntity, NumberEntity, TextSensorEntity
-from .entity_extensions import SwitchEntity
+from .entity_extensions import SensorEntity, SwitchEntity
 from .entity_keys import get_entity_key
 from .runtime_entity_setup import (
     setup_behavior_entities,
@@ -65,6 +65,9 @@ class EntityRegistry:
         self._gesture_confidence_entity: SensorEntity | None = None
         self._face_tracking_switch_entity: SwitchEntity | None = None
         self._gesture_detection_switch_entity: SwitchEntity | None = None
+        self._media_title_entity: TextSensorEntity | None = None
+        self._media_artist_entity: TextSensorEntity | None = None
+        self._media_album_entity: TextSensorEntity | None = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -364,6 +367,7 @@ class EntityRegistry:
         self._setup_phase22_entities(entities)
         self._setup_phase23_entities(entities)
         self._setup_phase24_entities(entities)  # System diagnostics
+        self._setup_phase27_entities(entities)  # Sendspin media metadata
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -447,3 +451,61 @@ class EntityRegistry:
 
     def _setup_phase24_entities(self, entities: list) -> None:
         setup_diagnostic_entities(self, entities)
+
+    def _setup_phase27_entities(self, entities: list) -> None:
+        """Setup Phase 27 entities: Sendspin media metadata."""
+        music_player = self.server.state.music_player
+        if music_player is None:
+            return
+
+        def get_title() -> str:
+            val = music_player.sendspin_metadata_title
+            return val if val is not None else ""
+
+        def get_artist() -> str:
+            val = music_player.sendspin_metadata_artist
+            return val if val is not None else ""
+
+        def get_album() -> str:
+            val = music_player.sendspin_metadata_album
+            return val if val is not None else ""
+
+        self._media_title_entity = TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("media_title"),
+            name="Media Title",
+            object_id="media_title",
+            icon="mdi:music",
+            value_getter=get_title,
+        )
+        entities.append(self._media_title_entity)
+
+        self._media_artist_entity = TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("media_artist"),
+            name="Media Artist",
+            object_id="media_artist",
+            icon="mdi:account-music",
+            value_getter=get_artist,
+        )
+        entities.append(self._media_artist_entity)
+
+        self._media_album_entity = TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("media_album"),
+            name="Media Album",
+            object_id="media_album",
+            icon="mdi:album",
+            value_getter=get_album,
+        )
+        entities.append(self._media_album_entity)
+
+        music_player._sendspin_metadata_callback = self._on_sendspin_metadata_updated
+
+    def _on_sendspin_metadata_updated(self) -> None:
+        if self._media_title_entity is not None:
+            self._media_title_entity.update_state()
+        if self._media_artist_entity is not None:
+            self._media_artist_entity.update_state()
+        if self._media_album_entity is not None:
+            self._media_album_entity.update_state()

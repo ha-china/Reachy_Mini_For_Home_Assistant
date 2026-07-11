@@ -7,13 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **NameError** - Add missing deque import in gesture smoother
-- **Syntax Error** - Add missing class indentation for volume methods in audio_player.py
-- **Audio Card Name Detection** - Use SDK's detection logic instead of hardcoded values
-- **SDK Port 8000 Blocking** - Use amixer directly for volume control to avoid SDK HTTP API blocking
-- **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
-- **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
+## [1.0.8] - 2026-07-11
+
+### Added
+- **Sendspin Metadata Sensors** — Expose `media_title`, `media_artist`, `media_album` as Home Assistant text sensor entities with real-time push updates
+- **Sendspin DeviceInfo** — Include `mac_address` and `software_version` in client hello message
+
+### Changed
+- **Continue-Conversation Settle Delay** — Add configurable delay (default 0.5s) before opening microphone after TTS finishes, preventing TTS tail capture in continuous conversation mode
+- **Client Access Isolation** — Extract `_get_daemon_status()` helper in `voice_assistant.py` to encapsulate `reachy.client` access, matching `ReachyController._get_cached_status()` pattern
 
 ## [1.0.7] - 2026-05-05
 

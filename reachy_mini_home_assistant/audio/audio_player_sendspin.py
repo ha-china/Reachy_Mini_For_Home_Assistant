@@ -17,14 +17,17 @@ from .audio_player_shared import (
 )
 
 if TYPE_CHECKING:
-    from aiosendspin.models.core import StreamStartMessage
+    from aiosendspin.models.core import ServerStatePayload, StreamStartMessage
 
 try:
     from aiosendspin.client import SendspinClient
     from aiosendspin.client.client import AudioFormat, PCMFormat
     from aiosendspin.models.core import DeviceInfo
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
-    from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles
+    from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles, UndefinedField
+
+    from .. import __version__
+    from ..core.util import get_mac
 
     SENDSPIN_AVAILABLE = True
 except Exception as e:
@@ -276,10 +279,12 @@ class AudioPlayerSendspinMixin:
         return SendspinClient(
             client_id=self._sendspin_client_id,
             client_name="Reachy Mini",
-            roles=[Roles.PLAYER],
+            roles=[Roles.PLAYER, Roles.METADATA],
             device_info=DeviceInfo(
                 product_name="Reachy Mini",
                 manufacturer="Pollen Robotics",
+                mac_address=get_mac(),
+                software_version=__version__,
             ),
             player_support=player_support,
             initial_volume=max(0, min(100, round(self._unduck_volume * 100.0))),
@@ -322,6 +327,10 @@ class AudioPlayerSendspinMixin:
             if _is_current():
                 self._on_sendspin_server_command(client, payload)
 
+        def _handle_metadata(payload: ServerStatePayload) -> None:
+            if _is_current():
+                self._on_sendspin_metadata(payload)
+
         self._sendspin_unsubscribers = [
             client.add_audio_chunk_listener(_handle_audio_chunk),
             client.add_stream_start_listener(_handle_stream_start),
@@ -329,6 +338,7 @@ class AudioPlayerSendspinMixin:
             client.add_stream_clear_listener(_handle_stream_clear),
             client.add_disconnect_listener(_handle_disconnect),
             client.add_server_command_listener(_handle_server_command),
+            client.add_metadata_listener(_handle_metadata),
         ]
 
     def _activate_sendspin_client(self, client: SendspinClient, *, server_url: str | None) -> None:
@@ -464,6 +474,47 @@ class AudioPlayerSendspinMixin:
             _LOGGER.info("Sendspin connected as PLAYER: %s (client_id=%s)", server_url, self._sendspin_client_id)
             return True
 
+    @property
+    def sendspin_metadata_title(self) -> str | None:
+        return self._sendspin_metadata_title
+
+    @property
+    def sendspin_metadata_artist(self) -> str | None:
+        return self._sendspin_metadata_artist
+
+    @property
+    def sendspin_metadata_album(self) -> str | None:
+        return self._sendspin_metadata_album
+
+    def _on_sendspin_metadata(self, payload: ServerStatePayload) -> None:
+        m = payload.metadata
+        if m is None:
+            return
+        changed = False
+        if m.title not in (None, UndefinedField):
+            self._sendspin_metadata_title = m.title
+            changed = True
+        elif m.title is None:
+            self._sendspin_metadata_title = None
+            changed = True
+        if m.artist not in (None, UndefinedField):
+            self._sendspin_metadata_artist = m.artist
+            changed = True
+        elif m.artist is None:
+            self._sendspin_metadata_artist = None
+            changed = True
+        if m.album not in (None, UndefinedField):
+            self._sendspin_metadata_album = m.album
+            changed = True
+        elif m.album is None:
+            self._sendspin_metadata_album = None
+            changed = True
+        if changed and self._sendspin_metadata_callback:
+            try:
+                self._sendspin_metadata_callback()
+            except Exception:
+                _LOGGER.exception("Error in sendspin metadata callback")
+
     def _on_sendspin_audio_chunk(
         self, client: SendspinClient, server_timestamp_us: int, audio_data: bytes, fmt: AudioFormat
     ) -> None:
@@ -505,6 +556,14 @@ class AudioPlayerSendspinMixin:
         if roles is None or "player" in roles:
             self._sendspin_stream_active = False
             self._reset_sendspin_stream_state(stop_output=True)
+            self._sendspin_metadata_title = None
+            self._sendspin_metadata_artist = None
+            self._sendspin_metadata_album = None
+            if self._sendspin_metadata_callback:
+                try:
+                    self._sendspin_metadata_callback()
+                except Exception:
+                    _LOGGER.exception("Error in sendspin metadata callback")
             _LOGGER.debug("Sendspin stream ended")
 
     def _on_sendspin_stream_clear(self, client: SendspinClient, roles: list[str] | None) -> None:

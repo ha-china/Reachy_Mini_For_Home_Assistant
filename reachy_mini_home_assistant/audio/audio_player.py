@@ -57,6 +57,12 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._last_sendspin_overflow_log = 0.0
         self._http_host_override: str | None = None
 
+        # Sendspin metadata
+        self._sendspin_metadata_title: str | None = None
+        self._sendspin_metadata_artist: str | None = None
+        self._sendspin_metadata_album: str | None = None
+        self._sendspin_metadata_callback: Callable[[], None] | None = None
+
     def set_reachy_mini(self, reachy_mini) -> None:
         self.reachy_mini = reachy_mini
 

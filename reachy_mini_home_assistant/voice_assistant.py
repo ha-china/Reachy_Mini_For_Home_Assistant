@@ -16,7 +16,7 @@ from collections import deque
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from queue import Queue
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import requests
@@ -192,7 +192,7 @@ class VoiceAssistantService:
         # Start Reachy Mini media system
         try:
             media = self.reachy_mini.media
-            daemon_status = self.reachy_mini.client.get_status()
+            daemon_status = self._get_daemon_status()
 
             if getattr(self.reachy_mini, "media_released", False):
                 raise RuntimeError("Reachy Mini media has been released externally; this app requires SDK-owned media")
@@ -389,6 +389,13 @@ class VoiceAssistantService:
             return
 
         await self._stop_camera_server_if_running(reason=reason)
+
+    def _get_daemon_status(self) -> Any:
+        """Return the current daemon status, or None if unavailable."""
+        try:
+            return self.reachy_mini.client.get_status()
+        except Exception:
+            return None
 
     def _probe_audio_capture_ready(self, media, timeout_s: float = 1.5) -> bool:
         """Check whether microphone samples become available shortly after startup."""

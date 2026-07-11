@@ -85,6 +85,10 @@ ENTITY_KEYS: dict[str, int] = {
     "services_suspended": 1901,
     # Phase 26: DOA tracking control (2000+)
     "doa_tracking_enabled": 2000,
+    # Phase 27: Media metadata (2100-2199)
+    "media_title": 2100,
+    "media_artist": 2101,
+    "media_album": 2102,
 }
 
 

@@ -47,6 +47,7 @@ from .motion_bridge import (
     turn_to_sound_source,
 )
 from .session_flow import (
+    cancel_delayed_continue_conversation,
     cancel_delayed_idle_return,
     clear_conversation,
     get_or_create_conversation_id,
@@ -113,6 +114,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Track Home Assistant entity states for change detection
         self._ha_entity_states: dict[str, str] = {}
         self._idle_return_timer: threading.Timer | None = None
+        self._continue_conversation_timer: threading.Timer | None = None
         self._pipeline_active = False
 
         # Initialize Reachy controller
@@ -342,6 +344,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _cancel_delayed_idle_return(self) -> None:
         cancel_delayed_idle_return(self)
+        cancel_delayed_continue_conversation(self)
 
     def _schedule_delayed_idle_return(self) -> None:
         schedule_delayed_idle_return(self, IDLE_RETURN_DELAY_S)

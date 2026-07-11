@@ -1,4 +1,15 @@
 [  {
+    "version": "1.0.8",
+    "date": "2026-07-11",
+    "changes": [
+      "Build: Bump package version to 1.0.8",
+      "New: Add Sendspin metadata sensors (media_title, media_artist, media_album) with real-time push to Home Assistant",
+      "New: Include mac_address and software_version in Sendspin DeviceInfo hello message",
+      "Change: Add configurable continue-conversation settle delay (default 0.5s) to prevent TTS tail capture",
+      "Change: Isolate reachy.client access into _get_daemon_status() helper in voice_assistant.py"
+    ]
+  },
+  {
     "version": "1.0.7",
     "date": "2026-05-05",
     "changes": [
