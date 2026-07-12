@@ -387,6 +387,12 @@ class VoiceSatelliteProtocol(APIServer):
         self._timer_ring_start = None
         self._set_stop_word_active(False)
 
+        # Stop any active playback so audio doesn't leak after HA disconnects
+        if self.state.music_player:
+            self.state.music_player.stop()
+        if self.state.tts_player:
+            self.state.tts_player.stop()
+
         run_ha_disconnected_callback(self)
 
     def _download_external_wake_word(

@@ -66,6 +66,9 @@ ENTITY_KEYS: dict[str, int] = {
     "camera": 1001,
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
+    "thinking_sound_enabled": 1501,
+    "wake_word_sensitivity": 1502,
+    "stop_word_sensitivity": 1503,
     # Phase 22: Gesture detection (1600-1699)
     "gesture_detected": 1600,
     "gesture_confidence": 1601,

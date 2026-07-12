@@ -49,6 +49,11 @@ def initialize_entities(protocol: "VoiceSatelliteProtocol") -> None:
                     music_player=protocol.state.music_player,
                     announce_player=protocol.state.tts_player,
                 )
+                # Restore persisted volume from preferences
+                saved_volume = protocol.state.preferences.media_volume
+                protocol.state.media_player_entity.volume = saved_volume
+                protocol.state.music_player.set_volume(int(saved_volume * 100))
+                protocol.state.tts_player.set_volume(int(saved_volume * 100))
                 protocol.state.entities.append(protocol.state.media_player_entity)
                 _LOGGER.info("MediaPlayerEntity created")
 

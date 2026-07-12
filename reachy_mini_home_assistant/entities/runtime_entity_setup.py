@@ -210,6 +210,65 @@ def setup_behavior_entities(registry: "EntityRegistry", entities: list) -> None:
             value_setter=lambda enabled: registry._set_pref_bool("continuous_conversation", enabled),
         )
     )
+
+    entities.append(
+        SwitchEntity(
+            server=registry.server,
+            key=get_entity_key("thinking_sound_enabled"),
+            name="Thinking Sound",
+            object_id="thinking_sound_enabled",
+            icon="mdi:brain",
+            entity_category=1,
+            value_getter=lambda: registry._get_pref_bool("thinking_sound_enabled"),
+            value_setter=lambda enabled: registry._set_pref_bool("thinking_sound_enabled", enabled),
+        )
+    )
+
+    def get_wake_word_sensitivity() -> float:
+        return float(registry._get_pref_float("wake_word_sensitivity", 0.7))
+
+    def set_wake_word_sensitivity(value: float) -> None:
+        registry._set_pref_float("wake_word_sensitivity", max(0.0, min(1.0, value)))
+
+    entities.append(
+        NumberEntity(
+            server=registry.server,
+            key=get_entity_key("wake_word_sensitivity"),
+            name="Wake Word Sensitivity",
+            object_id="wake_word_sensitivity",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.05,
+            icon="mdi:account-voice",
+            mode=2,
+            entity_category=1,
+            value_getter=get_wake_word_sensitivity,
+            value_setter=set_wake_word_sensitivity,
+        )
+    )
+
+    def get_stop_word_sensitivity() -> float:
+        return float(registry._get_pref_float("stop_word_sensitivity", 0.7))
+
+    def set_stop_word_sensitivity(value: float) -> None:
+        registry._set_pref_float("stop_word_sensitivity", max(0.0, min(1.0, value)))
+
+    entities.append(
+        NumberEntity(
+            server=registry.server,
+            key=get_entity_key("stop_word_sensitivity"),
+            name="Stop Word Sensitivity",
+            object_id="stop_word_sensitivity",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.05,
+            icon="mdi:stop-circle",
+            mode=2,
+            entity_category=1,
+            value_getter=get_stop_word_sensitivity,
+            value_setter=set_stop_word_sensitivity,
+        )
+    )
     _LOGGER.debug("Behavior entities registered")
 
 

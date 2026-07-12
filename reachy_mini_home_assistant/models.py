@@ -63,6 +63,13 @@ class Preferences:
     # Vision toggles and parameters (controlled from Home Assistant)
     face_tracking_enabled: bool = False
     gesture_detection_enabled: bool = False
+    # Media volume persistence (0.0-1.0, controlled from Home Assistant)
+    media_volume: float = 1.0
+    # Thinking sound toggle (controlled from Home Assistant)
+    thinking_sound_enabled: bool = False
+    # Wake word / stop word sensitivity (0.0-1.0, controlled from Home Assistant)
+    wake_word_sensitivity: float = 0.7
+    stop_word_sensitivity: float = 0.7
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Update the unified idle behavior toggle."""

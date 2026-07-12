@@ -130,11 +130,20 @@ class MediaPlayerEntity(ESPHomeEntity):
                 elif msg.command == MediaPlayerCommand.STOP:
                     self.music_player.stop()
                     yield self._update_state(MediaPlayerState.IDLE)
+                elif msg.command == MediaPlayerCommand.MUTE:
+                    self.muted = True
+                    self.music_player.set_volume(0)
+                    yield self._update_state(self.state)
+                elif msg.command == MediaPlayerCommand.UNMUTE:
+                    self.muted = False
+                    self.music_player.set_volume(int(self.volume * 100))
+                    yield self._update_state(self.state)
             elif msg.has_volume:
                 volume = int(msg.volume * 100)
                 self.music_player.set_volume(volume)
                 self.announce_player.set_volume(volume)
                 self.volume = msg.volume
+                self._persist_volume(msg.volume)
                 yield self._update_state(self.state)
         elif isinstance(msg, ListEntitiesRequest):
             # Set feature flags for Music Assistant compatibility
@@ -143,6 +152,7 @@ class MediaPlayerEntity(ESPHomeEntity):
                 MediaPlayerEntityFeature.PAUSE
                 | MediaPlayerEntityFeature.PLAY_MEDIA
                 | MediaPlayerEntityFeature.VOLUME_SET
+                | MediaPlayerEntityFeature.VOLUME_MUTE
                 | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
             )
             yield ListEntitiesMediaPlayerResponse(
@@ -158,6 +168,15 @@ class MediaPlayerEntity(ESPHomeEntity):
     def _update_state(self, new_state: MediaPlayerState) -> MediaPlayerStateResponse:
         self.state = new_state
         return self._get_state_message()
+
+    def _persist_volume(self, volume: float) -> None:
+        """Save the current media volume to preferences so it survives restarts."""
+        try:
+            state = self.server.state
+            state.preferences.media_volume = float(volume)
+            state.save_preferences()
+        except Exception:
+            logger.debug("Could not persist media volume", exc_info=True)
 
     def _get_state_message(self) -> MediaPlayerStateResponse:
         return MediaPlayerStateResponse(

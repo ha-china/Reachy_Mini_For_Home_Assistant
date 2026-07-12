@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aioesphomeapi.model import VoiceAssistantEventType, VoiceAssistantTimerEventType
-
-from ..core.util import call_all
 
 if TYPE_CHECKING:
     from aioesphomeapi.api_pb2 import VoiceAssistantTimerEventResponse  # type: ignore[attr-defined]
     from .satellite import VoiceSatelliteProtocol
 
 _LOGGER = logging.getLogger(__name__)
+_THINKING_SOUND = Path(__file__).resolve().parent.parent / "sounds" / "processing.wav"
 
 
 def handle_voice_event(
@@ -36,6 +37,23 @@ def handle_voice_event(
     ):
         protocol._is_streaming_audio = False
         protocol._reachy_on_thinking()
+        # Play optional thinking sound
+        if protocol.state.preferences.thinking_sound_enabled:
+            protocol.state.tts_player.play(str(_THINKING_SOUND))
+        return
+
+    if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_INTENT_START:
+        _LOGGER.debug("Intent processing started")
+        return
+
+    if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_ERROR:
+        _LOGGER.warning("Voice pipeline error: %s", data)
+        protocol._pipeline_active = False
+        protocol._is_streaming_audio = False
+        protocol._tts_played = False
+        protocol._continue_conversation = False
+        protocol.unduck()
+        protocol._reachy_on_idle()
         return
 
     if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_INTENT_PROGRESS:
@@ -149,5 +167,5 @@ def play_timer_finished(protocol: "VoiceSatelliteProtocol") -> None:
 
     protocol.state.tts_player.play(
         protocol.state.timer_finished_sound,
-        done_callback=lambda: call_all(lambda: time.sleep(1.0), protocol._play_timer_finished),
+        done_callback=lambda: threading.Timer(1.0, protocol._play_timer_finished).start(),
     )

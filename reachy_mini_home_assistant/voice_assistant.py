@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """
 Voice Assistant Service for Reachy Mini.
@@ -19,7 +19,6 @@ from queue import Queue
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
@@ -415,7 +414,7 @@ class VoiceAssistantService:
         _LOGGER.warning("Suspending voice services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
-        self._set_service_state(suspended=True)
+        self._set_services_state(suspended=True)
         self._audio_buffer.clear()
         self._suspend_satellite()
         self._set_audio_players_suspended(True)
@@ -427,7 +426,7 @@ class VoiceAssistantService:
         """Resume only voice-related services."""
         _LOGGER.info("Resuming voice services (%s)", reason)
         self._robot_services_paused.clear()
-        self._set_service_state(suspended=False)
+        self._set_services_state(suspended=False)
         self._start_media_system()
         self._resume_satellite()
         self._set_audio_players_suspended(False)
@@ -440,7 +439,7 @@ class VoiceAssistantService:
         _LOGGER.warning("Suspending non-ESPHome services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
-        self._set_service_state(suspended=True)
+        self._set_services_state(suspended=True)
         self._audio_buffer.clear()
 
         if self._camera_server is not None and self._state.camera_enabled:
@@ -467,7 +466,7 @@ class VoiceAssistantService:
         """Resume all non-ESPHome services after runtime suspension."""
         _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
         self._robot_services_paused.clear()
-        self._set_service_state(suspended=False)
+        self._set_services_state(suspended=False)
         self._start_media_system()
 
         if self._camera_server is not None and self._state.camera_enabled:
@@ -490,7 +489,7 @@ class VoiceAssistantService:
 
         _LOGGER.info("All services resumed - system fully operational")
 
-    def _set_service_state(self, *, suspended: bool) -> None:
+    def _set_services_state(self, *, suspended: bool) -> None:
         if self._state is None:
             return
         self._state.services_suspended = suspended
@@ -987,9 +986,10 @@ class VoiceAssistantService:
                     if wake_word.process_streaming(micro_input):
                         activated = True
             elif isinstance(wake_word, OpenWakeWord):
+                sensitivity = 1.0 - self._state.preferences.wake_word_sensitivity
                 for oww_input in ctx.oww_inputs:
                     for prob in wake_word.process_streaming(oww_input):
-                        if prob > 0.5:
+                        if prob > sensitivity:
                             activated = True
 
             if activated:
