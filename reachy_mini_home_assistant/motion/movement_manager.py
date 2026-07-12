@@ -475,18 +475,6 @@ class MovementManager:
         """Thread-safe: Perform a head shake gesture."""
         self._enqueue_command("shake", (amplitude_deg, duration), "shake")
 
-    def set_speech_sway(self, x: float, y: float, z: float, roll: float, pitch: float, yaw: float) -> None:
-        """Thread-safe: Set speech-driven sway offsets.
-
-        These offsets are applied on top of the current animation
-        to create audio-synchronized head motion during TTS playback.
-
-        Args:
-            x, y, z: Position offsets in meters
-            roll, pitch, yaw: Orientation offsets in radians
-        """
-        self._enqueue_command("speech_sway", (x, y, z, roll, pitch, yaw), "speech_sway")
-
     def reset_to_neutral(self, duration: float = 0.5) -> None:
         """Thread-safe: Reset to neutral position."""
         action = PendingAction(

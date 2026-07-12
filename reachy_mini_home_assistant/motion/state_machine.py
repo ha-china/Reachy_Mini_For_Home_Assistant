@@ -56,14 +56,6 @@ class MovementState:
     anim_antenna_left: float = 0.0
     anim_antenna_right: float = 0.0
 
-    # Speech sway offsets (from audio analysis)
-    sway_pitch: float = 0.0
-    sway_yaw: float = 0.0
-    sway_roll: float = 0.0
-    sway_x: float = 0.0
-    sway_y: float = 0.0
-    sway_z: float = 0.0
-
     # Target pose (from actions)
     target_pitch: float = 0.0
     target_yaw: float = 0.0

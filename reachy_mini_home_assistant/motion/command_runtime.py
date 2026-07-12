@@ -111,16 +111,6 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
         logger.debug("External pose update: %s", payload)
         return
 
-    if cmd == "speech_sway":
-        x, y, z, roll, pitch, yaw = payload
-        manager.state.sway_x = x
-        manager.state.sway_y = y
-        manager.state.sway_z = z
-        manager.state.sway_roll = roll
-        manager.state.sway_pitch = pitch
-        manager.state.sway_yaw = yaw
-        return
-
     if cmd == "emotion_move":
         start_emotion_move(manager, payload)
         return
