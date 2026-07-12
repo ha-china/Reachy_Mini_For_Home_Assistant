@@ -64,17 +64,17 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     )
     # Face tracking offsets are no longer composed here: the SDK daemon-side
     # head tracker blends its own aim into the IK output via start_head_tracking,
-    # so our `set_target` calls provide only the "base" pose. Secondary motion
-    # (sway + animation) is still layered on locally so the robot breathes /
-    # speaks while letting the daemon nudge the head toward the tracked face.
+    # so our `set_target` calls provide only the "base" pose. Speech sway is
+    # likewise handled by the daemon when ReachyMini.enable_wobbling() is used,
+    # so only the local animation layer is composed here.
     anim_blend = manager.state.animation_blend
     secondary_head = create_head_pose_matrix(
-        x=manager.state.anim_x * anim_blend + manager.state.sway_x,
-        y=manager.state.anim_y * anim_blend + manager.state.sway_y,
-        z=manager.state.anim_z * anim_blend + manager.state.sway_z,
-        roll=manager.state.anim_roll * anim_blend + manager.state.sway_roll,
-        pitch=manager.state.anim_pitch * anim_blend + manager.state.sway_pitch,
-        yaw=manager.state.anim_yaw * anim_blend + manager.state.sway_yaw,
+        x=manager.state.anim_x * anim_blend,
+        y=manager.state.anim_y * anim_blend,
+        z=manager.state.anim_z * anim_blend,
+        roll=manager.state.anim_roll * anim_blend,
+        pitch=manager.state.anim_pitch * anim_blend,
+        yaw=manager.state.anim_yaw * anim_blend,
     )
     final_head = compose_poses(primary_head, secondary_head)
 

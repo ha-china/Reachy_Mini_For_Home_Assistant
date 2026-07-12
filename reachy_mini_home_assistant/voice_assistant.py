@@ -654,9 +654,10 @@ class VoiceAssistantService:
         if self._camera_server and self._state.camera_enabled:
             await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
             self._camera_server = None
-        # Disable SDK head wobbler before closing media
+        # Disable SDK head wobbler via the public ReachyMini API so the
+        # daemon also stops composing sway offsets.
         try:
-            self.reachy_mini.media.disable_wobbling()
+            self.reachy_mini.disable_wobbling()
         except Exception:
             pass
         # Close SDK media resources to prevent memory leaks (even if camera is disabled)

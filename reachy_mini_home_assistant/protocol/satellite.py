@@ -133,18 +133,13 @@ class VoiceSatelliteProtocol(APIServer):
 
             state.motion.movement_manager._on_emotion_complete_callback = on_emotion_complete
 
-            # Setup SDK-driven head wobbling for audio-synchronized head motion
-            # The SDK's HeadWobbler hooks into the GStreamer audio pipeline tee
-            # and dispatches PTS-aligned sway offsets via this callback.
-            def wobbling_callback(offsets: tuple[float, float, float, float, float, float]) -> None:
-                mm = state.motion.movement_manager
-                if mm is not None:
-                    x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad = offsets
-                    mm.set_speech_sway(x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad)
-
+            # Setup SDK-driven head wobbling via the public ReachyMini API.
+            # enable_wobbling() starts the local GStreamer analyser AND tells
+            # the daemon to compose sway offsets into its IK output, so the
+            # app does not need to feed offsets back through set_target.
             try:
-                state.reachy_mini.media.enable_wobbling(wobbling_callback)
-                _LOGGER.info("SDK head wobbler configured for MovementManager")
+                state.reachy_mini.enable_wobbling()
+                _LOGGER.info("SDK head wobbler enabled (daemon-side composition)")
             except Exception:
                 _LOGGER.warning("SDK head wobbling unavailable; head motion during TTS disabled", exc_info=True)
 
