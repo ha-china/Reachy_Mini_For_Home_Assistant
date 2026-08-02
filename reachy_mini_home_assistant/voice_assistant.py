@@ -19,6 +19,7 @@ from queue import Queue
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
@@ -193,10 +194,10 @@ class VoiceAssistantService:
             media = self.reachy_mini.media
             daemon_status = self._get_daemon_status()
 
-            if getattr(self.reachy_mini, "media_released", False):
+            if self.reachy_mini.media_released:
                 raise RuntimeError("Reachy Mini media has been released externally; this app requires SDK-owned media")
 
-            if getattr(daemon_status, "no_media", False):
+            if daemon_status and daemon_status.get("no_media", False):
                 raise RuntimeError("Reachy Mini daemon is running with no_media=True; this app requires SDK media")
 
             if media.audio is None:
@@ -390,9 +391,14 @@ class VoiceAssistantService:
         await self._stop_camera_server_if_running(reason=reason)
 
     def _get_daemon_status(self) -> Any:
-        """Return the current daemon status, or None if unavailable."""
+        """Return the current daemon status via the public REST API, or None if unavailable."""
         try:
-            return self.reachy_mini.client.get_status()
+            resp = requests.get(
+                f"{Config.daemon.url.rstrip('/')}/api/daemon/status",
+                timeout=Config.daemon.check_interval_active,
+            )
+            resp.raise_for_status()
+            return resp.json()
         except Exception:
             return None
 

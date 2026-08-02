@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import threading
+    from collections.abc import Iterable
     from queue import Queue
 
+    from google.protobuf import message
     from pymicro_wakeword import MicroWakeWord
     from pyopen_wakeword import OpenWakeWord
 
@@ -70,6 +72,10 @@ class Preferences:
     # Wake word / stop word sensitivity (0.0-1.0, controlled from Home Assistant)
     wake_word_sensitivity: float = 0.7
     stop_word_sensitivity: float = 0.7
+    # Start streaming audio immediately after wake word detection,
+    # without waiting for the wakeup sound to finish playing.
+    # This avoids GStreamer ALSA deadlock on some hardware.
+    listen_during_wake_sound: bool = False
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Update the unified idle behavior toggle."""
@@ -103,6 +109,7 @@ class ServerState:
 
     media_player_entity: "MediaPlayerEntity | None" = None
     satellite: "VoiceSatelliteProtocol | None" = None
+    connections: "list[VoiceSatelliteProtocol]" = field(default_factory=list)
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
     timer_max_ring_seconds: float = 900.0
@@ -175,6 +182,14 @@ class ServerState:
         else:
             with self._state_lock:
                 object.__setattr__(self, "_camera_enabled", value)
+
+    def broadcast(self, msgs: "Iterable[message.Message]") -> None:
+        """Send messages to every connected API client."""
+        messages = list(msgs)
+        if not messages:
+            return
+        for connection in list(self.connections):
+            connection.send_messages(messages)
 
     def save_preferences(self) -> None:
         """Save preferences as JSON."""

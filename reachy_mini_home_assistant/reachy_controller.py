@@ -111,11 +111,10 @@ class ReachyController:
         return getattr(parent, child_key, default)
 
     def _get_cached_status(self) -> Any:
-        """Get cached daemon status to reduce query frequency.
+        """Get cached daemon status via the public REST API.
 
-        Note: get_status() may trigger I/O, so we cache it.
-        Unlike get_current_head_pose() and get_current_joint_positions()
-        which are non-blocking in the SDK.
+        Uses the daemon's HTTP API instead of the SDK's private client attribute.
+        Cached to reduce query frequency.
         """
         now = time.time()
         if now - self._last_status_query < self._cache_ttl:
@@ -125,7 +124,12 @@ class ReachyController:
             return None
 
         try:
-            status = self.reachy.client.get_status(wait=False)
+            resp = self._http_session.get(
+                f"{self._daemon_base_url}/api/daemon/status",
+                timeout=self._http_timeout,
+            )
+            resp.raise_for_status()
+            status = resp.json()
             self._state_cache["status"] = status
             self._last_status_query = now
             return status

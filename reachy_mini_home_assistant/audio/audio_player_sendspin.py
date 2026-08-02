@@ -21,10 +21,12 @@ if TYPE_CHECKING:
 
 try:
     from aiosendspin.client import SendspinClient
-    from aiosendspin.client.client import AudioFormat, PCMFormat
+    from aiosendspin.client.models import AudioFormat, PCMFormat
     from aiosendspin.models.core import DeviceInfo
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles, UndefinedField
+    from aiosendspin.noise.keys import Identity
+    from aiosendspin.noise.trust_store import ClientPairingStore
 
     from .. import __version__
     from ..core.util import get_mac
@@ -42,6 +44,8 @@ except Exception as e:
     AudioCodec = None  # type: ignore[assignment]
     PlayerCommand = None  # type: ignore[assignment]
     Roles = None  # type: ignore[assignment]
+    Identity = None  # type: ignore[assignment]
+    ClientPairingStore = None  # type: ignore[assignment]
 
 try:
     from aiosendspin.client.listener import DEFAULT_PORT as SENDSPIN_DEFAULT_PORT
@@ -276,10 +280,13 @@ class AudioPlayerSendspinMixin:
             buffer_capacity=32_000_000,
             supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
         )
+        identity = Identity.generate()
+        pairing_store = ClientPairingStore()
         return SendspinClient(
-            client_id=self._sendspin_client_id,
+            identity=identity,
             client_name="Reachy Mini",
             roles=[Roles.PLAYER, Roles.METADATA],
+            pairing_store=pairing_store,
             device_info=DeviceInfo(
                 product_name="Reachy Mini",
                 manufacturer="Pollen Robotics",
@@ -382,9 +389,9 @@ class AudioPlayerSendspinMixin:
             return
         self._sendspin_listener = ClientListener(
             client_id=self._sendspin_client_id,
-            client_name="Reachy Mini",
-            port=SENDSPIN_DEFAULT_PORT,
             on_connection=self._handle_sendspin_listener_connection,
+            port=SENDSPIN_DEFAULT_PORT,
+            client_name="Reachy Mini",
         )
         try:
             await self._sendspin_listener.start()

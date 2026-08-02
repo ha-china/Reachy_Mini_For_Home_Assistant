@@ -39,6 +39,20 @@ def queue_voice_request_after_wakeup(
     protocol._pending_voice_request = (wake_word_phrase, conversation_id)
 
 
+def start_audio_streaming(
+    protocol: "VoiceSatelliteProtocol", *, wake_word_phrase: str | None = None, conversation_id: str | None = None
+) -> None:
+    """Start audio streaming immediately, without waiting for wakeup sound to finish."""
+    logger.debug("Starting audio streaming for: %s", wake_word_phrase)
+    request = VoiceAssistantRequest(start=True)
+    if wake_word_phrase:
+        request.wake_word_phrase = wake_word_phrase
+    if conversation_id:
+        request.conversation_id = conversation_id
+    protocol.send_messages([request])
+    protocol._is_streaming_audio = True
+
+
 def on_wakeup_sound_finished(protocol: "VoiceSatelliteProtocol") -> None:
     if protocol._pending_voice_request is None:
         logger.debug("Wakeup sound finished with no pending voice request")

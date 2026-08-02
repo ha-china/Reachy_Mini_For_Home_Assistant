@@ -55,6 +55,7 @@ from .session_flow import (
     play_wakeup_sound,
     queue_voice_request_after_wakeup,
     schedule_delayed_idle_return,
+    start_audio_streaming,
     tts_finished,
 )
 from .voice_pipeline import (
@@ -237,6 +238,8 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.tts_player.set_http_host_override(peer_host)
             self.state.music_player.set_http_host_override(peer_host)
         super().connection_made(transport)
+        if self not in self.state.connections:
+            self.state.connections.append(self)
 
     def update_camera_server(self, camera_server):
         """Update the camera server reference in entity registry.
@@ -305,13 +308,24 @@ class VoiceSatelliteProtocol(APIServer):
         conv_id = self._get_or_create_conversation_id()
         self._pipeline_active = True
         self.duck()
-        self._queue_voice_request_after_wakeup(wake_word_phrase=wake_word_phrase, conversation_id=conv_id)
-        self._play_wakeup_sound()
+        if self.state.preferences.listen_during_wake_sound:
+            logger = _LOGGER
+            logger.debug("Starting audio streaming immediately (listen_during_wake_sound enabled)")
+            self.state.tts_player.play(self.state.wakeup_sound)
+            self._start_audio_streaming(wake_word_phrase=wake_word_phrase, conversation_id=conv_id)
+        else:
+            self._queue_voice_request_after_wakeup(wake_word_phrase=wake_word_phrase, conversation_id=conv_id)
+            self._play_wakeup_sound()
 
     def _queue_voice_request_after_wakeup(
         self, *, wake_word_phrase: str | None = None, conversation_id: str | None = None
     ) -> None:
         queue_voice_request_after_wakeup(self, wake_word_phrase=wake_word_phrase, conversation_id=conversation_id)
+
+    def _start_audio_streaming(
+        self, *, wake_word_phrase: str | None = None, conversation_id: str | None = None
+    ) -> None:
+        start_audio_streaming(self, wake_word_phrase=wake_word_phrase, conversation_id=conversation_id)
 
     def _on_wakeup_sound_finished(self) -> None:
         on_wakeup_sound_finished(self)
@@ -382,11 +396,16 @@ class VoiceSatelliteProtocol(APIServer):
         self._timer_ring_start = None
         self._set_stop_word_active(False)
 
-        # Stop any active playback so audio doesn't leak after HA disconnects
-        if self.state.music_player:
-            self.state.music_player.stop()
-        if self.state.tts_player:
-            self.state.tts_player.stop()
+        # Deregister this connection.
+        if self in self.state.connections:
+            self.state.connections.remove(self)
+
+        # Only tear down shared playback/state when the LAST client disconnects.
+        if not self.state.connections:
+            if self.state.music_player:
+                self.state.music_player.stop()
+            if self.state.tts_player:
+                self.state.tts_player.stop()
 
         run_ha_disconnected_callback(self)
 

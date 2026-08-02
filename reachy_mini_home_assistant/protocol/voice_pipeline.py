@@ -25,6 +25,7 @@ def handle_voice_event(
 
     if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
         protocol._pipeline_active = True
+        protocol._is_streaming_audio = True
         protocol._tts_url = data.get("url")
         protocol._tts_played = False
         protocol._continue_conversation = False
