@@ -78,7 +78,7 @@ exclude = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.15.4",
+    "ruff==0.15.12",
     "mypy==1.20.0",
 ]
 
