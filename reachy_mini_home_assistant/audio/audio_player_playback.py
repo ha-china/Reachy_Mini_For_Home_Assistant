@@ -45,7 +45,7 @@ class AudioPlayerPlaybackMixin(
     def _play_file(self, file_path: str) -> None:
         try:
             if file_path.startswith(("http://", "https://")):
-                source_url = rewrite_local_service_url(file_path, getattr(self, "_http_host_override", None))
+                source_url = rewrite_local_service_url(file_path, self._http_host_override)
                 streamed = False
                 cached_audio = bytearray()
                 content_type = ""

@@ -150,6 +150,12 @@ class VoiceAssistantService:
         # Load stop model
         stop_model = load_stop_model(wake_word_dirs, stop_model_id="stop")
 
+        # Seed the bundled SDK face tracking model into the HF cache so the
+        # daemon-side YuNet tracker does not need to download it at runtime.
+        from .vision.model_assets import ensure_face_tracking_model_cached
+
+        ensure_face_tracking_model_cached()
+
         # Create audio players with Reachy Mini reference and GStreamer lock
         music_player = AudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
         tts_player = LocalAudioPlayer(self.reachy_mini, gstreamer_lock=self._gstreamer_lock)
@@ -203,7 +209,7 @@ class VoiceAssistantService:
             if media.audio is None:
                 raise RuntimeError("Reachy Mini audio backend is unavailable")
 
-            if self.camera_enabled and getattr(self._state, "camera_enabled", True) and media.camera is None:
+            if self.camera_enabled and self._state.camera_enabled and media.camera is None:
                 raise RuntimeError("Reachy Mini camera backend is unavailable while camera runtime is enabled")
 
             try:
@@ -844,9 +850,7 @@ class VoiceAssistantService:
             # We need to filter by active_wake_words (which contains the IDs/keys)
             for ww_id, ww_model in self._state.wake_words.items():
                 if ww_id in self._state.active_wake_words:
-                    # Ensure the model has an 'id' attribute for later use
-                    if not hasattr(ww_model, "id"):
-                        ww_model.id = ww_id
+                    ww_model.id = ww_id
                     ctx.wake_words.append(ww_model)
 
             ctx.has_oww = any(isinstance(ww, OpenWakeWord) for ww in ctx.wake_words)

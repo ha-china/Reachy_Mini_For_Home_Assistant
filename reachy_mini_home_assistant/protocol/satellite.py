@@ -189,7 +189,20 @@ class VoiceSatelliteProtocol(APIServer):
         also notifying the entity registry when the boolean flips so the HA
         binary sensor updates.
         """
-        reachy_mini = state.reachy_mini
+        self._ensure_face_target_poller()
+
+    def _ensure_face_target_poller(self) -> None:
+        """Start (or restart) the face-target status sampler.
+
+        Idempotent: no-op if the poller thread is already alive. Called from
+        ``__init__`` (via ``_init_daemon_head_tracking``) and again from
+        ``connection_made`` so the HA-facing ``face_detected`` state keeps
+        updating after a Home Assistant disconnect/reconnect cycle (the poller
+        is stopped in ``connection_lost``).
+        """
+        if self._face_target_thread is not None and self._face_target_thread.is_alive():
+            return
+        reachy_mini = self.state.reachy_mini
         if reachy_mini is None:
             return
         try:
@@ -199,9 +212,11 @@ class VoiceSatelliteProtocol(APIServer):
             _LOGGER.warning("Daemon-side head tracking unavailable", exc_info=True)
             return
 
-        mm = state.motion.movement_manager if state.motion is not None else None
+        mm = self.state.motion.movement_manager if self.state.motion is not None else None
         if mm is None:
             return
+
+        self._face_target_stop.clear()
 
         def _poll_loop() -> None:
             last_detected: bool | None = None
@@ -223,6 +238,7 @@ class VoiceSatelliteProtocol(APIServer):
             target=_poll_loop, daemon=True, name="face-target-poller"
         )
         self._face_target_thread.start()
+        _LOGGER.info("Face-target poller started")
 
     def set_ha_connection_callbacks(self, on_connected, on_disconnected):
         """Set callbacks for Home Assistant connection/disconnection."""
@@ -240,6 +256,8 @@ class VoiceSatelliteProtocol(APIServer):
         super().connection_made(transport)
         if self not in self.state.connections:
             self.state.connections.append(self)
+        # Restart the face-target poller if it was stopped by connection_lost.
+        self._ensure_face_target_poller()
 
     def update_camera_server(self, camera_server):
         """Update the camera server reference in entity registry.

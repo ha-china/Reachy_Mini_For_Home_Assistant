@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ..core.config import Config
-from .camera_http import handle_client, handle_index, handle_snapshot, handle_stream
+from .camera_http import MJPEG_BOUNDARY, handle_client, handle_index, handle_snapshot, handle_stream
 from .camera_processing import (
     capture_frames,
     encode_snapshot_frame,
@@ -51,7 +51,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-MJPEG_BOUNDARY = "frame"
 GESTURE_MIN_FPS = 12.0
 
 
@@ -115,10 +114,6 @@ class MJPEGCameraServer:
         self._frame_rate_manager = AdaptiveFrameRateManager(
             config=FrameRateConfig(
                 fps_high=fps,
-                fps_low=fps,
-                fps_idle=fps,
-                low_power_threshold=float("inf"),
-                idle_threshold=float("inf"),
                 gesture_detection_interval=Config.camera.gesture_detection_interval,
             )
         )

@@ -8,7 +8,7 @@ Current package:
 - `reachy_mini_home_assistant`
 
 Current version:
-- `1.0.7`
+- `1.0.8`
 
 ## Local Reference Directories (DO NOT modify any files in reference directories)
 
@@ -36,7 +36,7 @@ Current version:
 
 ## Technical Architecture
 
-### Current Runtime Architecture (v1.0.7)
+### Current Runtime Architecture (v1.0.8)
 
 The current system is built around one main runtime service with motion, vision, audio, and Home Assistant entity subsystems.
 
@@ -139,8 +139,8 @@ Current motion inputs that feed the final composed pose:
 - explicit pose commands from Home Assistant entities
 - robot state transitions such as listening, thinking, speaking, and idle
 - emotion or action moves
-- speech sway from playback
-- face tracking offsets from the camera runtime
+- speech sway (SDK daemon-side head wobbler via `enable_wobbling()`)
+- face tracking offsets (SDK daemon-side YuNet tracker)
 - idle behavior and idle random actions
 - DOA-triggered turn-to-sound behavior
 
@@ -185,7 +185,7 @@ Actual split:
 2. `AudioPlayer` is stored in `ServerState.music_player`
 3. TTS, wakeup, and timer sounds go through the local player path
 4. Sendspin discovery, connection, buffering, remote commands, and synchronized playback live in the music player path
-5. `VoiceSatelliteProtocol` configures a speech sway callback on the TTS player so audio playback can drive head micro-movements
+5. Speech-driven head motion is delegated to the SDK daemon-side head wobbler (`ReachyMini.enable_wobbling()`); the app does not compute sway offsets locally
 
 Current audio module split:
 
@@ -212,9 +212,11 @@ Actual structure:
    - `sendspin_enabled`
    - `face_tracking_enabled`
    - `gesture_detection_enabled`
-   - `face_confidence_threshold`
    - `emotion`
    - `continuous_conversation`
+   - `thinking_sound_enabled`
+   - `wake_word_sensitivity`
+   - `stop_word_sensitivity`
 4. `sensor_entity_setup.py` registers state, observation, and diagnostic entities
 5. `entity_registry.py` keeps references to live entity objects and pushes updates back to Home Assistant
 
@@ -292,7 +294,9 @@ Manual runtime controls are exposed through Home Assistant entities, including m
 - `gesture_detection_enabled`: off by default
 - `continuous_conversation`: user-controlled
 - `idle_behavior_enabled`: user-controlled
-- `face_confidence_threshold`: persistent user setting, default runtime threshold `0.5`
+- `listen_during_wake_sound`: off by default
+- `thinking_sound_enabled`: off by default
+- `wake_word_sensitivity` / `stop_word_sensitivity`: default `0.7`
 
 Behavior notes:
 - When idle behavior is off, the camera server is stopped to reduce resource usage
@@ -310,6 +314,7 @@ Conversation-related motion behavior:
 - Wakeup can turn the head toward the current sound source using DOA information
 - Listening, thinking, speaking, and idle phases each map to specific motion states
 - Head, body yaw, antenna motion, breathing, and speech sway are combined through the motion stack
+- Speech sway and face tracking aim are composed by the SDK daemon (head wobbler and YuNet tracker); the app pushes weights via `enable_wobbling()` and `start_head_tracking()`
 - Built-in emotion moves and Home Assistant-triggered behaviors run through a shared behavior layer
 
 Idle behavior notes:
@@ -325,7 +330,8 @@ Camera and AI behavior:
 - The MJPEG stream is viewer-aware to avoid unnecessary continuous encoding work
 - `/snapshot` can encode on demand when no cached frame is available
 - Face tracking and gesture detection can continue independently of active stream viewers when their runtimes are enabled
-- Face tracking uses a detector plus smoothing/interpolation helpers
+- Face tracking is delegated to the SDK daemon-side YuNet tracker (no in-process face detector); the app only pushes a blend weight via `start_head_tracking(weight)` and samples `get_tracked_face()` to publish the `face_detected` state
+- The YuNet face tracker model (`face_detection_yunet_2026may.onnx`) is bundled under `models/` and seeded into the Hugging Face cache at startup (`vision/model_assets.py`) so the SDK loads it without a runtime download
 - Gesture detection uses ONNX models and a gesture smoother for stable result publishing
 
 Current feature toggles:
@@ -333,7 +339,6 @@ Current feature toggles:
 - `camera_disabled`
 - `face_tracking_enabled`
 - `gesture_detection_enabled`
-- `face_confidence_threshold`
 
 ## Current Architecture
 
@@ -350,14 +355,11 @@ reachy_mini_home_assistant/
   audio/
   core/
   entities/
-  handlers/
-  models/
   motion/
   protocol/
   sounds/
   static/
   vision/
-  voice/
   wakewords/
 ```
 
@@ -396,7 +398,6 @@ Motion layer:
 - `motion/idle_runtime.py` - idle behavior handling
 - `motion/pose_composer.py` - multi-source pose composition
 - `motion/smoothing.py` - pose smoothing
-- `motion/speech_sway.py` - speech-driven head micro-movements
 - `motion/animation_player.py` - animation playback
 - `motion/emotion_moves.py` - built-in emotion actions
 - `motion/antenna.py` - antenna behavior control
@@ -409,11 +410,10 @@ Vision layer:
 - `vision/camera_runtime.py` - camera lifecycle helpers
 - `vision/camera_processing.py` - frame capture and processing helpers
 - `vision/camera_http.py` - stream and snapshot handlers
-- `vision/head_tracker.py` - face detector
-- `vision/face_tracking_interpolator.py` - smooth face tracking transitions
 - `vision/gesture_detector.py` - gesture detection runtime
 - `vision/gesture_smoother.py` - gesture result stabilization
-- `vision/frame_processor.py` - adaptive frame pacing
+- `vision/frame_processor.py` - frame pacing
+- `vision/model_assets.py` - bundled model asset seeding (SDK YuNet face tracker)
 
 Audio layer:
 
@@ -425,7 +425,6 @@ Audio layer:
 - `audio/audio_player_stream_decoded.py` - decoded stream playback
 - `audio/audio_player_sendspin.py` - Sendspin integration
 - `audio/audio_player_shared.py` - shared constants and helpers
-- `audio/audio_player_wobble.py` - speech sway analysis helpers
 - `audio/doa_tracker.py` - direction-of-arrival tracking
 
 Entity layer:
@@ -481,7 +480,6 @@ reachy_mini_home_assistant/
     audio_player_stream_decoded.py
     audio_player_sendspin.py
     audio_player_shared.py
-    audio_player_wobble.py
     doa_tracker.py
   core/
     config.py
@@ -510,7 +508,6 @@ reachy_mini_home_assistant/
     pose_composer.py
     reachy_motion.py
     smoothing.py
-    speech_sway.py
     state_machine.py
   protocol/
     api_server.py
@@ -529,11 +526,9 @@ reachy_mini_home_assistant/
     camera_processing.py
     camera_runtime.py
     camera_server.py
-    face_tracking_interpolator.py
     frame_processor.py
     gesture_detector.py
     gesture_smoother.py
-    head_tracker.py
   wakewords/
 ```
 
@@ -566,7 +561,7 @@ Audio enhancements:
 - Local speech playback path
 - Optional Sendspin synchronized audio playback
 - Ducking during conversation
-- Shared sway behavior for speech and audio playback
+- Speech sway delegated to the SDK daemon-side head wobbler
 
 Diagnostics and control:
 - Runtime suspend/resume state
@@ -598,7 +593,9 @@ Representative control entities:
 - `camera_disabled`
 - `face_tracking_enabled`
 - `gesture_detection_enabled`
-- `face_confidence_threshold`
+- `thinking_sound_enabled`
+- `wake_word_sensitivity`
+- `stop_word_sensitivity`
 - `head_x`, `head_y`, `head_z`
 - `head_roll`, `head_pitch`, `head_yaw`
 - `body_yaw`
@@ -642,8 +639,10 @@ Implemented control entities:
 | Switch | `sendspin_enabled` | Enable or disable Sendspin playback integration |
 | Switch | `face_tracking_enabled` | Enable or disable face tracking |
 | Switch | `gesture_detection_enabled` | Enable or disable gesture detection |
-| Number | `face_confidence_threshold` | Face tracking confidence threshold |
 | Switch | `continuous_conversation` | Multi-turn conversation mode |
+| Switch | `thinking_sound_enabled` | Enable or disable the thinking sound |
+| Number | `wake_word_sensitivity` | Wake word sensitivity |
+| Number | `stop_word_sensitivity` | Stop word sensitivity |
 | Select | `emotion` | Manual emotion trigger |
 | Number | `head_x`, `head_y`, `head_z` | Head position control |
 | Number | `head_roll`, `head_pitch`, `head_yaw` | Head angle control |
@@ -667,6 +666,10 @@ Implemented sensor entities:
 | Text Sensor | `sdk_version` | SDK version |
 | Text Sensor | `robot_name` | Robot name |
 | Text Sensor | `wlan_ip` | Wireless IP address |
+| Text Sensor | `wireless_version` | Wireless variant flag |
+| Binary Sensor | `simulation_mode` | Simulation mode flag |
+| Sensor | `control_loop_frequency` | Motion control loop frequency |
+| Sensor | `imu_accel_x/y/z`, `imu_gyro_x/y/z`, `imu_temperature` | IMU accelerometer, gyroscope, and temperature |
 | Camera | `camera` | Live preview and snapshots |
 
 System diagnostic entities include CPU, temperature, memory, disk, uptime, and process metrics.
@@ -747,19 +750,20 @@ Deliberately not active in the current runtime:
 
 ### Face Tracking
 
-Current model:
+Current model (SDK-owned):
 
+- Face tracking is fully delegated to the Reachy Mini SDK daemon-side YuNet tracker
 - DOA is used once at wakeup to orient toward the speaker
-- Face tracking then provides continuous visual tracking when enabled
+- The app pushes a per-voice-phase blend weight via `start_head_tracking(weight)` (0 pauses the tracker, >0 blends the tracked aim into the SDK IK output)
 - Body yaw follows head orientation for more natural tracking behavior
-- Adaptive frame pacing is used to balance responsiveness and resource use
+- A poller thread samples `get_tracked_face()` to publish the `face_detected` binary state to Home Assistant
 
 Implemented aspects:
 
-- Face detector runtime
-- Face tracking smoothing and interpolation
-- Conversation-aware tracking behavior
+- Daemon-side face tracking runtime (SDK `start_head_tracking`/`get_tracked_face`)
+- Per-phase tracking weight blending
 - Face visibility state publishing to Home Assistant
+- The poller thread is restarted on Home Assistant reconnect so `face_detected` keeps updating
 
 ### Animation And Speech Sway
 
@@ -767,7 +771,7 @@ Current animation model:
 
 - Animation definitions are driven from `conversation_animations.json`
 - Motion state transitions use the animation system plus direct motion overlays
-- Speech sway provides small head motion during speech playback
+- Speech sway is delegated to the SDK daemon-side head wobbler via `ReachyMini.enable_wobbling()` (the SDK analyses the speech signal and composes sway offsets into its IK output); the app no longer computes sway offsets locally
 - Idle behavior can combine rest pose, breathing, antenna behavior, and other built-in patterns
 
 ### Gesture Detection
@@ -810,28 +814,24 @@ Current coverage is focused on animation config, command runtime behavior, gestu
 
 ## Dependency Baseline
 
-Current important runtime dependencies:
+Current important runtime dependencies (from `pyproject.toml`):
 
 ```toml
-reachy-mini>=1.7.1
+reachy-mini>=1.9.0
 soundfile>=0.13.0
-numpy>=2.2.5,<=2.2.5
+numpy>=2.2.5,<3.0.0
 opencv-python>=4.12.0.88
 pymicro-wakeword>=2.0.0,<3.0.0
 pyopen-wakeword>=1.0.0,<2.0.0
 aioesphomeapi>=43.10.1
 zeroconf>=0.131,<1
 websockets>=12,<16
-aiohttp
+aiohttp>=3.9.0
 scipy>=1.15.3,<2.0.0
-ultralytics
-supervision
-aiosendspin>=5.2,<6.0
+aiosendspin>=6.0,<7.0
 onnxruntime>=1.18.0
-torch==2.5.1
-torchvision==0.20.1
-pillow<12.0
-pydantic<=2.12.5
+pillow>=10.0,<12.0
+pydantic>=2.0,<=2.12.5
 requests>=2.33.0
 ```
 
@@ -839,8 +839,8 @@ requests>=2.33.0
 
 Recent project direction reflected by the current codebase:
 
-- The app is aligned with current Reachy Mini SDK media behavior
-- Legacy compatibility paths have largely been removed
+- The app is aligned with current Reachy Mini SDK media behavior (baseline `reachy-mini>=1.9.0`, tested against the v1.10.x release line)
+- Legacy compatibility paths have been removed; SDK overlap is delegated to the SDK (daemon-side YuNet face tracker and head wobbler)
 - TTS and Sendspin playback paths are separated for clearer runtime behavior
 - Camera streaming is viewer-aware to reduce unnecessary CPU usage
 - Idle-off mode is treated as a low-resource parked runtime rather than a legacy sleep mode
@@ -850,7 +850,7 @@ Recent version milestones relevant to the current state:
 - `1.0.5` removed app-managed sleep/wake integration and aligned with newer SDK behavior
 - `1.0.6` aligned the dependency baseline with newer SDK releases and improved camera snapshot/runtime handling
 - `1.0.7` split local TTS playback from Sendspin-capable music playback and tightened shared audio runtime behavior
-- Current uncommitted direction includes additional Sendspin alignment on the `aiosendspin 5.2` line
+- `1.0.8` resolved the STT silence bug (`_is_streaming_audio` on RUN_START, `listen_during_wake_sound`), migrated to the `aiosendspin` 6.x API, replaced private SDK client access with the daemon REST API, and moved face tracking / speech sway fully onto SDK daemon-side APIs (YuNet tracker and head wobbler)
 
 ## Notes For Future Updates
 

@@ -28,10 +28,6 @@ class FrameRateConfig:
     """Configuration for frame pacing."""
 
     fps_high: int = 15
-    fps_low: int = 15  # Unused; kept for compatibility
-    fps_idle: float = 15.0  # Unused; kept for compatibility
-    low_power_threshold: float = float("inf")  # Unused; kept for compatibility
-    idle_threshold: float = float("inf")  # Unused; kept for compatibility
     gesture_detection_interval: int = 1
     gesture_target_fps: float = 15.0
 
@@ -81,10 +77,6 @@ class AdaptiveFrameRateManager:
     def is_ai_enabled(self) -> bool:
         return self.state.ai_enabled
 
-    def update(self, face_detected: bool = False, in_conversation: bool = False) -> None:
-        """No-op retained for backward compatibility."""
-        return
-
     def should_run_inference(self) -> bool:
         """Always returns the AI-enabled flag (face detection no longer gates this)."""
         return self.state.ai_enabled
@@ -122,10 +114,6 @@ class AdaptiveFrameRateManager:
         self.state.mode = FrameRateMode.HIGH
         self.state.current_fps = self.config.fps_high
         logger.debug("Frame processing resumed")
-
-    def set_conversation_mode(self, in_conversation: bool) -> None:
-        """No-op retained for backward compatibility (face tracking is daemon-side)."""
-        return
 
 
 def calculate_frame_interval(fps: float) -> float:

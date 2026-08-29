@@ -572,16 +572,6 @@ class ReachyController:
         NOTE: Disabled to prevent conflict with MovementManager's control loop.
         """
         logger.warning("_update_look_at is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     x = getattr(self, '_look_at_x', 0.0)
-        #     y = getattr(self, '_look_at_y', 0.0)
-        #     z = getattr(self, '_look_at_z', 0.0)
-        #     self.reachy.look_at_world(x, y, z)
-        #     logger.info(f"Looking at world coordinates: ({x}, {y}, {z})")
-        # except Exception as e:
-        #     logger.error(f"Error updating look at: {e}")
 
     # ========== Phase 6: Diagnostic Information ==========
 

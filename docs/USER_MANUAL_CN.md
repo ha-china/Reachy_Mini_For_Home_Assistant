@@ -51,11 +51,11 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - Hey Luna
 
 ### 人脸追踪
-- 基于 YOLO 的人脸检测
+- SDK 守护进程侧 YuNet 人脸追踪
 - 头部跟随检测到的人脸
 - 头部转动时身体随之旋转
-- 自适应帧率：活跃时 15fps，空闲时 2fps
 - 可在 Home Assistant 中运行时开关
+- YuNet 模型已随应用打包，无需运行时下载
 
 ### 手势检测
 检测到的手势会作为实体状态同步到 Home Assistant。
@@ -105,14 +105,17 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | Sendspin | 开关 | 启用/禁用 Sendspin 发现与播放 |
 | Face Tracking | 开关 | 启用/禁用人脸跟踪 |
 | Gesture Detection | 开关 | 启用/禁用手势检测 |
-| Face Confidence | 数值 (0-1) | 人脸跟踪置信度阈值 |
+| Continuous Conversation | 开关 | 多轮对话模式 |
+| Thinking Sound | 开关 | 启用/禁用思考音 |
+| Wake Word Sensitivity | 数值 | 唤醒词检测灵敏度 |
+| Stop Word Sensitivity | 数值 | 停止词检测灵敏度 |
 
-### 阶段 2：睡眠与运行状态
+### 阶段 2：运行状态
 | 实体 | 类型 | 说明 |
 |------|------|------|
-| Sleep Control | 开关 | 打开表示进入睡眠，关闭表示唤醒 |
-| Sleep Mode | 二进制传感器 | 运行中表示唤醒，非运行表示睡眠 |
 | Services Suspended | 二进制传感器 | 运行中表示服务活跃 |
+
+注：应用管理的睡眠/唤醒控制已移除；机器人睡眠/唤醒由 Reachy Mini SDK 负责，并作为权威行为。
 
 ### 阶段 3：姿态控制
 | 实体 | 类型 | 范围 |
@@ -205,16 +208,7 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 ## 睡眠模式
 
-运行时反应是零配置的：语音阶段、计时器提醒和 HA 状态触发情绪，共用同一套内建行为模型。
-
-### 进入睡眠
-- 在 Home Assistant 中打开 `Sleep Control` 开关
-- 机器人放松电机、停止摄像头、暂停语音检测
-
-### 唤醒
-- 在 Home Assistant 中关闭 `Sleep Control` 开关
-- 或说唤醒词
-- 机器人恢复所有功能
+应用不管理机器人的睡眠/唤醒状态。机器人睡眠/唤醒由 Reachy Mini SDK 处理，应用与当前 SDK 行为保持一致，不暴露睡眠/唤醒控制实体。
 
 ---
 
@@ -241,4 +235,4 @@ ESPHome 端口： 6053
 
 ---
 
-*Reachy Mini 语音助手 v1.0.4*
+*Reachy Mini 语音助手 v1.0.8*

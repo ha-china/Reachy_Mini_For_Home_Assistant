@@ -143,7 +143,7 @@ def apply_head_tracking_weight(protocol: "VoiceSatelliteProtocol", weight: float
     if reachy_mini is None:
         return
     prefs = protocol.state.preferences
-    if prefs is not None and not bool(getattr(prefs, "face_tracking_enabled", False)):
+    if prefs is not None and not prefs.face_tracking_enabled:
         weight = HEAD_TRACKING_WEIGHT_DISABLED
     try:
         reachy_mini.start_head_tracking(weight=float(weight))

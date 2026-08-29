@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+MJPEG_BOUNDARY = "frame"
+
 
 def build_index_html(server: "MJPEGCameraServer") -> str:
     return f"""<!DOCTYPE html>
@@ -56,7 +58,7 @@ async def handle_client(server: "MJPEGCameraServer", reader: asyncio.StreamReade
         path = parts[1] if len(parts) >= 2 else "/"
         _LOGGER.debug("HTTP request: %s", request)
         if path == "/stream":
-            await handle_stream(server, writer, server.MJPEG_BOUNDARY if hasattr(server, 'MJPEG_BOUNDARY') else 'frame')
+            await handle_stream(server, writer, MJPEG_BOUNDARY)
         elif path == "/snapshot":
             await handle_snapshot(server, writer)
         else:

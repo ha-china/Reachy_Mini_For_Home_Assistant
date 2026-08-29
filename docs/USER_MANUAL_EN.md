@@ -51,11 +51,11 @@ Home Assistant will auto-discover Reachy Mini via mDNS.
 - Hey Luna
 
 ### Face Tracking
-- YOLO-based face detection
+- SDK daemon-side YuNet face tracking
 - Head follows detected face
 - Body follows head when turned far
-- Adaptive frame rate: 15fps active, 2fps idle
 - Runtime switchable from Home Assistant
+- The YuNet model is bundled with the app, so no runtime download is needed
 
 ### Gesture Detection
 Detected gestures are published to Home Assistant as entity state updates.
@@ -105,14 +105,17 @@ The robot can play 35 different emotions:
 | Sendspin | Switch | Enable/disable Sendspin discovery and playback |
 | Face Tracking | Switch | Enable/disable face tracking |
 | Gesture Detection | Switch | Enable/disable gesture detection |
-| Face Confidence | Number (0-1) | Face tracking confidence threshold |
+| Continuous Conversation | Switch | Multi-turn conversation mode |
+| Thinking Sound | Switch | Enable/disable the thinking sound |
+| Wake Word Sensitivity | Number | Wake word detection sensitivity |
+| Stop Word Sensitivity | Number | Stop word detection sensitivity |
 
-### Phase 2: Sleep and Runtime State
+### Phase 2: Runtime State
 | Entity | Type | Description |
 |--------|------|-------------|
-| Sleep Control | Switch | Turn on to sleep, turn off to wake |
-| Sleep Mode | Binary Sensor | Running when awake, not running when sleeping |
 | Services Suspended | Binary Sensor | Running when services are active |
+
+Note: App-managed sleep/wake control has been removed; the Reachy Mini SDK handles robot sleep/wake transitions and is treated as the source of truth.
 
 ### Phase 3: Pose Control
 | Entity | Type | Range |
@@ -205,16 +208,7 @@ Features:
 
 ## Sleep Mode
 
-Runtime reactions are zero-config: voice phases, timer alerts, and HA state-triggered emotions use the same built-in behavior model.
-
-### Enter Sleep
-- Turn on the `Sleep Control` switch in Home Assistant
-- Robot relaxes motors, stops camera, pauses voice detection
-
-### Wake Up
-- Turn off the `Sleep Control` switch in Home Assistant
-- Or say the wake word
-- Robot resumes all functions
+The app does not manage robot sleep/wake transitions. Robot sleep/wake is handled by the Reachy Mini SDK; the app stays aligned with the current SDK behavior and does not expose sleep/wake control entities.
 
 ---
 
@@ -241,4 +235,4 @@ Camera Port:   8081 (MJPEG)
 
 ---
 
-*Reachy Mini Voice Assistant v1.0.4*
+*Reachy Mini Voice Assistant v1.0.8*
