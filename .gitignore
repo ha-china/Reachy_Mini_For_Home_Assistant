@@ -58,15 +58,17 @@ config.json
 htmlcov/
 .tox/
 
-# Audio (exclude package bundled files)
+# Audio (exclude stray recordings; package bundled sounds are tracked)
 *.wav
 *.mp3
-# *.flac - bundled in package
-!reachy_mini_ha_voice/sounds/*.flac
+# Bundled sound assets in the package (old package name below was a no-op)
+!reachy_mini_home_assistant/sounds/*.flac
+!reachy_mini_home_assistant/sounds/*.wav
+# Legacy backup sound, not bundled
+reachy_mini_home_assistant/sounds/timer_finished_old.wav
 
-# Models (exclude package bundled files)
-# models/ - ignore external models directory
-models/
+# Models (exclude external models directory)
+/models/
 # Package bundled models
 !reachy_mini_home_assistant/models/
 

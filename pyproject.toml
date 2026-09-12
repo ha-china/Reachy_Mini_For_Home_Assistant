@@ -26,7 +26,9 @@ dependencies = [
     "pyopen-wakeword>=1.0.0,<2.0.0",
 
     # ESPHome protocol (communication with Home Assistant)
-    "aioesphomeapi>=43.10.1",
+    # Lower bound matches the line bundled with HA 2026.8.x; upper bound guards
+    # against private-surface drift (our codec is verified against 45.x/46.x)
+    "aioesphomeapi>=45.10,<47",
     "zeroconf>=0.131,<1",
     "websockets>=12,<16",
     "aiohttp>=3.9.0",
@@ -37,12 +39,15 @@ dependencies = [
     # Sendspin synchronized audio (optional, for multi-room playback)
     "aiosendspin>=9.0,<10.0",
 
+    # Streaming resampling for Sendspin/TTS audio (scipy fallback retained)
+    "soxr>=0.5",
+
     # Gesture detection (ONNX runtime for HaGRID models)
     "onnxruntime>=1.18.0",
 
     # Compatibility with system packages (gradio, etc.)
     "pillow>=10.0,<12.0",
-    "pydantic>=2.0,<=2.12.5",
+    "pydantic>=2.12.5,<3.0.0",
     "requests>=2.33.0",
 ]
 keywords = ["reachy-mini-app", "reachy-mini", "home-assistant", "voice-assistant"]
@@ -58,7 +63,7 @@ include-package-data = true
 where = ["."]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx"]
+"*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx", "*.wav"]
 
 # ============================================================================
 # Ruff - Fast Python linter and formatter
