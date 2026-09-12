@@ -49,12 +49,11 @@ from .idle_runtime import (
     update_idle_look_around,
 )
 from .state_machine import (
-    build_idle_pending_action,
-    load_idle_behavior_config,
     MovementState,
     PendingAction,
-    pick_idle_random_action,
     RobotState,
+    load_idle_behavior_config,
+    pick_idle_random_action,
 )
 
 if TYPE_CHECKING:
@@ -1012,7 +1011,7 @@ class MovementManager:
     def _reset_to_neutral_blocking(self) -> None:
         """Reset robot to neutral position (blocking)."""
         try:
-            from reachy_mini.reachy_mini import INIT_HEAD_POSE, INIT_ANTENNAS_JOINT_POSITIONS
+            from reachy_mini.reachy_mini import INIT_ANTENNAS_JOINT_POSITIONS, INIT_HEAD_POSE
 
             self.robot.goto_target(
                 head=INIT_HEAD_POSE,

@@ -4,7 +4,6 @@ This module now also contains idle-behavior data helpers so the control-loop
 implementation can stay focused on runtime orchestration.
 """
 
-import json
 import logging
 import math
 import random

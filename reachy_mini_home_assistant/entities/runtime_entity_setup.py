@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
-from .entity_extensions import SelectEntity, SensorEntity, SwitchEntity
+from .entity_extensions import SelectEntity, SwitchEntity
 from .entity_keys import get_entity_key
 
 if TYPE_CHECKING:
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_runtime_entities(registry: EntityRegistry, entities: list) -> None:
     rc = registry.reachy_controller
 
     entities.append(
@@ -160,7 +160,7 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
     _LOGGER.debug("Phase 1 entities registered")
 
 
-def setup_service_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_service_entities(registry: EntityRegistry, entities: list) -> None:
     registry._services_suspended_entity = BinarySensorEntity(
         server=registry.server,
         key=get_entity_key("services_suspended"),
@@ -173,7 +173,7 @@ def setup_service_entities(registry: "EntityRegistry", entities: list) -> None:
     _LOGGER.debug("Service state entities registered")
 
 
-def setup_behavior_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_behavior_entities(registry: EntityRegistry, entities: list) -> None:
     def get_emotion() -> str:
         return registry._current_emotion
 
@@ -272,7 +272,7 @@ def setup_behavior_entities(registry: "EntityRegistry", entities: list) -> None:
     _LOGGER.debug("Behavior entities registered")
 
 
-def setup_camera_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_camera_entities(registry: EntityRegistry, entities: list) -> None:
     def get_camera_image() -> bytes | None:
         if registry.camera_server:
             try:

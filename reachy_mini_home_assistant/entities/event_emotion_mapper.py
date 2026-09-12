@@ -5,7 +5,6 @@ This module now mirrors the reference-project separation more closely:
 - `BuiltinBehaviorController` executes the default zero-config behavior layer
 """
 
-import json
 import logging
 import threading
 import time

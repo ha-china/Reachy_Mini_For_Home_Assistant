@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def update_emotion_move(manager: "MovementManager") -> tuple[np.ndarray, tuple[float, float], float] | None:
+def update_emotion_move(manager: MovementManager) -> tuple[np.ndarray, tuple[float, float], float] | None:
     with manager._emotion_move_lock:
         if manager._emotion_move is None:
             return None
@@ -42,7 +42,7 @@ def update_emotion_move(manager: "MovementManager") -> tuple[np.ndarray, tuple[f
             return None
 
 
-def _fire_emotion_complete(manager: "MovementManager", emotion_name: str) -> None:
+def _fire_emotion_complete(manager: MovementManager, emotion_name: str) -> None:
     """Invoke the (optional) emotion-completion callback outside the lock."""
     callback = getattr(manager, "_on_emotion_complete_callback", None)
     if callback is None:
@@ -53,7 +53,7 @@ def _fire_emotion_complete(manager: "MovementManager", emotion_name: str) -> Non
         logger.debug("Emotion-complete callback error: %s", e)
 
 
-def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[float, float], float]:
+def compose_final_pose(manager: MovementManager) -> tuple[np.ndarray, tuple[float, float], float]:
     primary_head = create_head_pose_matrix(
         x=manager.state.target_x,
         y=manager.state.target_y,
@@ -114,7 +114,7 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     return final_head, (antenna_right, antenna_left), manager._body_yaw_smoothed
 
 
-def issue_control_command(manager: "MovementManager", head_pose: np.ndarray, antennas: tuple[float, float], body_yaw: float) -> None:
+def issue_control_command(manager: MovementManager, head_pose: np.ndarray, antennas: tuple[float, float], body_yaw: float) -> None:
     if manager._draining_event.is_set() or manager._emotion_playing_event.is_set() or manager._robot_paused_event.is_set():
         return
     now = manager._now()
@@ -161,7 +161,7 @@ def issue_control_command(manager: "MovementManager", head_pose: np.ndarray, ant
             manager._log_error_throttled(f"Failed to set robot target: {error_msg}")
 
 
-def run_control_loop(manager: "MovementManager", *, max_control_dt_s: float) -> None:
+def run_control_loop(manager: MovementManager, *, max_control_dt_s: float) -> None:
     logger.info("Movement manager control loop started (%.1f Hz)", manager._control_loop_hz)
     last_time = manager._now()
     while not manager._stop_event.is_set():

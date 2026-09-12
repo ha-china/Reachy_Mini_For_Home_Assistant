@@ -1,11 +1,11 @@
-﻿from __future__ import annotations
-
 """
 Voice Assistant Service for Reachy Mini.
 
 This module provides the main voice assistant service that integrates
 with Home Assistant via ESPHome protocol.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -16,26 +16,25 @@ from collections import deque
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from queue import Queue
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
-import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
 from .audio.local_audio_player import LocalAudioPlayer
 from .core import Config
+from .core.service_lifecycle import ServiceLifecycleMixin
 from .core.util import get_mac
-from .models import Preferences, ServerState
 from .motion.reachy_motion import ReachyMiniMotion
+from .preferences import Preferences, ServerState
 from .protocol.satellite import VoiceSatelliteProtocol
 from .protocol.wakeword_assets import find_available_wake_words, get_wake_word_dirs, load_stop_model, load_wake_models
 from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
-from .vision.camera_server import MJPEGCameraServer
 
 if TYPE_CHECKING:
-    from pymicro_wakeword import MicroWakeWord
-    from pyopen_wakeword import OpenWakeWord
+
+    from .vision.camera_server import MJPEGCameraServer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ AUDIO_BLOCK_SIZE = 512  # samples at 16kHz = 32ms (lower CPU while keeping wake 
 MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 40  # Max 40 chunks (~640ms) to prevent memory leak
 
 
-class VoiceAssistantService:
+class VoiceAssistantService(ServiceLifecycleMixin):
     """Voice assistant service that runs ESPHome protocol server."""
 
     def __init__(
@@ -347,6 +346,8 @@ class VoiceAssistantService:
             )
             return
 
+        from .vision.camera_server import MJPEGCameraServer
+
         self._camera_server = MJPEGCameraServer(
             reachy_mini=self.reachy_mini,
             host=self.host,
@@ -395,211 +396,6 @@ class VoiceAssistantService:
             return
 
         await self._stop_camera_server_if_running(reason=reason)
-
-    def _get_daemon_status(self) -> Any:
-        """Return the current daemon status via the public REST API, or None if unavailable."""
-        try:
-            resp = requests.get(
-                f"{Config.daemon.url.rstrip('/')}/api/daemon/status",
-                timeout=Config.daemon.check_interval_active,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception:
-            return None
-
-    def _probe_audio_capture_ready(self, media, timeout_s: float = 1.5) -> bool:
-        """Check whether microphone samples become available shortly after startup."""
-        deadline = time.monotonic() + timeout_s
-        while time.monotonic() < deadline:
-            try:
-                sample = media.get_audio_sample()
-                if sample is not None and isinstance(sample, np.ndarray) and sample.size > 0:
-                    return True
-            except Exception:
-                pass
-            time.sleep(0.05)
-        return False
-
-    def _suspend_voice_services(self, reason: str) -> None:
-        """Suspend only voice-related services."""
-        _LOGGER.warning("Suspending voice services (%s)", reason)
-        self._robot_services_paused.set()
-        self._robot_services_resumed.clear()
-        self._set_services_state(suspended=True)
-        self._audio_buffer.clear()
-        self._suspend_satellite()
-        self._set_audio_players_suspended(True)
-        self._stop_media_system()
-
-        _LOGGER.info("Voice services suspended - camera and motion remain active")
-
-    def _resume_voice_services(self, reason: str) -> None:
-        """Resume only voice-related services."""
-        _LOGGER.info("Resuming voice services (%s)", reason)
-        self._robot_services_paused.clear()
-        self._set_services_state(suspended=False)
-        self._start_media_system()
-        self._resume_satellite()
-        self._set_audio_players_suspended(False)
-        self._robot_services_resumed.set()
-
-        _LOGGER.info("Voice services resumed - camera and motion remained active")
-
-    def _suspend_non_esphome_services(self, reason: str) -> None:
-        """Suspend all non-ESPHome services."""
-        _LOGGER.warning("Suspending non-ESPHome services (%s)", reason)
-        self._robot_services_paused.set()
-        self._robot_services_resumed.clear()
-        self._set_services_state(suspended=True)
-        self._audio_buffer.clear()
-
-        if self._camera_server is not None and self._state.camera_enabled:
-            try:
-                self._camera_server.suspend()
-                _LOGGER.debug("Camera server suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending camera: %s", e)
-
-        if self._motion is not None and self._motion._movement_manager is not None:
-            try:
-                self._motion._movement_manager.suspend()
-                _LOGGER.debug("Motion controller suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending motion: %s", e)
-
-        self._suspend_satellite()
-        self._set_audio_players_suspended(True)
-        self._stop_media_system()
-
-        _LOGGER.info("Services suspended - ESPHome only")
-
-    def _resume_non_esphome_services(self, reason: str) -> None:
-        """Resume all non-ESPHome services after runtime suspension."""
-        _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
-        self._robot_services_paused.clear()
-        self._set_services_state(suspended=False)
-        self._start_media_system()
-
-        if self._camera_server is not None and self._state.camera_enabled:
-            try:
-                self._camera_server.resume_from_suspend()
-                _LOGGER.debug("Camera server resumed from suspend")
-            except Exception as e:
-                _LOGGER.warning("Error resuming camera: %s", e)
-
-        if self._motion is not None and self._motion._movement_manager is not None:
-            try:
-                self._motion._movement_manager.resume_from_suspend()
-                _LOGGER.debug("Motion controller resumed from suspend")
-            except Exception as e:
-                _LOGGER.warning("Error resuming motion: %s", e)
-
-        self._resume_satellite()
-        self._set_audio_players_suspended(False)
-        self._robot_services_resumed.set()
-
-        _LOGGER.info("All services resumed - system fully operational")
-
-    def _set_services_state(self, *, suspended: bool) -> None:
-        if self._state is None:
-            return
-        self._state.services_suspended = suspended
-
-    def _suspend_satellite(self) -> None:
-        if self._state is None or self._state.satellite is None:
-            return
-        try:
-            self._state.satellite.suspend()
-            _LOGGER.debug("Satellite suspended")
-        except Exception as e:
-            _LOGGER.warning("Error suspending satellite: %s", e)
-
-    def _resume_satellite(self) -> None:
-        if self._state is None or self._state.satellite is None:
-            return
-        try:
-            self._state.satellite.resume()
-            _LOGGER.debug("Satellite resumed")
-        except Exception as e:
-            _LOGGER.warning("Error resuming satellite: %s", e)
-
-    def _set_audio_players_suspended(self, suspended: bool) -> None:
-        if self._state is None:
-            return
-        action = "suspend" if suspended else "resume"
-        verb = "suspending" if suspended else "resuming"
-        for player_name, label in (("tts_player", "TTS player"), ("music_player", "music player")):
-            player = getattr(self._state, player_name)
-            if player is None:
-                continue
-            try:
-                getattr(player, action)()
-            except Exception as e:
-                _LOGGER.warning("Error %s %s: %s", verb, label, e)
-
-    def _stop_media_system(self) -> None:
-        media = self.reachy_mini.media
-        try:
-            media.stop_recording()
-        except Exception as e:
-            _LOGGER.warning("Error stopping recording: %s", e)
-        try:
-            media.stop_playing()
-        except Exception as e:
-            _LOGGER.warning("Error stopping playback: %s", e)
-        _LOGGER.debug("Media system stopped")
-
-    def _start_media_system(self) -> None:
-        try:
-            media = self.reachy_mini.media
-            if media.audio is not None:
-                try:
-                    media.stop_recording()
-                except Exception:
-                    pass
-                try:
-                    media.stop_playing()
-                except Exception:
-                    pass
-                time.sleep(0.2)
-                media.start_recording()
-                media.start_playing()
-                if not self._probe_audio_capture_ready(media, timeout_s=1.5):
-                    raise RuntimeError("Audio capture probe failed after media restart")
-                _LOGGER.info("Media system restarted")
-        except Exception as e:
-            _LOGGER.warning("Failed to restart media: %s", e)
-
-    def _on_robot_disconnected(self) -> None:
-        """Called when robot connection is lost."""
-        self._suspend_non_esphome_services(reason="robot_disconnected")
-
-    def _on_robot_connected(self) -> None:
-        """Called when robot connection is restored."""
-        self._resume_non_esphome_services(reason="robot_connected")
-
-    async def _on_ha_connected(self) -> None:
-        """Called when Home Assistant connects."""
-        _LOGGER.info("Home Assistant connected - initializing camera and voice services")
-        self._ha_connected = True
-        self._ha_connection_established = True
-
-        try:
-            await self._reconcile_camera_runtime(reason="ha_connected")
-        except Exception as e:
-            _LOGGER.error("Failed to reconcile camera runtime: %s", e)
-
-        # Resume services if they were suspended due to HA disconnection
-        if self._state.services_suspended:
-            self._resume_non_esphome_services(reason="ha_connected")
-
-    def _on_ha_disconnected(self) -> None:
-        """Called when Home Assistant disconnects."""
-        _LOGGER.warning("Home Assistant disconnected - suspending camera and voice services")
-        self._ha_connected = False
-
-        self._suspend_non_esphome_services(reason="ha_disconnected")
 
     async def stop(self) -> None:
         """Stop the voice assistant service."""
@@ -700,6 +496,7 @@ class VoiceAssistantService:
         required_sounds = [
             "wake_word_triggered.flac",
             "timer_finished.flac",
+            "processing.wav",
         ]
 
         missing_wakewords = self._find_missing_files(_WAKEWORDS_DIR, required_wakewords)
@@ -923,9 +720,7 @@ class VoiceAssistantService:
                 audio_data = audio_data.astype(np.float32, copy=False)
             audio_data = np.nan_to_num(audio_data, nan=0.0, posinf=1.0, neginf=-1.0)
 
-            if audio_data.ndim == 2 and audio_data.shape[1] >= 2:
-                audio_data = audio_data[:, 0]
-            elif audio_data.ndim == 2:
+            if (audio_data.ndim == 2 and audio_data.shape[1] >= 2) or audio_data.ndim == 2:
                 audio_data = audio_data[:, 0]
             if audio_data.ndim != 1:
                 return

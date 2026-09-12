@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def append_defined_entities(registry: "EntityRegistry", entities: list, definitions: list, callback_map: dict) -> None:
+def append_defined_entities(registry: EntityRegistry, entities: list, definitions: list, callback_map: dict) -> None:
     for definition in definitions:
         callbacks = callback_map.get(definition.key_name)
         if isinstance(callbacks, tuple):
@@ -35,7 +35,7 @@ def append_defined_entities(registry: "EntityRegistry", entities: list, definiti
         entities.append(create_entity(registry.server, definition))
 
 
-def setup_motion_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_motion_entities(registry: EntityRegistry, entities: list) -> None:
     rc = registry.reachy_controller
     append_defined_entities(
         registry,
@@ -66,7 +66,7 @@ def setup_motion_entities(registry: "EntityRegistry", entities: list) -> None:
     _LOGGER.debug("Motion entities registered")
 
 
-def setup_audio_direction_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_audio_direction_entities(registry: EntityRegistry, entities: list) -> None:
     rc = registry.reachy_controller
     entities.append(
         SensorEntity(
@@ -105,7 +105,7 @@ def setup_audio_direction_entities(registry: "EntityRegistry", entities: list) -
     )
 
 
-def setup_robot_info_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_robot_info_entities(registry: EntityRegistry, entities: list) -> None:
     rc = registry.reachy_controller
     append_defined_entities(
         registry,
@@ -123,7 +123,7 @@ def setup_robot_info_entities(registry: "EntityRegistry", entities: list) -> Non
     )
 
 
-def setup_imu_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_imu_entities(registry: EntityRegistry, entities: list) -> None:
     rc = registry.reachy_controller
     append_defined_entities(
         registry,
@@ -141,7 +141,7 @@ def setup_imu_entities(registry: "EntityRegistry", entities: list) -> None:
     )
 
 
-def setup_detection_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_detection_entities(registry: EntityRegistry, entities: list) -> None:
     def get_gesture() -> str:
         return registry.camera_server.get_current_gesture() if registry.camera_server else "none"
 
@@ -189,7 +189,7 @@ def setup_detection_entities(registry: "EntityRegistry", entities: list) -> None
     entities.append(registry._face_detected_entity)
 
 
-def setup_diagnostic_entities(registry: "EntityRegistry", entities: list) -> None:
+def setup_diagnostic_entities(registry: EntityRegistry, entities: list) -> None:
     diag = get_system_diagnostics()
     append_defined_entities(
         registry,

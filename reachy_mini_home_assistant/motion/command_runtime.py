@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def poll_commands(manager: "MovementManager") -> None:
+def poll_commands(manager: MovementManager) -> None:
     while True:
         try:
             cmd, payload = manager._command_queue.get_nowait()
@@ -37,7 +37,7 @@ def poll_commands(manager: "MovementManager") -> None:
         handle_command(manager, cmd, payload)
 
 
-def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
+def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
     if cmd == "set_state":
         old_state = manager.state.robot_state
         manager.state.robot_state = payload
@@ -119,7 +119,7 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
         manager._apply_idle_behavior_enabled(bool(payload))
 
 
-def start_emotion_move(manager: "MovementManager", emotion_name: str) -> None:
+def start_emotion_move(manager: MovementManager, emotion_name: str) -> None:
     if not is_emotion_available():
         logger.warning("Cannot play emotion '%s': emotion library not available", emotion_name)
         return
@@ -134,7 +134,7 @@ def start_emotion_move(manager: "MovementManager", emotion_name: str) -> None:
         logger.error("Failed to start emotion '%s': %s", emotion_name, e)
 
 
-def start_action(manager: "MovementManager", action: PendingAction) -> None:
+def start_action(manager: MovementManager, action: PendingAction) -> None:
     manager._pending_action = action
     manager._action_start_time = manager._now()
     manager._action_start_pose = {
@@ -150,14 +150,14 @@ def start_action(manager: "MovementManager", action: PendingAction) -> None:
     logger.debug("Starting action: %s", action.name)
 
 
-def do_nod(manager: "MovementManager", amplitude_deg: float, duration: float) -> None:
+def do_nod(manager: MovementManager, amplitude_deg: float, duration: float) -> None:
     amplitude_rad = math.radians(amplitude_deg)
     half_duration = duration / 2
     action_down = PendingAction(name="nod_down", target_pitch=amplitude_rad, duration=half_duration)
     start_action(manager, action_down)
 
 
-def do_shake(manager: "MovementManager", amplitude_deg: float, duration: float) -> None:
+def do_shake(manager: MovementManager, amplitude_deg: float, duration: float) -> None:
     amplitude_rad = math.radians(amplitude_deg)
     half_duration = duration / 2
     action_left = PendingAction(name="shake_left", target_yaw=-amplitude_rad, duration=half_duration)

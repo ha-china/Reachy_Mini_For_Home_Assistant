@@ -8,7 +8,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional
 
-from ..models import Preferences
+from ..preferences import Preferences
 from .entity import BinarySensorEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity
 from .entity_keys import get_entity_key

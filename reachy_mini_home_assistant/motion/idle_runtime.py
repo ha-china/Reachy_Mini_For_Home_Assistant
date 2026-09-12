@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> None:
+def apply_idle_behavior_enabled(manager: MovementManager, enabled: bool) -> None:
     manager._idle_motion_enabled = enabled
     manager._idle_antenna_enabled = enabled
     manager._idle_random_actions_enabled = enabled
@@ -38,7 +38,7 @@ def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> No
     logger.info("Idle behavior %s", "enabled" if enabled else "disabled")
 
 
-def apply_idle_rest_pose(manager: "MovementManager") -> None:
+def apply_idle_rest_pose(manager: MovementManager) -> None:
     manager.state.target_pitch = manager._idle_rest_head_pitch_rad
     manager.state.target_yaw = manager._idle_rest_head_yaw_rad
     manager.state.target_roll = manager._idle_rest_head_roll_rad
@@ -52,14 +52,14 @@ def apply_idle_rest_pose(manager: "MovementManager") -> None:
     manager._antenna_controller.reset()
 
 
-def transition_or_apply_idle_rest_pose(manager: "MovementManager", duration: float = 2.0) -> None:
+def transition_or_apply_idle_rest_pose(manager: MovementManager, duration: float = 2.0) -> None:
     if manager.state.robot_state == RobotState.IDLE:
         manager.transition_to_idle_rest(duration=duration)
     else:
         apply_idle_rest_pose(manager)
 
 
-def clear_idle_activity(manager: "MovementManager") -> None:
+def clear_idle_activity(manager: MovementManager) -> None:
     manager.state.next_look_around_time = 0.0
     manager.state.look_around_in_progress = False
     manager._idle_action_queue.clear()
@@ -67,7 +67,7 @@ def clear_idle_activity(manager: "MovementManager") -> None:
         manager._pending_action = None
 
 
-def clear_idle_animation(manager: "MovementManager") -> None:
+def clear_idle_animation(manager: MovementManager) -> None:
     manager._animation_player.stop()
     manager.state.anim_pitch = 0.0
     manager.state.anim_yaw = 0.0
@@ -79,13 +79,13 @@ def clear_idle_animation(manager: "MovementManager") -> None:
     manager.state.anim_antenna_right = 0.0
 
 
-def schedule_next_idle_action_time(manager: "MovementManager", now: float) -> None:
+def schedule_next_idle_action_time(manager: MovementManager, now: float) -> None:
     interval = random.uniform(manager._idle_random_actions_min_interval, manager._idle_random_actions_max_interval)
     manager.state.next_look_around_time = now + interval
 
 
 def update_idle_look_around(
-    manager: "MovementManager",
+    manager: MovementManager,
     *,
     inactivity_threshold_s: float,
     legacy_probability: float,

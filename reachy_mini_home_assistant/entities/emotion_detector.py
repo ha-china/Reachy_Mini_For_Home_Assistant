@@ -4,7 +4,6 @@ This module provides automatic emotion detection based on keywords in LLM respon
 allowing the robot to express emotions naturally during conversation.
 """
 
-import json
 import logging
 from collections.abc import Callable
 from pathlib import Path

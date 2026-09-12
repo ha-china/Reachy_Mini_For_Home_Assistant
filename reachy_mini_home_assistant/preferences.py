@@ -63,7 +63,9 @@ class Preferences:
     # Sendspin discovery and playback toggle (controlled from Home Assistant)
     sendspin_enabled: bool = False
     # Vision toggles and parameters (controlled from Home Assistant)
-    face_tracking_enabled: bool = False
+    # Face tracking defaults ON: the daemon-side YuNet tracker is cheap and the
+    # HA "Face Tracking" switch remains the opt-out.
+    face_tracking_enabled: bool = True
     gesture_detection_enabled: bool = False
     # Media volume persistence (0.0-1.0, controlled from Home Assistant)
     media_volume: float = 1.0
