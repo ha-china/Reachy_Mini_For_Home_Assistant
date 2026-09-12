@@ -12,6 +12,7 @@ from aioesphomeapi.model import VoiceAssistantEventType, VoiceAssistantTimerEven
 
 if TYPE_CHECKING:
     from aioesphomeapi.api_pb2 import VoiceAssistantTimerEventResponse  # type: ignore[attr-defined]
+
     from .satellite import VoiceSatelliteProtocol
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ _THINKING_SOUND = Path(__file__).resolve().parent.parent / "sounds" / "processin
 
 
 def handle_voice_event(
-    protocol: "VoiceSatelliteProtocol", event_type: VoiceAssistantEventType, data: dict[str, str]
+    protocol: VoiceSatelliteProtocol, event_type: VoiceAssistantEventType, data: dict[str, str]
 ) -> None:
     _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
@@ -86,9 +87,9 @@ def handle_voice_event(
 
 
 def handle_timer_event(
-    protocol: "VoiceSatelliteProtocol",
+    protocol: VoiceSatelliteProtocol,
     event_type: VoiceAssistantTimerEventType,
-    msg: "VoiceAssistantTimerEventResponse",
+    msg: VoiceAssistantTimerEventResponse,
 ) -> None:
     _LOGGER.debug("Timer event: type=%s", event_type.name)
     if event_type == VoiceAssistantTimerEventType.VOICE_ASSISTANT_TIMER_FINISHED and not protocol._timer_finished:
@@ -101,7 +102,7 @@ def handle_timer_event(
         protocol._reachy_on_timer_finished()
 
 
-def stop(protocol: "VoiceSatelliteProtocol") -> None:
+def stop(protocol: VoiceSatelliteProtocol) -> None:
     protocol._pipeline_active = False
     protocol._is_streaming_audio = False
     protocol._continue_conversation = False
@@ -123,7 +124,7 @@ def stop(protocol: "VoiceSatelliteProtocol") -> None:
         protocol._tts_finished()
 
 
-def play_tts(protocol: "VoiceSatelliteProtocol") -> None:
+def play_tts(protocol: VoiceSatelliteProtocol) -> None:
     if (not protocol._tts_url) or protocol._tts_played:
         return
     protocol._tts_played = True
@@ -133,19 +134,19 @@ def play_tts(protocol: "VoiceSatelliteProtocol") -> None:
     protocol.state.tts_player.play(protocol._tts_url, done_callback=protocol._tts_finished)
 
 
-def duck(protocol: "VoiceSatelliteProtocol") -> None:
+def duck(protocol: VoiceSatelliteProtocol) -> None:
     _LOGGER.debug("Ducking music")
     protocol.state.music_player.duck()
     protocol.state.music_player.pause_sendspin()
 
 
-def unduck(protocol: "VoiceSatelliteProtocol") -> None:
+def unduck(protocol: VoiceSatelliteProtocol) -> None:
     _LOGGER.debug("Unducking music")
     protocol.state.music_player.unduck()
     protocol.state.music_player.resume_sendspin()
 
 
-def play_timer_finished(protocol: "VoiceSatelliteProtocol") -> None:
+def play_timer_finished(protocol: VoiceSatelliteProtocol) -> None:
     if not protocol._timer_finished:
         protocol._timer_ring_start = None
         protocol.unduck()

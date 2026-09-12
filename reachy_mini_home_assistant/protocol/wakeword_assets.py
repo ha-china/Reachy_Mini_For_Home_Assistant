@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import logging
 import posixpath
 import shutil
@@ -15,10 +15,11 @@ from urllib.request import urlopen
 from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
-from ..models import AvailableWakeWord, WakeWordType
+from ..preferences import AvailableWakeWord, WakeWordType
 
 if TYPE_CHECKING:
     from aioesphomeapi.api_pb2 import VoiceAssistantExternalWakeWord  # type: ignore[attr-defined]
+
     from .satellite import VoiceSatelliteProtocol
 
 logger = logging.getLogger(__name__)
@@ -127,7 +128,7 @@ def load_stop_model(wake_word_dirs: list[Path], stop_model_id: str = "stop") -> 
 
 
 def download_external_wake_word(
-    protocol: "VoiceSatelliteProtocol", external_wake_word: "VoiceAssistantExternalWakeWord"
+    protocol: VoiceSatelliteProtocol, external_wake_word: VoiceAssistantExternalWakeWord
 ) -> AvailableWakeWord | None:
     eww_dir = protocol.state.download_dir / "external_wake_words"
     eww_dir.mkdir(parents=True, exist_ok=True)

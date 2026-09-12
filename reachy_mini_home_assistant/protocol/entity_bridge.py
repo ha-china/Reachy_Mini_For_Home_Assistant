@@ -7,19 +7,18 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .. import __version__
 from ..entities.entity import MediaPlayerEntity
 from ..entities.entity_registry import EntityRegistry, get_entity_key
-from ..entities.event_emotion_mapper import EventEmotionMapper
 
 if TYPE_CHECKING:
     from aioesphomeapi.api_pb2 import HomeAssistantStateResponse  # type: ignore[attr-defined]
+
     from .satellite import VoiceSatelliteProtocol
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def create_entity_registry(protocol: "VoiceSatelliteProtocol") -> EntityRegistry:
+def create_entity_registry(protocol: VoiceSatelliteProtocol) -> EntityRegistry:
     return EntityRegistry(
         server=protocol,
         reachy_controller=protocol.reachy_controller,
@@ -28,13 +27,13 @@ def create_entity_registry(protocol: "VoiceSatelliteProtocol") -> EntityRegistry
     )
 
 
-def bind_camera_callbacks(protocol: "VoiceSatelliteProtocol", camera_server) -> None:
+def bind_camera_callbacks(protocol: VoiceSatelliteProtocol, camera_server) -> None:
     if not camera_server:
         return
     camera_server.set_gesture_state_callback(protocol._entity_registry.update_gesture_state)
 
 
-def initialize_entities(protocol: "VoiceSatelliteProtocol") -> None:
+def initialize_entities(protocol: VoiceSatelliteProtocol) -> None:
     try:
         _LOGGER.info("Checking entity initialization state...")
         if not protocol.state._entities_initialized:
@@ -71,13 +70,13 @@ def initialize_entities(protocol: "VoiceSatelliteProtocol") -> None:
         raise
 
 
-def update_camera_server(protocol: "VoiceSatelliteProtocol", camera_server) -> None:
+def update_camera_server(protocol: VoiceSatelliteProtocol, camera_server) -> None:
     protocol._entity_registry.camera_server = camera_server
     bind_camera_callbacks(protocol, camera_server)
     _LOGGER.debug("Camera server reference updated in entity registry")
 
 
-def load_optional_mappings(protocol: "VoiceSatelliteProtocol") -> None:
+def load_optional_mappings(protocol: VoiceSatelliteProtocol) -> None:
     if protocol._optional_mappings_loaded:
         return
 
@@ -91,7 +90,7 @@ def load_optional_mappings(protocol: "VoiceSatelliteProtocol") -> None:
     protocol._optional_mappings_loaded = True
 
 
-def on_authenticated(protocol: "VoiceSatelliteProtocol") -> None:
+def on_authenticated(protocol: VoiceSatelliteProtocol) -> None:
     for entity in protocol.state.entities:
         try:
             entity.update_state()
@@ -99,7 +98,7 @@ def on_authenticated(protocol: "VoiceSatelliteProtocol") -> None:
             _LOGGER.debug("Failed to replay state for %s: %s", getattr(entity, "object_id", entity), e)
 
 
-def handle_ha_state_change(protocol: "VoiceSatelliteProtocol", msg: "HomeAssistantStateResponse") -> None:
+def handle_ha_state_change(protocol: VoiceSatelliteProtocol, msg: HomeAssistantStateResponse) -> None:
     try:
         entity_id = msg.entity_id
         new_state = msg.state
@@ -113,7 +112,7 @@ def handle_ha_state_change(protocol: "VoiceSatelliteProtocol", msg: "HomeAssista
         _LOGGER.error("Error handling HA state change: %s", e)
 
 
-def schedule_ha_connected_callback(protocol: "VoiceSatelliteProtocol") -> None:
+def schedule_ha_connected_callback(protocol: VoiceSatelliteProtocol) -> None:
     if protocol._on_ha_connected_callback:
         try:
             loop = asyncio.get_running_loop()
@@ -123,7 +122,7 @@ def schedule_ha_connected_callback(protocol: "VoiceSatelliteProtocol") -> None:
             _LOGGER.error("Error in HA connected callback: %s", e)
 
 
-def run_ha_disconnected_callback(protocol: "VoiceSatelliteProtocol") -> None:
+def run_ha_disconnected_callback(protocol: VoiceSatelliteProtocol) -> None:
     if protocol._on_ha_disconnected_callback:
         try:
             protocol._on_ha_disconnected_callback()

@@ -20,7 +20,7 @@ from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
 from ..entities.event_emotion_mapper import BuiltinBehaviorController, EventEmotionMapper
-from ..models import AvailableWakeWord, ServerState
+from ..preferences import AvailableWakeWord, ServerState
 from ..reachy_controller import ReachyController
 from .api_server import APIServer
 from .entity_bridge import (
@@ -28,8 +28,12 @@ from .entity_bridge import (
     create_entity_registry,
     initialize_entities,
     load_optional_mappings,
-    on_authenticated as replay_entity_states,
     run_ha_disconnected_callback,
+)
+from .entity_bridge import (
+    on_authenticated as replay_entity_states,
+)
+from .entity_bridge import (
     update_camera_server as update_entity_bridge_camera_server,
 )
 from .message_dispatch import handle_message as dispatch_message
@@ -64,8 +68,10 @@ from .voice_pipeline import (
     handle_voice_event,
     play_timer_finished,
     play_tts,
-    stop as stop_pipeline,
     unduck,
+)
+from .voice_pipeline import (
+    stop as stop_pipeline,
 )
 from .wakeword_assets import download_external_wake_word
 

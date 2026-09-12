@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_or_create_conversation_id(protocol: "VoiceSatelliteProtocol") -> str:
+def get_or_create_conversation_id(protocol: VoiceSatelliteProtocol) -> str:
     now = time.time()
     if protocol._conversation_id is None or now - protocol._last_conversation_time > protocol._conversation_timeout:
         protocol._conversation_id = str(uuid.uuid4())
@@ -28,19 +28,19 @@ def get_or_create_conversation_id(protocol: "VoiceSatelliteProtocol") -> str:
     return protocol._conversation_id
 
 
-def clear_conversation(protocol: "VoiceSatelliteProtocol") -> None:
+def clear_conversation(protocol: VoiceSatelliteProtocol) -> None:
     protocol._conversation_id = None
     protocol._continue_conversation = False
 
 
 def queue_voice_request_after_wakeup(
-    protocol: "VoiceSatelliteProtocol", *, wake_word_phrase: str | None = None, conversation_id: str | None = None
+    protocol: VoiceSatelliteProtocol, *, wake_word_phrase: str | None = None, conversation_id: str | None = None
 ) -> None:
     protocol._pending_voice_request = (wake_word_phrase, conversation_id)
 
 
 def start_audio_streaming(
-    protocol: "VoiceSatelliteProtocol", *, wake_word_phrase: str | None = None, conversation_id: str | None = None
+    protocol: VoiceSatelliteProtocol, *, wake_word_phrase: str | None = None, conversation_id: str | None = None
 ) -> None:
     """Start audio streaming immediately, without waiting for wakeup sound to finish."""
     logger.debug("Starting audio streaming for: %s", wake_word_phrase)
@@ -53,7 +53,7 @@ def start_audio_streaming(
     protocol._is_streaming_audio = True
 
 
-def on_wakeup_sound_finished(protocol: "VoiceSatelliteProtocol") -> None:
+def on_wakeup_sound_finished(protocol: VoiceSatelliteProtocol) -> None:
     if protocol._pending_voice_request is None:
         logger.debug("Wakeup sound finished with no pending voice request")
         return
@@ -71,13 +71,13 @@ def on_wakeup_sound_finished(protocol: "VoiceSatelliteProtocol") -> None:
     protocol._is_streaming_audio = True
 
 
-def play_wakeup_sound(protocol: "VoiceSatelliteProtocol") -> None:
+def play_wakeup_sound(protocol: VoiceSatelliteProtocol) -> None:
     protocol.state.tts_player.play(
         protocol.state.wakeup_sound, done_callback=lambda: on_wakeup_sound_finished(protocol)
     )
 
 
-def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
+def tts_finished(protocol: VoiceSatelliteProtocol) -> None:
     protocol._pipeline_active = False
     protocol.state.active_wake_words.discard(protocol.state.stop_word.id)
     protocol._set_stop_word_active(False)
@@ -110,7 +110,7 @@ def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
         protocol._schedule_delayed_idle_return()
 
 
-def _start_continued_conversation(protocol: "VoiceSatelliteProtocol") -> None:
+def _start_continued_conversation(protocol: VoiceSatelliteProtocol) -> None:
     """Resume listening after the settle delay elapses."""
     protocol._continue_conversation_timer = None
     if protocol.state.is_muted:
@@ -125,20 +125,20 @@ def _start_continued_conversation(protocol: "VoiceSatelliteProtocol") -> None:
     logger.debug("Continued conversation started")
 
 
-def cancel_delayed_continue_conversation(protocol: "VoiceSatelliteProtocol") -> None:
+def cancel_delayed_continue_conversation(protocol: VoiceSatelliteProtocol) -> None:
     """Cancel a pending continued-conversation timer if one is active."""
     if protocol._continue_conversation_timer is not None:
         protocol._continue_conversation_timer.cancel()
         protocol._continue_conversation_timer = None
 
 
-def cancel_delayed_idle_return(protocol: "VoiceSatelliteProtocol") -> None:
+def cancel_delayed_idle_return(protocol: VoiceSatelliteProtocol) -> None:
     if protocol._idle_return_timer is not None:
         protocol._idle_return_timer.cancel()
         protocol._idle_return_timer = None
 
 
-def schedule_delayed_idle_return(protocol: "VoiceSatelliteProtocol", delay_s: float) -> None:
+def schedule_delayed_idle_return(protocol: VoiceSatelliteProtocol, delay_s: float) -> None:
     cancel_delayed_idle_return(protocol)
 
     def _go_idle() -> None:

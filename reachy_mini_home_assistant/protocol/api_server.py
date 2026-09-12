@@ -2,12 +2,12 @@
 
 import asyncio
 import logging
+import threading
 from abc import abstractmethod
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 # pylint: disable=no-name-in-module
-from aioesphomeapi._frame_helper.packets import make_plain_text_packets
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     AuthenticationRequest,
     AuthenticationResponse,
@@ -18,8 +18,9 @@ from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     PingRequest,
     PingResponse,
 )
-from aioesphomeapi.core import MESSAGE_TYPE_TO_PROTO
 from google.protobuf import message
+
+from .esphome_codec import MESSAGE_TYPE_TO_PROTO, encode_packets
 
 PROTO_TO_MESSAGE_TYPE = {v: k for k, v in MESSAGE_TYPE_TO_PROTO.items()}
 
@@ -27,7 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class APIServer(asyncio.Protocol):
-    """ESPHome API Server implementation."""
+    """ESPHome API server implementation."""
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -36,6 +37,8 @@ class APIServer(asyncio.Protocol):
         self._pos: int = 0
         self._transport = None
         self._writelines = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread_id: int | None = None
 
     @abstractmethod
     def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
@@ -47,7 +50,11 @@ class APIServer(asyncio.Protocol):
 
     def process_packet(self, msg_type: int, packet_data: bytes) -> None:
         try:
-            msg_class = MESSAGE_TYPE_TO_PROTO[msg_type]
+            msg_class = MESSAGE_TYPE_TO_PROTO.get(msg_type)
+            if msg_class is None:
+                # Unknown/newer message type: skip instead of tearing the connection down
+                _LOGGER.debug("Ignoring unknown ESPHome message type %s", msg_type)
+                return
             msg_inst = msg_class.FromString(packet_data)
             _LOGGER.debug("Received message: %s", msg_class.__name__)
 
@@ -89,19 +96,42 @@ class APIServer(asyncio.Protocol):
                 self._writelines = None
 
     def send_messages(self, msgs: list[message.Message]):
-        if self._writelines is None:
+        """Send messages, safe to call from any thread.
+
+        asyncio transports are not documented as thread-safe, so cross-thread
+        callers (the audio worker thread streaming voice audio) are marshalled
+        onto the event loop thread.
+        """
+        if self._writelines is None or not msgs:
             return
 
         try:
             packets = [(PROTO_TO_MESSAGE_TYPE[msg.__class__], msg.SerializeToString()) for msg in msgs]
-            packet_bytes = make_plain_text_packets(packets)
-            self._writelines(packet_bytes)
+        except KeyError:
+            _LOGGER.exception("Attempted to send message with unknown protobuf class")
+            return
+        packet_bytes = encode_packets(packets)
+
+        if self._loop_thread_id is not None and threading.get_ident() != self._loop_thread_id:
+            loop = self._loop
+            if loop is None or loop.is_closed():
+                return
+            try:
+                loop.call_soon_threadsafe(self._write_now, packet_bytes)
+            except RuntimeError:
+                # Event loop closed during shutdown
+                return
+        else:
+            self._write_now(packet_bytes)
+
+    def _write_now(self, packet_bytes: bytes) -> None:
+        """Write frames on the event loop thread."""
+        if self._writelines is None:
+            return
+        try:
+            self._writelines([packet_bytes])
         except (IndexError, OSError, BrokenPipeError, ConnectionResetError) as e:
-            _LOGGER.warning(
-                "Error sending message (%s): %s - connection may be lost",
-                msgs[0].__class__.__name__ if msgs else "unknown",
-                e,
-            )
+            _LOGGER.warning("Error sending message: %s - connection may be lost", e)
             # Mark transport as invalid to prevent further writes
             self._writelines = None
             if self._transport:
@@ -111,6 +141,8 @@ class APIServer(asyncio.Protocol):
     def connection_made(self, transport) -> None:
         self._transport = transport
         self._writelines = transport.writelines
+        self._loop = asyncio.get_running_loop()
+        self._loop_thread_id = threading.get_ident()
         _LOGGER.info("ESPHome client connected from %s", transport.get_extra_info("peername"))
 
     def data_received(self, data: bytes):

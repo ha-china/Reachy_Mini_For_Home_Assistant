@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def handle_message(protocol: "VoiceSatelliteProtocol", msg: message.Message) -> Iterable[message.Message]:
+def handle_message(protocol: VoiceSatelliteProtocol, msg: message.Message) -> Iterable[message.Message]:
     if isinstance(msg, VoiceAssistantEventResponse):
         data: dict[str, str] = {}
         for arg in msg.data:

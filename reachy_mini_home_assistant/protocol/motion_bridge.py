@@ -51,7 +51,7 @@ _ROBOT_STATE_TO_PHASE: dict[RobotState, str] = {
 }
 
 
-def turn_to_sound_source(protocol: "VoiceSatelliteProtocol") -> None:
+def turn_to_sound_source(protocol: VoiceSatelliteProtocol) -> None:
     if not protocol.state.motion_enabled:
         _LOGGER.info("DOA turn-to-sound: motion disabled")
         return
@@ -78,23 +78,23 @@ def turn_to_sound_source(protocol: "VoiceSatelliteProtocol") -> None:
         _LOGGER.error("Error in turn-to-sound: %s", e)
 
 
-def reachy_on_listening(protocol: "VoiceSatelliteProtocol") -> None:
+def reachy_on_listening(protocol: VoiceSatelliteProtocol) -> None:
     protocol._behavior_controller.handle_voice_phase(VOICE_PHASE_LISTENING)
 
 
-def reachy_on_thinking(protocol: "VoiceSatelliteProtocol") -> None:
+def reachy_on_thinking(protocol: VoiceSatelliteProtocol) -> None:
     protocol._behavior_controller.handle_voice_phase(VOICE_PHASE_THINKING)
 
 
-def reachy_on_speaking(protocol: "VoiceSatelliteProtocol") -> None:
+def reachy_on_speaking(protocol: VoiceSatelliteProtocol) -> None:
     protocol._behavior_controller.handle_voice_phase(VOICE_PHASE_SPEAKING)
 
 
-def reachy_on_idle(protocol: "VoiceSatelliteProtocol") -> None:
+def reachy_on_idle(protocol: VoiceSatelliteProtocol) -> None:
     protocol._behavior_controller.handle_voice_phase(VOICE_PHASE_IDLE)
 
 
-def set_conversation_mode(protocol: "VoiceSatelliteProtocol", in_conversation: bool) -> None:
+def set_conversation_mode(protocol: VoiceSatelliteProtocol, in_conversation: bool) -> None:
     """Conversation mode affects DOA suppression; no longer wired to the camera server."""
     # The camera_server's adaptive frame rate no longer keys off conversation
     # state, so we intentionally do nothing here. Kept for compatibility with
@@ -102,15 +102,15 @@ def set_conversation_mode(protocol: "VoiceSatelliteProtocol", in_conversation: b
     _LOGGER.debug("Conversation mode set to %s", in_conversation)
 
 
-def reachy_on_timer_finished(protocol: "VoiceSatelliteProtocol") -> None:
+def reachy_on_timer_finished(protocol: VoiceSatelliteProtocol) -> None:
     protocol._behavior_controller.execute_skill(SKILL_TIMER_ALERT, context="timer_finished")
 
 
-def play_emotion(protocol: "VoiceSatelliteProtocol", emotion_name: str) -> None:
+def play_emotion(protocol: VoiceSatelliteProtocol, emotion_name: str) -> None:
     protocol._behavior_controller.execute_skill(SKILL_PLAY_EMOTION, emotion_name=emotion_name, context="emotion")
 
 
-def queue_emotion_move(protocol: "VoiceSatelliteProtocol", emotion_name: str) -> None:
+def queue_emotion_move(protocol: VoiceSatelliteProtocol, emotion_name: str) -> None:
     try:
         if protocol.state.motion and protocol.state.motion.movement_manager:
             movement_manager = protocol.state.motion.movement_manager
@@ -128,7 +128,7 @@ def queue_emotion_move(protocol: "VoiceSatelliteProtocol", emotion_name: str) ->
         _LOGGER.error("Error playing emotion %s: %s", emotion_name, e)
 
 
-def apply_head_tracking_weight(protocol: "VoiceSatelliteProtocol", weight: float, *, context: str) -> None:
+def apply_head_tracking_weight(protocol: VoiceSatelliteProtocol, weight: float, *, context: str) -> None:
     """Push a face tracking weight to the SDK daemon.
 
     The SDK's ``start_head_tracking(weight)``:
@@ -155,7 +155,7 @@ def apply_head_tracking_weight(protocol: "VoiceSatelliteProtocol", weight: float
         _LOGGER.warning("Failed to apply head tracking weight %.2f (%s): %s", weight, context, e)
 
 
-def _restore_head_tracking_after_emotion(protocol: "VoiceSatelliteProtocol") -> None:
+def _restore_head_tracking_after_emotion(protocol: VoiceSatelliteProtocol) -> None:
     """Re-apply the current voice-phase weight after an emotion move ends."""
     mm = protocol.state.motion.movement_manager if protocol.state.motion else None
     robot_state = mm.state.robot_state if mm is not None else RobotState.IDLE
@@ -164,7 +164,7 @@ def _restore_head_tracking_after_emotion(protocol: "VoiceSatelliteProtocol") -> 
     apply_head_tracking_weight(protocol, weight, context="after_emotion")
 
 
-def set_face_tracking_for_state(protocol: "VoiceSatelliteProtocol", enabled: bool, context: str) -> None:
+def set_face_tracking_for_state(protocol: VoiceSatelliteProtocol, enabled: bool, context: str) -> None:
     """Apply a face tracking weight for a voice phase.
 
     Maps the legacy boolean ``face_tracking`` flag from ``enter_motion_state``
@@ -188,7 +188,7 @@ def set_face_tracking_for_state(protocol: "VoiceSatelliteProtocol", enabled: boo
 
 
 def enter_motion_state(
-    protocol: "VoiceSatelliteProtocol", context: str, callback_name: str, *, face_tracking: bool | None = None
+    protocol: VoiceSatelliteProtocol, context: str, callback_name: str, *, face_tracking: bool | None = None
 ) -> None:
     protocol._cancel_delayed_idle_return()
     if face_tracking is not None:
@@ -196,7 +196,7 @@ def enter_motion_state(
     run_motion_state(protocol, context, callback_name)
 
 
-def run_motion_state(protocol: "VoiceSatelliteProtocol", context: str, callback_name: str) -> None:
+def run_motion_state(protocol: VoiceSatelliteProtocol, context: str, callback_name: str) -> None:
     if not protocol.state.motion_enabled:
         if context == "speaking":
             _LOGGER.warning("Motion disabled, skipping speaking animation")
