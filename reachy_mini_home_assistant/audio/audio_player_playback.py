@@ -142,12 +142,25 @@ class AudioPlayerPlaybackMixin(
             except Exception:
                 _LOGGER.exception("Unexpected error running done callback")
 
+    def _flush_player_output(self) -> None:
+        """Drop queued playback audio without stopping the shared GStreamer pipeline.
+
+        The SDK's local audio backend runs the record and playback chains in ONE
+        pipeline so webrtcdsp shares a clock with the mic capture; ``stop_playing()``
+        NULLs that whole pipeline and kills microphone capture. ``clear_player()`` is
+        the SDK's supported flush (same pattern as the upstream conversation app).
+        """
+        audio = getattr(self.reachy_mini.media, "audio", None) if self.reachy_mini is not None else None
+        if audio is None:
+            return
+        try:
+            audio.clear_player()
+        except Exception:
+            _LOGGER.debug("Failed to flush player output", exc_info=True)
+
     def pause(self) -> None:
         self._stop_flag.set()
-        try:
-            self.reachy_mini.media.stop_playing()
-        except Exception:
-            pass
+        self._flush_player_output()
         self.is_playing = False
 
     def resume_playback(self) -> None:
@@ -157,10 +170,7 @@ class AudioPlayerPlaybackMixin(
 
     def stop(self) -> None:
         self._stop_flag.set()
-        try:
-            self.reachy_mini.media.stop_playing()
-        except Exception:
-            pass
+        self._flush_player_output()
         if self._playback_thread and self._playback_thread.is_alive():
             try:
                 self._playback_thread.join(timeout=2.0)

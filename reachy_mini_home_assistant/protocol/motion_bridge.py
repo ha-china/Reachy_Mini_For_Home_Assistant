@@ -149,7 +149,10 @@ def apply_head_tracking_weight(protocol: "VoiceSatelliteProtocol", weight: float
         reachy_mini.start_head_tracking(weight=float(weight))
         _LOGGER.debug("Head tracking weight=%.2f (%s)", weight, context)
     except Exception as e:
-        _LOGGER.debug("Failed to apply head tracking weight %.2f (%s): %s", weight, context, e)
+        # The daemon answers head-tracking requests with "unavailable" (e.g. no
+        # camera or a failed YuNet model load) without raising on the client
+        # side, so any exception here is a real transport/connection problem.
+        _LOGGER.warning("Failed to apply head tracking weight %.2f (%s): %s", weight, context, e)
 
 
 def _restore_head_tracking_after_emotion(protocol: "VoiceSatelliteProtocol") -> None:

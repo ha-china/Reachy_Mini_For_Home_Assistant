@@ -164,15 +164,13 @@ class AudioPlayerSendspinMixin:
     def _stop_sendspin_output(self) -> None:
         if self.reachy_mini is None:
             return
+        # Flush via clear_player() only: stop_playing() would NULL the shared
+        # record+playback pipeline and kill microphone capture (e.g. when the
+        # voice assistant pauses Sendspin music on wake).
         try:
             self.reachy_mini.media.audio.clear_player()
         except Exception:
             _LOGGER.debug("Failed to clear output buffer", exc_info=True)
-        if self._sendspin_playback_started:
-            try:
-                self.reachy_mini.media.stop_playing()
-            except Exception:
-                _LOGGER.debug("Failed to stop Sendspin playback", exc_info=True)
         self._sendspin_playback_started = False
 
     def _clear_sendspin_queue(self) -> None:

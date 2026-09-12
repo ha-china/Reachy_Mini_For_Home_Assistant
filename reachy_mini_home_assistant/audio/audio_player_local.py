@@ -104,10 +104,10 @@ class AudioPlayerLocalMixin:
                 now = time.monotonic()
                 if now > playback_timeout:
                     _LOGGER.warning("Audio playback timeout (%.1fs), stopping", max_duration)
-                    self.reachy_mini.media.stop_playing()
+                    self._flush_player_output()
                     break
                 if self._stop_flag.is_set():
-                    self.reachy_mini.media.stop_playing()
+                    self._flush_player_output()
                     break
                 if has_duration:
                     if (now - start_time) >= duration_s:
