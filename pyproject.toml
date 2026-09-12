@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK with gstreamer support (for camera streaming)
-    "reachy-mini>=1.9.0",
+    "reachy-mini>=1.10.0",
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
@@ -35,7 +35,7 @@ dependencies = [
     "scipy>=1.15.3,<2.0.0",
 
     # Sendspin synchronized audio (optional, for multi-room playback)
-    "aiosendspin>=6.0,<7.0",
+    "aiosendspin>=9.0,<10.0",
 
     # Gesture detection (ONNX runtime for HaGRID models)
     "onnxruntime>=1.18.0",

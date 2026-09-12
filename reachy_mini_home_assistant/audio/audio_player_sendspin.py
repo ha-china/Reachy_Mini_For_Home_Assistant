@@ -26,7 +26,7 @@ try:
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles, UndefinedField
     from aiosendspin.noise.keys import Identity
-    from aiosendspin.noise.trust_store import ClientPairingStore
+    from aiosendspin.noise.trust_store import InMemoryClientPairingStore
 
     from .. import __version__
     from ..core.util import get_mac
@@ -45,7 +45,7 @@ except Exception as e:
     PlayerCommand = None  # type: ignore[assignment]
     Roles = None  # type: ignore[assignment]
     Identity = None  # type: ignore[assignment]
-    ClientPairingStore = None  # type: ignore[assignment]
+    InMemoryClientPairingStore = None  # type: ignore[assignment]
 
 try:
     from aiosendspin.client.listener import DEFAULT_PORT as SENDSPIN_DEFAULT_PORT
@@ -281,7 +281,7 @@ class AudioPlayerSendspinMixin:
             supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
         )
         identity = Identity.generate()
-        pairing_store = ClientPairingStore()
+        pairing_store = InMemoryClientPairingStore()
         return SendspinClient(
             identity=identity,
             client_name="Reachy Mini",
