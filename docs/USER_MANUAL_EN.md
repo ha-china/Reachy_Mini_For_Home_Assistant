@@ -236,3 +236,14 @@ Camera Port:   8081 (MJPEG)
 ---
 
 *Reachy Mini Voice Assistant v1.0.8*
+
+### Sendspin Headless Pairing
+
+The robot has no screen, so when the Sendspin server (Home Assistant) starts pairing it expects a code "shown on the device". The code is surfaced through these entities:
+
+| Entity | Type | Description |
+|--------|------|-------------|
+| Sendspin Pairing Code | Text Sensor | Shows the dynamic pairing code during server pairing; cleared afterwards |
+| Sendspin Pairing Window | Switch | Opens a 5-minute pairing window (the headless equivalent of a pairing button) |
+
+Flow: enable **Sendspin Pairing Window** -> start pairing from the HA Sendspin server -> read the code from **Sendspin Pairing Code** -> confirm in HA. Pairing persists (identity + records are stored on disk); no re-pairing after restart.

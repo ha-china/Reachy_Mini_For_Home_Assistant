@@ -236,3 +236,14 @@ ESPHome 端口： 6053
 ---
 
 *Reachy Mini 语音助手 v1.0.8*
+
+### Sendspin 无屏配对
+
+机器人没有屏幕，Sendspin 服务端（Home Assistant）发起配对时需要一个"设备上显示"的配对码。配对码通过以下实体提供：
+
+| 实体 | 类型 | 说明 |
+|------|------|------|
+| Sendspin Pairing Code | 文本传感器 | 服务端配对时显示动态配对码，配对结束后清空 |
+| Sendspin Pairing Window | 开关 | 打开 5 分钟配对窗口（等同无屏设备的"配对按键"） |
+
+配对流程：打开 **Sendspin Pairing Window** 开关 → 在 HA 的 Sendspin 服务端发起配对 → 从 **Sendspin Pairing Code** 实体读取配对码 → 在 HA 中确认。配对成功后长期生效（身份与配对记录持久化存储），重启无需重新配对。
