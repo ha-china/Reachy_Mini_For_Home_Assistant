@@ -88,6 +88,7 @@ def load_wake_models(
             try:
                 loaded_model = wake_word.load()
                 loaded_model.id = wake_word_id
+                loaded_model._stock_probability_cutoff = wake_word.probability_cutoff
                 wake_models[wake_word_id] = loaded_model
                 active_wake_words.add(wake_word_id)
             except Exception as exc:
@@ -104,6 +105,7 @@ def load_wake_models(
         try:
             loaded_model = wake_word.load()
             loaded_model.id = wake_word_id
+            loaded_model._stock_probability_cutoff = wake_word.probability_cutoff
             wake_models[wake_word_id] = loaded_model
             active_wake_words.add(wake_word_id)
             return wake_models, active_wake_words
@@ -119,7 +121,14 @@ def load_stop_model(wake_word_dirs: list[Path], stop_model_id: str = "stop") -> 
         if not stop_config_path.exists():
             continue
         try:
-            return MicroWakeWord.from_config(stop_config_path)
+            stop_model = MicroWakeWord.from_config(stop_config_path)
+            try:
+                stop_model._stock_probability_cutoff = json.loads(stop_config_path.read_text(encoding="utf-8"))[
+                    "micro"
+                ].get("probability_cutoff", 0.5)
+            except Exception:
+                stop_model._stock_probability_cutoff = 0.5
+            return stop_model
         except Exception as exc:
             logger.error("Failed to load stop model from %s: %s", stop_config_path, exc, exc_info=True)
 

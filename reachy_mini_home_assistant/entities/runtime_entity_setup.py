@@ -225,7 +225,7 @@ def setup_behavior_entities(registry: EntityRegistry, entities: list) -> None:
     )
 
     def get_wake_word_sensitivity() -> float:
-        return float(registry._get_pref_float("wake_word_sensitivity", 0.7))
+        return float(registry._get_pref_float("wake_word_sensitivity", 0.5))
 
     def set_wake_word_sensitivity(value: float) -> None:
         registry._set_pref_float("wake_word_sensitivity", max(0.0, min(1.0, value)))
@@ -248,7 +248,7 @@ def setup_behavior_entities(registry: EntityRegistry, entities: list) -> None:
     )
 
     def get_stop_word_sensitivity() -> float:
-        return float(registry._get_pref_float("stop_word_sensitivity", 0.7))
+        return float(registry._get_pref_float("stop_word_sensitivity", 0.5))
 
     def set_stop_word_sensitivity(value: float) -> None:
         registry._set_pref_float("stop_word_sensitivity", max(0.0, min(1.0, value)))

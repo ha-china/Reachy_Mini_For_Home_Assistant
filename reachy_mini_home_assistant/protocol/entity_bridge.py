@@ -48,11 +48,14 @@ def initialize_entities(protocol: VoiceSatelliteProtocol) -> None:
                     music_player=protocol.state.music_player,
                     announce_player=protocol.state.tts_player,
                 )
-                # Restore persisted volume from preferences
+                # Restore persisted volume (and muted flag) from preferences
                 saved_volume = protocol.state.preferences.media_volume
                 protocol.state.media_player_entity.volume = saved_volume
-                protocol.state.music_player.set_volume(int(saved_volume * 100))
-                protocol.state.tts_player.set_volume(int(saved_volume * 100))
+                saved_muted = bool(getattr(protocol.state.preferences, "media_muted", False))
+                protocol.state.media_player_entity.muted = saved_muted
+                restore_level = 0 if saved_muted else int(saved_volume * 100)
+                protocol.state.music_player.set_volume(restore_level)
+                protocol.state.tts_player.set_volume(restore_level)
                 protocol.state.entities.append(protocol.state.media_player_entity)
                 _LOGGER.info("MediaPlayerEntity created")
 

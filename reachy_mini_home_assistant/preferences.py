@@ -69,11 +69,15 @@ class Preferences:
     gesture_detection_enabled: bool = False
     # Media volume persistence (0.0-1.0, controlled from Home Assistant)
     media_volume: float = 1.0
+    # Muted flag persisted so a restart while muted stays consistent
+    media_muted: bool = False
     # Thinking sound toggle (controlled from Home Assistant)
     thinking_sound_enabled: bool = False
     # Wake word / stop word sensitivity (0.0-1.0, controlled from Home Assistant)
-    wake_word_sensitivity: float = 0.7
-    stop_word_sensitivity: float = 0.7
+    # 0.5 matches the models' built-in probability cutoff (0.5); the detection
+    # cutoff is computed as 1.0 - sensitivity, so higher = more sensitive.
+    wake_word_sensitivity: float = 0.5
+    stop_word_sensitivity: float = 0.5
     # Start streaming audio immediately after wake word detection,
     # without waiting for the wakeup sound to finish playing.
     # This avoids GStreamer ALSA deadlock on some hardware.

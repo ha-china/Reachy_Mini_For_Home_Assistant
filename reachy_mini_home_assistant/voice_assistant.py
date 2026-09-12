@@ -788,8 +788,16 @@ class VoiceAssistantService(ServiceLifecycleMixin):
             activated = False
 
             if isinstance(wake_word, MicroWakeWord):
+                # Probability comparison so the HA sensitivity slider takes
+                # effect live (the model's built-in cutoff ignores it). The
+                # slider offsets the model's own tuned cutoff around its
+                # factory value, so 0.5 = stock behaviour.
+                threshold = self._sensitivity_cutoff(
+                    wake_word, self._state.preferences.wake_word_sensitivity
+                )
                 for micro_input in ctx.micro_inputs:
-                    if wake_word.process_streaming(micro_input):
+                    prob = wake_word.process_streaming_prob(micro_input)
+                    if prob is not None and prob > threshold:
                         activated = True
             elif isinstance(wake_word, OpenWakeWord):
                 sensitivity = 1.0 - self._state.preferences.wake_word_sensitivity
@@ -807,6 +815,17 @@ class VoiceAssistantService(ServiceLifecycleMixin):
                     # Face tracking will handle looking at user automatically
                     self._motion.on_wakeup()
                     ctx.last_active = now
+
+    @staticmethod
+    def _sensitivity_cutoff(model, sensitivity: float) -> float:
+        """Map a 0-1 sensitivity slider onto a probability cutoff.
+
+        0.5 reproduces the model's tuned (stock) cutoff; each step up in
+        sensitivity lowers the cutoff and vice versa, clamped to sane bounds.
+        """
+        stock = float(getattr(model, "_stock_probability_cutoff", 0.5))
+        offset = (float(sensitivity) - 0.5) * -1.0
+        return max(0.05, min(0.99, stock + offset))
 
     def _detect_stop_word(self, ctx: AudioProcessingContext) -> None:
         """Detect stop word in the processed audio features."""
@@ -831,8 +850,13 @@ class VoiceAssistantService(ServiceLifecycleMixin):
                 pass
 
         stopped = False
+        # Same stock-anchored cutoff convention as wake words.
+        threshold = self._sensitivity_cutoff(
+            self._state.stop_word, self._state.preferences.stop_word_sensitivity
+        )
         for micro_input in ctx.micro_inputs:
-            if self._state.stop_word.process_streaming(micro_input):
+            prob = self._state.stop_word.process_streaming_prob(micro_input)
+            if prob is not None and prob > threshold:
                 stopped = True
                 break  # Stop at first detection
 
