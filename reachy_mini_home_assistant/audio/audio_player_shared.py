@@ -5,6 +5,8 @@ import logging
 import socket
 from urllib.parse import urlparse, urlunparse
 
+import numpy as np
+
 _LOGGER = logging.getLogger(__name__)
 
 STREAM_FETCH_CHUNK_SIZE = 2048
@@ -61,3 +63,41 @@ def get_stable_client_id() -> str:
         return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
     except Exception:
         return "reachy-mini-default"
+
+
+class AudioResampler:
+    """Stateful streaming resampler with a scipy fallback.
+
+    soxr's ResampleStream keeps filter state across chunks (no FFT periodicity
+    artefacts between chunks) at a fraction of the CPU cost of
+    scipy.signal.resample on the robot's ARM SoC. Output arrives with a
+    small constant filter delay that continuous playback absorbs.
+    """
+
+    def __init__(self, in_rate: int, out_rate: int, channels: int, quality: str = "MQ") -> None:
+        self.in_rate = in_rate
+        self.out_rate = out_rate
+        self._channels = max(1, int(channels))
+        self._stream = None
+        try:
+            import soxr
+
+            self._stream = soxr.ResampleStream(
+                in_rate, out_rate, self._channels, dtype="float32", quality=quality
+            )
+        except ImportError:
+            _LOGGER.info("soxr not installed; falling back to scipy resampling")
+        except Exception:
+            _LOGGER.exception("soxr resampler init failed; falling back to scipy")
+
+    def process(self, audio: np.ndarray) -> np.ndarray:
+        """Resample one (frames, channels) float32 chunk."""
+        if self._stream is not None:
+            out = self._stream.resample_chunk(audio)
+            return np.ascontiguousarray(out, dtype=np.float32)
+        import scipy.signal
+
+        new_length = int(len(audio) * self.out_rate / self.in_rate)
+        if new_length <= 0:
+            return audio[:0]
+        return scipy.signal.resample(audio, new_length, axis=0).astype(np.float32, copy=False)

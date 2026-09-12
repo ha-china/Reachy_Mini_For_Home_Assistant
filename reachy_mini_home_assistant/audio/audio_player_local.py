@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
+from .audio_player_shared import _LOGGER, STREAM_FETCH_CHUNK_SIZE, sniff_audio_content_type
 
 
 class AudioPlayerLocalMixin:

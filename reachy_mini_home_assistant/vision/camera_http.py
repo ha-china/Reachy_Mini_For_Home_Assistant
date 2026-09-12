@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 MJPEG_BOUNDARY = "frame"
 
 
-def build_index_html(server: "MJPEGCameraServer") -> str:
+def build_index_html(server: MJPEGCameraServer) -> str:
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -46,7 +46,7 @@ def build_index_html(server: "MJPEGCameraServer") -> str:
 </html>"""
 
 
-async def handle_client(server: "MJPEGCameraServer", reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+async def handle_client(server: MJPEGCameraServer, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
     try:
         request_line = await asyncio.wait_for(reader.readline(), timeout=10.0)
         request = request_line.decode("utf-8", errors="ignore").strip()
@@ -77,7 +77,7 @@ async def handle_client(server: "MJPEGCameraServer", reader: asyncio.StreamReade
             pass
 
 
-async def handle_index(server: "MJPEGCameraServer", writer: asyncio.StreamWriter) -> None:
+async def handle_index(server: MJPEGCameraServer, writer: asyncio.StreamWriter) -> None:
     html = build_index_html(server)
     response = (
         "HTTP/1.1 200 OK\r\n"
@@ -91,7 +91,7 @@ async def handle_index(server: "MJPEGCameraServer", writer: asyncio.StreamWriter
     await writer.drain()
 
 
-async def handle_snapshot(server: "MJPEGCameraServer", writer: asyncio.StreamWriter) -> None:
+async def handle_snapshot(server: MJPEGCameraServer, writer: asyncio.StreamWriter) -> None:
     jpeg_data = server.get_snapshot()
     if jpeg_data is None:
         response = (
@@ -116,7 +116,7 @@ async def handle_snapshot(server: "MJPEGCameraServer", writer: asyncio.StreamWri
     await writer.drain()
 
 
-async def handle_stream(server: "MJPEGCameraServer", writer: asyncio.StreamWriter, boundary: str) -> None:
+async def handle_stream(server: MJPEGCameraServer, writer: asyncio.StreamWriter, boundary: str) -> None:
     client_id = server._register_stream_client()
     response = (
         "HTTP/1.1 200 OK\r\n"

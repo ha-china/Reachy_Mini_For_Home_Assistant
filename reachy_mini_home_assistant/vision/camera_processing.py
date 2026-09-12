@@ -6,7 +6,6 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-import cv2
 import numpy as np
 
 if TYPE_CHECKING:
@@ -15,7 +14,14 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def capture_frames(server: "MJPEGCameraServer", *, gesture_min_fps: float) -> None:
+def _get_cv2():
+    """Import OpenCV lazily so process startup does not pay for it unless the camera runs."""
+    import cv2
+
+    return cv2
+
+
+def capture_frames(server: MJPEGCameraServer, *, gesture_min_fps: float) -> None:
     """Capture and encode frames for MJPEG streaming + gesture detection.
 
     JPEG encoding uses the SDK's GStreamer jpegenc pipeline (hardware-accelerated
@@ -44,17 +50,20 @@ def capture_frames(server: "MJPEGCameraServer", *, gesture_min_fps: float) -> No
                 continue
 
             if should_run_gesture:
-                # Need raw BGR frame for gesture detection; encode locally for streaming.
-                frame = get_camera_frame(server)
-                if frame is None:
+                # One hardware-encoded JPEG feeds both the stream and the gesture
+                # model: the daemon's jpegenc pipeline does the encode, and we pay
+                # only for a small JPEG decode on gesture ticks instead of pulling
+                # ~1MB raw frames over IPC plus software-encoding them here.
+                jpeg = get_camera_jpeg(server)
+                if jpeg is None:
                     _sleep_until_next(server, gesture_min_fps)
                     continue
                 frame_count += 1
                 if streaming:
-                    success, jpeg_data = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, server.quality])
-                    if success:
-                        _store_frame(server, jpeg_data.tobytes())
-                process_gesture_detection(server, frame)
+                    _store_frame(server, jpeg)
+                frame = decode_jpeg_frame(jpeg)
+                if frame is not None:
+                    process_gesture_detection(server, frame)
             else:
                 # Only streaming — use SDK's hardware JPEG encoder directly.
                 jpeg = get_camera_jpeg(server)
@@ -75,13 +84,23 @@ def capture_frames(server: "MJPEGCameraServer", *, gesture_min_fps: float) -> No
     _LOGGER.info("Camera capture thread stopped")
 
 
-def _store_frame(server: "MJPEGCameraServer", jpeg_bytes: bytes) -> None:
+def decode_jpeg_frame(jpeg_bytes: bytes) -> np.ndarray | None:
+    """Decode a hardware-encoded JPEG back to a BGR frame for gesture inference."""
+    try:
+        cv2 = _get_cv2()
+        return cv2.imdecode(np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    except Exception:
+        _LOGGER.debug("JPEG decode for gesture detection failed", exc_info=True)
+        return None
+
+
+def _store_frame(server: MJPEGCameraServer, jpeg_bytes: bytes) -> None:
     with server._frame_lock:
         server._last_frame = jpeg_bytes
         server._last_frame_time = time.time()
 
 
-def _sleep_until_next(server: "MJPEGCameraServer", gesture_min_fps: float) -> None:
+def _sleep_until_next(server: MJPEGCameraServer, gesture_min_fps: float) -> None:
     sleep_time = server._frame_rate_manager.get_sleep_interval()
     if server._gesture_detection_enabled and server._gesture_detector is not None:
         sleep_time = min(sleep_time, 1.0 / gesture_min_fps)
@@ -89,12 +108,12 @@ def _sleep_until_next(server: "MJPEGCameraServer", gesture_min_fps: float) -> No
         time.sleep(sleep_time)
 
 
-def has_stream_clients(server: "MJPEGCameraServer") -> bool:
+def has_stream_clients(server: MJPEGCameraServer) -> bool:
     with server._stream_client_lock:
         return len(server._active_stream_clients) > 0
 
 
-def register_stream_client(server: "MJPEGCameraServer") -> int:
+def register_stream_client(server: MJPEGCameraServer) -> int:
     with server._stream_client_lock:
         client_id = server._next_client_id % 1000000
         server._next_client_id += 1
@@ -103,13 +122,13 @@ def register_stream_client(server: "MJPEGCameraServer") -> int:
         return client_id
 
 
-def unregister_stream_client(server: "MJPEGCameraServer", client_id: int) -> None:
+def unregister_stream_client(server: MJPEGCameraServer, client_id: int) -> None:
     with server._stream_client_lock:
         server._active_stream_clients.discard(client_id)
         _LOGGER.debug("Stream client unregistered: %d (total: %d)", client_id, len(server._active_stream_clients))
 
 
-def process_gesture_detection(server: "MJPEGCameraServer", frame: np.ndarray) -> None:
+def process_gesture_detection(server: MJPEGCameraServer, frame: np.ndarray) -> None:
     if server._gesture_detector is None:
         return
     try:
@@ -138,7 +157,7 @@ def process_gesture_detection(server: "MJPEGCameraServer", frame: np.ndarray) ->
         _LOGGER.warning("Gesture detection error: %s", e)
 
 
-def get_camera_frame(server: "MJPEGCameraServer") -> np.ndarray | None:
+def get_camera_frame(server: MJPEGCameraServer) -> np.ndarray | None:
     """Fetch a raw BGR frame from the SDK media backend (for gesture detection)."""
     if not server._camera_ready():
         return None
@@ -156,7 +175,7 @@ def get_camera_frame(server: "MJPEGCameraServer") -> np.ndarray | None:
         return None
 
 
-def get_camera_jpeg(server: "MJPEGCameraServer") -> bytes | None:
+def get_camera_jpeg(server: MJPEGCameraServer) -> bytes | None:
     """Fetch a JPEG-encoded frame from the SDK's GStreamer jpegenc pipeline."""
     if not server._camera_ready():
         return None
@@ -174,7 +193,7 @@ def get_camera_jpeg(server: "MJPEGCameraServer") -> bytes | None:
         return None
 
 
-def encode_snapshot_frame(server: "MJPEGCameraServer") -> bytes | None:
+def encode_snapshot_frame(server: MJPEGCameraServer) -> bytes | None:
     """Encode a single JPEG snapshot via the SDK's GStreamer jpegenc pipeline."""
     jpeg = get_camera_jpeg(server)
     if jpeg is None:

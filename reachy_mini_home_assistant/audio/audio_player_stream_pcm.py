@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, UNTHROTTLED_PREROLL_S
+from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, UNTHROTTLED_PREROLL_S, AudioResampler
 
 
 class AudioPlayerStreamPCMMixin:
@@ -65,6 +65,7 @@ class AudioPlayerStreamPCMMixin:
             target_sr = 16000
         if not self._ensure_media_playback_started():
             return False
+        resampler = AudioResampler(sample_rate, target_sr, channels) if sample_rate != target_sr else None
         remainder = b""
         pushed_any = False
         played_frames = 0
@@ -82,12 +83,10 @@ class AudioPlayerStreamPCMMixin:
                 continue
             pcm = np.frombuffer(data[:usable_len], dtype=np.int16).astype(np.float32) / 32768.0
             pcm = np.clip(pcm * self._current_volume, -1.0, 1.0).reshape(-1, channels)
-            if sample_rate != target_sr and target_sr > 0:
-                import scipy.signal
-
-                new_len = int(len(pcm) * target_sr / sample_rate)
-                if new_len > 0:
-                    pcm = scipy.signal.resample(pcm, new_len, axis=0).astype(np.float32, copy=False)
+            if resampler is not None:
+                pcm = resampler.process(pcm).astype(np.float32, copy=False)
+                if len(pcm) == 0:
+                    continue
             target_elapsed = played_frames / float(target_sr)
             actual_elapsed = time.monotonic() - stream_start
             if target_elapsed > UNTHROTTLED_PREROLL_S and target_elapsed > actual_elapsed:

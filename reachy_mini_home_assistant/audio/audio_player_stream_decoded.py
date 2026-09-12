@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, UNTHROTTLED_PREROLL_S, _LOGGER
+from .audio_player_shared import _LOGGER, STREAM_FETCH_CHUNK_SIZE, UNTHROTTLED_PREROLL_S
 
 
 class AudioPlayerStreamDecodedMixin:

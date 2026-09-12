@@ -53,6 +53,7 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._sendspin_queue_event = threading.Event()
         self._sendspin_queue_stop = threading.Event()
         self._sendspin_queue_thread: threading.Thread | None = None
+        self._sendspin_resampler = None
         self._logged_resample = False
         self._last_sendspin_overflow_log = 0.0
         self._http_host_override: str | None = None

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def load_gesture_detector(server: "MJPEGCameraServer") -> bool:
+def load_gesture_detector(server: MJPEGCameraServer) -> bool:
     try:
         from .gesture_detector import GestureDetector
 
@@ -31,7 +31,7 @@ def load_gesture_detector(server: "MJPEGCameraServer") -> bool:
         return False
 
 
-async def start(server: "MJPEGCameraServer") -> None:
+async def start(server: MJPEGCameraServer) -> None:
     if server._running:
         _LOGGER.warning("Camera server already running")
         return
@@ -68,7 +68,7 @@ async def start(server: "MJPEGCameraServer") -> None:
     _LOGGER.info("  Snapshot URL: http://<ip>:%d/snapshot", server.port)
 
 
-async def stop(server: "MJPEGCameraServer", join_timeout: float = 3.0) -> None:
+async def stop(server: MJPEGCameraServer, join_timeout: float = 3.0) -> None:
     _LOGGER.info("Stopping MJPEG camera server...")
     server._running = False
     if server._capture_thread:
@@ -92,7 +92,7 @@ async def stop(server: "MJPEGCameraServer", join_timeout: float = 3.0) -> None:
     _LOGGER.info("MJPEG Camera server stopped - all resources released")
 
 
-def release_ml_models(server: "MJPEGCameraServer") -> None:
+def release_ml_models(server: MJPEGCameraServer) -> None:
     if server._gesture_detector is not None:
         try:
             if hasattr(server._gesture_detector, "close"):
@@ -103,7 +103,7 @@ def release_ml_models(server: "MJPEGCameraServer") -> None:
             _LOGGER.warning("Error releasing gesture detector: %s", e)
 
 
-def suspend_processing(server: "MJPEGCameraServer") -> None:
+def suspend_processing(server: MJPEGCameraServer) -> None:
     _LOGGER.info("Suspending camera processing resources...")
     server._frame_rate_manager.suspend()
     server._gesture_detection_enabled = False
@@ -115,7 +115,7 @@ def suspend_processing(server: "MJPEGCameraServer") -> None:
     log_vision_runtime_state(server, "Suspended")
 
 
-def resume_processing(server: "MJPEGCameraServer") -> None:
+def resume_processing(server: MJPEGCameraServer) -> None:
     _LOGGER.info("Resuming camera processing resources...")
     if server._gesture_detection_requested:
         server._frame_rate_manager.resume()
@@ -131,7 +131,7 @@ def resume_processing(server: "MJPEGCameraServer") -> None:
 
 
 def apply_runtime_vision_state(
-    server: "MJPEGCameraServer",
+    server: MJPEGCameraServer,
     *,
     gesture_requested: bool,
     models_allowed: bool,
@@ -146,7 +146,7 @@ def apply_runtime_vision_state(
     resume_processing(server)
 
 
-def suspend(server: "MJPEGCameraServer") -> None:
+def suspend(server: MJPEGCameraServer) -> None:
     if not server._running:
         _LOGGER.debug("Camera server not running, nothing to suspend")
         return
@@ -161,7 +161,7 @@ def suspend(server: "MJPEGCameraServer") -> None:
     _LOGGER.info("Camera server suspended - CPU released")
 
 
-def resume_from_suspend(server: "MJPEGCameraServer") -> None:
+def resume_from_suspend(server: MJPEGCameraServer) -> None:
     if server._running:
         _LOGGER.debug("Camera server already running")
         return
@@ -173,7 +173,7 @@ def resume_from_suspend(server: "MJPEGCameraServer") -> None:
     _LOGGER.info("Camera server resumed")
 
 
-def log_vision_runtime_state(server: "MJPEGCameraServer", source: str) -> None:
+def log_vision_runtime_state(server: MJPEGCameraServer, source: str) -> None:
     _LOGGER.info(
         "%s vision state: gesture requested=%s active=%s",
         source,

@@ -15,6 +15,7 @@ from .audio_player_shared import (
     SENDSPIN_LATE_DROP_GRACE_US,
     SENDSPIN_LOCAL_BUFFER_CAPACITY_BYTES,
     SENDSPIN_SCHEDULE_AHEAD_LIMIT_US,
+    AudioResampler,
 )
 
 if TYPE_CHECKING:
@@ -24,14 +25,17 @@ if TYPE_CHECKING:
 # (an in-memory store loses the long-term PSK on every boot, and this robot has
 # no screen to re-enter pairing codes).
 _PAIRING_STORE_PATH = Path(__file__).resolve().parent.parent.parent / "local" / "sendspin_pairing.json"
+# Long-term noise identity: regenerating it per connection would make every
+# reconnect look like a brand-new device to the server.
+_IDENTITY_PATH = Path(__file__).resolve().parent.parent.parent / "local" / "sendspin_identity.b64u"
 
 try:
     from aiosendspin.client import SendspinClient
-    from aiosendspin.client.models import AudioFormat, PCMFormat, PairingSupport
+    from aiosendspin.client.models import AudioFormat, PairingSupport, PCMFormat
     from aiosendspin.models.core import DeviceInfo
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles, UndefinedField
-    from aiosendspin.noise.keys import Identity
+    from aiosendspin.noise.keys import Identity, b64url_decode
     from aiosendspin.noise.trust_store import FileClientPairingStore, InMemoryClientPairingStore
 
     from .. import __version__
@@ -190,6 +194,7 @@ class AudioPlayerSendspinMixin:
     def _reset_sendspin_stream_state(self, *, stop_output: bool) -> None:
         self._clear_sendspin_queue()
         self._sendspin_audio_format = None
+        self._sendspin_resampler = None
         self._logged_resample = False
         if stop_output:
             self._stop_sendspin_output()
@@ -261,17 +266,36 @@ class AudioPlayerSendspinMixin:
         audio_float = self._decode_pcm_bytes(audio_data, pcm_format)
         target_sample_rate = self.reachy_mini.media.get_output_audio_samplerate()
         if pcm_format.sample_rate != target_sample_rate and target_sample_rate > 0:
-            import scipy.signal
-
-            new_length = int(len(audio_float) * target_sample_rate / pcm_format.sample_rate)
-            if new_length > 0:
-                audio_float = scipy.signal.resample(audio_float, new_length, axis=0)
-                if not self._logged_resample:
-                    _LOGGER.debug(
-                        "Resampling Sendspin audio: %d Hz -> %d Hz", pcm_format.sample_rate, target_sample_rate
-                    )
-                    self._logged_resample = True
+            if self._sendspin_resampler is None:
+                self._sendspin_resampler = AudioResampler(
+                    pcm_format.sample_rate, target_sample_rate, channels=pcm_format.channels
+                )
+                _LOGGER.debug(
+                    "Resampling Sendspin audio: %d Hz -> %d Hz", pcm_format.sample_rate, target_sample_rate
+                )
+            audio_float = self._sendspin_resampler.process(audio_float)
+            if len(audio_float) == 0:
+                return np.zeros((0, pcm_format.channels), dtype=np.float32)
         return np.clip(audio_float * self._get_sendspin_effective_volume(), -1.0, 1.0).astype(np.float32, copy=False)
+
+    def _get_or_create_sendspin_identity(self):
+        """Load the persisted long-term noise identity, generating it on first use.
+
+        The SDK's pairing records bind the server to this identity's key pair;
+        regenerating per connection makes every reconnect look like a new device.
+        """
+        try:
+            if _IDENTITY_PATH.exists():
+                private_b64u = _IDENTITY_PATH.read_text(encoding="ascii").strip()
+                if private_b64u:
+                    return Identity.from_private_bytes(b64url_decode(private_b64u))
+            identity = Identity.generate()
+            _IDENTITY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _IDENTITY_PATH.write_text(identity.private_b64u, encoding="ascii")
+            return identity
+        except Exception:
+            _LOGGER.warning("Failed to load persisted Sendspin identity; using ephemeral identity", exc_info=True)
+            return Identity.generate()
 
     async def _ensure_sendspin_pairing_store(self):
         """Return the persisted pairing store, opening it lazily."""
@@ -350,7 +374,7 @@ class AudioPlayerSendspinMixin:
             buffer_capacity=32_000_000,
             supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
         )
-        identity = Identity.generate()
+        identity = self._get_or_create_sendspin_identity()
         return SendspinClient(
             identity=identity,
             client_name="Reachy Mini",

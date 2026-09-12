@@ -143,7 +143,7 @@ class MJPEGCameraServer:
     def _release_ml_models(self) -> None:
         release_ml_models(self)
 
-    async def __aenter__(self) -> "MJPEGCameraServer":
+    async def __aenter__(self) -> MJPEGCameraServer:
         await self.start()
         return self
 
