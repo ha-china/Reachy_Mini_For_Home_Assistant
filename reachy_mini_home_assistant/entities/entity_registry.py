@@ -68,6 +68,8 @@ class EntityRegistry:
         self._media_title_entity: TextSensorEntity | None = None
         self._media_artist_entity: TextSensorEntity | None = None
         self._media_album_entity: TextSensorEntity | None = None
+        self._sendspin_pairing_code_entity: TextSensorEntity | None = None
+        self._sendspin_pairing_switch_entity: SwitchEntity | None = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -368,6 +370,7 @@ class EntityRegistry:
         self._setup_phase23_entities(entities)
         self._setup_phase24_entities(entities)  # System diagnostics
         self._setup_phase27_entities(entities)  # Sendspin media metadata
+        self._setup_phase28_entities(entities)  # Sendspin headless pairing
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -509,3 +512,49 @@ class EntityRegistry:
             self._media_artist_entity.update_state()
         if self._media_album_entity is not None:
             self._media_album_entity.update_state()
+
+    def _setup_phase28_entities(self, entities: list) -> None:
+        """Sendspin headless pairing: surface the dynamic pairing code and window switch.
+
+        The robot has no screen, so the SDK's derived dynamic pairing code is
+        published as a text sensor and the pairing gesture is exposed as a
+        switch the user can flip from Home Assistant.
+        """
+        music_player = self.server.state.music_player
+        if music_player is None:
+            return
+
+        def get_pairing_code() -> str:
+            val = music_player.sendspin_pairing_code
+            return val if val is not None else ""
+
+        self._sendspin_pairing_code_entity = TextSensorEntity(
+            server=self.server,
+            key=get_entity_key("sendspin_pairing_code"),
+            name="Sendspin Pairing Code",
+            object_id="sendspin_pairing_code",
+            icon="mdi:shield-key",
+            value_getter=get_pairing_code,
+        )
+        entities.append(self._sendspin_pairing_code_entity)
+
+        def open_pairing_window(enabled: bool) -> None:
+            if enabled:
+                music_player.open_sendspin_pairing_window()
+
+        self._sendspin_pairing_switch_entity = SwitchEntity(
+            server=self.server,
+            key=get_entity_key("sendspin_pairing_window"),
+            name="Sendspin Pairing Window",
+            object_id="sendspin_pairing_window",
+            icon="mdi:link-variant",
+            value_getter=lambda: music_player.sendspin_pairing_window_open,
+            value_setter=open_pairing_window,
+        )
+        entities.append(self._sendspin_pairing_switch_entity)
+
+        music_player._sendspin_pairing_code_callback = self._on_sendspin_pairing_code_updated
+
+    def _on_sendspin_pairing_code_updated(self) -> None:
+        if self._sendspin_pairing_code_entity is not None:
+            self._sendspin_pairing_code_entity.update_state()

@@ -63,6 +63,11 @@ class AudioPlayer(AudioPlayerSendspinMixin, AudioPlayerPlaybackMixin):
         self._sendspin_metadata_album: str | None = None
         self._sendspin_metadata_callback: Callable[[], None] | None = None
 
+        # Sendspin pairing (headless client: dynamic code surfaced via HA entity)
+        self._sendspin_pairing_store = None
+        self._sendspin_pairing_code: str | None = None
+        self._sendspin_pairing_code_callback: Callable[[], None] | None = None
+
     def set_reachy_mini(self, reachy_mini) -> None:
         self.reachy_mini = reachy_mini
 

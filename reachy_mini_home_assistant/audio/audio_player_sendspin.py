@@ -4,6 +4,7 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -19,14 +20,19 @@ from .audio_player_shared import (
 if TYPE_CHECKING:
     from aiosendspin.models.core import ServerStatePayload, StreamStartMessage
 
+# Persisted pairing records so the robot does not need re-pairing after restart
+# (an in-memory store loses the long-term PSK on every boot, and this robot has
+# no screen to re-enter pairing codes).
+_PAIRING_STORE_PATH = Path(__file__).resolve().parent.parent.parent / "local" / "sendspin_pairing.json"
+
 try:
     from aiosendspin.client import SendspinClient
-    from aiosendspin.client.models import AudioFormat, PCMFormat
+    from aiosendspin.client.models import AudioFormat, PCMFormat, PairingSupport
     from aiosendspin.models.core import DeviceInfo
     from aiosendspin.models.player import ClientHelloPlayerSupport, SupportedAudioFormat
     from aiosendspin.models.types import AudioCodec, PlayerCommand, Roles, UndefinedField
     from aiosendspin.noise.keys import Identity
-    from aiosendspin.noise.trust_store import InMemoryClientPairingStore
+    from aiosendspin.noise.trust_store import FileClientPairingStore, InMemoryClientPairingStore
 
     from .. import __version__
     from ..core.util import get_mac
@@ -46,6 +52,8 @@ except Exception as e:
     Roles = None  # type: ignore[assignment]
     Identity = None  # type: ignore[assignment]
     InMemoryClientPairingStore = None  # type: ignore[assignment]
+    FileClientPairingStore = None  # type: ignore[assignment]
+    PairingSupport = None  # type: ignore[assignment]
 
 try:
     from aiosendspin.client.listener import DEFAULT_PORT as SENDSPIN_DEFAULT_PORT
@@ -265,7 +273,71 @@ class AudioPlayerSendspinMixin:
                     self._logged_resample = True
         return np.clip(audio_float * self._get_sendspin_effective_volume(), -1.0, 1.0).astype(np.float32, copy=False)
 
-    def _build_sendspin_client(self) -> SendspinClient:
+    async def _ensure_sendspin_pairing_store(self):
+        """Return the persisted pairing store, opening it lazily."""
+        if self._sendspin_pairing_store is not None:
+            return self._sendspin_pairing_store
+        if FileClientPairingStore is not None:
+            try:
+                self._sendspin_pairing_store = await FileClientPairingStore.open(_PAIRING_STORE_PATH)
+                return self._sendspin_pairing_store
+            except Exception:
+                _LOGGER.warning(
+                    "Failed to open Sendspin pairing store at %s; falling back to in-memory store "
+                    "(pairing will not survive restarts)",
+                    _PAIRING_STORE_PATH,
+                    exc_info=True,
+                )
+        if InMemoryClientPairingStore is not None:
+            self._sendspin_pairing_store = InMemoryClientPairingStore()
+        return self._sendspin_pairing_store
+
+    async def _maybe_open_sendspin_pairing_window(self, client: SendspinClient, store) -> None:
+        """Open a pairing window on first use (headless equivalent of a button press)."""
+        try:
+            records = await store.list_records()
+        except Exception:
+            records = []
+        if records:
+            return
+        client.open_pairing_window()
+        _LOGGER.info("Sendspin: no paired server yet - pairing window open for 5 minutes")
+
+    def open_sendspin_pairing_window(self) -> bool:
+        """Open a pairing window on demand (HA "Sendspin Pairing Window" switch)."""
+        client = self._sendspin_client
+        if client is None:
+            return False
+        client.open_pairing_window()
+        _LOGGER.info("Sendspin pairing window opened (5 minutes)")
+        return True
+
+    async def _publish_sendspin_pairing_code(self, code: str | None) -> None:
+        """Out-channel for the SDK's derived dynamic pairing code."""
+        if self._sendspin_pairing_code == code:
+            return
+        self._sendspin_pairing_code = code
+        if code is not None:
+            _LOGGER.info("Sendspin pairing code: %s (confirm it on the Sendspin server)", code)
+        else:
+            _LOGGER.info("Sendspin pairing code cleared")
+        callback = self._sendspin_pairing_code_callback
+        if callback is not None:
+            try:
+                callback()
+            except Exception:
+                _LOGGER.debug("Failed to notify Sendspin pairing code callback", exc_info=True)
+
+    @property
+    def sendspin_pairing_code(self) -> str | None:
+        return self._sendspin_pairing_code
+
+    @property
+    def sendspin_pairing_window_open(self) -> bool:
+        client = self._sendspin_client
+        return bool(client.pairing_window_open) if client is not None else False
+
+    def _build_sendspin_client(self, store) -> SendspinClient:
         player_support = ClientHelloPlayerSupport(
             supported_formats=[
                 SupportedAudioFormat(codec=AudioCodec.PCM, channels=2, sample_rate=16000, bit_depth=16),
@@ -279,12 +351,20 @@ class AudioPlayerSendspinMixin:
             supported_commands=[PlayerCommand.VOLUME, PlayerCommand.MUTE],
         )
         identity = Identity.generate()
-        pairing_store = InMemoryClientPairingStore()
         return SendspinClient(
             identity=identity,
             client_name="Reachy Mini",
             roles=[Roles.PLAYER, Roles.METADATA],
-            pairing_store=pairing_store,
+            pairing_store=store,
+            # Headless pairing: surface the derived dynamic pairing code through
+            # the HA entity/log out-channel so the operator can confirm it.
+            # 9.x names this wiring pin_display; the newer SDK renames it to
+            # pairing_code_display.
+            pairing_support=(
+                PairingSupport(pin_display=self._publish_sendspin_pairing_code)
+                if PairingSupport is not None
+                else None
+            ),
             device_info=DeviceInfo(
                 product_name="Reachy Mini",
                 manufacturer="Pollen Robotics",
@@ -403,7 +483,9 @@ class AudioPlayerSendspinMixin:
             await ws.close()
             return
         disconnect_event = asyncio.Event()
-        client = self._build_sendspin_client()
+        store = await self._ensure_sendspin_pairing_store()
+        client = self._build_sendspin_client(store)
+        await self._maybe_open_sendspin_pairing_window(client, store)
         async with self._get_sendspin_connect_lock():
             if self._sendspin_client is not None:
                 await self._disconnect_sendspin()
@@ -465,7 +547,9 @@ class AudioPlayerSendspinMixin:
                 return True
             if self._sendspin_client is not None:
                 await self._disconnect_sendspin()
-            client = self._build_sendspin_client()
+            store = await self._ensure_sendspin_pairing_store()
+            client = self._build_sendspin_client(store)
+            await self._maybe_open_sendspin_pairing_window(client, store)
             try:
                 await client.connect(server_url)
             except Exception:
@@ -628,4 +712,5 @@ class AudioPlayerSendspinMixin:
         self._sendspin_muted = False
         self._sendspin_remote_volume = 100
         self._stop_sendspin_worker()
+        self._sendspin_pairing_code = None
         _LOGGER.info("Sendspin stopped")
