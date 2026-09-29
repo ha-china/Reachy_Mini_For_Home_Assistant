@@ -9,12 +9,14 @@ audio processing loop and wake word pipeline.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
 import numpy as np
 import requests
 
+from ..audio.xvf3800_config import apply_xvf3800_startup_config
 from .config import Config
 
 _LOGGER = logging.getLogger(__name__)
@@ -195,6 +197,15 @@ class ServiceLifecycleMixin:
                 if not self._probe_audio_capture_ready(media, timeout_s=1.5):
                     raise RuntimeError("Audio capture probe failed after media restart")
                 _LOGGER.info("Media system restarted")
+                # Re-apply the XVF3800 mic-processor tuning after every media
+                # (re)start: the write path takes ~1s (settled, verified), so it
+                # runs in the background and must never block resume.
+                threading.Thread(
+                    target=apply_xvf3800_startup_config,
+                    args=(media,),
+                    name="xvf3800-tuning",
+                    daemon=True,
+                ).start()
         except Exception as e:
             _LOGGER.warning("Failed to restart media: %s", e)
 

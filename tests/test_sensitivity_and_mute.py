@@ -2,8 +2,6 @@
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
-
 import pytest
 
 from aioesphomeapi.api_pb2 import MediaPlayerCommandRequest  # type: ignore[attr-defined]
