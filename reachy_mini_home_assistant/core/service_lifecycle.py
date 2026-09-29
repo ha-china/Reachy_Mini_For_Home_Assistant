@@ -21,9 +21,31 @@ from .config import Config
 
 _LOGGER = logging.getLogger(__name__)
 
+# Serializes background media-lifecycle tasks so rapid suspend/resume
+# (e.g. mute toggling) cannot interleave a stop with a start.
+_MEDIA_LIFECYCLE_LOCK = threading.Lock()
+
 
 class ServiceLifecycleMixin:
     """Mixin: suspend/resume + media lifecycle hooks for the voice service."""
+
+    def _run_media_heavy(self, heavy) -> None:
+        """Run a media-lifecycle task off the calling (event-loop) thread.
+
+        Media restart/stop touches GStreamer state and joins playback threads,
+        which can take seconds; running it on the ESPHome event loop stalls
+        every other protocol message for that duration (user-visible as
+        sluggish entity updates on mute toggles and HA reconnects).
+        """
+
+        def _runner() -> None:
+            try:
+                with _MEDIA_LIFECYCLE_LOCK:
+                    heavy()
+            except Exception:
+                _LOGGER.exception("Media lifecycle task failed")
+
+        threading.Thread(target=_runner, name="media-lifecycle", daemon=True).start()
 
     def _get_daemon_status(self) -> Any:
         """Return the current daemon status via the public REST API, or None if unavailable."""
@@ -51,29 +73,44 @@ class ServiceLifecycleMixin:
         return False
 
     def _suspend_voice_services(self, reason: str) -> None:
-        """Suspend only voice-related services."""
+        """Suspend only voice-related services.
+
+        Flags flip synchronously; the slow parts (satellite playback stop with
+        its thread join, media teardown) run off the event loop.
+        """
         _LOGGER.warning("Suspending voice services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
         self._set_services_state(suspended=True)
         self._audio_buffer.clear()
+        self._run_media_heavy(self._suspend_media_heavy)
+
+        _LOGGER.info("Voice services suspended - camera and motion remain active")
+
+    def _suspend_media_heavy(self) -> None:
         self._suspend_satellite()
         self._set_audio_players_suspended(True)
         self._stop_media_system()
 
-        _LOGGER.info("Voice services suspended - camera and motion remain active")
-
     def _resume_voice_services(self, reason: str) -> None:
-        """Resume only voice-related services."""
+        """Resume only voice-related services.
+
+        Flags and the satellite resume are synchronous so the audio loop and
+        HA entities react immediately; media restart runs in the background
+        (the audio loop simply idles until capture is back).
+        """
         _LOGGER.info("Resuming voice services (%s)", reason)
         self._robot_services_paused.clear()
         self._set_services_state(suspended=False)
-        self._start_media_system()
         self._resume_satellite()
-        self._set_audio_players_suspended(False)
+        self._run_media_heavy(self._resume_media_heavy)
         self._robot_services_resumed.set()
 
         _LOGGER.info("Voice services resumed - camera and motion remained active")
+
+    def _resume_media_heavy(self) -> None:
+        self._start_media_system()
+        self._set_audio_players_suspended(False)
 
     def _suspend_non_esphome_services(self, reason: str) -> None:
         """Suspend all non-ESPHome services."""
@@ -97,18 +134,20 @@ class ServiceLifecycleMixin:
             except Exception as e:
                 _LOGGER.warning("Error suspending motion: %s", e)
 
+        self._run_media_heavy(self._suspend_all_heavy)
+
+        _LOGGER.info("Services suspended - ESPHome only")
+
+    def _suspend_all_heavy(self) -> None:
         self._suspend_satellite()
         self._set_audio_players_suspended(True)
         self._stop_media_system()
-
-        _LOGGER.info("Services suspended - ESPHome only")
 
     def _resume_non_esphome_services(self, reason: str) -> None:
         """Resume all non-ESPHome services after runtime suspension."""
         _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
         self._robot_services_paused.clear()
         self._set_services_state(suspended=False)
-        self._start_media_system()
 
         if self._camera_server is not None and self._state.camera_enabled:
             try:
@@ -125,7 +164,7 @@ class ServiceLifecycleMixin:
                 _LOGGER.warning("Error resuming motion: %s", e)
 
         self._resume_satellite()
-        self._set_audio_players_suspended(False)
+        self._run_media_heavy(self._resume_media_heavy)
         self._robot_services_resumed.set()
 
         _LOGGER.info("All services resumed - system fully operational")
@@ -208,14 +247,6 @@ class ServiceLifecycleMixin:
                 ).start()
         except Exception as e:
             _LOGGER.warning("Failed to restart media: %s", e)
-
-    def _on_robot_disconnected(self) -> None:
-        """Called when robot connection is lost."""
-        self._suspend_non_esphome_services(reason="robot_disconnected")
-
-    def _on_robot_connected(self) -> None:
-        """Called when robot connection is restored."""
-        self._resume_non_esphome_services(reason="robot_connected")
 
     async def _on_ha_connected(self) -> None:
         """Called when Home Assistant connects."""
